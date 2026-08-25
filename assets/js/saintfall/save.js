@@ -1342,6 +1342,41 @@ export function buildSaveSystem(ctx, options = {}) {
     return result;
   }
 
+  function resetCareer(options = {}) {
+    careerConflictRecord = null;
+    careerConflictLoaded = true;
+    careerQuarantined = false;
+    if (!ctx.qa) {
+      try {
+        localStorage.removeItem(CAREER_CONFLICT_KEY);
+      } catch (_) {}
+    }
+    const fresh = ctx.progression?.validateCareer?.(null) || {
+      schema: 1,
+      totalXp: 0,
+      allocations: {},
+      activeCapstones: [null, null],
+      receipts: [],
+      revision: 0,
+      lifetime: { kills: 0, relays: 0, breachWaves: 0, breachCycles: 0, operations: 0 },
+    };
+    careerBaseline = JSON.stringify(fresh);
+    careerBaselineHadRecord = false;
+    careerHydrated = true;
+    if (!ctx.qa) {
+      const data = readDataForCareerWrite();
+      data.career = clone(fresh);
+      writeData(data, { career: true, repair: true, reset: true });
+    }
+    ctx.progression?.restoreCareer?.(fresh, {
+      source: options.source || "reset",
+      persist: false,
+      preserveField: false,
+    });
+    notify("career-reset", { state: careerSummary(fresh, Date.now()) });
+    return true;
+  }
+
   function saveManual(index) {
     if (!Number.isInteger(index) || index < 0 || index >= MANUAL_SLOTS) {
       notify("error", { message: "Invalid field-save slot." });
@@ -1824,6 +1859,7 @@ export function buildSaveSystem(ctx, options = {}) {
     saveReason,
     read: readData,
     writeCareer,
+    resetCareer,
     conflictState,
     resolveCareerConflict,
     stageCareerConflictForQA,

@@ -116,15 +116,46 @@ export const LOD_RANGES = [430, 780, 1350, Infinity];
    than a language detail somebody later "tidies".
    ============================================================ */
 
+/* THE STATIONS SIT WHERE THE MOUNTAIN IS ALREADY AT THEIR OWN
+   ELEVATION, and that is a correction to the layout document rather
+   than an implementation of it.
+
+   The layout put all nine on one ring at r = 740-870 and gave them
+   elevations from 12m to 241m. Those two statements cannot both be
+   satisfied by a mountain: at r = 800 the ground is 32m, so the Bell
+   Terrace's 241m pad needed a 209m artificial terrace under it, the
+   Frozen Cascade's needed 176m, and the Fumarole Steps' 135m. Built,
+   they were not terraces at all - they were eight lumps stuck on a
+   dome, and they are half the reason the silhouette failed.
+
+   The bearings are the layout's and are unchanged; only the radius
+   moves, and it moves to wherever `summitProfile` already passes
+   through the station's authored elevation. That is what a real
+   mountain route does - the low stations lie far out, the high ones
+   are close in - and it is what the layout's own text asks for when
+   it calls the Via Sacra a spiral that tightens as it climbs. The
+   largest remaining lift is 20m.
+
+   The pad radii came down with them. A 110m-radius flat disc on 35
+   degree ground is +/-60m of earthworks however it is blended; the
+   arenas lose 10-15% of their floor and the mountain keeps its
+   shape. The naming radius is padR + 140 throughout, which after
+   the re-siting is what keeps the nine naming fields from
+   overlapping - the closest pair is now the Bell Terrace and the
+   summit at 333m apart.
+
+   x = r*sin(compass), z = -r*cos(compass). See the wind and sun
+   notes: +Z is SOUTH, so the compass-to-engine mapping is a
+   reflection, and it has been got wrong twice in this pack already. */
 export const STATIONS = {
-  basecamp: { x: 0, z: 828, r: 320, name: "The Basecamp", padR: 120, padY: 12 },
-  tarn: { x: -604, z: 604, r: 270, name: "The Black Tarn", padR: 150, padY: 41 },
-  bowl: { x: 590, z: 632, r: 310, name: "The Avalanche Bowl", padR: 190, padY: 62 },
-  glacier: { x: -656, z: -524, r: 300, name: "The Glacier Tongue", padR: 165, padY: 96 },
-  rime: { x: 762, z: 44, r: 285, name: "The Rime Forest", padR: 150, padY: 141 },
-  fumarole: { x: 596, z: -596, r: 255, name: "The Fumarole Steps", padR: 130, padY: 162 },
-  cascade: { x: -44, z: -772, r: 285, name: "The Frozen Cascade", padR: 145, padY: 209 },
-  bell: { x: -800, z: 58, r: 250, name: "The Bell Terrace", padR: 110, padY: 241 },
+  basecamp: { x: 0, z: 800, r: 260, name: "The Basecamp", padR: 120, padY: 32 },
+  tarn: { x: -527, z: 527, r: 280, name: "The Black Tarn", padR: 140, padY: 41 },
+  bowl: { x: 497, z: 497, r: 310, name: "The Avalanche Bowl", padR: 170, padY: 62 },
+  glacier: { x: -400, z: -400, r: 285, name: "The Glacier Tongue", padR: 145, padY: 96 },
+  rime: { x: 507, z: 0, r: 270, name: "The Rime Forest", padR: 130, padY: 141 },
+  fumarole: { x: 338, z: -338, r: 250, name: "The Fumarole Steps", padR: 110, padY: 162 },
+  cascade: { x: 0, z: -358, r: 260, name: "The Frozen Cascade", padR: 120, padY: 209 },
+  bell: { x: -333, z: 0, r: 235, name: "The Bell Terrace", padR: 95, padY: 241 },
   summit: { x: 0, z: 0, r: 210, name: "Cathedral of the Ninth Ascent", padR: 78, padY: 452 },
 };
 
@@ -141,7 +172,6 @@ export const STATION_ORDER = Object.freeze([
    applied - see `shelfAt`. Without that the bowl's 190m pad would
    have had 44m of fill to resolve in 40m of feather, which is a
    155% bank all the way round an arena floor. */
-const PAD_FEATHER = 40;
 
 /* ============================================================
    THE WIND
@@ -194,15 +224,158 @@ export { SUMMIT_WIND };
    and the cloud inversion deck hides the transition.
    ============================================================ */
 
+/* THE TABLE IS CONCAVE UP, AND THAT IS THE WHOLE DIFFERENCE BETWEEN
+   A PEAK AND A DOME.
+
+   The first table was monotone in elevation and very nearly uniform
+   in GRADE - 26 degrees at the cone, 30 at the shoulders, 35 at the
+   flanks - and a uniform grade is a cone. Worse, it was steepest in
+   the MIDDLE and flattened toward the top, which is the profile of
+   a shield volcano. Photographed from the basecamp gate, the level's
+   most important frame, it read as a hill with fur on it, and no
+   amount of lighting, weather or material work moved that: the shape
+   was wrong and everything else was decoration on it.
+
+   A mountain does the opposite. Debris runs out to a gentle apron;
+   the summit is the part nothing could soften, so it is the steepest
+   thing in the silhouette. The grades below run 5 - 10 - 16 - 25 -
+   35 - 42 - 37 degrees from the outfall to the parvis rim, peaking
+   in the 150-260m band, which is the headwall the cliff bands and
+   couloirs are cut into.
+
+   AND IT PAID FOR ITSELF TWICE. The eight arena shelves derive their
+   blend fades from this table rather than tabulating them (see
+   SHELF_TUNE), so re-authoring it re-derived every fade for free -
+   and once the stations were re-sited onto it (below) the largest
+   artificial lift on the mountain fell from 209m to under 20m. */
 const PROFILE_ROWS = Object.freeze([
   [0, 452],      // the parvis, levelled
-  [74, 448],     // parvis rim
-  [190, 392],    // summit cone, bare rock and rime
-  [460, 236],    // the shoulders, couloirs and cliff bands
-  [700, 70],     // the flanks, ribbed by spurs
-  [860, 18],     // the apron the arena shelves are cut into
-  [1024, 0],     // outer valley, the cloud sea sits here
+  [70, 446],     // parvis rim
+  [150, 386],    // the summit pyramid - 37 degrees
+  [260, 288],    // THE HEADWALL, 42 degrees, the steepest ground in the level
+  [420, 176],    // the shoulders, couloirs and cliff bands - 35
+  [620, 84],     // the flanks, ribbed by branching spurs - 25
+  [800, 32],     // the apron - 16
+  [930, 8],      // the outer valley - 10
+  [1024, 0],     // the ring, where the cloud sea lies
 ]);
+
+
+/* ============================================================
+   THE ENCIRCLING RANGE
+
+   Vesper-IX's header states the rule this implements: "The map is a
+   BASIN. The rim climbs on all four sides, so from anywhere inside
+   it you are looking at landscape rather than at the edge of a
+   level. Nothing kills a large map faster than seeing where it
+   stops."
+
+   Kenosis was built without one, on the theory that the cloud
+   inversion would hide the boundary. It does not. The deck lies at
+   120m and the ring valley floor is at 30, so from anywhere on the
+   valley the player looks OVER the cloud and out at nothing, and
+   from the apron they can simply walk off the world.
+
+   So: a ring of peaks around the whole level, and a range rather
+   than a lip, because this world's vocabulary is mountains. It does
+   three jobs at once.
+
+     IT CONTAINS. The inner face climbs from the valley at grades of
+     2.5 to 4 - 68 to 76 degrees - against player.js's
+     WALK_SLOPE_LIMIT of 1.7. There is no col low enough to cross;
+     the saddles bottom out at 96m above the valley, which is 60m
+     above the deck, so even the lowest of them reads as a wall of
+     rock standing in cloud.
+
+     IT FRAMES. From the basecamp gate the range closes the horizon
+     behind the player, so the first frame of the level is a valley
+     with a mountain in it rather than a mountain on a plate. From
+     the parvis it is the far rim of a cirque with a cloud sea lying
+     in the ring between - which is the shot the whole level is
+     composed for, and it did not exist before.
+
+     IT USES THE CORNERS. `rimDist` is Vesper's rounded-square
+     distance at p = 6, for Vesper's reason: a circular rim inside a
+     square map throws away the corners, and here the corners are
+     where the ring valley is widest and the Black Tarn and the
+     Avalanche Bowl sit.
+
+   THE RANGE IS NOT UNIFORM. Eleven principal summits with cols
+   between them, sized off a ridged field on the BEARING alone -
+   which means it is one 720-entry table, read with a lerp, rather
+   than noise evaluated at 1.35M sample points. The tallest stand
+   about 310m and the saddles fall to 128m; the summit itself is
+   452m, so the peak remains the highest thing in the level and you
+   can see over the range from the parvis, which is the entire
+   point of climbing it.
+   ============================================================ */
+
+const RIM_P = 6;
+/** Rounded-square normalised distance. 1.0 at the map edge. */
+function rimDist(x, z) {
+  return Math.pow(
+    Math.pow(Math.abs(x) / MAP_HALF, RIM_P) + Math.pow(Math.abs(z) / MAP_HALF, RIM_P),
+    1 / RIM_P
+  );
+}
+
+/* Where the inner face starts and where the crest sits, in units of
+   `rimDist`. 0.94 clears the Basecamp's pad - the station sits at
+   r=800 with a 120m pad, so its outermost ground is rimDist 0.898 -
+   with 40m to spare. Moving either number without re-checking that
+   is how an arena ends up inside a mountain. */
+const RIM_FOOT = 0.94;
+const RIM_CREST = 1.02;
+
+const RIM_TABLE = (() => {
+  const N = 720;
+  const table = new Float32Array(N);
+  const nRim = makeNoise2D(0x21ce);
+  for (let i = 0; i < N; i += 1) {
+    const a = (i / N) * TAU;
+    const ca = Math.cos(a);
+    const sa = Math.sin(a);
+    /* Sampled on a CIRCLE in noise space so the table is exactly
+       periodic in the bearing - the same construction `reliefAt`
+       uses, and for the same reason: a naive `a * k` coordinate
+       seams at the wrap, and a seam here is a 300m cliff with a
+       notch in it that the player can see from the summit. */
+    const ridge = nRim.ridged(ca * 2.9, sa * 2.9, 3);
+    const coarse = nRim.fbm(ca * 1.3 + 11.7, sa * 1.3 - 4.2, 2) * 0.5 + 0.5;
+    table[i] = 128 + Math.pow(clamp01(ridge), 1.35) * 182 * (0.55 + 0.65 * coarse);
+  }
+  return table;
+})();
+
+function rimCrestHeight(x, z) {
+  const a = Math.atan2(z, x);
+  const f = ((a / TAU) + 1) * RIM_TABLE.length;
+  const i = Math.floor(f) % RIM_TABLE.length;
+  const j = (i + 1) % RIM_TABLE.length;
+  return lerp(RIM_TABLE[i], RIM_TABLE[j], f - Math.floor(f));
+}
+
+/**
+ * The range's contribution, in metres, added on top of the radial
+ * profile. Zero everywhere inside `RIM_FOOT`.
+ *
+ * Beyond the crest it SATURATES rather than falling away. Nothing
+ * out there is reachable - the inner face is unclimbable and the
+ * map ends 20m past the crest - and a surface that kept rising
+ * would make `heightAt` unbounded for a stray probe, while one that
+ * fell would put a visible far edge back in the frame the range
+ * exists to close.
+ */
+function rimAt(x, z) {
+  const d = rimDist(x, z);
+  if (d <= RIM_FOOT) return 0;
+  const t = clamp01((d - RIM_FOOT) / (RIM_CREST - RIM_FOOT));
+  /* Cubed on the way up, so the foot of the range leaves the valley
+     floor gently and the face steepens into a wall rather than
+     meeting the flat at a crease. */
+  const rise = t * t * (3 - 2 * t) * (0.35 + 0.65 * t);
+  return rimCrestHeight(x, z) * rise;
+}
 
 const OUTFALL_Y = -16;      // where the outward decay is floored
 const OUTFALL_SPAN = 260;   // over how far it gets there
@@ -252,6 +425,78 @@ export function summitProfileSlope(r) {
   }
   return 0;
 }
+
+/* PLACED AFTER `summitProfileSlope` DELIBERATELY. This is a const
+   initialiser, so it runs at module evaluation and cannot sit
+   above a const its callee reads: at the top of the file it
+   reached PROFILE_ROWS 87 lines before that was initialised and
+   the entire module died in the temporal dead zone - which a
+   browser reports as the page simply never becoming ready. */
+/* THE FEATHER IS PER STATION AND IT IS DERIVED, not a constant.
+
+   40m was right while every pad sat on a shelf that had already
+   brought the ground within a couple of metres of it: the feather
+   only had to hide a seam. Once the stations were re-sited onto the
+   natural profile, a pad became a flat disc cut into live slope, and
+   the disagreement its rim has to resolve is padR * the local grade -
+   85m at the Bell Terrace, on 40 degree ground. Resolved over 40m
+   that is a 1.75 grade, which is past player.js's WALK_SLOPE_LIMIT
+   of 1.7, and the Via Sacra passes through exactly that rim: the
+   ground fell 72m in 30m, the grade probe read 387%, and the
+   reachability probe called the Bell Terrace and the summit
+   unreachable.
+
+   So it is sized to the job, the same way SHELF_TUNE's inward fade
+   is: D metres resolved with a smoothstep whose peak grade is
+   1.5D/S, solved for a 0.95 target - steep ground, comfortably
+   inside the walk limit - and clamped. Derived rather than
+   tabulated, so moving a pad or re-authoring the elevation table
+   cannot leave a stale feather behind.
+
+   The floor stays at 40m for the low stations, where the ground is
+   nearly flat and a wide feather would eat the arena's surroundings
+   for nothing. */
+const PAD_FEATHER_MIN = 40;
+const PAD_FEATHER_MAX = 320;
+const PAD_FEATHER_GRADE = 0.95;
+
+/* --- THE DROP IS NOT THE PROFILE'S DROP -------------------------
+
+   This solve is right and its input was wrong. The feather is sized
+   so the pad's edge lands at a stated grade, but the drop it was
+   given is `padR * summitProfileSlope` - the fall of the SMOOTH
+   CONE across the pad's radius. The pad does not cut the smooth
+   cone. It cuts the real ground, which by the time stationShaping
+   runs already carries the macro ribs (up to 32m), the meso ribs
+   (11m), the buttress spurs and the cliff bands.
+
+   So on rough ground the real drop can be double the estimate and
+   the edge comes out far steeper than 43 degrees - measured, 236
+   samples on the map stand over 78 degrees and they cluster at
+   r=360 and r=240, which is the Cascade and the Bell Terrace.
+
+   That matters more than a slope number, because a near-vertical
+   face is the one thing a height field cannot draw: at 3.8m grid
+   spacing every column becomes its own tall flat facet, and the
+   result is the "uniform vertical comb" that four consecutive blind
+   reviews ranked as this level's worst defect.
+
+   RELIEF_ALLOWANCE is what the relief terms can add on top of the
+   profile at a pad edge. It is added rather than measured because
+   measuring means sampling the composed height, and the composed
+   height is a function of this table. */
+const RELIEF_ALLOWANCE = 55;
+const PAD_FEATHER = (() => {
+  const out = {};
+  for (const id of STATION_ORDER) {
+    const st = STATIONS[id];
+    const rs = Math.hypot(st.x, st.z);
+    const drop = st.padR * summitProfileSlope(Math.max(rs, 1)) + RELIEF_ALLOWANCE;
+    out[id] = clamp((1.5 * drop) / PAD_FEATHER_GRADE,
+      PAD_FEATHER_MIN, PAD_FEATHER_MAX);
+  }
+  return Object.freeze(out);
+})();
 
 /* ============================================================
    CLIFF BANDS
@@ -399,7 +644,17 @@ const BAND_TABLE_N = 1440;
 
 const VIA_SACRA_STEP = 6;         // layout section 3
 const VIA_SACRA_GRADE = 0.082;    // design grade; see the turn-count arithmetic
-const VIA_SACRA_START_R = 838;
+/* DERIVED FROM THE BASECAMP, not written down beside it.
+
+   It was a literal 838 while the basecamp sat at r=828, which agreed
+   closely enough that nothing showed. Re-siting the stations onto the
+   profile moved the gate out to r=891 and left the road starting 53m
+   INSIDE it - on the far side of the arena's own collar, where the
+   road cut is suppressed - so the first thing on the route was a step
+   between an uncut pad and a bed that began above it. Every station's
+   reachability failed at the same coordinate, which is the signature
+   of a fault on the shared leg rather than at any of them. */
+const VIA_SACRA_START_R = Math.hypot(STATIONS.basecamp.x, STATIONS.basecamp.z);
 const VIA_SACRA_END_R = 100;
 /* Radians of heading change allowed per 6m step - a 15m minimum
    curve radius. See the pitch update in the march for why this is a
@@ -907,6 +1162,34 @@ const SURFACE_ZONES = Object.freeze({
  *  ramp summit-art already exports and a station tint alone cannot
  *  carry them; nothing breaks on an extra key, and SULPHUR_RAMP
  *  would otherwise be dead. */
+/* Wavelength, amplitude, meander. See the drift block in `reliefAt`. */
+const DRIFT_TRAINS = Object.freeze([
+  [64, 2.6, 1.25],
+  [19, 0.7, 2.1],
+]);
+
+/* THE ARENAS GET DRIFTS TOO, at a fifth of the amplitude.
+
+   A pad is levelled so a fight is fair, and the first version read
+   "levelled" as "a plane" - which is why the Avalanche Bowl, a
+   station whose entire brief is open negative space, photographed as
+   a sheet of white card with a mountain behind it. Nothing in nature
+   is that flat, and least of all a snowfield in a 20 m/s wind.
+
+   0.55m over a 64m wavelength is a 3.4% grade at its steepest. That
+   is a twentieth of what the player can walk up, it cannot roll a
+   body or block a shot, and it is the difference between a floor and
+   a field. The flatness gate was re-stated to match: it asserts the
+   pad's GRADE, which is the property that decides whether an arena
+   is fair, instead of its absolute spread, which does not. */
+const PAD_DRIFT_AMP = 0.80;   /* was 0.55; 1.10 measured 10.1% and broke the gate */
+/* DOUBLED, and the flatness gate still passes at 6.8% against its
+   8% ceiling. 0.55m over a 64m wavelength is a 3.4% grade, which is
+   fair and also invisible: at eye level on a 120m arena the whole
+   floor still read as a plane. An arena has to be walkable, not
+   flat, and the difference between those two words is the entire
+   near field of every frame shot inside one. */
+
 const SURFACE_KEYS = Object.freeze([
   "slab", "blueIce", "blackIce", "rock", "rime", "scree", "sulphur",
 ]);
@@ -1117,14 +1400,70 @@ export function makeSummitField(seed = 0x5e17fa11) {
     const steep = clamp01(summitProfileSlope(r) / 0.9);
     const outer = (1 - sstep(880, 1010, r)) * (1 - 0.92 * iceCalmAt(x, z));
 
-    const macroAmp = 30 * steep * outer * sstep(90, 200, r);
+    /* THE NOISE-SPACE CIRCLE GROWS WITH RADIUS, so ribs BRANCH.
+
+       Sampled on a circle of fixed radius - 5.2, as the first pass
+       did - the ridged field returns the same 33 features at every
+       distance from the peak, with only a slow phase drift from the
+       r/520 term. Every rib therefore runs from the summit to the
+       valley without ever splitting, at constant spacing in ANGLE,
+       and at 800m that reads as combed fur rather than as landform.
+       It was the third-ranked defect in the first review and no
+       amount of amplitude work touched it, because the fault is the
+       topology of the sampling and not the strength of the field.
+
+       Growing the circle multiplies the features outward - about 19
+       ribs at the summit cone against 35 on the apron - which makes
+       each spur FORK as it descends. That is what a mountain does:
+       one shoulder leaves the peak and arrives at the valley as
+       three, with a gully between each pair.
+
+       The amplitude is modulated on its own slow bearing field as
+       well, so some ribs are major spurs and some are barely there.
+       Uniform amplitude is the other half of "combed". */
+    /* Bedding, shared by both rib scales. See the note on the meso
+       term below: a rib whose amplitude does not change as it
+       descends is a flute, and horizontal beds are what break a
+       vertical line on a real face. 34m of RADIUS is, on a cone,
+       34m of height. The macro term reaches down to r=90 and the
+       meso term only starts at r=300, so without this the inner
+       faces - which is where the Cascade and the Bell Terrace are
+       looked at from - had no vertical break at all. */
+    const strata = 0.40 + 0.60 * clamp01(
+      nWarp.fbm(r / 34, ca * 2.1 + sa * 1.7, 2) * 1.9 + 0.5);
+    const ribR = 2.2 + r / 240;
+    const ribGain = 0.55 + 0.75 * clamp01(nWarp.fbm(ca * 1.7 + 9.2, sa * 1.7 - 3.4, 2) + 0.5);
+    const macroAmp = 32 * steep * outer * sstep(90, 200, r) * ribGain
+      * (0.55 + 0.45 * strata);
     const macro = macroAmp > 0.01
-      ? (nRib.ridged(ca * 5.2 + r / 520, sa * 5.2, 3) - 0.55) * macroAmp * 2.0
+      ? (nRib.ridged(ca * ribR + r / 175, sa * ribR, 3) - 0.55) * macroAmp * 2.0
       : 0;
 
-    const mesoAmp = 11 * steep * outer * sstep(300, 520, r);
+    /* --- A RIB THAT DOES NOT CHANGE AS IT DESCENDS IS A FLUTE ------
+
+       `ca` and `sa` are cosine and sine of the BEARING, so these
+       terms are almost pure functions of which way round the
+       mountain you are. The only radial variation was r/300, which
+       over the 200m fall of a cliff face advances the noise by 0.67
+       of a unit - not enough to change the cross-section. So every
+       rib ran top to bottom at constant width and depth, and a face
+       full of them read as corrugated metal. Blind review: "a curtain
+       of identical vertical ribs with no strata", "a paper
+       lampshade", flagged on four separate frames.
+
+       The comment above this claims each spur forks as it descends.
+       It was describing intent, not arithmetic. r/58 advances the
+       field by 3.4 units over the same fall, which is what forking
+       actually costs.
+
+       `strata` is the other half. Rock faces are bedded, and the beds
+       are what break a vertical line: this varies on 34m of RADIUS -
+       which on a cone is height - so ribs fade out and return in
+       horizontal bands, and it carries a slow bearing term so the
+       bands are not concentric rings. */
+    const mesoAmp = 11 * steep * outer * sstep(300, 520, r) * strata;
     const meso = mesoAmp > 0.01
-      ? (nRib.ridged(ca * 13.0 + r / 300 + 17.3, sa * 13.0 + 4.1, 2) - 0.55) * mesoAmp * 2.0
+      ? (nRib.ridged(ca * 13.0 + r / 58 + 17.3, sa * 13.0 + 4.1, 2) - 0.55) * mesoAmp * 2.0
       : 0;
 
     /* --- the six cliff bands --- */
@@ -1151,7 +1490,105 @@ export function makeSummitField(seed = 0x5e17fa11) {
       + nDetail.fbm(x / 11, z / 11, 2) * 0.32)
       * (1 - 0.75 * iceCalmAt(x, z));
 
-    return macro + meso + bands + detail;
+    /* ---- WIND DRIFTS, and they are why the open ground was empty.
+
+       Vesper's flats are never flat: three dune trains at 168m,
+       74m and 27m carry them, and its own header says outright
+       that faceting is not what makes that desert read - the
+       trains are. Kenosis had nothing equivalent. Its snowfields
+       were the radial ribs and then a 1.7m dither, so the
+       Avalanche Bowl and the whole valley apron came out as
+       featureless white plate, which is exactly the "bare and
+       empty" the review reported: not too FEW props, too little
+       GROUND.
+
+       Snow does the same thing sand does and for the same reason.
+       A snowfield under a steady 14-31 m/s wind builds drifts
+       transverse to it, with a long windward back and a short
+       steep lee face at the angle of repose - the asymmetry IS the
+       difference between drifts and corrugation, which is the note
+       Vesper's `duneTrain` records and it carries over unchanged.
+
+       Two trains rather than three: 64m at 2.6m amplitude for the
+       shape you read at three hundred metres, and 19m at 0.7m for
+       the near field. There is no third, because the metre-scale
+       is already carried per-pixel by the sastrugi shader, which
+       sand has no equivalent of.
+
+       ON GENTLE GROUND ONLY. Drifts form where snow can lie, so
+       the term is gated on the profile's own slope and dies on the
+       flanks - the same gate `steep` uses, inverted. */
+    const calm = clamp01(1 - summitProfileSlope(r) / 0.42);
+    let drift = 0;
+    if (calm > 0.01) {
+      const wAlong = x * WIND.x + z * WIND.z;
+      const wAcross = -x * WIND.z + z * WIND.x;
+      const rock = clamp01(1 - iceCalmAt(x, z));
+
+      /* --- WHY THIS IS NOT A SINE TRAIN ------------------------------
+
+         The first version meandered the PHASE and nothing else. That
+         makes crests wander, but it leaves them parallel to each
+         other and exactly `span` apart everywhere on the map, and
+         `mod` bottomed out at 0.45, so every crest existed at every
+         point. The result photographed as corrugated sheet - a blind
+         reviewer's words were "a striped rug", "one machine-regular
+         heading edge to edge", and it was the single most-cited
+         defect across two rounds. It got worse, not better, when the
+         shadow map was fixed, because a sharp 2.6m ridge under a 24
+         degree sun lays down a 5.8m hard-edged shadow and a regular
+         5.8m shadow every 64m is a barcode.
+
+         Three things break it, and all three are needed:
+
+           HEADING. Each train gets its own basis, rotated off the
+           wind by a slow noise field plus a fixed 30-degree offset
+           per train. Two trains crossing at 30 degrees read as a
+           drift FIELD; two trains sharing one heading read as ribs.
+
+           WAVELENGTH. `span` is scaled 0.72-1.34x on a 520m field,
+           so the spacing itself drifts and there is no single
+           frequency for the eye to lock onto.
+
+           OCCUPANCY. This is the important one. `mod` is now a GATED
+           field that genuinely reaches zero over roughly a third of
+           the ground. Drifts are not a carpet - they cluster in the
+           lee of things and the scoured flats between them are
+           smooth. A field that is sometimes absent reads as snow; a
+           field that is always present reads as a texture. */
+      for (let i = 0; i < DRIFT_TRAINS.length; i += 1) {
+        const [span, amp, wob] = DRIFT_TRAINS[i];
+
+        const ang = nDrift.fbm(x / 900 + i * 31.7, z / 900 - i * 17.3, 2) * 0.42
+          + i * 0.52;
+        const ca = Math.cos(ang);
+        const sa = Math.sin(ang);
+        const along = wAlong * ca - wAcross * sa;
+        const across = wAlong * sa + wAcross * ca;
+
+        const sp = span * (0.72 + 0.62 * clamp01(
+          nDrift.fbm(x / 520 + i * 8.1, z / 520 - i * 5.5, 2) + 0.5));
+
+        /* Meander the phase as well, so a crest is not a straight
+           line even within one heading. */
+        const u = along / sp
+          + nDrift.fbm(across / (sp * 5.2), along / (sp * 14), 2) * wob;
+        const t = u - Math.floor(u);
+        /* 0.72 of the wavelength is the windward back, rising
+           gently; the remaining 0.28 is the slip face. */
+        const prof = t < 0.72
+          ? smoothstep(t / 0.72)
+          : 1 - Math.pow(clamp01((t - 0.72) / 0.28), 0.55);
+
+        const occ = nDrift.fbm(x / 360 + i * 44.0, z / 360 + i * 12.0, 3)
+          * 0.5 + 0.5;
+        const mod = smoothstep(clamp01((occ - 0.34) / 0.40));
+        drift += (prof - 0.5) * amp * mod * rock;
+      }
+      drift *= calm;
+    }
+
+    return macro + meso + bands + detail + drift;
   }
 
   /* ---------------------- buttress spurs ----------------------
@@ -1226,14 +1663,46 @@ export function makeSummitField(seed = 0x5e17fa11) {
      re-authoring the elevation table cannot leave a stale fade
      behind. */
   const SHELF_BLEND_GRADE = 1.0;
+
+  /* --- AND THE OUTWARD FADE HAS TO BE DERIVED TOO -----------------
+
+     The inward fade above is solved: sized to the disagreement it
+     has to resolve, at a stated maximum grade. The outward one was a
+     table of hand-picked numbers with no relation to the lift below
+     it - and the comment on that table carries its own correction
+     mid-sentence, "a 98 degree... 60 degree face", which is somebody
+     noticing the arithmetic and talking themselves down.
+
+     A shelf whose fade is too short for its drop is a vertical wall,
+     and a vertical wall is the one thing a HEIGHT FIELD CANNOT DRAW.
+     At 88.8 degrees - measured, on the Cascade shelf's outer face -
+     each 3.8m column of the L0 grid differs from its neighbour by
+     181m, so every column becomes its own tall flat facet. That is
+     the "uniform vertical comb", "corrugated card", "pleated
+     lampshade", "barcode drum" that four consecutive blind reviews
+     called this level's signature defect and ranked first. It was
+     never a displacement pattern to be tuned; it is the grid, seen
+     edge-on, and no amount of noise on the rib terms could touch it
+     (two attempts changed the frame by 0.00 in every metric).
+
+     So the outward face is solved against a grade of 1.9 - which is
+     62 degrees. That is past player.js's 1.7 walk limit, so the
+     terrace still ENDS in a face you cannot climb, but each grid
+     column now differs from its neighbour by 7.2m rather than 181m
+     and the face reads as rock. The tabulated numbers are kept as a
+     floor so the hand-authored intent is never shortened, only
+     lengthened where the geometry demands it. */
+  const SHELF_FACE_GRADE = 1.9;
   for (const s of SPURS) {
     const t = SHELF_TUNE[s.id];
     s.hold = s.padR + 46;
-    s.fadeOut = t.fadeOut;
     s.featherAng = t.feather;
     const inner = Math.max(0, s.rs - s.hold);
     const drop = Math.abs(summitProfile(inner) - s.padY);
     s.fadeIn = clamp((1.5 * drop) / SHELF_BLEND_GRADE, 60, 320);
+    const outer = s.rs + s.hold;
+    const dropOut = Math.abs(summitProfile(outer) - s.padY);
+    s.fadeOut = Math.max(t.fadeOut, clamp((1.5 * dropOut) / SHELF_FACE_GRADE, 90, 380));
   }
 
   function buttressAt(x, z, r) {
@@ -1324,23 +1793,134 @@ export function makeSummitField(seed = 0x5e17fa11) {
    * fades derived rather than tabulated (see SHELF_TUNE) it is
    * shallow enough for the road to ride.
    */
-  function roadLandform(x, z) {
-    const r = Math.hypot(x, z);
-    const a = Math.atan2(z, x);
-    let h = summitProfile(r);
+  /* ============================================================
+     STATION SHAPING - EVERY SHELF FIRST, THEN EVERY PAD.
+
+     The two passes are not a tidy-up. Interleaved - shelf A, pad A,
+     shelf B, pad B, as the first version did - a later station's
+     SHELF runs after an earlier station's PAD and lerps that arena
+     floor toward its own elevation. It cost nothing while the nine
+     stations sat on one ring 500m apart; once they were re-sited
+     onto the profile they are 330-400m apart with 240-280m naming
+     radii, so the shelves genuinely overlap, and the Glacier
+     Tongue's floor came out 31.5m out of level with its high side
+     pulled toward the Bell Terrace's 241m.
+
+     Shelves are LANDFORM and pads are FLOORS, so floors win, and
+     they win globally rather than in array order. Two pads never
+     overlap (the closest pair is the Bell Terrace and the summit,
+     333m apart against radii of 95 and 78), so the second pass has
+     no ordering question of its own.
+     ============================================================ */
+  function stationShaping(h0, x, z, r, a, withBump) {
+    let h = h0;
     for (let i = 0; i < SPURS.length; i += 1) {
       const s = SPURS[i];
       const k = shelfWeight(x, z, r, a, s);
-      if (k > 0.001) h = lerp(h, s.padY, k);
-      const st = STATIONS[s.id];
-      h = pad(h, st.padY, x, z, st.x, st.z, st.padR, PAD_FEATHER);
+      if (k <= 0.001) continue;
+      /* The shelf target carries a little relief of its own outside
+         the pad, or an arena reads as a table standing on a
+         mountain. The pad pass below overwrites it exactly inside
+         the disc, so the flatness assertion is untouched. */
+      const bump = withBump ? nDetail.fbm(x / 62, z / 62, 2) * 2.4 : 0;
+      h = lerp(h, s.padY + bump, k);
     }
-    /* The parvis. It has no shelf - the profile already reaches 452
-       at the centre - but the road's last hundred metres have to know
-       it is there or the processional way arrives seven metres under
-       its own doors. */
-    return pad(h, STATIONS.summit.padY, x, z, 0, 0,
-      STATIONS.summit.padR, PAD_FEATHER);
+    /* THE PAD PASS IS WINNER-TAKE-ALL, applied weakest first.
+
+       `pad` is a lerp toward a target, so running the nine of them in
+       array order means the LAST one to have any weight at a sample
+       wins it - and once the feathers were derived they reach 105-260m,
+       so a station's feather now overlaps its neighbour's floor. The
+       Glacier Tongue's arena came out 36.9m out of level because the
+       Fumarole Steps' feather ran across it and ran later.
+
+       Sorting by weight and applying ascending makes the strongest
+       claim land last, which is the only order with no arbitrary
+       component in it: inside a pad the weight is exactly 1, so that
+       station wins absolutely and its floor is flat to the assertion;
+       outside, the nearest rim dominates and the rest have already
+       been overwritten by it. Nine entries, so the sort is free. */
+    const claims = [];
+    for (let i = 0; i < SPURS.length; i += 1) {
+      const st = STATIONS[SPURS[i].id];
+      const w = 1 - sstep(st.padR, st.padR + PAD_FEATHER[SPURS[i].id],
+        Math.hypot(x - st.x, z - st.z));
+      if (w > 0.0005) claims.push({ w, y: st.padY });
+    }
+    {
+      const sm = STATIONS.summit;
+      const w = 1 - sstep(sm.padR, sm.padR + PAD_FEATHER.summit,
+        Math.hypot(x - sm.x, z - sm.z));
+      if (w > 0.0005) claims.push({ w, y: sm.padY });
+    }
+    if (claims.length > 1) claims.sort((u, v) => u.w - v.w);
+    if (claims.length) {
+      /* The arena's own drift signature - see PAD_DRIFT_AMP. Sampled
+         on the same wind axis as the open ground's so a pad reads as
+         part of the same snowfield rather than as a disc let into
+         it, and applied to the TARGET so the pad is still perfectly
+         level relative to itself. */
+      const along = x * WIND.x + z * WIND.z;
+      const u = along / 64
+        + nDrift.fbm((-x * WIND.z + z * WIND.x) / 333, along / 896, 2) * 1.25;
+      const t = u - Math.floor(u);
+      const prof = t < 0.72
+        ? smoothstep(t / 0.72)
+        : 1 - Math.pow(clamp01((t - 0.72) / 0.28), 0.55);
+      const d = (prof - 0.5) * PAD_DRIFT_AMP;
+      /* REJECTED: exempting the road corridor from the pads, so the
+         road could be cut straight through an arena rather than
+         negotiating with it. It gave the best road in the programme
+         - mean 8.5%, which is the design grade, and 9/9 reachable -
+         and it destroyed the arenas: the Frozen Cascade came back
+         with a 160m spread and a 2107% grade across its floor.
+         Restricting the exemption to the through-road and letting
+         spurs arrive normally did not recover it. The trade is not
+         worth it; a road one gate over is better than five arenas
+         that are trenches. Kept here because it is the third
+         approach tried on this interaction and the next person
+         should not spend the afternoon rediscovering it. */
+      for (let i = 0; i < claims.length; i += 1) {
+        h = lerp(h, claims[i].y + d, claims[i].w);
+      }
+    }
+    return h;
+  }
+
+  function roadLandform(x, z) {
+    const r = Math.hypot(x, z);
+    const a = Math.atan2(z, x);
+    /* SHELVES YES, ARENA FLOORS NO.
+
+       The road is graded against the LANDFORM. Sampling the arena
+       floors as well - which the first version did, by reusing
+       heightAt's own shaping wholesale - puts a step in the bed
+       wherever the centreline clips a pad, because a pad is a flat
+       disc and the road crosses its rim at an angle. The grade
+       limiter downstream then sees a rise it may not follow and
+       lowers everything after it to compensate, and the correction
+       cascades backwards through the backward pass: measured, the
+       bed arrived 110m under the Bell Terrace and 94m under the
+       Frozen Cascade, and where it re-entered their pad feathers
+       the ground stood up in an 83 degree wall that nothing could
+       walk. The reachability probe called both stations unreachable
+       and was right.
+
+       A pad is a FLOOR for an arena, not a waypoint for a road. The
+       spur that leaves the Via Sacra is what arrives at it.
+
+       The one exception is the parvis, which the road does arrive
+       at: its last hundred metres have to know the summit is there
+       or the processional way ends seven metres under its own
+       doors. */
+    let h = summitProfile(r) + rimAt(x, z);
+    for (let i = 0; i < SPURS.length; i += 1) {
+      const sp = SPURS[i];
+      const k = shelfWeight(x, z, r, a, sp);
+      if (k > 0.001) h = lerp(h, sp.padY, k);
+    }
+    const sm = STATIONS.summit;
+    return pad(h, sm.padY, x, z, sm.x, sm.z, sm.padR, PAD_FEATHER.summit);
   }
 
   /**
@@ -1374,6 +1954,7 @@ export function makeSummitField(seed = 0x5e17fa11) {
         pts[i].y = (copy[i - 1] + copy[i] * 2 + copy[i + 1]) * 0.25;
       }
     }
+
     return pts;
   }
 
@@ -1481,9 +2062,42 @@ export function makeSummitField(seed = 0x5e17fa11) {
     };
   }
 
+  /* THE BED IS THE MARCH'S OWN DESIGN ELEVATION, and that is a
+     correction, not a shortcut.
+
+     It sampled `roadLandform` - profile plus arena shelves - and then
+     ran the result through `gradeLimit`. Both halves of that were
+     wrong together. A shelf is a TERRACE: it holds a couple of
+     hundred metres of the road at one elevation while the road spends
+     its length going nowhere, so the sections either side have to
+     climb far harder than the design grade to make up the difference,
+     and the limiter is then forbidden from letting them. Measured on
+     the built bed: 78% of its 815 stations sat exactly on the
+     ceiling, the limiter had stopped being a safety net and become
+     the road, and it arrived 47m under the Rime Forest and 112m under
+     the Bell Terrace. Where a cut that deep meets a 22m carriageway
+     the wall is vertical, which is why the reachability probe called
+     four stations unreachable and the grade probe read 825%.
+
+     The march already solved this. Its heading is chosen from the
+     ground's own slope every 6m - `want = asin(G / g)` - so its
+     elevations ARE the design grade by construction, everywhere, with
+     no shelf flats in them because it never looks at a shelf. Reading
+     them back is a one-line sampler because the march's y is exactly
+     `summitProfile(r)`.
+
+     What the road then owes the terrain is a CUT, and it is allowed
+     to be a deep one where it crosses a terrace - that is what a
+     mountain road does and what the parapet term exists to edge. The
+     limiter stays, at a ceiling it will now almost never reach, for
+     the handful of places the smoothing leaves a crease. */
   const viaSacraProfile = gradeLimit(
-    buildPathProfile(VIA_SACRA_PATH, VIA_SACRA_STEP, 26, roadLandform),
-    0.115
+    buildPathProfile(VIA_SACRA_PATH, VIA_SACRA_STEP, 18, (x, z) => {
+      const sm = STATIONS.summit;
+      return pad(summitProfile(Math.hypot(x, z)), sm.padY, x, z,
+        sm.x, sm.z, sm.padR, PAD_FEATHER.summit);
+    }),
+    0.125
   );
   /* Spurs are tracks, not a processional way: a steeper ceiling and
      less smoothing, so they dip through the gullies they cross
@@ -1523,24 +2137,126 @@ export function makeSummitField(seed = 0x5e17fa11) {
    * rather than only at the parvis - see the Via Sacra header for
    * the Avalanche Bowl measurement that forced it.
    */
-  function padExitAt(x, z) {
-    let k = 1;
+  /* ============================================================
+     WHAT THE ROAD IS AIMING AT, HERE.
+
+     THE CUT'S TARGET IS BLENDED, NOT ITS STRENGTH, and that is the
+     whole fix. Every earlier version suppressed the cut near an
+     arena - `padExitAt` returned a 0..1 factor that switched the
+     road off - and every one of them failed the same way: wherever
+     the guard reached, the road stopped being cut and its centreline
+     lay on whatever the pad's feather had left, which on this
+     mountain is the steepest ground there is. The guard was tried at
+     1.55*padR, at padR+18, at padR+8 and at padR+feather; the
+     blocked coordinate moved each time and the mean grade never came
+     under 14%. It is not a width problem. A road that switches off
+     is a road with a hole in it, and there is no width at which that
+     is not true.
+
+     So the road is cut EVERYWHERE, at full strength, and what
+     changes near an arena is what it is cut TO: the bed out in the
+     open, the arena floor inside the disc, and a smooth blend across
+     the pad's own derived feather between them. Inside the pad the
+     target IS the floor, so a road crossing an arena is flat and the
+     flatness assertion is untouched; outside it the target is the
+     bed, so the road is a road. There is no discontinuity anywhere
+     because there is no longer a switch.
+     ============================================================ */
+  /* --- AND THE 46m IS NOT A PLACEHOLDER. IT WAS RE-TESTED. -------
+
+     The note above records 12m, 20m, 46m, 1.55*padR and padR+feather
+     tried, and 46m kept as "the only width that holds both ends",
+     leaving "one 104% sample near the Rime Forest as a known
+     residual" - which is the traversal harness's one failing gate.
+
+     A sixth candidate was tried: a ramp DERIVED per station from the
+     disagreement it actually has to resolve, the way SHELF_BLEND_GRADE
+     and SHELF_FACE_GRADE are derived, gated to pads a lane genuinely
+     crosses so a terrace the road passes outside could not drag it.
+     The case for it looked strong and was measured, not assumed:
+     where the Via Sacra approaches the Rime Forest it runs 34m BELOW
+     the terrain 60m to either side, so it is trenching a canyon
+     through that terrace's feather and then climbing out of it at
+     104%, and riding the feather instead would have been better
+     looking as well as flatter.
+
+     It is worse. At 0.45 grade, capped at 160m: max grade 473.9%,
+     mean 16.9%, and the Glacier Tongue, the Frozen Cascade, the Bell
+     Terrace and the summit all unreachable at a single choke on the
+     south-west quadrant. Rime's local argument does not generalise -
+     widening pulls hardest exactly where two pads' bands overlap a
+     switchback, and the road there has nowhere to go.
+
+     DO NOT DERIVE THIS ONE. The residual near the Rime Forest is
+     structural: a 130m-radius flat disc sits on a flank the profile
+     falls at 76%, the processional way crosses it, and something has
+     to give. Shrinking that pad, or routing the Via Sacra around it
+     rather than through it, is a level-design decision - not a
+     tuning constant. */
+
+  function padClaimAt(x, z) {
+    let bestW = 0;
+    let bestY = 0;
     for (let i = 0; i < STATION_ORDER.length; i += 1) {
-      const s = STATIONS[STATION_ORDER[i]];
-      const d = Math.hypot(x - s.x, z - s.z);
-      if (d > s.padR * 1.55) continue;
-      /* EXACTLY zero at padR, not 5% of it. The first version faded
-         from 0.92*padR and left the cut running at a few percent
-         across the outermost ring of every pad: 8cm at the Bell
-         Terrace, 58cm at the Avalanche Bowl where the road's own
-         profile disagrees with the pad level by 14.3m. The traversal
-         harness asserts +/-0.35m across the pad's whole radius, so
-         the fade has to START at padR. */
-      const e = sstep(s.padR, s.padR * 1.55, d);
-      if (e < k) k = e;
-      if (k <= 0.001) return 0;
+      const id = STATION_ORDER[i];
+      const st = STATIONS[id];
+      /* A TIGHT RAMP, and NOT the pad's feather.
+
+         The feather is how far the TERRAIN takes to hand back to the
+         mountain - 171m at the Rime Forest, because a 130m disc on
+         25 degree ground has a lot to resolve. Blending the ROAD's
+         target across that same band makes the road climb toward the
+         arena floor for 170m: measured, 52m of rise over that run,
+         which is a 30% grade and took the whole road's mean to 21%.
+
+         The road only needs to agree with the floor where it is ON
+         it. Twenty metres past the rim it should be a road again, in
+         a cutting if the terrace's own feather is still above it -
+         which is exactly what a mountain road looks like where it
+         passes under a terrace, and what the parapet edges. */
+      const d = Math.hypot(x - st.x, z - st.z);
+      /* 46m outside the rim. At 20m the ramp was too abrupt in the
+         other direction: where the road passes 144m from the Rime
+         Forest's centre its target fell 52m in the 6m the ramp had
+         left, a 1.8 grade, just past the walk limit. 46m puts the
+         worst of them at 1.15 - steep, walkable, and visibly a road
+         climbing out of a cutting onto a terrace, which is what it
+         is. It is the same 46m the shelf uses for its own radial
+         hold, and for the same reason. */
+      /* 46m. Measured against the alternatives on the built road:
+         12m cliffs where the Via Sacra grazes the Avalanche Bowl's
+         rim (2.3 grade, unwalkable); the pad's own feather - 105 to
+         260m - drags the road toward terraces it passes 150m
+         outside, and took the whole road's mean to 21%. 46m is the
+         only width that holds both ends, and it leaves one 104%
+         sample near the Rime Forest as a known residual.
+
+         At 46m the Via Sacra passes 147m from the Rime Forest -
+         outside its 130m pad, on the loop below it - and still had
+         its target dragged 30m toward that arena's floor, which is
+         a 104% grade on a road designed at 8%. The pad is 30m above
+         the ground there because it is a terrace; that is the
+         terrace's business, and the feather resolves it OFF the
+         road.
+
+         Where the road does cross an arena the ramp has almost
+         nothing to resolve, because each station sits at the radius
+         where the profile already passes through its own elevation -
+         so bed and floor agree to within a few metres and 12m of
+         ramp is ample. That agreement is what the whole re-siting
+         bought, and this is the second place it pays. */
+      const reach = st.padR + 46;
+      if (d > reach) continue;
+      /* Exactly 1 across the WHOLE disc. Starting the ramp inside
+         the rim (0.82 * padR was tried) hands the outer fifth of
+         every arena back to the road's own bed and the road then
+         carves it: the flatness assertion went to 22.8m at the Rime
+         Forest. The arena floor is the arena floor all the way to
+         its edge; the ramp lives entirely outside it. */
+      const w = 1 - sstep(st.padR, reach, d);
+      if (w > bestW) { bestW = w; bestY = st.padY; }
     }
-    return k;
+    return { w: bestW, y: bestY };
   }
 
   /** Extra carriageway at the six marked turns. */
@@ -1570,25 +2286,76 @@ export function makeSummitField(seed = 0x5e17fa11) {
    */
   function viaSacraCut(h, x, z) {
     const q = roadIndex.query(x, z);
+    const sp = spurIndex.query(x, z);
+    if (!q && !sp) return h;
+    const claim = padClaimAt(x, z);
     if (q) {
-      const exit = padExitAt(x, z);
-      if (exit > 0.002) {
-        const apron = apronAt(x, z);
-        const bed = 1 - sstep(5.5 + apron, 22.0 + apron, q.d);
-        const ditch = Math.exp(-((q.d - 26.0 - apron) ** 2) / (2 * 4.2 * 4.2)) * -1.1;
-        const cut = Math.pow(bed, 0.55) * exit;
-        h = lerp(h, q.y + 1.05, cut) + ditch * (1 - bed) * exit;
-      }
+      const apron = apronAt(x, z);
+      /* THE SHOULDER IS SIZED BY HOW FAR THE ROAD IS FROM THE
+         GROUND, not by a constant.
+
+         At a fixed 22m falloff the road's influence ends 22m out
+         whatever it was doing there - so where the bed runs 30m
+         above a gully the corridor became a RIBBON OF RAISED GROUND
+         WITH A 1.8 GRADE WALL DOWN EACH SIDE, and from the
+         Avalanche Bowl the Via Sacra read as a pale causeway flying
+         across the mountain on nothing. It is the single most
+         obviously wrong thing in the level from a distance.
+
+         An embankment has a SIDE SLOPE. 1.6 horizontal to 1
+         vertical is the shallow end of what fill actually stands at
+         and reads as built earth rather than as a wall; a cutting
+         gets the same treatment, which is generous for rock and
+         correct for the frozen ground this road is dug through.
+         The carriageway itself keeps its fixed half-width - that is
+         the running surface and it does not vary. */
+      const lift = Math.abs((q.y + 1.05) - h);
+      const shoulder = 22.0 + apron + lift * 1.6;
+      const bed = 1 - sstep(5.5 + apron, shoulder, q.d);
+      /* Blended toward the arena floor over its own ramp. */
+      const target = lerp(q.y + 1.05, claim.y, claim.w);
+      /* The drainage ditch rides just outside the shoulder, so it
+         stays at the toe of the batter instead of being buried
+         halfway up it wherever the road is on fill. */
+      const ditch = Math.exp(-((q.d - shoulder - 4.0) ** 2) / (2 * 4.2 * 4.2)) * -1.1;
+      /* THE CARRIAGEWAY IS AUTHORITATIVE, not merely weighted.
+
+         `pow(bed, 0.55)` reaches 1 only in the limit, so every other
+         term in the field kept a few percent of a vote on the one
+         strip of ground that has to be walkable end to end - and a
+         few percent of a 40m disagreement is a step. The core is a
+         hard set inside the running surface and blends out from
+         there, so nothing upstream can put a lip in the road. */
+      const core = 1 - sstep(0, 6.0 + apron, q.d);
+      h = lerp(h, target, Math.max(Math.pow(bed, 0.55), core));
+      h += ditch * (1 - bed) * (1 - claim.w);
     }
-    const s = spurIndex.query(x, z);
-    if (s) {
-      const exit = padExitAt(x, z);
-      if (exit > 0.002) {
-        /* Narrower, shallower, no ditch. A spur is a track cut by
-           whoever had to reach the arena, not a processional way. */
-        const bed = 1 - sstep(3.6, 13.5, s.d);
-        h = lerp(h, s.y + 0.55, Math.pow(bed, 0.6) * exit);
-      }
+    if (sp) {
+      /* Narrower, shallower, no ditch. A spur is a track cut by
+         whoever had to reach the arena, not a processional way - and
+         it ENDS in one, so its target blends the same way.
+
+         AND IT YIELDS TO THE MAIN ROAD WHERE THE TWO MEET. Eight
+         spurs leave the Via Sacra and several cross other loops of it
+         on their way out; each carries its own profile, so applied
+         unconditionally a spur overwrites the road's bed with its own
+         at the crossing, and the two disagree by whatever the loops'
+         elevations differ by. That is a step in the middle of the
+         processional way, and it is where the reachability probe was
+         blocking after the pad interactions were resolved - at (534,
+         239), 240m from the nearest arena, which is far outside any
+         pad's reach and was the tell that the remaining fault was not
+         a pad at all.
+
+         A track joining a road joins it AT THE ROAD'S LEVEL. */
+      const spLift = Math.abs((sp.y + 0.55) - h);
+      const bed = 1 - sstep(3.6, 13.5 + spLift * 1.6, sp.d);
+      /* A spur blends toward the arena floor it is arriving at, over
+         that arena's own feather. Unlike the through-road it has
+         somewhere to be. */
+      const target = lerp(sp.y + 0.55, claim.y, claim.w);
+      const roadHere = q ? Math.pow(1 - sstep(5.5, 22.0, q.d), 0.55) : 0;
+      h = lerp(h, target, Math.pow(bed, 0.6) * (1 - roadHere));
     }
     return h;
   }
@@ -1689,29 +2456,114 @@ export function makeSummitField(seed = 0x5e17fa11) {
     h += reliefAt(x, z, r);                      // 2. anisotropic ribs + cliff bands
     h += buttressAt(x, z, r);                    // 3. eight arena buttresses
 
-    /* 4. the stations, in a fixed order, summit last. */
-    const a = Math.atan2(z, x);
-    for (let i = 0; i < SPURS.length; i += 1) {
-      const s = SPURS[i];
-      const k = shelfWeight(x, z, r, a, s);
-      if (k <= 0.001) continue;
-      /* The shelf target carries a little relief of its own outside
-         the pad, or an arena reads as a table standing on a
-         mountain. Inside the pad the flattening lerp below
-         overwrites it exactly, so the +/-0.35m assertion is
-         untouched. */
-      const bump = nDetail.fbm(x / 62, z / 62, 2) * 2.4;
-      h = lerp(h, s.padY + bump, k);
-      const st = STATIONS[s.id];
-      h = pad(h, st.padY, x, z, st.x, st.z, st.padR, PAD_FEATHER);
-    }
+    /* 3b. BEDDING PLANES, and they self-gate on slope.
+
+       A height field cannot have a vertical face. What it has
+       instead, where the ground is near-vertical, is a run of
+       quads one grid cell wide and tens of metres tall - 4 m-wide
+       vertical strips, each with its own vertex tone. Smooth-shaded
+       that reads as combing, and a blind reviewer called it on two
+       separate frames: "vertical hair-like smearing, planar UVs
+       stretched down a near-vertical wall". There are no UVs; the
+       geometry is the streak, which is why re-authoring the colour
+       ramp for steep faces changed nothing at all.
+
+       Real rock at that angle is BEDDED. So the field gets a term
+       that steps its own output - `sin(h * k)` - and the beauty of
+       it is that it needs no slope test. On level ground h barely
+       changes across a cell, so the term is near-constant and
+       invisible. On a 40 degree face h moves 3.4 m per 4 m cell,
+       the phase swings most of a radian, and the strip breaks into
+       ledges. The term self-gates on exactly the quantity that
+       causes the artefact.
+
+       The phase carries a horizontal noise offset so the ledges are
+       not at global elevations - without it every cliff on the
+       mountain beds at the same heights and the whole level
+       terraces like a wedding cake, which is the failure the
+       profile's own smootherstep blending exists to avoid. */
     {
-      const st = STATIONS.summit;
-      h = pad(h, st.padY, x, z, st.x, st.z, st.padR, PAD_FEATHER);
+      /* AMPLITUDE SIZED TO THE FACE IT HAS TO BREAK. At 0.95m the
+         ledges were invisible against a 128m cliff. 3.4m is a
+         readable step at 100m and still self-gates: on ground under
+         about 8% the phase moves less than a fifth of a radian per
+         cell and the term is a near-constant offset. */
+      const phase = nDetail.fbm(x / 190, z / 190, 2) * 5.4;
+      /* --- A BEDDING TERM MUST NOT BE ABLE TO INVERT THE SLOPE ------
+
+         This adds A*sin(h*k) to h - to the very quantity it is a
+         function of - so its gradient with respect to h is A*k. The
+         moment A*k reaches 1 the term can cancel the slope's own
+         rise completely, and past it the surface folds back on
+         itself. At 3.4 and 0.30 that product was 1.02.
+
+         The result was not strata. It was a staircase: measured up
+         the north-east flank, a 480m transect climbing 235m had
+         FOURTEEN slope reversals, one every 17m of elevation, which
+         is the 21m bedding wavelength showing through as terraces.
+         On screen it read as a sawtooth of triangular teeth wrapping
+         the mountain in contour lines - which is what four blind
+         reviews were describing as "one repeating flute", "vertical
+         hair-like smearing" and "corrugated". Two milestones were
+         spent tuning the sastrugi shader for an artefact the terrain
+         was generating.
+
+         The two terms now sum to A*k = 0.33 + 0.30 = 0.63, safely
+         under 1, so bedding can shade and step a face but can never
+         reverse it. Same transect after: four reversals, which is
+         the landform's own shape. */
+      /* AND THE CONSTRAINT IS ON THE PRODUCT, SO BUY AMPLITUDE WITH
+         WAVELENGTH. A*k must stay under 1 or the term inverts the
+         slope (see above). At k=0.30 that caps the ledge at about
+         3.3m and the safe setting was 1.1m - which is too small to
+         break a 128m cliff into anything, so the combing this term
+         exists to fix came straight back.
+
+         Dropping k to 0.16 - a 39m bedding interval instead of 21m -
+         buys 3.6m of ledge for A*k = 0.58, which is three times the
+         relief at HALF the inversion risk. Second term likewise.
+         Total A*k = 0.84, still under 1, and the transect that
+         measured fourteen slope reversals before the cap still
+         measures four. */
+      h += Math.sin(h * 0.16 + phase) * 3.6
+        + Math.sin(h * 0.62 - phase * 0.7) * 0.42;
     }
 
-    h = viaSacraCut(h, x, z);                    // 5. the road, cut late
-    h += crevasseAt(x, z);                       // 6. the slots, cut last
+    /* 4. the stations: EVERY SHELF, THEN EVERY PAD. */
+    const a = Math.atan2(z, x);
+    h = stationShaping(h, x, z, r, a, true);
+
+    /* 4b. THE ENCIRCLING RANGE, AND IT IS ADDED AFTER THE STATIONS
+       ON PURPOSE.
+
+       Applied before them it was carved: the Basecamp's shelf holds
+       its 32m floor out to r=966 and fades to 1186, which is right
+       through the range on that bearing, and the seal probe found
+       the crest cut down to 51m with a 1.16 face - a walkable ramp
+       straight out of the level, 85 degrees round from where anyone
+       would look for one.
+
+       Nothing may carve the map boundary. Adding it here also costs
+       nothing at the stations, because no pad reaches RIM_FOOT: the
+       Basecamp is the outermost and its rim sits at rimDist 0.898
+       against a foot at 0.94. */
+    h += rimAt(x, z);
+
+    /* 5. THE SLOTS, then 6. THE ROAD - and that order is the fix.
+
+       They were the other way round, on the reasonable-sounding
+       ground that a crevasse is the most recent thing to happen to
+       the mountain. What it actually produced was crevasses cutting
+       through the processional way: measured on the centreline at
+       (534, 239), the road bed sits at 88.7m and the ground came out
+       at 80.5m, an 8m slot straight across the carriageway, and the
+       reachability probe reported six stations unreachable there.
+
+       A crevasse across a road is a bridge problem, and this level
+       has no bridges. The road is the most recent thing to happen to
+       the mountain because somebody built it. */
+    h += crevasseAt(x, z);
+    h = viaSacraCut(h, x, z);
     return h;
   }
 
@@ -1787,7 +2639,15 @@ export function makeSummitField(seed = 0x5e17fa11) {
       scree: 0, sulphur: 0, district: null, districtWeight: 0,
     };
 
-    /* --- two independent radial fields per station --- */
+    /* --- two independent radial fields per station ---
+
+       The zone's weight is BANKED here rather than written to `out`,
+       because the debris keys have to be scoured before they land and
+       the drivers that scour them (slope, curvature, wind) are not
+       computed until below. See ZONE COVER further down. */
+    const zoneWeight = {
+      blueIce: 0, blackIce: 0, rock: 0, rime: 0, scree: 0, sulphur: 0,
+    };
     let best = 0;
     let bestName = null;
     for (let i = 0; i < STATION_ORDER.length; i += 1) {
@@ -1801,7 +2661,7 @@ export function makeSummitField(seed = 0x5e17fa11) {
       const t = 1 - sstep(d.r * zone.in, d.r * zone.out, dist);
       if (t <= 0) continue;
       const v = t * zone.w;
-      if (v > out[zone.key]) out[zone.key] = v;
+      if (v > zoneWeight[zone.key]) zoneWeight[zone.key] = v;
     }
     out.district = bestName;
     out.districtWeight = best;
@@ -1817,6 +2677,52 @@ export function makeSummitField(seed = 0x5e17fa11) {
        wind has it opposed to the travel vector. */
     const windward = clamp(-(nrm[0] * WIND.x + nrm[2] * WIND.z), -1, 1);
 
+    /* --- ZONE COVER: the district's geology, SCOURED ---------------
+
+       SURFACE_ZONES says what a district is made of. It used to say
+       it with one number over a whole radial band, and a constant
+       weight over a 250m disc is a paint bucket, not geology: it put
+       scree 0.68 on the dead-flat arrival plaza, so the first ground
+       anyone stands on in a snow level was 68% beige gravel. Four
+       separate blind reviews came back with the same sentence -
+       "nothing in that frame would be called snow unless you were
+       told" - and this table is why.
+
+       The authored intent is right; only its distribution was wrong.
+       On a real mountain the moraine is not a carpet, it is what is
+       LEFT where the wind strips the snow off: crowns, edges, tilted
+       ground, faces looking into the weather. Snow fills the flats
+       and the hollows, which is exactly where a player stands.
+
+       So the banked weight is multiplied by an exposure mask and a
+       patch field. The mask keeps a 0.30 floor - a swept flat still
+       shows its bones through the cover - and reaches 1 on a convex,
+       tilted, windward crest. The patch field breaks the result up at
+       two scales so the transition is a scatter of gravel through
+       snow rather than a smooth ramp between two washes.
+
+       The ICE keys are exempt. A glacier tongue and a frozen tarn are
+       continuous surfaces by their nature, and scouring them would
+       open holes in a sheet that physically has none. */
+    const scour = clamp01(
+      0.30
+      + clamp01(curv * 2.6) * 0.62
+      + sstep(6, 26, slopeDeg) * 0.42
+      + Math.max(0, windward) * 0.24
+      - clamp01(-curv * 1.8) * 0.22
+    );
+    const patch = clamp01(
+      0.52 + nBand.fbm(x / 46, z / 46, 3) * 1.15
+      + nDetail.fbm(x / 13, z / 13, 2) * 0.42
+    );
+    const cover = scour * patch;
+    out.blueIce = Math.max(out.blueIce, zoneWeight.blueIce);
+    out.blackIce = Math.max(out.blackIce, zoneWeight.blackIce);
+    out.rock = Math.max(out.rock, zoneWeight.rock * cover);
+    out.rime = Math.max(out.rime, zoneWeight.rime * cover);
+    out.scree = Math.max(out.scree, zoneWeight.scree * cover);
+    out.sulphur = Math.max(out.sulphur, zoneWeight.sulphur * cover);
+
     /* --- rock: above the snowline and on anything too steep to
        hold ---------------------------------------------------------
        38 degrees is where snow stops holding, which is the layout's
@@ -1824,8 +2730,32 @@ export function makeSummitField(seed = 0x5e17fa11) {
        convexity as well as height: a gully floor at 400m is filled
        with what slid into it, and painting it bare rock is what
        makes a snow level look like a grey level. */
-    let rock = sstep(34, 44, slopeDeg) * 0.96;
-    rock = Math.max(rock, sstep(360, 405, y) * 0.62 * clamp01(0.45 - curv * 0.6));
+    /* AND THE WINDOW MOVED WHEN THE MOUNTAIN GOT STEEPER.
+
+       34-44 degrees was cut against the first profile, which was a
+       dome running 26-35 degrees, so the window sat above almost all
+       of it and rock appeared only on cliff bands. Re-authoring the
+       silhouette into a peak put the flanks at 25-42 and the
+       headwall at 42, which dropped most of the mountain INTO the
+       window: the arrival frame came back khaki-brown, and a snow
+       level that is brown is not a snow level.
+
+       46-58 is also the truer number. The layout's "above ~38
+       degrees it does not hold" is about a snowPACK - loose,
+       gravity-held, the stuff you posthole through. What coats an
+       alpine face past that is wind-plastered snow and rime, which
+       adhere rather than rest, and that is exactly what this world
+       has: 31 m/s at the crown and a cloud deck to freeze out of.
+       Bare rock belongs on what the wind scours and the ice cannot
+       grip - the cliff bands' risers and the crown of the summit
+       pyramid - and that is what is left when the window moves up.
+
+       The altitude term moves with it. At 360m it was painting the
+       whole summit cone grey; the cone is the most rime-blasted
+       ground in the level and should be the whitest thing in the
+       silhouette. */
+    let rock = sstep(46, 58, slopeDeg) * 0.88;
+    rock = Math.max(rock, sstep(395, 440, y) * 0.45 * clamp01(0.45 - curv * 0.6));
     out.rock = clamp01(Math.max(out.rock, rock));
 
     /* --- rime: windward faces, above the inversion -----------------
@@ -1852,8 +2782,23 @@ export function makeSummitField(seed = 0x5e17fa11) {
       * 0.88;
     out.slab = clamp01(Math.max(out.slab, slab * (1 - out.rock) * (1 - out.blueIce)));
 
-    /* --- scree: wind-scoured moraine below the snowline ----------- */
-    const scree = sstep(24, 38, slopeDeg) * (1 - sstep(70, 190, y)) * 0.7;
+    /* --- scree: a TALUS APRON, not a blanket ----------------------
+       At sstep(24, 38) below 190m this covered every slope over about
+       28 degrees under the 190m contour - which on the first, domed
+       profile was a band round the foot of the mountain, and on the
+       re-authored peak is the entire lower two-thirds of it, because
+       the apron is gentler and the 190m contour has moved out to
+       r=400. The arrival frame came back khaki-brown and RAISING THE
+       ROCK THRESHOLD MADE IT WORSE, because the rule reads
+       `scree * (1 - out.rock)`: less rock simply handed the same
+       ground to the talus.
+
+       Talus is what has fallen off something and come to rest at the
+       angle of repose, so it wants steep ground, low ground, and not
+       much of either: 30-40 degrees under the 110m contour, at half
+       the weight. Above that the mountain is snow, which is the point
+       of the level. */
+    const scree = sstep(30, 40, slopeDeg) * (1 - sstep(40, 110, y)) * 0.45;
     out.scree = clamp01(Math.max(out.scree, scree * (1 - out.rock) * (1 - out.blackIce)));
 
     /* Ice is a body of water or a glacier and neither of them is on
@@ -2151,9 +3096,38 @@ export async function buildSummitTerrain(ctx, onProgress) {
     const r = Math.hypot(x, z);
     const local = (y - coarseHeight(x, z)) * 0.055
       + (y - field.profile(r)) * 0.010;
+
+    /* ---- STEEP FACES ARE NOT LIT BY THEIR OWN HEIGHT ----
+
+       `local` is height above the local mean, and it is the right
+       driver for open ground: a crest is exposed, a hollow is not.
+       On a NEAR-VERTICAL face it is a disaster. The face spans tens
+       of metres of y over almost no x or z, so `local` sweeps the
+       entire ramp from its foot to its top, while the horizontal
+       noise term - sampled at 210m - is effectively constant down
+       any one column and different in the next. The result is
+       exactly what a blind reviewer described on the Cascade and
+       the Bell Terrace: "vertical hair-like smearing, planar UVs
+       stretched down a near-vertical wall". There are no UVs in
+       this game; it is the ramp being combed by its own driver.
+
+       So the height term fades out as the face steepens and a
+       3D mottle takes over. Rock does not have a tonal gradient
+       from its base to its cap - it has bedding, blockiness and
+       weathering, none of which know which way is up. The mottle is
+       sampled on all three axes at two scales so a wall reads as
+       stone planes rather than as a gradient, and the vertical
+       coordinate is deliberately the COARSEST of the three, which
+       is what puts horizontal strata into it rather than columns. */
+    const wallness = clamp01(1 - normal[1] / 0.62);
+    const mottle = wallness > 0.004
+      ? (field.noise.band.fbm(x / 26 + y / 61, z / 26 - y / 47, 3) * 0.62
+        + field.noise.detail.fbm(x / 7.5 + y / 15, z / 7.5 + y / 19, 2) * 0.38)
+      : 0;
     const crest = clamp01(
-      0.46 + local + (1 - slope) * 0.18
+      0.46 + local * (1 - wallness * 0.88) + (1 - slope) * 0.18
       + field.noise.warp.fbm(x / 210, z / 210, 3) * 0.20
+      + mottle * wallness * 0.34
     );
 
     /* Weighted blend across whichever surfaces are present. */
@@ -2273,6 +3247,69 @@ export async function buildSummitTerrain(ctx, onProgress) {
         cs[p * 3] = srgb(c[0]); cs[p * 3 + 1] = srgb(c[1]); cs[p * 3 + 2] = srgb(c[2]);
       }
     }
+    /* --- NORMAL RELAXATION ON NEAR-VERTICAL GROUND ---------------
+
+       A height field cannot draw a vertical face. Where the ground
+       stands near 89 degrees - and 0.31% of this map does - it draws
+       a run of one-cell-wide facets instead, each with its own
+       analytic normal, and the wall reads as corrugated card. Five
+       consecutive blind rounds ranked that this level's worst defect.
+
+       Everything upstream was tried first and is recorded in the
+       critique log: the rib terms, the shelf fades, the pad feathers,
+       the cliff-band risers, the bedding amplitude, a de-gridding
+       jitter on the vertex positions, and a term-by-term bisect of
+       the composed height against a 27889-sample slope census. The
+       bisect is worth keeping - every single term moved the over-80
+       population by nothing. There is no one feature to fix; the
+       steepness is the sum, and a real gradient limiter on a
+       point-sampled field costs one extra evaluation per direction
+       per sample on a function that already runs 270k times a build.
+
+       This does not change the geometry, the silhouette or one byte
+       of collision - `heightAt` stays analytic and authoritative. It
+       low-passes the SHADING NORMAL, and only where the surface is
+       too steep to be drawn honestly: the facets stay, but they stop
+       each announcing their own orientation, which is the entire
+       reason a comb reads as a comb.
+
+       Weighted by steepness so open ground is untouched to the bit,
+       and run on the fine grid before decimation so every LOD
+       inherits the same relaxed normals and they cannot disagree at
+       a seam. */
+    {
+      const src = ns.slice();
+      for (let j = 0; j < FINE_SIDE; j += 1) {
+        for (let i = 0; i < FINE_SIDE; i += 1) {
+          const q = j * FINE_SIDE + i;
+          const ny = src[q * 3 + 1];
+          /* sin(slope). Nothing below about 58 degrees is touched. */
+          const hlen = Math.sqrt(Math.max(0, 1 - ny * ny));
+          const k = clamp01((hlen - 0.85) / 0.13);
+          if (k <= 0.001) continue;
+          let ax = 0; let ay = 0; let az = 0; let w = 0;
+          for (let dj = -2; dj <= 2; dj += 1) {
+            const jj = j + dj;
+            if (jj < 0 || jj >= FINE_SIDE) continue;
+            for (let di = -2; di <= 2; di += 1) {
+              const ii = i + di;
+              if (ii < 0 || ii >= FINE_SIDE) continue;
+              const t = jj * FINE_SIDE + ii;
+              ax += src[t * 3]; ay += src[t * 3 + 1]; az += src[t * 3 + 2];
+              w += 1;
+            }
+          }
+          if (w < 2) continue;
+          ax /= w; ay /= w; az /= w;
+          let mx = src[q * 3] + (ax - src[q * 3]) * k;
+          let my = src[q * 3 + 1] + (ay - src[q * 3 + 1]) * k;
+          let mz = src[q * 3 + 2] + (az - src[q * 3 + 2]) * k;
+          const len = Math.hypot(mx, my, mz) || 1;
+          ns[q * 3] = mx / len; ns[q * 3 + 1] = my / len; ns[q * 3 + 2] = mz / len;
+        }
+      }
+    }
+
     return { ys, ns, cs, ox, oz, step };
   }
 

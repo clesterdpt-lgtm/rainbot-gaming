@@ -1803,6 +1803,10 @@ export async function buildVesperTrooper(ctx) {
     weaponBindQuaternion: weaponMount.quaternion.clone(),
     armAxis: new THREE.Vector3(0, 1, 0),
     legAxis: new THREE.Vector3(0, 1, 0),
+    /* The imported gauntlet's visible palm plane leads its hand bone
+       slightly toward figure-forward. Counter-roll the two relaxed
+       wrists symmetrically so the palms settle toward the thighs. */
+    freeHandPalmTurn: THREE.MathUtils.degToRad(35),
   };
 }
 
@@ -1811,6 +1815,26 @@ async function buildTrooper(ctx) {
     return await buildVesperTrooper(ctx);
   } catch (error) {
     console.warn("[saintfall] Vesper player asset failed; using procedural fallback", error);
+    const fallback = buildProceduralTrooper(ctx);
+    fallback.imported = false;
+    fallback.assetSource = "procedural-fallback";
+    fallback.baseScale = fallback.root.scale.clone();
+    return fallback;
+  }
+}
+
+/* A parallel world may supply a different playable BODY without
+   changing the Reliquary factory used by Vesper encounters. The
+   controller contract stays identical, and a failed planet-specific
+   asset still degrades to the proven procedural figure rather than
+   booting the level with no player at all. */
+async function buildPlayerTrooper(ctx) {
+  if (typeof ctx.playerFigureFactory !== "function") return buildTrooper(ctx);
+  try {
+    return await ctx.playerFigureFactory(ctx);
+  } catch (error) {
+    const label = ctx.playerFigureName || "custom";
+    console.warn(`[saintfall] ${label} player asset failed; using procedural fallback`, error);
     const fallback = buildProceduralTrooper(ctx);
     fallback.imported = false;
     fallback.assetSource = "procedural-fallback";
@@ -2100,7 +2124,7 @@ function makeInput(canvas, captureMeleeAim = null) {
 
 export async function createPlayer(ctx, canvas) {
   const { THREE, scene, terrain } = ctx;
-  const figure = await buildTrooper(ctx);
+  const figure = await buildPlayerTrooper(ctx);
   scene.add(figure.root);
 
   /* THE HEART LAMP RIDES THE SCENE, NOT THE RIG. The drop cinematic
@@ -2266,6 +2290,11 @@ export async function createPlayer(ctx, canvas) {
        mode, and borrowing any of those would also borrow their fuel,
        collision and action rules. */
     downhillGrade: 0,
+    /* Signed grade along the way the body is FACING, + uphill.
+       `downhillGrade` cannot stand in for it: that one is gated on
+       actually travelling down a continuous face, and is zero for
+       every climb. */
+    slopeGrade: 0,
     downhillSliding: false,
     downhillPose: 0,
     bob: 0,
@@ -2327,6 +2356,12 @@ export async function createPlayer(ctx, canvas) {
      sprint, but takes longer to build and shed that momentum. */
   const WALK = 4.4;
   const SPRINT = 8.6;
+  /* Below this the body is no longer travelling far enough per frame
+     to carry the gait, so the swing borrows a clock. Deliberately
+     well under WALK: a genuine slow amble already advances the cycle
+     faster than the floor does, so this only ever applies to a body
+     that is stopping. */
+  const GAIT_SETTLE_SPEED = 1.7;
   const MELEE_THRUST_SPEED = 12.8;
   /* Fraction of the ordinary speed kept while sighted, and the field
      of view the camera pulls to. 0.46 of a walk is a deliberate
@@ -2434,6 +2469,44 @@ export async function createPlayer(ctx, canvas) {
   initIk(THREE);
   const ARM_AXIS = figure.armAxis || new THREE.Vector3(0, -1, 0);
   const LEG_AXIS = figure.legAxis || new THREE.Vector3(0, -1, 0);
+  /* Imported figures do not necessarily share Vesper's shoulder
+     height or arm proportions. Keep the proven Vesper values as the
+     defaults, while allowing a figure adapter to author the free-arm
+     envelope that its own skeleton can actually reach. */
+  const freeArmPose = figure.freeArmPose || {};
+  const freeArmValue = (key, fallback) => Number.isFinite(freeArmPose[key])
+    ? freeArmPose[key]
+    : fallback;
+  /* The value below is the orientation of the FOOT BONE, not a
+     universal boot angle. Imported meshes may author their sole plane
+     at a different rotation around that bone, so let the figure
+     adapter supply the measured flat-contact pitch. */
+  const footPose = figure.footPose || {};
+  const REST_FOOT_PITCH = Number.isFinite(footPose.restPitch)
+    ? footPose.restPitch
+    : 0.55;
+  /* WHERE THE ANKLE SITS WHEN NOTHING IS HOLDING THE FOOT UP.
+     A deviation from the ankle's own neutral, positive toes-up, NOT
+     a world pitch - which is the whole repair below. Legs trailing
+     under a jetpack hang from relaxed ankles with the toes following
+     the shin; the old absolute pitch pointed both sabatons at the
+     horizon while the shins ran backwards, which is a 90-degree
+     ankle break and reads exactly as the reported "feet pointing
+     up". Being a deviation, one number now suits both playable rigs,
+     whose foot bones disagree by 26 degrees about where "flat" is. */
+  const FLIGHT_ANKLE_DEV = Number.isFinite(footPose.flightDev)
+    ? footPose.flightDev
+    : -0.34;
+  /* WHAT AN ANKLE CAN DO. Roughly 55 degrees pointed and 26 pulled
+     up, which is the human range plus a little for armour. This is
+     the last thing applied to every foot in every mode, so no
+     solver below - gait, climb, skid, boost or flight - can hand the
+     rig a joint angle a leg does not have. */
+  const ANKLE_DEV_MIN = -0.96;
+  const ANKLE_DEV_MAX = 0.46;
+  /* The sole may roll this far across a hill before the boot simply
+     rides the slope's edge, matching a real subtalar joint. */
+  const ANKLE_ROLL_LIMIT = 0.38;
   const chestOffset = new THREE.Quaternion();
   const headOffset = new THREE.Quaternion();
   const chestWorldQuaternion = new THREE.Quaternion();
@@ -2459,6 +2532,279 @@ export async function createPlayer(ctx, canvas) {
   const footBasis = new THREE.Matrix4();
   const footWorldQuaternion = new THREE.Quaternion();
   const footParentQuaternion = new THREE.Quaternion();
+  const footRollQuaternion = new THREE.Quaternion();
+  const footFwd = new THREE.Vector3();
+  const shinDir = new THREE.Vector3();
+  const jointWorld = new THREE.Vector3();
+  const hipWorld = new THREE.Vector3();
+  const reachTmp = new THREE.Vector3();
+  const groundTilt = { pitch: 0, roll: 0 };
+  /** Clamped smoothstep. The gait channels below are all "ease this
+   *  fraction of a phase", and an un-clamped one runs away past its
+   *  own window. */
+  const smoothstep01 = (v) => {
+    const x = clamp01(v);
+    return x * x * (3 - 2 * x);
+  };
+
+  /* ============================================================
+     THE ANKLE
+
+     Foot bones do not participate in two-joint IK. Left alone they
+     inherit every shin rotation and point up, inward or backward, so
+     they get an authored world basis instead - X across the body, Y
+     along the bone to the toe, Z completing the frame.
+
+     THE FRAME IS THE POINT, AND IT WAS THE BUG. A boot planted on
+     the ground is held by the GROUND: its sole owns a world angle
+     and the shin swings over it. A boot in the air is held by the
+     ANKLE: it hangs off the shin and has no opinion about the
+     horizon at all. The old code only ever built the first kind, so
+     every pose where the shin left vertical - a folded swing knee, a
+     leg trailing under the jetpack, a stride up a hill - took the
+     entire difference out of the ankle joint. Measured on a flat
+     walk that was 114 degrees of dorsiflexion at mid-swing; hovering
+     it was 98 on Vesper and 111 on White Vigil, held for as long as
+     the player kept flying.
+
+     So `orientFoot` takes the pose as an ANKLE DEVIATION - toes-up
+     from neutral, zero being a sole flat under a vertical shin - and
+     a `follow` weight saying which of the two frames owns it. It
+     ends by clamping the deviation the rig actually receives into
+     the range an ankle has, whatever the caller asked for.
+     ============================================================ */
+  function ankleAnglesFrom(i, facing) {
+    /* The shin's angle in the vertical plane through `facing`,
+       measured from forward toward up: -PI/2 is straight down,
+       past -PI is folded back and up under the thigh.
+       ...
+       AND THAT IS WHY IT IS UNWRAPPED AGAINST LAST FRAME. `atan2`
+       returns (-PI, PI], so a knee folding past horizontal steps
+       from -179 to +174 degrees in one frame - a 353-degree jump in
+       the quantity the whole ankle pose is measured against. It
+       snapped the sabaton through a right angle for a single frame,
+       twice per stride, at exactly the moment the leg was moving
+       fastest: individually invisible, collectively the reported
+       "glitchy" leg.
+
+       A fixed branch cut does not fix it, it only moves it. A shin
+       at +95 degrees is a knee lifted with the foot forward and a
+       shin at +174 is a heel folded back over the calf, and no
+       threshold tells those apart - the first attempt here read the
+       forward one as folded 265 degrees backward and put 23 degrees
+       of that straight into the ankle. Continuity does tell them
+       apart, because the leg cannot get from one to the other
+       without passing through everything between. */
+    footFwd.set(Math.sin(facing), 0, Math.cos(facing));
+    figure.kneePivots[i].getWorldPosition(jointWorld);
+    figure.footPivots[i].getWorldPosition(reachTmp);
+    shinDir.copy(reachTmp).sub(jointWorld);
+    const leg = legs[i];
+    if (shinDir.lengthSq() < 1e-10) return leg.shinPhi;
+    shinDir.normalize();
+    let phi = Math.atan2(shinDir.y, shinDir.x * footFwd.x + shinDir.z * footFwd.z);
+    const prev = leg.shinPhi;
+    while (phi - prev > Math.PI) phi -= Math.PI * 2;
+    while (prev - phi > Math.PI) phi += Math.PI * 2;
+    /* Bounded so a teleport, a respawn or a cutscene cannot leave a
+       leg carrying an accumulated multiple of a turn. A real gait
+       oscillates about straight down and never approaches this. */
+    if (phi < -Math.PI * 2.5 || phi > Math.PI * 1.5) {
+      phi = Math.atan2(shinDir.y, shinDir.x * footFwd.x + shinDir.z * footFwd.z);
+    }
+    leg.shinPhi = phi;
+    return phi;
+  }
+
+  function orientFoot(i, facing, dev, follow = 0, roll = 0) {
+    const foot = figure.footPivots && figure.footPivots[i];
+    if (!foot || !foot.parent) return;
+    const shinPhi = ankleAnglesFrom(i, facing);
+    /* Where the toe points, as an angle in the same plane. The
+       world frame answers "flat, tilted by `dev`"; the shin frame
+       answers "wherever the shin went, plus the same `dev`". They
+       agree exactly when the shin is vertical, which is what keeps
+       the blend continuous through touchdown. */
+    const worldPhi = dev - REST_FOOT_PITCH;
+    /* Wide on purpose: any value this clamps is a value the achieved
+       ankle angle is WRONG by, so the real bound is the deviation
+       clamp below and this is only a NaN/runaway guard. */
+    const shinPhi0 = clamp(shinPhi, -5.5, 1.7);
+    const toePhi = worldPhi + clamp01(follow) * (shinPhi0 + Math.PI / 2);
+    // The one guarantee: a joint angle a leg can hold.
+    const held = clamp(
+      toePhi - shinPhi0 - Math.PI / 2 + REST_FOOT_PITCH,
+      ANKLE_DEV_MIN, ANKLE_DEV_MAX
+    );
+    const pitch = -(shinPhi0 + Math.PI / 2 + held - REST_FOOT_PITCH);
+
+    const cp = Math.cos(pitch);
+    const sp = Math.sin(pitch);
+    footX.set(Math.cos(facing), 0, -Math.sin(facing));
+    footY.set(Math.sin(facing) * cp, -sp, Math.cos(facing) * cp);
+    footZ.crossVectors(footX, footY).normalize();
+    footBasis.makeBasis(footX, footY, footZ);
+    footWorldQuaternion.setFromRotationMatrix(footBasis);
+    /* AND NOW THE SAME BOUND AGAIN, IN THREE DIMENSIONS.
+     *
+     * Everything above works in the vertical plane through `facing`,
+     * which is where a leg belongs and where all of the authored
+     * pose lives. A leg that has wandered OUT of that plane - the
+     * body sliding along masonry leaves a stance foot two thirds of
+     * a metre off the midline - has a shin with a large lateral
+     * component, and the in-plane angle then understates the real
+     * joint angle by everything the projection dropped: measured 40
+     * degrees of dorsiflexion where the planar clamp believed it had
+     * allowed 26. Correcting it here rather than in the plane leaves
+     * the pose exactly as authored whenever the leg is where it
+     * should be, and bounds it exactly when it is not. */
+    const ankle3d = Math.acos(clamp(shinDir.dot(footY), -1, 1));
+    const neutral3d = Math.PI / 2 - REST_FOOT_PITCH;
+    const want3d = clamp(ankle3d, neutral3d + ANKLE_DEV_MIN, neutral3d + ANKLE_DEV_MAX);
+    if (Math.abs(want3d - ankle3d) > 1e-4) {
+      footZ.crossVectors(shinDir, footY);
+      if (footZ.lengthSq() > 1e-8) {
+        footZ.normalize();
+        footRollQuaternion.setFromAxisAngle(footZ, want3d - ankle3d);
+        footWorldQuaternion.premultiply(footRollQuaternion);
+        footY.applyQuaternion(footRollQuaternion);
+      }
+    }
+    if (roll) {
+      /* ROLLED ABOUT THE BOOT'S OWN LONG AXIS - which is the toe
+         direction, and NOT the body's forward. Those are the same
+         line only when the sole is level, and everywhere else
+         rolling about forward drags the toe out of the plane the
+         flexion was just solved in: on a cross-slope climb it added
+         a further 22 degrees to an ankle already at its limit, which
+         is the whole thing this function exists to prevent. About
+         the toe, the joint angle is untouched and only the sole
+         turns, which is what an ankle's inversion actually is. */
+      footRollQuaternion.setFromAxisAngle(
+        footY, clamp(roll, -ANKLE_ROLL_LIMIT, ANKLE_ROLL_LIMIT)
+      );
+      footWorldQuaternion.premultiply(footRollQuaternion);
+    }
+    foot.parent.getWorldQuaternion(footParentQuaternion).invert();
+    foot.quaternion.copy(footParentQuaternion).multiply(footWorldQuaternion);
+    foot.updateWorldMatrix(false, true);
+  }
+
+  /**
+   * The ground's pitch and roll under a point, in the frame of a body
+   * facing `facing`. Written into `groundTilt`.
+   *
+   * A sole held flat while the hill is not is the difference between
+   * a boot standing on Kenosis and a boot standing THROUGH it, and
+   * no amount of correct leg IK hides it: the contact patch is the
+   * one part of a walk a player looks straight at.
+   */
+  /* The same question, per leg, memoised on where it was asked.
+   *
+   * Four height samples a foot a frame is not free - it measured
+   * about 0.2ms of sim on its own - and most of them are repeats: a
+   * standing trooper asks about the same square metre forever, and a
+   * swing's landing point barely moves until the last few frames
+   * before touchdown. 4cm is well inside the 22cm the tilt is
+   * measured over, so a hit is the same answer. */
+  const legTilt = [0, 1].map(() => ({
+    x: NaN, z: NaN, yaw: 0, at: -1, pitch: 0, roll: 0,
+  }));
+  const FLAT_TILT = { pitch: 0, roll: 0 };
+  function legGroundTilt(i, x, z, facing) {
+    const cache = legTilt[i];
+    /* Expires on TIME as well as on distance, because the ground is
+       not a constant: the Ossuary's pit is carved into the height
+       field and animated, and a boot standing still over moving
+       terrain would otherwise hold its opening tilt for as long as
+       the player did not step. */
+    if (state.clock - cache.at < 0.2
+      && Math.abs(cache.x - x) < 0.04 && Math.abs(cache.z - z) < 0.04
+      && Math.abs(cache.yaw - facing) < 0.05) return cache;
+    const tilt = readGroundTilt(x, z, facing);
+    cache.x = x;
+    cache.z = z;
+    cache.yaw = facing;
+    cache.at = state.clock;
+    cache.pitch = tilt.pitch;
+    cache.roll = tilt.roll;
+    return cache;
+  }
+
+  function readGroundTilt(x, z, facing) {
+    const s = 0.22;
+    const fx = Math.sin(facing);
+    const fz = Math.cos(facing);
+    const rise = groundY(x + fx * s, z + fz * s) - groundY(x - fx * s, z - fz * s);
+    const lift = groundY(x + fz * s, z - fx * s) - groundY(x - fz * s, z + fx * s);
+    groundTilt.pitch = Number.isFinite(rise) ? Math.atan2(rise, s * 2) : 0;
+    groundTilt.roll = Number.isFinite(lift) ? Math.atan2(lift, s * 2) : 0;
+    return groundTilt;
+  }
+
+  /**
+   * Pull a foot target inside the leg's own reach.
+   *
+   * The two-joint solver CLAMPS rather than stretching, which is the
+   * right call - but it clamps silently, and what the player sees is
+   * a locked-straight leg with the sabaton hanging somewhere the gait
+   * still believes it planted. Climbing a 1.4 grade the trailing
+   * ankle finished 1.39m from its target; that is not a stiff pose,
+   * it is a boot that has come off the leg.
+   *
+   * Moving the TARGET instead keeps the ankle attached to the shin
+   * and the whole limb inside a pose it can hold. The foot ends up
+   * higher off the hill than the gait asked for, which is exactly
+   * what a person climbing does with the trailing leg.
+   */
+  function clampReach(i, target) {
+    figure.legPivots[i].updateWorldMatrix(true, false);
+    hipWorld.setFromMatrixPosition(figure.legPivots[i].matrixWorld);
+    const lengths = figure.legLengths ? figure.legLengths[i] : figure.limb;
+    const chain = lengths.thigh + lengths.shin;
+    const max = chain * 0.985;
+    /* And the NEAR limit, which the solver does not have. Its own
+       floor is |thigh - shin|, a couple of millimetres on a human
+       leg, so a target close to the hip folds the knee through 178
+       degrees - the shin doubled back onto the thigh. 0.28 of the
+       chain is a 147-degree fold: heel to buttock, and the end of
+       what a knee does. Climbing a 1.4 grade reached 178 every
+       stride. */
+    const min = chain * 0.28;
+    /* AND A CEILING, WHICH IS WHAT ACTUALLY ENFORCES THE FOLD.
+     *
+     * An ankle does not go above its own hip while walking, and
+     * saying so as a plain clamp on height does the near limit's job
+     * for it: with the ankle at least `min` BELOW the hip, the
+     * hip-to-ankle distance is at least `min` whatever the foot is
+     * doing horizontally, so the knee cannot fold past its limit and
+     * the near branch below becomes a guard rather than a mechanism.
+     *
+     * That matters because the near branch cannot be made smooth.
+     * Every version of it replaces the target wholesale, so a target
+     * DRIFTING across the limit sphere jumps when it crosses -
+     * sprinting up a 41-degree slope, the boot sat pinned just under
+     * the hip for several frames and then snapped 0.8m in one. A
+     * ceiling has no far side to cross. */
+    reachTmp.copy(target).sub(hipWorld);
+    const ceiling = hipWorld.y - min;
+    if (target.y > ceiling) {
+      target.y = ceiling;
+      reachTmp.y = -min;
+    }
+    const d = reachTmp.length();
+    if (d < 1e-6) return 0;
+    if (d > max) {
+      target.copy(hipWorld).addScaledVector(reachTmp, max / d);
+      return d - max;
+    }
+    if (d < min) {
+      const horiz = Math.hypot(reachTmp.x, reachTmp.z);
+      target.y = hipWorld.y - Math.sqrt(Math.max(0, min * min - horiz * horiz));
+      return d - min;
+    }
+    return 0;
+  }
   const handWrist = new THREE.Vector3();
   const handX = new THREE.Vector3();
   const handY = new THREE.Vector3();
@@ -2524,7 +2870,17 @@ export async function createPlayer(ctx, canvas) {
        time. */
     const turnN = clamp01(Math.abs(state.yawRate) / 2.2);
     const chop = 1 - 0.42 * turnN;
-    gaitSpec.strideLen = (lerp(0.78, 2.05, walkN) + 1.55 * sprintN) * chop;
+    /* AND YOU CANNOT TAKE A FULL STRIDE UP A HILL EITHER. The
+       landing foot has to reach the ground a stride ahead, which on
+       a 1.4 grade is most of a metre higher than the one behind it:
+       the front leg folds to the end of a knee and the back one is
+       asked for ground a leg-length and a half below the hip. Both
+       are then rescued by clamps, and a clamp is a pose nobody
+       authored. Chopping the stride is what a person climbing does
+       and it keeps the whole cycle inside the leg. */
+    const climbN = clamp01(Math.max(0, state.slopeGrade) / 1.25);
+    gaitSpec.strideLen = (lerp(0.78, 2.05, walkN) + 1.55 * sprintN)
+      * chop * lerp(1, 0.55, climbN);
     const backpedal = backpedalWeight();
     const forwardStance = lerp(0.52, 0.34, walkN) - 0.14 * sprintN + 0.10 * turnN;
     /* A forward run deliberately has a flight phase. A firing
@@ -2556,7 +2912,20 @@ export async function createPlayer(ctx, canvas) {
     swinging: false,
     side: i === 0 ? -1 : 1,
     planted: false,
-    footPitch: 0.55,
+    /* ANKLE DEVIATION, toes-up positive, zero being a sole flat
+       under a vertical shin. Deliberately not a world pitch: see
+       `orientFoot`. */
+    footDev: 0,
+    /* How much the sabaton rides the shin rather than the ground.
+       A planted boot is held by the hill; a free one hangs off the
+       ankle, and the handoff has to be continuous or the foot snaps
+       through 90 degrees at every touchdown. */
+    footFollow: 0,
+    footRoll: 0,
+    /* Last frame's shin angle, kept ONLY so the next one can be
+       unwrapped against it - see `ankleAnglesFrom`. */
+    shinPhi: -Math.PI / 2,
+    settling: false,
   }));
 
   /* ============================================================
@@ -3374,6 +3743,20 @@ export async function createPlayer(ctx, canvas) {
        silhouette metric reported 0% coverage, which is what an
        absent subject looks like. Position, facing, legs and crouch
        are body state; only the camera belongs to the camera. */
+    /* Read once a frame, before anything asks for the gait: the
+       stride length depends on it and the sole angle is measured
+       against it. Damped, because a single height sample under a
+       moving body crosses every pebble on the level and a stride
+       that changed length per pebble would be its own defect. */
+    const slopeAhead = (groundY(
+      state.x + Math.sin(state.yaw) * 1.4,
+      state.z + Math.cos(state.yaw) * 1.4
+    ) - groundY(state.x, state.z)) / 1.4;
+    state.slopeGrade = damp(
+      state.slopeGrade,
+      Number.isFinite(slopeAhead) ? clamp(slopeAhead, -2, 2) : 0,
+      7, dt
+    );
     const gait = readGaitSpec();
     const jetPose = clamp01(ctx.jetpack?.state?.pose || 0);
     const boostPose = clamp01(ctx.boost?.state?.pose || 0);
@@ -3697,6 +4080,7 @@ export async function createPlayer(ctx, canvas) {
 
   function update(dt, camera) {
     state.clock += dt;
+    const gaitAtFrameStart = state.gait;
     sampleAction(dt);
     /* How far through the fall, for the camera. Read off the action's
        own clock rather than tracked separately, so there is exactly one
@@ -4300,6 +4684,29 @@ export async function createPlayer(ctx, canvas) {
       }
     }
     if (!downhillUpdated) updateDownhill(0, false, dt);
+    /* THE STEP THE BODY STARTED HAS TO FINISH.
+     *
+     * The gait is integrated from DISTANCE TRAVELLED, which is the
+     * whole reason a planted foot never slides - and it means a body
+     * that stops advancing stops the cycle wherever it is. Braking
+     * out of a sprint, that is a boot parked at knee height for the
+     * half-second the trooper takes to shed 8m/s, and then a hurried
+     * settle when the walk finally drops below its own threshold.
+     * It is the third of the reported leg faults and the only one
+     * that is neither an angle nor a snap: it is a leg that has
+     * simply stopped animating while you watch it.
+     *
+     * So a swing - and ONLY a swing, never a planted foot - is given
+     * a cadence floor that grows as the shortfall between the body's
+     * speed and a walk grows. A stance foot is untouched, so distance
+     * still owns the plant and the no-slip claim is unchanged. */
+    if (state.grounded && !boostMode && !flightMode
+      && (legs[0].swinging || legs[1].swinging)) {
+      const shortfall = clamp01((GAIT_SETTLE_SPEED - state.speed) / GAIT_SETTLE_SPEED);
+      const floor = dt * 1.5 * shortfall;
+      const advanced = state.gait - gaitAtFrameStart;
+      if (floor > advanced) state.gait += floor - advanced;
+    }
     if (boostMode) {
       ctx.boost?.noteMotion?.(motionStartX, motionStartZ, state.x, state.z, dt);
     }
@@ -5077,30 +5484,32 @@ export async function createPlayer(ctx, canvas) {
         figure.legPivots[i].updateWorldMatrix(true, true);
       }
       kneePole.set(leg.side * 0.10, -0.08, 1).normalize().applyQuaternion(rootQuat);
+      clampReach(i, footTmp);
       const lengths = figure.legLengths ? figure.legLengths[i] : figure.limb;
       solveTwoJoint(
         figure.legPivots[i], figure.kneePivots[i],
         footTmp, kneePole, lengths.thigh, lengths.shin, LEG_AXIS
       );
 
-      const foot = figure.footPivots && figure.footPivots[i];
-      if (foot && foot.parent) {
-        const pitch = lerp(0.55, 0.22, pose);
-        const cp = Math.cos(pitch);
-        const sp = Math.sin(pitch);
-        footX.set(Math.cos(facing), 0, -Math.sin(facing));
-        footY.set(Math.sin(facing) * cp, -sp, Math.cos(facing) * cp);
-        footZ.crossVectors(footX, footY).normalize();
-        footBasis.makeBasis(footX, footY, footZ);
-        footWorldQuaternion.setFromRotationMatrix(footBasis);
-        foot.parent.getWorldQuaternion(footParentQuaternion).invert();
-        foot.quaternion.copy(footParentQuaternion).multiply(footWorldQuaternion);
-        foot.updateWorldMatrix(false, true);
-      }
+      /* NOTHING IS HOLDING THIS FOOT UP. The shin trails backwards
+         and slightly above the horizontal here, so a sole aimed at
+         the horizon - which is what an absolute pitch produces - is
+         an ankle folded through more than a right angle. Hand it to
+         the shin instead and let it hang. */
+      leg.footDev = damp(leg.footDev, lerp(0, FLIGHT_ANKLE_DEV, pose), 12, dt);
+      leg.footFollow = pose;
+      leg.footRoll = 0;
+      orientFoot(i, facing, leg.footDev, pose, 0);
+      /* The gait's own record of where this boot is. Left stale
+         through a flight it holds the launch position, so a landing
+         starts from a target a whole flight path away - and any
+         harness reading `leg.foot` measures the ground the trooper
+         took off from. */
+      leg.foot.copy(footTmp);
+      leg.plant.copy(footTmp);
       leg.swinging = false;
       leg.planted = false;
     }
-    void dt;
   }
 
   /** Ground boost lunge: one boot attacks the travel line while the
@@ -5132,7 +5541,10 @@ export async function createPlayer(ctx, canvas) {
       groundY(state.x + dx * 0.18, state.z + dz * 0.18)
       - groundY(state.x - dx * 0.18, state.z - dz * 0.18)
     ) / 0.36;
-    const groundPitch = clamp(0.55 - Math.atan(slope) * 0.68, 0.20, 1.15);
+    /* Toes up into an uphill line, down into a downhill one, but
+       only as far as an ankle goes - the global clamp in
+       `orientFoot` is the backstop, this is the pose. */
+    const groundDev = clamp(Math.atan(slope) * 0.68, -0.35, 0.42);
     figure.root.updateMatrixWorld(true);
 
     for (let i = 0; i < 2; i += 1) {
@@ -5153,7 +5565,10 @@ export async function createPlayer(ctx, canvas) {
       leg.plant.copy(leg.foot);
       leg.swinging = false;
       leg.planted = false;
-      leg.footPitch = damp(leg.footPitch, groundPitch, 18, dt);
+      const tilt = legGroundTilt(i, x, z, facing);
+      leg.footDev = damp(leg.footDev, groundDev, 18, dt);
+      leg.footFollow = damp(leg.footFollow, 0, 18, dt);
+      leg.footRoll = damp(leg.footRoll, tilt.roll, 14, dt);
 
       if (figure.legBindQuaternions && figure.kneeBindQuaternions) {
         figure.legPivots[i].quaternion.copy(figure.legBindQuaternions[i]);
@@ -5165,25 +5580,14 @@ export async function createPlayer(ctx, canvas) {
         -0.30,
         dz + rightZ * leg.side * 0.18
       ).normalize();
+      clampReach(i, leg.foot);
+      leg.plant.copy(leg.foot);
       const lengths = figure.legLengths ? figure.legLengths[i] : figure.limb;
       solveTwoJoint(
         figure.legPivots[i], figure.kneePivots[i],
         leg.foot, kneePole, lengths.thigh, lengths.shin, LEG_AXIS
       );
-
-      const foot = figure.footPivots && figure.footPivots[i];
-      if (foot && foot.parent) {
-        const cp = Math.cos(leg.footPitch);
-        const sp = Math.sin(leg.footPitch);
-        footX.set(Math.cos(facing), 0, -Math.sin(facing));
-        footY.set(Math.sin(facing) * cp, -sp, Math.cos(facing) * cp);
-        footZ.crossVectors(footX, footY).normalize();
-        footBasis.makeBasis(footX, footY, footZ);
-        footWorldQuaternion.setFromRotationMatrix(footBasis);
-        foot.parent.getWorldQuaternion(footParentQuaternion).invert();
-        foot.quaternion.copy(footParentQuaternion).multiply(footWorldQuaternion);
-        foot.updateWorldMatrix(false, true);
-      }
+      orientFoot(i, facing, leg.footDev, leg.footFollow, leg.footRoll);
     }
   }
 
@@ -5199,11 +5603,9 @@ export async function createPlayer(ctx, canvas) {
     const sin = Math.sin(facing);
     const cos = Math.cos(facing);
     figure.root.updateMatrixWorld(true);
-    const slopePitch = clamp(
-      0.55 + Math.atan(Math.max(0, state.downhillGrade)) * 0.68,
-      0.55,
-      1.20
-    );
+    /* Toes DOWN into the fall line: the brace is the ball of the
+       boot, not the heel. */
+    const slopeDev = clamp(-Math.atan(Math.max(0, state.downhillGrade)) * 0.68, -0.65, 0);
 
     for (let i = 0; i < 2; i += 1) {
       const leg = legs[i];
@@ -5222,7 +5624,10 @@ export async function createPlayer(ctx, canvas) {
       leg.plant.copy(leg.foot);
       leg.swinging = false;
       leg.planted = false;
-      leg.footPitch = damp(leg.footPitch, slopePitch, 14, dt);
+      const tilt = legGroundTilt(i, x, z, facing);
+      leg.footDev = damp(leg.footDev, slopeDev, 14, dt);
+      leg.footFollow = damp(leg.footFollow, 0, 16, dt);
+      leg.footRoll = damp(leg.footRoll, tilt.roll, 12, dt);
 
       if (figure.legBindQuaternions && figure.kneeBindQuaternions) {
         figure.legPivots[i].quaternion.copy(figure.legBindQuaternions[i]);
@@ -5234,25 +5639,14 @@ export async function createPlayer(ctx, canvas) {
         -0.24,
         cos - sin * leg.side * 0.13
       ).normalize();
+      clampReach(i, leg.foot);
+      leg.plant.copy(leg.foot);
       const lengths = figure.legLengths ? figure.legLengths[i] : figure.limb;
       solveTwoJoint(
         figure.legPivots[i], figure.kneePivots[i],
         leg.foot, kneePole, lengths.thigh, lengths.shin, LEG_AXIS
       );
-
-      const foot = figure.footPivots && figure.footPivots[i];
-      if (foot && foot.parent) {
-        const cp = Math.cos(leg.footPitch);
-        const sp = Math.sin(leg.footPitch);
-        footX.set(Math.cos(facing), 0, -Math.sin(facing));
-        footY.set(Math.sin(facing) * cp, -sp, Math.cos(facing) * cp);
-        footZ.crossVectors(footX, footY).normalize();
-        footBasis.makeBasis(footX, footY, footZ);
-        footWorldQuaternion.setFromRotationMatrix(footBasis);
-        foot.parent.getWorldQuaternion(footParentQuaternion).invert();
-        foot.quaternion.copy(footParentQuaternion).multiply(footWorldQuaternion);
-        foot.updateWorldMatrix(false, true);
-      }
+      orientFoot(i, facing, leg.footDev, leg.footFollow, leg.footRoll);
     }
   }
 
@@ -5288,13 +5682,38 @@ export async function createPlayer(ctx, canvas) {
       }
 
       if (!moving) {
+        /* THE BRAKE. `leg.plant` is the last TOUCHDOWN, and a leg
+           caught mid-swing has not had one for most of a stride - so
+           adopting it here teleported the boot backward by up to
+           1.29m in a single frame, which is the reported "legs warp
+           when you stop". Take the pose the foot is actually in and
+           ease that under the hips instead; on a leg that was
+           already planted this is a no-op, because plant and foot
+           are the same point. */
+        if (leg.swinging) {
+          leg.plant.copy(leg.foot);
+          leg.swinging = false;
+          /* A boot caught in the air owes the ground a step, and it
+             is the only foot here that does. An already-planted one
+             is merely tidying its stance and must keep the slow ease
+             or a standing trooper's feet fidget. */
+          leg.settling = true;
+        }
         // Standing: ease both feet back under the hips rather than
         // leaving them wherever the last step finished.
         footRest(leg, 0, footTmp);
-        leg.plant.lerp(footTmp, 1 - Math.exp(-9 * dt));
+        if (leg.settling && leg.plant.distanceToSquared(footTmp) < 0.0016) {
+          leg.settling = false;
+        }
+        leg.plant.lerp(footTmp, 1 - Math.exp(-(leg.settling ? 17 : 9) * dt));
         leg.foot.copy(leg.plant);
-        leg.swinging = false;
-        leg.footPitch = 0.55;
+        const tilt = legGroundTilt(i, leg.foot.x, leg.foot.z, state.yaw);
+        /* Damped, not assigned. A snap here put the whole of a
+           toe-off or heel-strike angle into one frame at exactly the
+           moment the rest of the body was settling. */
+        leg.footDev = damp(leg.footDev, clamp(tilt.pitch, -0.55, 0.42), 10, dt);
+        leg.footFollow = damp(leg.footFollow, 0, 12, dt);
+        leg.footRoll = damp(leg.footRoll, tilt.roll, 10, dt);
       } else {
         const u = (cycle + leg.phase) % 1;
         if (u >= gait.stance) {
@@ -5374,10 +5793,49 @@ export async function createPlayer(ctx, canvas) {
              midline on the way. It is a foot in the air, so it may
              be moved freely - and the correction is zero at
              touchdown, where the predicted frame has become the real
-             one, so this cannot fight the landing point. */
-          uncross(leg, leg.foot, state.x, state.z, state.yaw, 1);
-          // Toe clears first, then the whole sabaton settles flat.
-          leg.footPitch = lerp(0.28, 0.55, e) - Math.sin(t * Math.PI) * 0.10;
+             one, so this cannot fight the landing point.
+
+             RAMPED IN, not applied whole on the first swing frame.
+             A body that slides relative to its own facing - deflected
+             along a wall, or turning over a planted foot - leaves the
+             stance boot inboard of the guard, and taking all of that
+             out at once rotated the foot 0.32m about the pelvis in a
+             single frame at exactly the moment it left the ground.
+             It is a snap on the flat, with nothing steep or fast
+             about it, and it was the largest one left. The ramp is
+             finished long before mid-swing, so the guarantee this
+             exists for is unchanged. */
+          uncross(leg, leg.foot, state.x, state.z, state.yaw,
+            smoothstep01(t / 0.16));
+          /* THE SWING FOOT HANGS OFF THE SHIN. Held to a world angle
+             instead - which is what this did - a knee folded 140
+             degrees under the pelvis took every degree of that out
+             of the ankle, and the trooper ran with both sabatons
+             pulled 114 degrees past what an ankle reaches. It rides
+             the shin for the whole swing and hands ownership back to
+             the ground over the last fifth, so the sole arrives
+             flat. Toe-off hands over the other way: `toeEase` in the
+             stance branch is 1 exactly here, so the two meet. */
+          leg.footFollow = 1 - smoothstep01((t - 0.78) / 0.22);
+          /* The ankle's own trajectory through a stride, which is
+             not a settle from one pose to another: pointed off the
+             push, pulled up to clear the ground, and dropped back
+             toward flat to meet it. */
+          const toeUp = smoothstep01(t / 0.32);
+          const reach = smoothstep01((t - 0.55) / 0.45);
+          /* Weightless for most of the swing - the boot is riding
+             the shin, not the hill - so do not go and read the hill. */
+          const landTilt = leg.footFollow < 0.985
+            ? legGroundTilt(i, leg.target.x, leg.target.z, state.yaw)
+            : FLAT_TILT;
+          /* Ends on the same value the stance branch opens with, so
+             touchdown is a handoff and not a step change. */
+          const strike = lerp(0.14, -0.30, clamp01(
+            (state.speed - WALK) / Math.max(0.1, SPRINT - WALK)
+          ));
+          leg.footDev = lerp(-0.34, 0.22, toeUp) + (strike - 0.22) * reach
+            + clamp(landTilt.pitch, -0.55, 0.42) * (1 - leg.footFollow);
+          leg.footRoll = damp(leg.footRoll, landTilt.roll * (1 - leg.footFollow), 12, dt);
         } else {
           if (leg.swinging) {
             leg.swinging = false;
@@ -5432,7 +5890,31 @@ export async function createPlayer(ctx, canvas) {
           const toeOff = clamp01((stanceT - 0.72) / 0.28);
           const toeEase = toeOff * toeOff * (3 - 2 * toeOff);
           leg.foot.y += toeEase * lerp(0.065, 0.115, clamp01(state.speed / SPRINT));
-          leg.footPitch = lerp(0.34, 0.55, heelSettle) + toeEase * 0.30;
+          /* Heel strike, roll through, drive off the ball - and lie
+             along the hill while doing it. Without the terrain term
+             a boot planted on a 30-degree slope is held flat and
+             cuts straight through it, which no amount of correct leg
+             IK above hides. */
+          const tilt = toeEase < 0.985
+            ? legGroundTilt(i, leg.plant.x, leg.plant.z, state.yaw)
+            : FLAT_TILT;
+          /* Planted: the GROUND owns this sole - until the heel comes
+             off it. `toeEase` is the heel lift, so it is also exactly
+             how much of the boot the ankle has taken back, and it
+             reaches 1 at toe-off where the swing collects it. */
+          leg.footFollow = toeEase;
+          /* HOW THE FOOT MEETS THE GROUND depends on how fast it is
+             arriving. A march lands heel first; a sprint lands on
+             the ball of the boot, which is not a stylisation - it is
+             what the leg does at speed, and asking for a flat sole
+             at 8.6m/s wrote a request the ankle then had to be
+             clamped out of. */
+          const strike = lerp(0.14, -0.30, clamp01(
+            (state.speed - WALK) / Math.max(0.1, SPRINT - WALK)
+          ));
+          leg.footDev = lerp(strike, 0, heelSettle) - toeEase * 0.34
+            + clamp(tilt.pitch, -0.55, 0.42) * (1 - toeEase);
+          leg.footRoll = damp(leg.footRoll, tilt.roll * (1 - toeEase), 14, dt);
         }
       }
 
@@ -5454,32 +5936,26 @@ export async function createPlayer(ctx, canvas) {
         -0.15,
         cos - sin * leg.side * 0.10
       ).normalize();
+      /* Inside the leg's own reach BEFORE the solver clamps it
+         silently. On a hillside the trailing ankle asks for ground
+         more than a leg-length below the hip, and a clamped solve
+         leaves the sabaton floating off a straight leg. */
+      /* The CONTACT RECORD is deliberately not touched. `leg.plant`
+         is where this boot came down and what the slip check holds
+         still; `leg.foot` is where the ankle is drawn, toe lift and
+         reach clamp included. Copying one into the other would let
+         a clamped stance creep the plant uphill a little every
+         frame. */
+      clampReach(i, leg.foot);
       const lengths = figure.legLengths ? figure.legLengths[i] : figure.limb;
       solveTwoJoint(
         figure.legPivots[i], figure.kneePivots[i],
         leg.foot, kneePole, lengths.thigh, lengths.shin, LEG_AXIS
       );
-
-      /* Foot bones do not participate in two-joint IK.  Left alone,
-         they inherit every shin rotation and point up, inward, or
-         backward.  Meshy's foot-to-toe axis is local +Y, so author a
-         full world basis: X across the body, Y forward and down to
-         the sole, Z completing the frame.  This fixes both yaw and
-         roll rather than merely chasing the toe with another aim. */
-      const foot = figure.footPivots && figure.footPivots[i];
-      if (foot && foot.parent) {
-        const facing = state.yaw + actionPose.pelvisYaw;
-        const cp = Math.cos(leg.footPitch);
-        const sp = Math.sin(leg.footPitch);
-        footX.set(Math.cos(facing), 0, -Math.sin(facing));
-        footY.set(Math.sin(facing) * cp, -sp, Math.cos(facing) * cp);
-        footZ.crossVectors(footX, footY).normalize();
-        footBasis.makeBasis(footX, footY, footZ);
-        footWorldQuaternion.setFromRotationMatrix(footBasis);
-        foot.parent.getWorldQuaternion(footParentQuaternion).invert();
-        foot.quaternion.copy(footParentQuaternion).multiply(footWorldQuaternion);
-        foot.updateWorldMatrix(false, true);
-      }
+      orientFoot(
+        i, state.yaw + actionPose.pelvisYaw,
+        leg.footDev, leg.footFollow, leg.footRoll
+      );
     }
   }
 
@@ -5507,6 +5983,13 @@ export async function createPlayer(ctx, canvas) {
      with the back of its hand. +1 means the palm looks along local
      +Z. */
   const HAND_PALM_LOCAL_Z = 1;
+  /* Relaxed-hand correction around the finger/forearm axis. This is
+     figure-authored because a skinned mesh's visible palm plane does
+     not necessarily line up exactly with its hand bone. Weapon grips
+     use their separate PALM_ROLL path below and are unaffected. */
+  let FREE_HAND_PALM_TURN = Number.isFinite(figure.freeHandPalmTurn)
+    ? figure.freeHandPalmTurn
+    : 0;
 
   const restHand = new THREE.Vector3();
   const restElbowPole = new THREE.Vector3();
@@ -5699,7 +6182,8 @@ export async function createPlayer(ctx, canvas) {
     const walkN = clamp01(state.speed / WALK);
     const sprintN = clamp01((state.speed - WALK) / Math.max(0.1, SPRINT - WALK));
     // Standing still is a hang, not a swing: amplitude starts at zero.
-    const amp = 0.180 * walkN + 0.080 * sprintN;
+    const amp = freeArmValue("walkSwing", 0.180) * walkN
+      + freeArmValue("sprintSwing", 0.080) * sprintN;
     const phase = i === 0 ? 0 : Math.PI;
     const sw = Math.sin(state.gait * TAU + phase);
     restSwing.fore = sw * amp;
@@ -5707,16 +6191,21 @@ export async function createPlayer(ctx, canvas) {
        from the hip on the forward stroke and tucks back on the
        return, and the hand rises as it comes forward - without that
        the arm reads as a pendulum bolted to a shoulder. */
-    restSwing.lift = Math.abs(sw) * amp * 0.38;
-    const restX = side * (0.205 + 0.015 * walkN + 0.008 * sprintN);
-    const restY = 0.84 - 0.01 * walkN + 0.11 * sprintN + restSwing.lift * 0.50;
-    const restZ = 0.060 + restSwing.fore;
+    restSwing.lift = Math.abs(sw) * amp * freeArmValue("swingLift", 0.38);
+    const restX = side * (freeArmValue("idleX", 0.205)
+      + freeArmValue("walkX", 0.015) * walkN
+      + freeArmValue("sprintX", 0.008) * sprintN);
+    const restY = freeArmValue("idleY", 0.84)
+      + freeArmValue("walkY", -0.01) * walkN
+      + freeArmValue("sprintY", 0.11) * sprintN
+      + restSwing.lift * freeArmValue("liftY", 0.50);
+    const restZ = freeArmValue("idleZ", 0.060) + restSwing.fore;
     return out.set(
-      lerp(restX, side * 0.205, jetPose),
+      lerp(restX, side * freeArmValue("flightX", 0.205), jetPose),
       /* Long, relaxed walking arms; a sprint raises the hands and
          closes the elbows into the compact armoured-running shape. */
-      lerp(restY, 0.985, jetPose),
-      lerp(restZ, -0.17, jetPose)
+      lerp(restY, freeArmValue("flightY", 0.985), jetPose),
+      lerp(restZ, freeArmValue("flightZ", -0.17), jetPose)
     ).applyMatrix4(figure.root.matrixWorld);
   }
 
@@ -5757,6 +6246,12 @@ export async function createPlayer(ctx, canvas) {
     freeHandZ.addScaledVector(freeHandY, -freeHandZ.dot(freeHandY));
     if (freeHandZ.lengthSq() < 1e-8) freeHandZ.set(0, 0, 1);
     freeHandZ.normalize();
+    /* Both wrists need the same anatomical turn but opposite signed
+       bone rotations. The side factor removes the forward component
+       from each authored palm and turns it toward the body. */
+    if (Math.abs(FREE_HAND_PALM_TURN) > 1e-6) {
+      freeHandZ.applyAxisAngle(freeHandY, side * FREE_HAND_PALM_TURN);
+    }
     freeHandX.crossVectors(freeHandY, freeHandZ).normalize();
     freeHandBasis.makeBasis(freeHandX, freeHandY, freeHandZ);
     freeHandWorld.setFromRotationMatrix(freeHandBasis);
@@ -6385,8 +6880,31 @@ export async function createPlayer(ctx, canvas) {
       PALM_ROLL[0] = support;
       PALM_ROLL[1] = trigger;
     },
+    /* QA-tunable because the last few degrees depend on the visible
+       skinned palm surface, not only the abstract hand bone. */
+    freeHandPalmTurn() { return FREE_HAND_PALM_TURN; },
+    setFreeHandPalmTurn(radians) {
+      if (Number.isFinite(radians)) FREE_HAND_PALM_TURN = radians;
+      return FREE_HAND_PALM_TURN;
+    },
     input,
     figure,
+    /* The leg solver's RESOLVED constants, for the review harness.
+       `footPose` is figure-authored with defaults filled in here, so a
+       probe that reads the figure sees only half the answer and one
+       that hard-codes 0.55 measures its own copy of a number this
+       file is free to move. */
+    legRig: () => ({
+      restPitch: REST_FOOT_PITCH,
+      flightDev: FLIGHT_ANKLE_DEV,
+      devLimit: [ANKLE_DEV_MIN, ANKLE_DEV_MAX],
+      hipHalf: HIP_HALF,
+      stanceGuard: STANCE_GUARD,
+      ankle: figure.limb.ankle,
+      reach: figure.legLengths
+        ? figure.legLengths.map((l) => l.thigh + l.shin)
+        : [figure.limb.thigh + figure.limb.shin, figure.limb.thigh + figure.limb.shin],
+    }),
     beginAction,
     sampleActionAt,
     meleeSwing,

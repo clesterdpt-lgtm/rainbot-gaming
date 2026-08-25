@@ -860,6 +860,24 @@ function buildShafts(ctx, specs) {
     }
   }
 
+  /* WRITE EVERY SHAFT ONCE, HERE.
+
+     `follow` below is the only other caller of `writeShaft`, and it
+     returns early unless something in the set is sun-tracked and then
+     rewrites ONLY the sun-tracked ones. So a static shaft - a rose
+     window down a nave, a slot of light through a lancet - was never
+     written at all: its 154 vertices stayed at the origin with a
+     colour of zero, and the cone was a degenerate point nobody could
+     see. It fails silently in the worst way, because the mesh exists,
+     reports the right triangle count, and is visible.
+
+     This is what the header means by "the rose window down the nave",
+     and it has never drawn. */
+  for (let i = 0; i < prep.length; i += 1) writeShaft(i, prep[i]);
+  posAttr.needsUpdate = true;
+  colAttr.needsUpdate = true;
+  radAttr.needsUpdate = true;
+
   const tracked = specs.some((s) => s.sun === true);
   let sunKey = "";
 

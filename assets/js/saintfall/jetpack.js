@@ -709,9 +709,24 @@ function buildExhaust(ctx) {
   return { COUNT, points, geo, positions, colors, ages, lives, velocities, cursor: 0, alive: 0 };
 }
 
-export function buildJetpack(ctx, player) {
+export function buildJetpack(ctx, player, options = {}) {
   const { THREE } = ctx;
   const config = JETPACK_CONFIG;
+  /* --- FLYING WITHOUT PAYING, AND WHY IT IS NOT THE BOON ---------
+
+     `ctx.mission.boon()` already means exactly this to the pack -
+     every fuel gate below consults it and every one of them refills
+     the tank and clears the cooldown. Switching the boon on would
+     have been one line in the level's mission stub.
+
+     It is the wrong line. The boon is also read by combat.js,
+     weapons.js and hud.js, where it multiplies damage and heat, so
+     a level that wants an unlimited PACK cannot borrow it without
+     quietly buffing every weapon in the player's hands. This flag
+     joins the same path and stops at the pack. */
+  const unlimitedFuel = options.unlimitedFuel === true;
+  const freeFlight = () => unlimitedFuel
+    || ctx.mission?.boon?.()?.active === true;
   const visual = buildPack(ctx, player);
   const exhaust = buildExhaust(ctx);
   const nozzlePosition = [new THREE.Vector3()];
@@ -815,8 +830,7 @@ export function buildJetpack(ctx, player) {
 
   function ignite(playerState, groundY) {
     const wasGrounded = !!playerState.grounded;
-    const boon = ctx.mission?.boon?.();
-    const cost = boon?.active ? 0 : config.ignitionCost;
+    const cost = freeFlight() ? 0 : config.ignitionCost;
     const fuelBefore = state.fuel;
     state.fuel = Math.max(0, state.fuel - cost);
     state.active = true;
@@ -877,8 +891,7 @@ export function buildJetpack(ctx, player) {
     const requested = rawRequested && !playerState.free && !dead && !blockedByAction;
     state.requested = requested;
 
-    const boon = ctx.mission?.boon?.();
-    if (boon?.active) {
+    if (freeFlight()) {
       state.fuel = config.maxFuel;
       state.exhausted = false;
       state.cooldownRemaining = 0;
@@ -908,8 +921,8 @@ export function buildJetpack(ctx, player) {
     const pinned = ((playerState.rootFor || 0) > 0 && playerState.grounded)
       || (playerState.stunFor || 0) > 0;
     if (pressed && !state.active && !state.needsRelease && !pinned
-      && (state.fuel >= config.minIgnitionFuel || boon?.active)
-      && (state.cooldownRemaining <= 0 || boon?.active)) {
+      && (state.fuel >= config.minIgnitionFuel || freeFlight())
+      && (state.cooldownRemaining <= 0 || freeFlight())) {
       const gy = ctx.collide?.groundHeight(playerState.x, playerState.z)
         ?? ctx.terrain.heightAt(playerState.x, playerState.z);
       ignite(playerState, gy);
@@ -917,7 +930,7 @@ export function buildJetpack(ctx, player) {
 
     if (state.active) {
       if (!requested) cutoff(false);
-      else if (!boon?.active) {
+      else if (!freeFlight()) {
         state.fuel = Math.max(0, state.fuel - config.burnRate * dt);
         if (state.fuel <= 1e-6) cutoff(true);
       }
@@ -1012,8 +1025,7 @@ export function buildJetpack(ctx, player) {
    */
   function spend(amount, ground = false, airborne = false) {
     const cost = Math.max(0, Number(amount) || 0);
-    const boon = ctx.mission?.boon?.();
-    if (boon?.active) {
+    if (freeFlight()) {
       state.fuel = config.maxFuel;
       state.exhausted = false;
       state.cooldownRemaining = 0;
@@ -1040,8 +1052,7 @@ export function buildJetpack(ctx, player) {
    */
   function drain(amount) {
     const request = Math.max(0, Number(amount) || 0);
-    const boon = ctx.mission?.boon?.();
-    if (boon?.active) {
+    if (freeFlight()) {
       state.fuel = config.maxFuel;
       state.exhausted = false;
       state.cooldownRemaining = 0;

@@ -1,0 +1,19 @@
+{
+  "id": "01a02e53-9acd-756b-8299-c39ea4241a32",
+  "type": "rig",
+  "status": "SUCCEEDED",
+  "progress": 100,
+  "createdAt": 1787483632489,
+  "startedAt": 1787483632495,
+  "finishedAt": 1787483660875,
+  "expiresAt": 1787742860875,
+  "consumedCredits": 5,
+  "taskError": null,
+  "inputTaskId": "01a02e51-1c98-70f3-b2e7-09af662a360e",
+  "heightMeters": 1.9,
+  "files": {
+    "rigged": "white-vigil-player-rigged.glb",
+    "walking": "white-vigil-player-walk.glb",
+    "running": "white-vigil-player-run.glb"
+  }
+}

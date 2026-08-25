@@ -1,0 +1,32 @@
+{
+  "taskId": "01a02e51-1c98-70f3-b2e7-09af662a360e",
+  "taskType": "multi-image-to-3d",
+  "inputs": [
+    "assets/concepts/saintfall/playable-characters/white-vigil-playable-turnaround-front-v1.png",
+    "assets/concepts/saintfall/playable-characters/white-vigil-playable-turnaround-left-v1.png",
+    "assets/concepts/saintfall/playable-characters/white-vigil-playable-unarmed-target-v1.png",
+    "assets/concepts/saintfall/playable-characters/white-vigil-playable-turnaround-back-v1.png"
+  ],
+  "request": {
+    "image_urls": [
+      "[local image data URI omitted]",
+      "[local image data URI omitted]",
+      "[local image data URI omitted]",
+      "[local image data URI omitted]"
+    ],
+    "texture_image_urls": [
+      "[local image data URI omitted]",
+      "[local image data URI omitted]",
+      "[local image data URI omitted]",
+      "[local image data URI omitted]"
+    ],
+    "ai_model": "meshy-7",
+    "enable_pbr": true,
+    "should_texture": true,
+    "should_remesh": true,
+    "target_formats": [
+      "glb"
+    ],
+    "alpha_thumbnail": true
+  }
+}

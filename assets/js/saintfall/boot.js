@@ -110,7 +110,7 @@
        its own exact-specifier key or the browser serves it with no
        cache key at all - see the block comment below. */
     "summit-art", "summit-terrain", "summit-structures", "summit-weather",
-    "summit-sky", "summit-world", "summit-hud", "summit-qa", "summit-main",
+    "summit-sky", "summit-world", "summit-hud", "summit-player", "summit-qa", "summit-main",
   ];
 
   /* WHICH ENTRY POINT. A level page declares its own with

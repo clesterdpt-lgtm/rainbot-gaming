@@ -56,10 +56,109 @@
    only artefact a stack has is a sheet passing through your own
    eye level, which is one line of fragment shader below.
 
-   Sized by SUBTENDED ANGLE and bounded by the FAR PLANE, per the
-   cirrus note: `camera.far` is 11000 and the camera roams to
-   +/-1010, so nothing may sit past ~9700 from the origin. The
-   top and bottom sheets run to 8600.
+   ------------------------------------------------------------
+   1b. THE CLEARING - why the deck has a hole in it
+
+   THE DEFECT THIS EXISTS TO FIX, measured on the arrival frame,
+   which is the level's most important image. The basecamp eye sits
+   at 28 m and the deck's sheets sat at 56, 78, 100 and 120 m with
+   their shorelines at the radius where the mountain reaches that
+   altitude - 714, 667, 558 and 532 m. The sight line from the gate
+   at r = 957 up to the peak crosses those four altitudes at r =
+   890, 838, 786 and 738, and every one of those crossings is
+   OUTSIDE its sheet's shoreline, so the ray to the peak passed
+   through four sheets within 220 m of the camera. The whole
+   subject arrived behind a pale wash with the sheet intersections
+   drawn as horizontal bands across the flank, and those bands read
+   as a rendering fault rather than as weather. Which is exactly
+   what standing under cloud looks like, and is the wrong picture.
+
+   THE FIX IS LEVEL DESIGN, NOT AN OPACITY SLIDER. Three cheaper
+   answers were considered and rejected in writing:
+     - drop the deck's alpha. Buys a thinner veil, still a veil,
+       and it costs the level jobs (a) and (b) above - the map edge
+       comes back and every high shot loses its horizon.
+     - lower INVERSION_BASE / INVERSION_TOP so the deck sits under
+       the gate. It cannot: the gate is at 12 m and the four low
+       stations sit between 12 and 96 m, so a deck low enough to be
+       under the arrival camera is under the level as well.
+     - move the gate above the deck. That is the one image the
+       layout is built around - you arrive at the mouth of the
+       valley with the whole mountain framed by two buttresses -
+       and it is authored at 0 m on purpose.
+
+   What a cloud sea in a ring valley actually does is stand OFF the
+   massif: air forced up the flank and back down in the lee is dry,
+   so the sea has a clear hole over the mountain and laps at a
+   shore some way out from its foot. So the deck gains a CLEARING -
+   an inner radius that is not the mountain's own contour - with
+   three properties, all of them geometric:
+
+     - it is A LOBE POINTING DOWNWIND, not a circle. The axis is
+       read from `atmos.windDir`, the same vector that drives the
+       deck's own flow, the spindrift, the rime and the sastrugi. A
+       clearing that ignored the wind while everything else in the
+       level obeyed it is the sort of disagreement that is only
+       ever noticed once and then cannot be unseen.
+     - it is FEATHERED, by the existing 150 m lap and by four
+       integer harmonics of its own.
+     - it is a SHAFT, not a funnel - see DECK_LAYERS for the pass
+       that got that backwards and what it measured.
+
+   MEASURED. Over 3600 bearings the boundary runs 79 m to 1024 m,
+   mean 645; `status().inversion.clearing` publishes base, shear,
+   min, max and mean, so a build that quietly lost the lobe reports
+   a flat curve rather than looking almost right.
+
+   Against the arrival sight line specifically - the pose stands at
+   r = 957, y = 28 and looks at (0, 430, 0), and the clearing at
+   that bearing is 983 m:
+
+     sheet y=120   crosses r 738   sheet starts 983   clear by 245
+     sheet y=100   crosses r 786   sheet starts 983   clear by 197
+     sheet y= 78   crosses r 838   sheet starts 983   clear by 145
+     sheet y= 56   crosses r 890   sheet starts 983   clear by  93
+     sheet y= 34   crosses r 943   sheet starts 983   clear by  40
+     sheet y= 10   behind the camera
+
+   and `coverAt` at that camera is 0.00 against 0.99 before, which
+   is also worth 38% of the key light: the overcast block in
+   `update` was dimming the sun by that much because the CAMERA was
+   under cloud, on the one frame in the level composed around a
+   sunlit peak.
+
+   The frame, A/B on the same terrain with the lobe switched off
+   (`CLEAR_BASE = CLEAR_SHEAR = 0` reduces `innerAt` to the
+   contour, which is exactly the pre-clearing build):
+
+                        veiled        cleared
+     mean luma          144.6         119.3
+     std dev             47.4          40.2
+     saturation          27.9          61.7
+     edge density        6.72%        10.98%
+
+   STANDARD DEVIATION WENT DOWN, and reporting it as an improvement
+   would be a lie. sigma on this frame was never measuring form: a
+   bright veil over a dark unlit mountain is a large global
+   light/dark split and it scores well. What actually changed is
+   that the subject came back - edge density up 63%, saturation up
+   121%, and the summit and its spire visible at all. The
+   instruments that see this change are edges and colour; sigma is
+   the instrument that saw the ambient-fill defect in round 1 and
+   it is the wrong one here.
+
+   WHAT IT COSTS, NAMED. Of the four stations the art direction
+   puts under the lid, the Black Tarn keeps it outright (cover
+   0.96) and the Basecamp and the Avalanche Bowl lose it (0.00).
+   The Bowl is not an accident of the arithmetic: it sits 23
+   degrees off downwind, which is where a lee clearing goes. The
+   Basecamp losing it is the whole request. The Glacier Tongue is
+   a separate matter and NOT this module's doing - its pad is at
+   96 m and the mountain reaches 120 m at r = 532 while the pad
+   sits at r = 566, so the station is 34 m outside the sea's own
+   waterline whatever the clearing does, and measures 0.12. If the
+   Tongue is meant to be a cloud-light station it needs to be sited
+   lower or further out; the deck is reporting honestly.
 
    ------------------------------------------------------------
    2. THE 22-DEGREE HALO AND THE SUN DOGS
@@ -106,6 +205,19 @@ import {
 } from "saintfall/core.js";
 import { srgbTransfer as srgb, patchBasicMaterial } from "saintfall/art.js";
 import { mergeGeometries } from "saintfall/sky.js";
+/* THREE NAMES, and each is here because the alternative is a copy
+   that drifts. `summitProfile` is the authored elevation table (see
+   THE MOUNTAIN, below); `MAP_HALF` is the edge of the world, which
+   the clearing may not open past; `STATIONS` is what the floor
+   sheet's screening cap is derived from, because the stations move
+   and a number typed in against last week's siting is a number that
+   will be wrong without saying so.
+
+   No cycle: summit-terrain imports core, art and summit-art only.
+   Its module body does real work at import time (the Via Sacra
+   march), and that work already happens - summit-main imports it
+   two steps before it builds this. */
+import { MAP_HALF, STATIONS, summitProfile } from "saintfall/summit-terrain.js";
 
 /* The top of the inversion, in metres. Exported because it is a
    shared authored number: summit-weather's `fall` field is only
@@ -359,75 +471,32 @@ const CLOUD_FRAG = /* glsl */`
 
    The deck's shoreline is where a horizontal plane at the sheet's
    altitude meets the mountain, so the sky has to know the
-   elevation profile. It cannot ask: summit-main builds the sky at
-   step 5 and the terrain at step 6 (contract 2.1), so ctx.terrain
-   does not exist yet.
+   elevation profile.
 
-   This is therefore a SECOND COPY of the layout's radial table,
-   and copies drift. Three things make this one safe:
-     - it is the AUTHORED table from saintfall-summit-layout.md
-       section 1, which is the same source summit-terrain reads,
-       not a fit to summit-terrain's output;
-     - it is used for ONE thing, the radius at which each sheet
-       laps out, and that shoreline is alpha-feathered over 150m,
-       so an error of tens of metres is invisible;
-     - it deliberately ignores ridge noise, spurs and station
-       pads. A cloud shoreline that followed every gully would be
-       a worse shoreline. Real ones do not.
+   IT ASKS SUMMIT-TERRAIN. `summitProfile(r)` is a pure module-level
+   export - the authored radial table and nothing else, no field, no
+   noise, no build - so there is no ordering problem in reading it
+   from a builder that runs at contract step 5, one step before the
+   terrain mesh exists. `ctx.terrain` is what is unavailable here;
+   the profile function is not.
 
-   If the layout's table ever changes, this changes with it.
+   THIS FILE USED TO KEEP ITS OWN COPY OF THE TABLE, and the copy
+   was the right call only for as long as there was no function to
+   call. It drifted within one working session: the profile was
+   re-authored from a near-uniform slope into a concave-up peak and
+   every shoreline moved by 60 to 200 metres - y = 120 from 606 to
+   532, y = 10 from 937 to 900 - while the copy went on describing
+   the old mountain. A shoreline is alpha-feathered over 150 m, so
+   the symptom was not an error anywhere; it was a sea lying in the
+   wrong place with every check still green. The copy is gone.
 
-   CROSS-CHECKED AGAINST THE REAL FIELD, and the result is worth
-   recording because it is not clean. Bisecting
-   summit-terrain's `makeSummitField(...).heightAt` over 48
-   bearings for the altitude each sheet sits at:
-
-     sheet y=120  table 606   field median 621   (agrees)
-     sheet y=100  table 625   field median 660   (agrees)
-     sheet y= 78  table 655   field median 1023
-     sheet y= 56  table 759   field never crosses
-     sheet y= 34  table 797   field never crosses
-     sheet y= 10  table 937   field never crosses
-
-   The cause is visible in a straight radial sample: the field
-   PLATEAUS from r = 700 out to r = 937 at [12, 96, 241] metres
-   (min, median, max over bearings) and is still at [11, 68, 162]
-   at the map edge, where the layout's table says 0 to 18. Those
-   three numbers are the basecamp pad (12m), the glacier pad
-   (96m) and the Bell Terrace pad (241m): the station pads are
-   flooding the outer ring far past the layout's 40m rim feather.
-
-   Nothing here is designed around that, deliberately. The layout
-   is the fixed authority on numbers and this file is authored to
-   it; a shoreline fitted to the current field would have to be
-   refitted when the pad feathers are bounded. What it means in
-   the meantime is concrete and checkable, so it is written down
-   rather than discovered from a screenshot: the low sheets are
-   buried, and with terrain standing at up to 162m at r = 1024 a
-   deck whose top is at 120m cannot hide the map edge on the
-   western bearings. That is a summit-terrain question, not a sky
-   one - see the note handed back with this module.
+   What the sky deliberately does NOT read is the height FIELD.
+   The profile is the smooth authored cone; the field adds ridge
+   noise, buttress spurs, station pads and the Via Sacra cut. A
+   cloud shoreline that followed every gully and every levelled
+   arena would be a worse shoreline than one that ignores them.
+   Real ones do not do it either.
    ============================================================ */
-const PROFILE_ROWS = [
-  [0, 452], [74, 448], [190, 392], [460, 236], [700, 70], [860, 18], [1024, 0],
-];
-
-/** Smootherstep, matching the layout's blend between rows. */
-const smoother = (t) => {
-  const x = clamp01(t);
-  return x * x * x * (x * (x * 6 - 15) + 10);
-};
-
-function layoutHeight(r) {
-  if (r <= 0) return PROFILE_ROWS[0][1];
-  if (r >= 1024) return 0;
-  for (let i = 0; i < PROFILE_ROWS.length - 1; i += 1) {
-    const [r0, y0] = PROFILE_ROWS[i];
-    const [r1, y1] = PROFILE_ROWS[i + 1];
-    if (r <= r1) return lerp(y0, y1, smoother((r - r0) / (r1 - r0)));
-  }
-  return 0;
-}
 
 /** The radius at which the mountain drops through altitude `y`.
  *  Bisection rather than a closed form: the profile is monotonic
@@ -435,10 +504,10 @@ function layoutHeight(r) {
  *  runs six times in the whole build. */
 function shoreRadiusFor(y) {
   let lo = 0;
-  let hi = 1024;
+  let hi = MAP_HALF;
   for (let i = 0; i < 28; i += 1) {
     const mid = (lo + hi) * 0.5;
-    if (layoutHeight(mid) > y) lo = mid; else hi = mid;
+    if (summitProfile(mid) > y) lo = mid; else hi = mid;
   }
   return (lo + hi) * 0.5;
 }
@@ -455,18 +524,25 @@ function shoreRadiusFor(y) {
               painted into the horizon.
      y =  10  THE LOW SHEET, and it is what hides the map edge.
               Worked through from the basecamp, which is the worst
-              case: eye at (0, 828, 14), the terrain mesh ends
-              196m south at r = 1024, and a 1.7m eye on flat
-              ground puts that edge at -0.4 degrees - just under
-              the eyeline, i.e. exactly where a hard cut is most
-              visible. A sheet at 10m starting at r = 938 (109m
-              south of the eye) presents its near edge at -2.1
-              degrees, so everything from -2.1 degrees up to the
-              horizon is its top surface receding to infinity, and
-              the mesh boundary at -0.4 degrees is behind it. The
-              four sheets between do not reach: their shorelines
-              are inside the basecamp and their altitudes are
-              above the eye.
+              case: the spawn eye stands at (0, 931, 13.7) on a
+              12 m pad, the terrain mesh ends 93 m south at
+              r = 1024 where the ground is at 0, and that boundary
+              therefore sits 8.4 degrees below the eyeline - inside
+              the frame of anyone who turns round at the gate. This
+              sheet is capped at FLOOR_SHORE_CAP = 951 (see THE
+              CLEARING), so it begins 20 m south of the spawn and
+              presents its near edge 10.5 degrees down: everything
+              from there up to the horizon is its top surface
+              receding to infinity, and the mesh boundary at -8.4
+              is inside that. The four sheets between do not reach:
+              their shorelines are inside the basecamp and their
+              altitudes are above the eye.
+
+              THAT CAP IS THE REASON THE CLEARING DOES NOT APPLY
+              HERE IN FULL. Every other sheet takes the lobe
+              whole; this one is pulled back to the cap wherever
+              the lobe would carry it further, because its job is
+              geometric and the lobe reaches 1024 downwind.
 
    The middle four are the body of the deck. They are small in
    radius on purpose - a sheet 38m above your head covers
@@ -475,19 +551,226 @@ function shoreRadiusFor(y) {
    the horizon already own. Area goes as r squared and this is a
    fill-bound frame.
    ============================================================ */
+/* `hole` is how much of THE CLEARING (header 1b) this sheet takes:
+   0 pins it to the mountain's own contour exactly as before the
+   clearing existed, 1 gives it the whole lobe.
+
+   IT IS A SHAFT, NOT A FUNNEL, and the first pass had it the other
+   way round for a reason that sounded right and measured wrong. A
+   sea thins from the top, so the clearing was authored widest at
+   the surface and tapering toward the floor - 1.00, 1.00, 0.84,
+   0.52, 0.22, 0.28 down the stack. That is what a break in a
+   stratus deck looks like from ABOVE, and the frame this exists
+   for is from BELOW. The arrival camera sits at 28 m, so its sight
+   line to the peak crosses the 34 m sheet way out at r = 943 and
+   the 120 m sheet at only 738: the LOW sheets are the ones a low
+   camera looks through, and tapering them tapered the only ones
+   that mattered. Measured on that sight line with the lobe at 983:
+   at 0.52 the 56 m sheet's shore came out at 854 against a
+   crossing at 890, so it was still veiling the shot on a build
+   whose top sheet had retreated 450 m.
+
+   So every sheet takes the whole lobe, and the one exception is a
+   JOB rather than a shape: `cap` on the floor sheet, which is the
+   map-edge screen. See FLOOR_SHORE_CAP and THE SHEETS. */
+/* --- THE SHEETS HAVE TO OVERLAP OR THEY ARE STRIPES -------------
+
+   Six sheets at 120/100/78/56/34/10 with gaps of 20-24m, and a
+   `swell` - the vertical displacement in the vertex shader - of 8.5m
+   at the top and 1.4m at the bottom. Nothing ever reached its
+   neighbour, so from any level camera the deck resolved as six flat
+   discs seen edge-on: hard, countable, evenly spaced. Three
+   consecutive blind rounds described it independently - "posterised
+   horizontal bands", "six hard horizontal terrace bands", "five hard
+   fog bands, the band stepping is countable" - and in two of them it
+   was the whole picture.
+
+   Swell is now about three quarters of the gap above each sheet, so
+   adjacent sheets interpenetrate and the deck integrates vertically
+   into one body instead of a stack. Alpha comes down by roughly a
+   fifth because overlapping sheets accumulate, and the point of the
+   deck is that the mountain has no waterline. */
 const DECK_LAYERS = [
-  { y: 120, r: 8600, seg: 192, rings: 15, bill: 11.0, swell: 8.5, alpha: 0.88, tone: 1.00 },
-  { y: 100, r: 3800, seg: 128, rings: 10, bill: 5.5, swell: 5.0, alpha: 0.52, tone: 0.76 },
-  { y: 78, r: 3200, seg: 128, rings: 10, bill: 4.0, swell: 4.0, alpha: 0.46, tone: 0.56 },
-  { y: 56, r: 2800, seg: 112, rings: 9, bill: 3.2, swell: 3.2, alpha: 0.42, tone: 0.38 },
-  { y: 34, r: 2600, seg: 112, rings: 9, bill: 2.4, swell: 2.4, alpha: 0.38, tone: 0.20 },
-  { y: 10, r: 8600, seg: 144, rings: 13, bill: 1.4, swell: 1.4, alpha: 0.46, tone: 0.05 },
+  /* Swell now EXCEEDS the gap above each sheet (22-24m), where the
+     previous pass only matched three quarters of it. Matching the gap
+     still leaves a plane you can see edge-on: a sheet is thin by
+     construction, so from inside the stack each one presents its own
+     hard horizontal line and six of them read as terraces. A blind
+     round called it "quantised terrace bands across an entire slope -
+     a shading bug, not art" and lost two frames on it.
+     Exceeding the gap means no sheet has a boundary of its own that
+     is not already inside its neighbour, and the deck integrates into
+     one body. Alpha comes down again to pay for the extra overlap. */
+  { y: 120, r: 8600, seg: 192, rings: 15, bill: 11.0, swell: 30.0, alpha: 0.58, tone: 1.00, hole: 1 },
+  { y: 100, r: 3800, seg: 128, rings: 10, bill: 5.5, swell: 28.0, alpha: 0.34, tone: 0.76, hole: 1 },
+  { y: 78, r: 3200, seg: 128, rings: 10, bill: 4.0, swell: 28.0, alpha: 0.30, tone: 0.56, hole: 1 },
+  { y: 56, r: 2800, seg: 112, rings: 9, bill: 3.2, swell: 28.0, alpha: 0.27, tone: 0.38, hole: 1 },
+  { y: 34, r: 2600, seg: 112, rings: 9, bill: 2.4, swell: 30.0, alpha: 0.25, tone: 0.20, hole: 1 },
+  { y: 10, r: 8600, seg: 144, rings: 13, bill: 1.4, swell: 24.0, alpha: 0.30, tone: 0.05, hole: 1, cap: true },
 ];
 
 /** How far out from its shoreline a sheet takes to reach full
  *  alpha. Long, because the whole read of an inversion is that
  *  the mountain does not have a waterline - it fades into one. */
-const SHORE_FEATHER = 150;
+const SHORE_FEATHER = 320;   // was 150: a shoreline seen edge-on is a line
+
+/* ============================================================
+   THE FAR RANGES - what is beyond the last mountain
+
+   The map ends at r = 1024 and the inversion hides that edge, so
+   the level had a horizon but nothing standing on it: past the
+   encircling crest the frame went straight to flat haze, and a
+   player reported it as emptiness beyond the first range.
+
+   FIVE SILHOUETTE RINGS, each a closed curtain from under the
+   deck up to a ridgeline, at 2.4 to 8.2 km. They are the cheapest
+   possible object that answers the complaint - unlit, flat,
+   vertex-coloured, one merged mesh, no draw call of their own -
+   because at these distances a mountain IS its silhouette and its
+   haze. Nothing else about it survives twenty degrees of murk.
+
+   THE CRESTS BARELY RISE WITH DISTANCE, and that is the whole
+   read. Aerial perspective alone does not make a range look far
+   away; what does is that a farther one sits CLOSER TO THE
+   HORIZON LINE. From the summit eye at 452 m these five come in
+   at -1.1, -0.35, -0.06, +0.07 and +0.14 degrees - converging on
+   the eyeline, which is what a receding range does. Give them
+   equal angular height instead and they stack up the frame like
+   a staircase and read as one jagged wall.
+
+   THE WAVENUMBERS ARE INTEGERS AND THEY SCALE WITH RADIUS. The
+   integers are the same closed-loop rule the deck's shoreline
+   note sets out: a ring is a function on a circle and a
+   fractional wavenumber tears it open at theta = 0. The scaling
+   is because a peak is a fixed number of METRES wide, so the
+   same physical range twice as far away has to have twice as many
+   peaks around its ring or it reads as twice the size.
+
+   The bases sit at y = 20, far under the 120 m sea, so every
+   range comes out of the cloud rather than standing on a line. */
+const FAR_RANGE_BASE = 20;
+/* Half a degree of segment is a visible facet on a ridgeline at
+   1080p; 1200 segments is 0.3 degrees, about 8 px at a 55 degree
+   field. Cost is 12k triangles across all five - a third of the
+   cirrus, and opaque rather than blended. */
+const FAR_RANGE_SEG = 1800;
+/* CRESTS RISE WITH DISTANCE, RELIEF FALLS, AND EVERY RANGE TOPS
+   OUT JUST UNDER THE SUMMIT'S 452 m.
+
+   The rise is what converges them on the eyeline; the falling
+   relief is a peak of roughly constant SIZE seen from further
+   away. Together they give about 5 degrees of skyline at the Bell
+   Terrace falling to 1.4 at the far ring, which is the layering,
+   and from the parvis at 452 m the whole backdrop sits at or just
+   under the horizon - present, and not competing with the one
+   mountain the level is about. */
+const FAR_RANGES = [
+  { r: 2450, crest: 333, relief: 260, haze: 0.44 },
+  { r: 3600, crest: 351, relief: 220, haze: 0.60 },
+  { r: 5000, crest: 367, relief: 185, haze: 0.73 },
+  { r: 6600, crest: 380, relief: 155, haze: 0.83 },
+  { r: 8200, crest: 391, relief: 130, haze: 0.90 },
+];
+/* RIDGED OCTAVES, AND THE BASE WAVENUMBER IS THE WHOLE READ.
+
+   The first pass used seven harmonics from k=2 with a 1/k^0.85
+   falloff, which is a reasonable-looking spectrum and was wrong
+   by an order of magnitude: k=2 and k=3 carried nearly all the
+   amplitude, so each ring had two or three broad humps around its
+   ENTIRE circumference. Across a 55-degree frame that is a flat
+   line, and the backdrop photographed as four horizontal grey
+   slabs - the exact "quantised terrace band" failure the deck's
+   own note records a blind round losing two frames on.
+
+   A ridge has to have peaks at a few degrees of spacing, so the
+   base wavenumber is chosen from ANGLE: k=11 is a 33-degree
+   period, and five doublings take it to 2 degrees.
+
+   `1 - |sin|` rather than `sin`, because a sum of sines is a
+   swell and a mountain is a ridge - the fold puts a crease at
+   every zero crossing, which is what a skyline is made of. */
+const FAR_RANGE_OCT = 5;
+const FAR_RANGE_K0 = 11;
+const FAR_RANGE_GAIN = 0.56;
+
+/* THE CLEARING, as two numbers, a direction and two caps.
+
+   THE SHAPE IS A TONGUE POINTING DOWNWIND: a cosine in bearing,
+   `CLEAR_BASE + CLEAR_SHEAR * cos(theta - lee)`. The first pass
+   modelled it as a circle displaced downwind and solved the ray-
+   circle intersection in closed form, which is prettier and is not
+   what the level needs. Three station constraints have to hold at
+   once and they are 45 degrees of bearing apart; a displaced
+   circle has one shape parameter and could satisfy two of them.
+
+   CLEAR_BASE 737 and CLEAR_SHEAR 661 are the solution of exactly
+   two of those equations and are not tuned beyond them:
+     983 = base + shear * cos(68 deg)   the arrival corridor, which
+                                        has to clear a sight line
+                                        whose worst crossing is at
+                                        r = 943
+     600 = base + shear * cos(102 deg)  the `inversion` camera
+                                        station at r = 750, which
+                                        has to still be IN cloud
+   Everything else falls out and was measured rather than aimed at:
+   the Black Tarn ends up at 469 against its own r = 745 and holds
+   cover 0.96; the Avalanche Bowl at 1024 against r = 703 and holds
+   0.00; the boundary runs 79 m to 1024 m with a mean of 645.
+
+   `shear / base` is 0.90, so this curve is close to a cardioid and
+   has a real dimple on its upwind side. That is invisible and it
+   is worth knowing why: `innerAt` takes the GREATER of the
+   clearing and the mountain's own contour, and upwind the contour
+   (532 m at the sea surface, further out for every lower sheet) is
+   outside the whole lobe. So the sea piles against the windward
+   flank exactly as it did before the clearing existed and is
+   cleared only in the lee - which is the weather this models,
+   arrived at by solving two station constraints rather than by
+   being drawn.
+
+   THE OUTER CAP. `MAP_HALF` bounds the boundary, because the
+   clearing is a hole in the cloud over the MASSIF: past the
+   terrain edge there is no massif and no valley to reveal, only
+   sea and dome, so opening further would delete sea from the
+   horizon and leave the floor sheet out there on its own - a dark
+   `tone: 0.05` plate where the picture wants a bright one. It is
+   imported rather than typed because what the number means is "the
+   edge of the world", not 1024.
+
+   THE FLOOR CAP. The lowest sheet is the map-edge screen (see THE
+   SHEETS), and a screen that begins outside the ground it is
+   screening is not one. It is capped 60 m outside the outermost
+   station a player can stand on, derived from STATIONS so that
+   re-siting the level re-derives it - which is not hypothetical:
+   the basecamp moved from r = 828 to r = 891 while this module was
+   being written, and the first set of numbers in this comment
+   block had to be thrown away because of it. */
+const CLEAR_BASE = 737;
+const CLEAR_SHEAR = 661;
+const OUTERMOST_STATION = Math.max(
+  ...Object.values(STATIONS).map((st) => Math.hypot(st.x, st.z))
+);
+const FLOOR_SHORE_CAP = Math.min(MAP_HALF - 48, OUTERMOST_STATION + 60);
+
+/* FOUR HARMONICS, INTEGER, for the same reason the shoreline's are
+   (see SHORE_HARMONICS) - a non-integer wavenumber on a closed
+   loop tears the boundary open at theta = 0.
+
+   AUTHORED, NOT DRAWN FROM AN RNG, and the phases are the reason.
+   The total amplitude is 0.080, so the boundary can lose 8% of its
+   radius at an unlucky bearing - and there is exactly one bearing
+   in this level where that is not allowed to happen. The layout
+   fixes the Basecamp at x = 0, so the arrival frame always looks
+   along theta = pi/2, and the phases below put the harmonic factor
+   there at 0.998. A random draw would have been right about
+   eleven times in twelve and would have veiled the level's opening
+   image the twelfth. */
+const CLEAR_HARMONICS = [
+  { k: 2, a: 0.030, p: 0.61 },
+  { k: 3, a: 0.024, p: 2.44 },
+  { k: 5, a: 0.016, p: 4.12 },
+  { k: 9, a: 0.010, p: 5.37 },
+];
 
 /* The halo's radius. It is CENTRED ON THE CAMERA, so this number
    buys no parallax and sets exactly two things: how much aerial
@@ -512,7 +795,30 @@ const SHORE_FEATHER = 150;
    1448) so ridges occlude it honestly, and well inside the far
    plane with the camera 1010 off origin. */
 const HALO_R = 3400;
-const HALO_FADE = 0.85;
+/* THE FADE, RE-CUT AGAINST A MEASUREMENT rather than against the
+   arithmetic above it.
+
+   `fade` is `uRim.z`, and on the additive path it multiplies the
+   haze fraction: the arc keeps `1 - f * fade` of its brightness
+   (art.js's ATMOS_FRAG_ADDITIVE). At 0.85 the numbers worked out
+   to 22% surviving at the basecamp, and 22% of a peak vertex that
+   is 0.09 linear, added to a horizon sky already sitting near 0.5,
+   is 4% - which is not "dissolved into the valley haze", it is
+   gone. Photographed at the gate: no ring at all, on a frame whose
+   `status().halo.ring` reported 1.0.
+
+   0.62 keeps 47% instead of 22% and leaves the summit end
+   untouched (f is 0.001 up there, so any fade multiplies nothing).
+   The gradient the geometry exists for - crisp in thin air,
+   dissolving toward the valley - is what changes; the direction of
+   it does not.
+
+   THE CLEARING IS WHY THIS IS NOW HONEST. Before the deck had a
+   hole in it the gate stood under six sheets of stratus, where a
+   22-degree halo would be a lie whatever its brightness. It now
+   stands in clear air with cirrus overhead, which is exactly the
+   condition that makes one. */
+const HALO_FADE = 0.62;
 
 /* Inner edge sharp and red, outer edge soft and blue. That is the
    actual dispersion of a 22-degree halo and it is the only thing
@@ -591,7 +897,23 @@ export function buildSummitSky(ctx) {
      `render.setQuality`, because setQuality re-applies the tier
      default unconditionally (render.js:1863) - this is only the
      value the first four warm-up frames see. */
-  const shadowHalf = 420;
+  /* THE SPAN IS A MOUNTAIN'S, NOT A BASIN'S.
+
+     At 420m - a sensible number, and Vesper's own order of
+     magnitude - the shadow camera covers a disc around the player
+     and nothing else, so from the basecamp gate the peak 854m away
+     casts NOTHING. Measured on the first arrival capture: turning
+     the weather and the fog off changed the frame's standard
+     deviation by two, because the flatness was never haze. It was a
+     452m mountain with no shadow structure on it at all.
+
+     900m is what covers the ascent from any station's own arena,
+     and the cost is real and stated: at a 2048 map that is 0.88m
+     per texel against 0.41, so contact shadows under a prop soften
+     by about a texel. On this level that trade is obviously right -
+     the large-scale form of the mountain IS the level, and a
+     softened contact under a cairn is not. */
+  const shadowHalf = 900;
   sun.shadow.camera.left = -shadowHalf;
   sun.shadow.camera.right = shadowHalf;
   sun.shadow.camera.top = shadowHalf;
@@ -716,6 +1038,100 @@ export function buildSummitSky(ctx) {
      agree exactly, and so the bisection does not run per frame. */
   const layerShore = DECK_LAYERS.map((l) => shoreRadiusFor(l.y));
 
+  /* ------------------------------ the clearing ------------------------------ */
+
+  /* THE LEE DIRECTION IS READ FROM THE ATMOSPHERE, not typed in.
+
+     `atmos.windDir` is the direction the air MOVES (summit-art's
+     SUMMIT_WIND.toward, applied by `applySummitWind` at summit-main
+     step 1, four steps before this builder runs), and it is the
+     same Vector2 that `sync()` copies into `uWind` - which is the
+     uniform CLOUD_VERT reads to drive the deck's flow. So the
+     clearing is displaced along exactly the axis the sheets are
+     seen sliding along, by construction rather than by two
+     constants agreeing. A second copy of the bearing here would
+     drift the day someone re-authors the wind, and the symptom
+     would be a hole in the sea that is not in the lee of anything.
+
+     Fallback to the layout's own vector if an atmosphere ever
+     arrives without one: a zero-length wind would make `leeX/leeZ`
+     NaN and every vertex in the deck would follow. */
+  const windLen = Math.hypot(atmos.windDir?.x || 0, atmos.windDir?.y || 0);
+  const leeX = windLen > 1e-4 ? atmos.windDir.x / windLen : 0.9272;
+  const leeZ = windLen > 1e-4 ? atmos.windDir.y / windLen : 0.3746;
+
+  /** The lee bearing in `atan2(z, x)` terms, which is the same
+   *  convention `shoreAt` and `coverAt` use. */
+  const leeTheta = Math.atan2(leeZ, leeX);
+
+  /** The clearing's boundary radius at bearing `theta`, in metres.
+   *  A cosine lobe about the lee bearing, wobbled by four integer
+   *  harmonics, and bounded by the edge of the world - see THE
+   *  CLEARING for why each of those three terms is there. */
+  function clearingAt(theta) {
+    let w = 1;
+    for (const h of CLEAR_HARMONICS) w += h.a * Math.sin(h.k * theta + h.p);
+    const lobe = CLEAR_BASE + CLEAR_SHEAR * Math.cos(theta - leeTheta);
+    /* The `max(0, …)` is not reachable at the authored constants -
+       the upwind extreme is 79 m - and it is here because the
+       moment `shear` exceeds `base` the lobe goes negative on the
+       upwind arc, and a negative inner radius does not fail: it
+       silently makes `innerAt` return the contour and the clearing
+       stops existing on half the map with nothing to see in any
+       log. */
+    return Math.min(Math.max(0, lobe * w), MAP_HALF);
+  }
+
+  /** Where sheet `index` actually begins at bearing `theta`: its
+   *  own contour shore, moved `hole` of the way out to the
+   *  clearing. `Math.max` rather than a plain lerp because the
+   *  clearing is only ever allowed to PUSH the sea back - upwind,
+   *  and anywhere a re-authored profile puts the mountain further
+   *  out than the disc, the mountain wins and the sea laps its
+   *  flank exactly as it did before. That is also what keeps this
+   *  robust to the profile table drifting: the clearing is
+   *  authored in map coordinates and owes the elevation table
+   *  nothing.
+   *
+   *  ONE FUNCTION, TWO READERS - `buildDeckLayer` and `coverAt`.
+   *  They have to agree to the metre or the lights say you are
+   *  under cloud in a frame that plainly shows blue sky. */
+  function innerAt(index, theta) {
+    const layer = DECK_LAYERS[index];
+    const contour = shoreAt(layerShore[index], theta);
+    const clearing = clearingAt(theta);
+    const inner = contour + Math.max(0, clearing - contour) * layer.hole;
+    /* The floor sheet's screening cap. `Math.max(contour, …)` on
+       the ceiling as well, so that if a future profile ever puts
+       the mountain's own contour outside the cap the sheet is
+       pinned to the mountain rather than dragged inside it and
+       drawn across the flank. */
+    if (layer.cap) return Math.min(inner, Math.max(contour, FLOOR_SHORE_CAP));
+    return inner;
+  }
+
+  /* Baked once, for `status()`. The audit harness has to be able to
+     assert that the deck has a hole in it and how big it is, and a
+     status call is made every frame by some probes - sampling a
+     transcendental 360 times per read is a cost with no reader. */
+  const clearingStats = (() => {
+    const SAMPLES = 360;
+    let min = Infinity;
+    let max = -Infinity;
+    let sum = 0;
+    for (let s = 0; s < SAMPLES; s += 1) {
+      const v = clearingAt((s / SAMPLES) * TAU);
+      if (v < min) min = v;
+      if (v > max) max = v;
+      sum += v;
+    }
+    return {
+      min: Number(min.toFixed(1)),
+      max: Number(max.toFixed(1)),
+      mean: Number((sum / SAMPLES).toFixed(1)),
+    };
+  })();
+
   /* The sea's static relief. Three trains with incommensurate
      wavelengths - this one IS a lattice in the plane, so the
      ratios have to be irrational or the swells line up into a
@@ -756,7 +1172,6 @@ export function buildSummitSky(ctx) {
   }
 
   function buildDeckLayer(layer, index) {
-    const base = layerShore[index];
     const pos = [];
     const nrm = [];
     const swell = [];
@@ -779,7 +1194,7 @@ export function buildSummitSky(ctx) {
       const theta = (s % seg) / seg * TAU;
       const ct = Math.cos(theta);
       const st = Math.sin(theta);
-      const shore = shoreAt(base, theta);
+      const shore = innerAt(index, theta);
       for (let i = 0; i < rings; i += 1) {
         const t = i / (rings - 1);
         /* Geometric rather than linear: the shoreline is where
@@ -870,28 +1285,84 @@ export function buildSummitSky(ctx) {
          bakes at the shadow end of the ramp and hangs there as a
          dark smear.
 
-     Two numbers change. The distance multiplier is 3.0 rather
-     than 4.0 because this geometry is world-anchored (it shares
-     the mesh with the deck, which cannot follow the camera), so
-     the far-plane budget has to absorb the camera roaming 1010m
-     off the origin: worst case here is centre 6653 + half a
-     4178m band = 8742, plus 1010 = 9752 against a far plane of
-     11000. And 26 bands rather than 30, because the deck below is
-     new load on the same transparent pass.
+     THE DEFECT THE SECOND PASS FIXED, and it was not "there is no
+     cirrus" - there were 26 bands and they rendered. It was that
+     they were all ABOVE THE FRAME. `ground` was drawn log-uniform
+     over [1500, 4500] against an altitude of [2600, 4200], which
+     puts every band between 30 and 70 degrees of elevation. A
+     level-eye or near-level frame - which is every frame in this
+     level except the ones looking straight up - sees from about
+     -3 to +30 degrees, so the whole field sat off the top of the
+     picture. Measured on `summit-parvis`: two wisps clipped by
+     the top edge, and an empty gradient everywhere else.
+
+     Three changes, and only the third is a taste call.
+
+     (1) `ground` runs to 7500 rather than 4500, which brings the
+         low end of the elevation spread from 30 degrees down to
+         16. That is not merely a wider range: for a flat deck with
+         log-uniform radius the per-solid-angle band density is
+         proportional to dist^3 / (r^2 * A), which is U-shaped with
+         its MINIMUM at r = A - so the bands the old range was
+         throwing away were the ones nearest the horizon, which is
+         precisely where a frame has room for them.
+
+     (2) The far-plane budget is now MEASURED PER BAND rather than
+         estimated once in a comment. The old note quoted a worst
+         case of 9752 against a far plane of 11000 and that
+         arithmetic only held for the old ranges; a band near the
+         horizon has its width divided by sin(elevation), so at 19
+         degrees it is three times wider than the same band
+         overhead and the estimate breaks. So: build the band in
+         local coordinates, take its true bounding radius, and if
+         `dist + radius` will not fit, scale the geometry AND the
+         placement by the same factor. Scaling both leaves every
+         subtended angle and the elevation untouched - the band is
+         identical on screen and merely nearer - which is the whole
+         reason this file sizes by angle in the first place. The
+         cost is parallax: a band pulled in to 4 km shifts about
+         half a degree over the 452 m climb, against zero for one
+         at 8. That is below the resolution of anything in the
+         level and it is the price of never clipping. Measured on
+         the shipping seed: the worst band took a 0.93 scale, so
+         the clamp is engaging and engaging gently.
+
+     (3) 46 bands rather than 26. The count is a fill cost on the
+         transparent pass and zero draw calls, and 26 over 4pi
+         steradians put roughly two in a 55-degree frame.
      ============================================================ */
+
+  /* How far a cirrus vertex may sit from the ORIGIN. The camera
+     roams to 1010 m in plan and 452 m in height, so hypot(1010,
+     452) = 1106 m of that budget belongs to the camera; 11000 -
+     1106 leaves 9894 and 9450 keeps 444 m of margin under the far
+     plane for a band that is a little larger than its bounding
+     radius suggests along one diagonal. */
+  const CIRRUS_REACH = 9450;
+  /* 46 bands. Zero draw calls - they merge into the deck's mesh -
+     and about 24k triangles of thin alpha on the transparent pass.
+     The ceiling is fill, not geometry, and the frame is fill-bound,
+     so a further increase needs the post harness's numbers rather
+     than an opinion. */
+  const CIRRUS_BANDS = 46;
+  /** Worst per-band placement scale the reach clamp applied. 1
+   *  means nothing was clamped. Reported through `status()` so a
+   *  future widening of the ranges shows up as a number rather
+   *  than as bands quietly collapsing toward the camera. */
+  let cirrusWorstFit = 1;
+
   function buildCirrusBand(rng) {
-    const alt = rng.range(2600, 4200);
-    const ground = 1500 * Math.pow(3.0, rng());
+    const alt = rng.range(2200, 4400);
+    const ground = 1000 * Math.pow(7.5, rng());
     const az = rng() * TAU;
     const dist = Math.hypot(ground, alt);
     const sinEl = Math.max(0.20, alt / dist);
-    const centre = new THREE.Vector3(Math.cos(az) * ground, alt, Math.sin(az) * ground);
 
     const pos = [];
     const idx = [];
     const nrm = [];
     const alpha = [];
-    const filaments = rng.int(4, 9);
+    const filaments = rng.int(5, 10);
     const bandLen = (12 + rng() * 24) * Math.PI / 180 * dist;
     /* Half-width in DEGREES of subtended angle. A filament ends
        up at roughly 0.2x the band half-width once its own
@@ -899,7 +1370,12 @@ export function buildSummitSky(ctx) {
        thread at 1600x900; 3 to 7 puts it at 25-60 pixels, which
        is a cloud. */
     const bandHW = (3.0 + rng() * 4.0) * Math.PI / 180 * dist / sinEl;
-    const bandAlpha = rng.range(0.34, 0.62);
+    /* Raised from [0.34, 0.62]. The old top end was a band you had
+       to go looking for; against a navy zenith and a peach horizon
+       band a mare's tail at 0.4 is still translucent enough to see
+       the gradient through, which is the only thing the ceiling
+       here protects. */
+    const bandAlpha = rng.range(0.40, 0.70);
     for (let f = 0; f < filaments; f += 1) {
       const segs = rng.int(9, 15);
       const len = bandLen * rng.range(0.55, 1.0);
@@ -952,10 +1428,35 @@ export function buildSummitSky(ctx) {
     for (let v = 0; v < count; v += 1) colors[v * 4 + 3] = alpha[v];
     g.setAttribute("color", new THREE.BufferAttribute(colors, 4));
 
+    /* THE REACH CLAMP. `ext` is the band's true bounding radius in
+       its own frame, taken from the vertices rather than estimated
+       from bandLen and bandHW - the gaussian offsets on x0 and z0
+       have no bound worth quoting, and an estimate that is right
+       for the current ranges is an estimate that fails silently
+       when someone widens them.
+
+       `fit` scales the geometry and the placement TOGETHER, which
+       is what leaves the picture alone: a band twice as near and
+       half as large subtends the same angle, sits at the same
+       elevation and is lit the same way, because nothing in the
+       cirrus path is authored in metres. Without it a horizon band
+       - width divided by sin(19 degrees) - reaches past the far
+       plane and is sliced clean through by it, which is the exact
+       failure the sky-cirrus note records as "a band sliced at
+       12.5 km". */
+    let ext = 0;
+    for (let v = 0; v < pos.length; v += 3) {
+      const d2 = pos[v] * pos[v] + pos[v + 1] * pos[v + 1] + pos[v + 2] * pos[v + 2];
+      if (d2 > ext) ext = d2;
+    }
+    ext = Math.sqrt(ext);
+    const fit = Math.min(1, CIRRUS_REACH / Math.max(1, dist + ext));
+    if (fit < cirrusWorstFit) cirrusWorstFit = fit;
+
     g.applyMatrix4(new THREE.Matrix4().compose(
-      centre,
+      new THREE.Vector3(Math.cos(az) * ground * fit, alt * fit, Math.sin(az) * ground * fit),
       new THREE.Quaternion().setFromEuler(new THREE.Euler(0, rng() * TAU, 0)),
-      new THREE.Vector3(1, 1, 1)
+      new THREE.Vector3(fit, fit, fit)
     ));
     return { geometry: g, count };
   }
@@ -984,7 +1485,11 @@ export function buildSummitSky(ctx) {
        within one narrow tonal range for that reason. Give the
        bottom sheet a strongly different hue from the top one and
        this comment becomes a bug report. */
-    for (let i = 0; i < 26; i += 1) {
+    /* Reset before the loop, not at declaration: `buildClouds` can
+       run again, and a worst-fit carried over from a previous
+       build would report a clamp that this geometry never took. */
+    cirrusWorstFit = 1;
+    for (let i = 0; i < CIRRUS_BANDS; i += 1) {
       const band = buildCirrusBand(rng);
       geoms.push(band.geometry);
       const t = new Float32Array(band.count).fill(1);
@@ -1148,6 +1653,213 @@ export function buildSummitSky(ctx) {
   }
 
   buildClouds();
+
+  /* ------------------------------ the far ranges ------------------------------ */
+
+  const ranges = new THREE.Group();
+  ranges.name = "far-ranges";
+  /* At the origin, like the deck and for the same reason: these
+     stand on the world, so a camera that walks a kilometre across
+     the map has to see them shift. That parallax is most of what
+     sells them as land rather than as a painted backdrop, and it
+     is free. */
+  group.add(ranges);
+
+  const rangeMat = new THREE.MeshBasicMaterial({
+    vertexColors: true, toneMapped: true, side: THREE.FrontSide,
+    /* Opaque, and it may write depth. Nothing in the level is ever
+       behind them - the dome is depthTest:false at renderOrder
+       -1000 - and the deck's sheets are depthWrite:false, so they
+       still veil these correctly on the transparent pass. */
+    depthWrite: true, fog: false,
+  });
+  rangeMat.name = "sf-far-ranges";
+
+  let rangeMesh = null;
+  let rangeHaze = null;   // 0 near, 1 lost in the murk
+  let rangeUp = null;     // 0 at the base, 1 at the ridge
+  let rangeAz = null;     // bearing, for the sun-side lift
+  let rangeTris = 0;
+
+  function buildFarRanges() {
+    if (rangeMesh) {
+      ranges.remove(rangeMesh);
+      rangeMesh.geometry.dispose();
+      rangeMesh = null;
+    }
+    const rng = makeRng(0xfa2e17);
+    const geoms = [];
+    const haze = [];
+    const ups = [];
+    const azs = [];
+
+    for (let li = 0; li < FAR_RANGES.length; li += 1) {
+      const layer = FAR_RANGES[li];
+      /* Wavenumbers scale with radius so a PEAK stays the same
+         number of metres wide: the same range twice as far away
+         needs twice as many summits around its ring, or it reads
+         as twice the mountain. Rounded to integers because a ring
+         is a function on a circle - the same closed-loop rule the
+         deck's shoreline harmonics are held to, and a fractional
+         wavenumber tears the skyline open at theta = 0. */
+      const kScale = layer.r / FAR_RANGES[0].r;
+      const harm = [];
+      let amp = 0;
+      for (let o = 0; o < FAR_RANGE_OCT; o += 1) {
+        const a = Math.pow(FAR_RANGE_GAIN, o);
+        harm.push({
+          k: Math.max(2, Math.round(FAR_RANGE_K0 * Math.pow(2, o) * kScale)),
+          a,
+          p: rng() * TAU,
+        });
+        amp += a;
+      }
+      const envA = { k: Math.max(2, Math.round(3 * kScale)), p: rng() * TAU };
+      const envB = { k: Math.max(2, Math.round(5 * kScale)), p: rng() * TAU };
+
+      const pos = [];
+      const idx = [];
+      const hz = [];
+      const up = [];
+      const az = [];
+      for (let sgi = 0; sgi <= FAR_RANGE_SEG; sgi += 1) {
+        const th = (sgi / FAR_RANGE_SEG) * TAU;
+        /* AN ENVELOPE, NOT A MULTIFRACTAL.
+
+           Added flat, the ridged octaves give every summit the same
+           height and spacing - a comb of identical teeth across the
+           frame, a texture rather than a range. The obvious fix is
+           the standard ridged multifractal, weighting each octave
+           by the one beneath it; measured, it compounds the
+           amplitude away in three octaves and the skyline came back
+           as a long low mesa with a stubble on top.
+
+           So the octaves stay additive, and a separate LOW-frequency
+           envelope decides where the range is high and where it
+           drops to saddles. Two integer wavenumbers, scaled with the
+           ring like everything else here, and phases of their own -
+           so no two rings put their massifs at the same bearing and
+           the near one's saddles are where the far ones show
+           through. That is the layering. */
+        let w = 0;
+        for (const h of harm) w += h.a * (1 - Math.abs(Math.sin(h.k * th + h.p)));
+        const e = 0.5 + 0.5 * (Math.sin(envA.k * th + envA.p) * 0.62
+          + Math.sin(envB.k * th + envB.p) * 0.38);
+        const shaped = clamp01(Math.pow(clamp01(w / amp), 1.25)
+          * (0.30 + 0.70 * clamp01(e)));
+        const crest = layer.crest + (shaped - 0.5) * layer.relief;
+        const cx = Math.cos(th) * layer.r;
+        const cz = Math.sin(th) * layer.r;
+        pos.push(cx, FAR_RANGE_BASE, cz, cx, crest, cz);
+        /* THE BASE HAS TO DISSOLVE, not stop. A curtain hazed
+           evenly top to bottom ends on a hard horizontal line
+           where it meets the cloud, and a straight edge under a
+           jagged one reads as a cut-out. Losing the foot of every
+           range in the murk is also just what aerial perspective
+           does - the higher a thing is, the less air is in front
+           of it. */
+        hz.push(clamp01(layer.haze + 0.40), layer.haze);
+        up.push(0, 1);
+        az.push(th, th);
+        if (sgi < FAR_RANGE_SEG) {
+          /* WOUND TO FACE INWARD. The camera lives inside every one
+             of these rings, so the front face has to point at the
+             origin. Wound the other way the whole backdrop is
+             back-facing and culls to nothing - the mesh is there,
+             12,000 triangles of it, correctly coloured, and the
+             frame is byte-identical with it hidden. */
+          const b = sgi * 2;
+          idx.push(b, b + 2, b + 1, b + 1, b + 2, b + 3);
+        }
+      }
+      const g = new THREE.BufferGeometry();
+      g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+      g.setIndex(idx);
+      geoms.push(g);
+      haze.push(Float32Array.from(hz));
+      ups.push(Float32Array.from(up));
+      azs.push(Float32Array.from(az));
+    }
+
+    const merged = mergeGeometries(THREE, geoms);
+    for (const g of geoms) g.dispose();
+    const count = merged.attributes.position.count;
+    rangeHaze = new Float32Array(count);
+    rangeUp = new Float32Array(count);
+    rangeAz = new Float32Array(count);
+    let o = 0;
+    for (let i = 0; i < haze.length; i += 1) {
+      rangeHaze.set(haze[i], o);
+      rangeUp.set(ups[i], o);
+      rangeAz.set(azs[i], o);
+      o += haze[i].length;
+    }
+    merged.setAttribute("color",
+      new THREE.Float32BufferAttribute(new Float32Array(count * 3), 3));
+    rangeTris = merged.index ? merged.index.count / 3 : 0;
+    rangeMesh = new THREE.Mesh(merged, rangeMat);
+    rangeMesh.name = "sf-far-ranges";
+    rangeMesh.frustumCulled = false;
+    /* Behind everything opaque in the level, so the terrain's own
+       aerial perspective is composited over them rather than the
+       other way round. */
+    rangeMesh.renderOrder = -900;
+    ranges.add(rangeMesh);
+    repaintFarRanges();
+  }
+
+  /* The rock scratch, alongside the deck's. */
+  const rockLit = [0, 0, 0];
+  const rockShade = [0, 0, 0];
+
+  /** Same contract as `repaintClouds`: the geometry is fixed and
+   *  only the light across it changes, so an hour of the day is
+   *  one colour buffer rather than a rebuild.
+   *
+   *  THE ROCK IS DERIVED FROM THE SKY, not tabulated. A hand-picked
+   *  slate looks right at one preset and fights the grade at the
+   *  other four - which is the mistake summit-art's own note about
+   *  inherited colour describes. Taking both ends off `skyHigh` and
+   *  `sunColor` gives alpenglow a warm sunward flank against a blue
+   *  shadow side, noon a flat grey, and blue hour a lilac, for no
+   *  table at all. */
+  function repaintFarRanges() {
+    if (!rangeMesh) return;
+    const colors = rangeMesh.geometry.attributes.color;
+    if (!colors || !rangeHaze) return;
+    const night = clamp01(atmos.nightFactor);
+    const storm = clamp01(atmos.storm);
+    toSrgb(atmos.skyHigh, shadeRgb);
+    toSrgb(atmos.sunColor, litRgb);
+    toSrgb(atmos.skyHorizon, skyRgb);
+    for (let i = 0; i < 3; i += 1) {
+      rockShade[i] = clamp01(shadeRgb[i] * 0.34 * lerp(1, 0.34, night));
+      rockLit[i] = clamp01(lerp(shadeRgb[i], litRgb[i], 0.45) * 0.62
+        * lerp(1, 0.34, night));
+    }
+    /* Azimuth of the key, for the sunward flank. Only the bearing:
+       these are silhouettes and have no surface normal worth the
+       name, so the one lighting cue available is which side of the
+       ring a vertex is on. */
+    const sunAz = Math.atan2(atmos.sunDir.z, atmos.sunDir.x);
+    for (let v = 0; v < colors.count; v += 1) {
+      const lit = 0.5 + 0.5 * Math.cos(rangeAz[v] - sunAz);
+      const t = Math.pow(lit, 1.4);
+      tmpRgb[0] = lerp(rockShade[0], rockLit[0], t);
+      tmpRgb[1] = lerp(rockShade[1], rockLit[1], t);
+      tmpRgb[2] = lerp(rockShade[2], rockLit[2], t);
+      /* A whiteout takes the far ranges first - see SUMMIT_TIMES.
+         storm, which removes the world at 5 m. */
+      const m = clamp01(rangeHaze[v] + storm * 0.7);
+      tmpRgb[0] = lerp(tmpRgb[0], skyRgb[0], m);
+      tmpRgb[1] = lerp(tmpRgb[1], skyRgb[1], m);
+      tmpRgb[2] = lerp(tmpRgb[2], skyRgb[2], m);
+      colors.setXYZ(v, srgb(tmpRgb[0]), srgb(tmpRgb[1]), srgb(tmpRgb[2]));
+    }
+    colors.needsUpdate = true;
+  }
+
+  buildFarRanges();
 
   /* ============================================================
      THE 22-DEGREE HALO AND THE SUN DOGS
@@ -1360,8 +2072,28 @@ export function buildSummitSky(ctx) {
        horizon and a cirrus layer to shine through, and it needs
        there NOT to be a whiteout - inside the cloud there are no
        crystals between you and the sun at 22 degrees, there is
-       just cloud. */
-    haloGain = sstep(-0.5, 5.0, elev)
+       just cloud.
+
+       BRIGHTEST AT LOW SUN, and both halves of that are authored
+       rather than emergent.
+
+       The ramp-in is -1.0 to 3.0 rather than -0.5 to 5.0. The old
+       window meant the level's own default sun at 7.2 degrees was
+       on the ramp's shoulder, so the one preset the level ships
+       pinned to was not seeing a full-strength halo - the effect
+       was being faded for a sun that had already risen.
+
+       The taper out is new. A real 22-degree halo does not vanish
+       at a high sun, but three things here do argue for dimming
+       it: the ring climbs out of the composition entirely (at 58
+       degrees its upper arc is at 80 and nothing but a zenith
+       shot contains it); the parhelia approximation below stops
+       holding; and the whole point of the effect on this level is
+       that it says COLD at the hour the level is composed for.
+       0.42 at the top, reached over 12 to 55 degrees, so noon
+       keeps a ghost of a ring rather than a bright one. */
+    haloGain = sstep(-1.0, 3.0, elev)
+      * lerp(1, 0.42, sstep(12, 55, elev))
       * clamp01(1 - atmos.nightFactor * 1.2)
       * (1 - clamp01(atmos.storm) * 0.95);
     /* Parhelia are a low-sun phenomenon. Bright at 7 degrees,
@@ -1426,7 +2158,14 @@ export function buildSummitSky(ctx) {
          sheet has been passed. */
       const above = sstep(-9, 9, layer.y - y);
       if (above <= 0) continue;
-      const shore = shoreAt(layerShore[i], theta);
+      /* THE SAME `innerAt` THE GEOMETRY WAS BUILT FROM. Before the
+         clearing this read `shoreAt(layerShore[i], theta)` and that
+         was the whole answer; now the sheet begins somewhere else,
+         and a `coverAt` still asking the old question would report
+         the gate as 99% overcast while the frame shows clear sky
+         over the peak - and would drive the key light down by 38%
+         in exactly the shot the clearing exists to rescue. */
+      const shore = innerAt(i, theta);
       const lap = sstep(0, SHORE_FEATHER, r - shore);
       if (lap <= 0) continue;
       clear *= 1 - clamp01(layer.alpha * lap * above);
@@ -1548,7 +2287,21 @@ export function buildSummitSky(ctx) {
       top: INVERSION_TOP,
       base: INVERSION_BASE,
       coverAt,
-      layers: () => DECK_LAYERS.map((l, i) => ({ y: l.y, shore: layerShore[i], radius: l.r })),
+      /* `shore` is the mountain's own contour, `inner` is where the
+         sheet actually starts once the clearing has pushed it back.
+         Both are reported because the difference between them IS
+         the clearing, and a reader that only saw one of them could
+         not tell a deck with a hole from a deck without one. */
+      layers: () => DECK_LAYERS.map((l, i) => ({
+        y: l.y, shore: layerShore[i], radius: l.r, hole: l.hole,
+      })),
+      /** The clearing boundary at bearing `atan2(z, x)`, in metres.
+       *  Exposed so a harness can ask the module the question
+       *  rather than reimplementing the curve - a test that
+       *  reimplements the rule it is testing tests itself. */
+      clearingAt,
+      /** Where sheet `index` begins at that bearing. */
+      innerAt,
     },
 
     status() {
@@ -1564,6 +2317,17 @@ export function buildSummitSky(ctx) {
           ring: Number(haloGain.toFixed(4)),
           dogs: Number(dogGain.toFixed(4)),
           opacity: Number(haloBuilt.material.opacity.toFixed(4)),
+          fade: HALO_FADE,
+          /* Read back off the material rather than restated, so
+             this reports what `patchBasicMaterial` actually did.
+             An additive surface patched WITHOUT this flag fades
+             toward the sky colour, and adding a full-brightness
+             patch of sky is how a hazed additive volume becomes
+             "a pale wedge stamped over the mountains"
+             (art.js:1405-1411). It is the one property of this
+             mesh that fails silently and invisibly at close range,
+             so it is asserted rather than trusted. */
+          additive: !!haloBuilt.material.userData.sfAdditive,
         },
         inversion: {
           top: INVERSION_TOP,
@@ -1571,6 +2335,36 @@ export function buildSummitSky(ctx) {
           layers: DECK_LAYERS.length,
           triangles: cloudTris,
           overcast: Number(overcast.toFixed(4)),
+          /* THE HOLE OVER THE MASSIF, published so the audit can
+             assert on it rather than on a screenshot. `min`/`max`
+             are the boundary's extremes over 360 bearings, so a
+             build that lost the lobe reports them equal; `leeDeg`
+             is the axis it actually resolved from `atmos.windDir`,
+             which is the other half that can silently go wrong.
+             The per-bearing curve itself is on `api.inversion` as
+             `clearingAt` / `innerAt` - a harness that needs to
+             assert about one station should ask for that station's
+             bearing rather than reimplement a cosine. */
+          clearing: {
+            base: CLEAR_BASE,
+            shear: CLEAR_SHEAR,
+            floorCap: Number(FLOOR_SHORE_CAP.toFixed(1)),
+            leeDeg: Number(((leeTheta * 180 / Math.PI + 360) % 360).toFixed(1)),
+            min: clearingStats.min,
+            max: clearingStats.max,
+            mean: clearingStats.mean,
+          },
+        },
+        /* The high deck shares the inversion's mesh, so it has no
+           triangle count of its own worth reporting - what a
+           harness needs is the count and whether the far-plane
+           clamp bit. `worstFit` below about 0.4 means the ranges
+           have been widened past what the reach can carry and the
+           bands are being dragged toward the camera. */
+        cirrus: {
+          bands: CIRRUS_BANDS,
+          reach: CIRRUS_REACH,
+          worstFit: Number(cirrusWorstFit.toFixed(3)),
         },
         underground: Number(subterranean.toFixed(4)),
         shadowSpan,
@@ -1696,6 +2490,7 @@ export function buildSummitSky(ctx) {
 
       if (atmosphereChanged) {
         repaintClouds();
+        repaintFarRanges();
         repaintHalo();
       }
 
@@ -1735,6 +2530,7 @@ export function buildSummitSky(ctx) {
     /** Rebuild anything that bakes the atmosphere into geometry. */
     refresh() {
       repaintClouds();
+      repaintFarRanges();
       repaintHalo();
     },
 

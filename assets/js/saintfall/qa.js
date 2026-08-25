@@ -571,6 +571,543 @@ export function installQa(ctx, api) {
       return out;
     },
 
+    /* ============================================================
+       LEG RIG INSTRUMENT
+
+       Three complaints from play, none of which a still frame can
+       settle: sabatons pointing up under the jetpack, legs "warped"
+       climbing a steep grade, legs "warped" braking out of a run.
+       All three are one class of defect - the pose the solver
+       PRODUCED is not a pose a leg can hold - so all three are
+       measured off the posed bones rather than off the targets the
+       solver was handed.
+
+       Per leg, per frame:
+
+         ankleDev  how far the ankle is from its own neutral, in
+                   degrees, positive toes-up. NOT the raw bone angle:
+                   the two playable rigs disagree by 26 degrees about
+                   where their foot bones point, and `restPitch` is
+                   exactly that disagreement, so subtracting it is
+                   what makes one gate cover both bodies. Standing
+                   flat is 0. A person can point to about -50 and pull
+                   up to about +25; hard limits are -55 and +30.
+         kneeDeg   bend at the knee, 0 = fully extended, 150 = heel
+                   against the buttock and past what a knee does.
+         missM     how far the posed ankle finished from the target
+                   the solver was given. Non-zero means the two-joint
+                   clamp fired, which is what "stretched" looks like:
+                   the boot is no longer where the gait thinks it is.
+         soleDeg   the sole's pitch against the ground under it,
+                   positive toes-up, so a boot lying correctly along
+                   a 30-degree hill reads 0 and one held flat while
+                   the hill falls away reads 30.
+
+       And per scenario, `popM`: the largest SECOND difference of the
+       ankle's world path. A fast swing has a large first difference
+       and a small second one; a teleport has both, and that is the
+       whole reason this is an acceleration rather than a speed.
+
+       Everything is skipped on a frame where the body failed to
+       advance. A trooper walking into masonry keeps `speed` high
+       while `state.gait` stops, which freezes both legs mid-swing -
+       a real pose, but the wall's, and grading it reports a building
+       as a broken rig.
+       ============================================================ */
+    legRigCheck(options) {
+      const p = api.player;
+      const opts = options || {};
+      const rig = p.legRig
+        ? p.legRig()
+        : { restPitch: 0.55, flightDev: -0.34, ankle: 0.118, reach: [0.82, 0.82] };
+      const fig = p.figure;
+      const hasFeet = !!(fig.footPivots && fig.toePivots);
+      const DEG = 180 / Math.PI;
+      const REST_DEG = rig.restPitch * DEG;
+      const LIMIT_DEG = Math.abs((rig.devLimit ? rig.devLimit[1] : 0.46) * DEG);
+
+      const vHip = new THREE.Vector3();
+      const vKnee = new THREE.Vector3();
+      const vAnkle = new THREE.Vector3();
+      const vToe = new THREE.Vector3();
+      const vA = new THREE.Vector3();
+      const vB = new THREE.Vector3();
+      const angleOf = (a, b) => {
+        if (a.lengthSq() < 1e-12 || b.lengthSq() < 1e-12) return 0;
+        return Math.acos(clamp(a.dot(b) / (a.length() * b.length()), -1, 1)) * DEG;
+      };
+
+      /* Ground slope along the foot's OWN facing, so a boot standing
+         across a hill is not scored against a fall line it is not
+         pointing down. */
+      const groundPitchAt = (x, z, dirX, dirZ) => {
+        const s = 0.18;
+        const hi = api.collide.groundHeight(x + dirX * s, z + dirZ * s);
+        const lo = api.collide.groundHeight(x - dirX * s, z - dirZ * s);
+        if (!Number.isFinite(hi) || !Number.isFinite(lo)) return 0;
+        return Math.atan2(hi - lo, s * 2) * DEG;
+      };
+
+      const rows = [{}, {}];
+      const sample = () => {
+        for (let i = 0; i < 2; i += 1) {
+          const leg = p.legs[i];
+          const row = rows[i];
+          fig.legPivots[i].getWorldPosition(vHip);
+          fig.kneePivots[i].getWorldPosition(vKnee);
+          if (hasFeet) {
+            fig.footPivots[i].getWorldPosition(vAnkle);
+            fig.toePivots[i].getWorldPosition(vToe);
+          } else {
+            vAnkle.copy(leg.foot);
+            vToe.copy(leg.foot);
+          }
+          /* IN THE BODY FRAME, not the world. A pop is the foot
+             coming off its own path; the world path also carries
+             every metre the body travels, and under the jetpack it
+             carries the body's ACCELERATION - which read as a 0.25m
+             discontinuity in a hover that was, on inspection, the
+             player accelerating to 12m/s in a straight line. */
+          const bs = Math.sin(p.state.yaw);
+          const bc = Math.cos(p.state.yaw);
+          const bx = vAnkle.x - p.state.x;
+          const bz = vAnkle.z - p.state.z;
+          row.rawY = vAnkle.y;
+          row.ankleX = bx * bc - bz * bs;
+          row.ankleY = vAnkle.y - p.state.y;
+          row.ankleZ = bx * bs + bz * bc;
+          row.swinging = !!leg.swinging;
+          /* IS THIS BOOT ON THE GROUND. Not `!swinging`, which is
+             also true of both legs in mid-air under the jetpack and
+             of a stance foot whose heel has deliberately come off.
+             `footFollow` is the solver's own statement of who owns
+             the sole - 0 the ground, 1 the ankle - so the frames
+             where the sole is CLAIMED flat are exactly the frames
+             where holding it flat is a promise to check. */
+          row.contact = !leg.swinging && p.state.grounded
+            && (leg.footFollow || 0) < 0.15;
+          row.missM = vAnkle.distanceTo(leg.foot);
+          vA.copy(vKnee).sub(vHip);
+          vB.copy(vAnkle).sub(vKnee);
+          row.kneeDeg = angleOf(vA, vB);
+          row.ankleDev = 0;
+          row.soleDeg = 0;
+          if (hasFeet) {
+            vA.copy(vAnkle).sub(vKnee);
+            vB.copy(vToe).sub(vAnkle);
+            row.ankleDev = angleOf(vA, vB) - 90 + REST_DEG;
+            /* The sole is `restPitch` off the toe direction by
+               definition - that is what restPitch MEANS - so the
+               boot's world pitch is the toe direction's elevation
+               plus it, and the reading against the hill is that
+               minus the hill. */
+            const len = vB.length();
+            const rise = len > 1e-6 ? vB.y / len : 0;
+            const run = Math.hypot(vB.x, vB.z);
+            const gp = run > 1e-4
+              ? groundPitchAt(vAnkle.x, vAnkle.z, vB.x / run, vB.z / run)
+              : 0;
+            const off = (Math.asin(clamp(rise, -1, 1)) + rig.restPitch) * DEG - gp;
+            /* NET OF WHAT AN ANKLE HAS. A hill steeper than the joint
+               cannot be lain on, and a boot climbing one is supposed
+               to have its heel off the ground - scoring that as a
+               fault would make the gate unreachable on Kenosis and
+               unfalsifiable everywhere else. What is left is the part
+               the pose could have fixed and did not. */
+            const spare = Math.max(0, Math.abs(gp) - LIMIT_DEG);
+            row.soleDeg = Math.sign(off) * Math.max(0, Math.abs(off) - spare);
+          }
+        }
+        return rows;
+      };
+
+      /* Per-frame dump for ONE named scenario. A summary cannot say
+         WHERE in a stride a discontinuity is, and every fault found
+         here so far has been identified by its phase. */
+      const wanted = opts.series || null;
+      const run = (spec) => {
+        const series = wanted === spec.id ? [] : null;
+        const acc = [0, 1].map(() => ({
+          missM: 0, devMin: 999, devMax: -999, kneeMax: 0,
+          soleMin: 999, soleMax: -999, steps: [], stanceSoleMax: 0,
+          contactFrames: 0, clampedFrames: 0,
+          worstDevAt: null, worstPopAt: null, worstSoleAt: null,
+        }));
+        const prev = [null, null];
+        let frames = 0;
+        let blocked = 0;
+        let travelled = 0;
+        let hang = 0;
+        let maxHang = 0;
+        let t = 0;
+        let px = p.state.x;
+        let pz = p.state.z;
+
+        const measure = (moving) => {
+          const advanced = Math.hypot(p.state.x - px, p.state.z - pz);
+          travelled += advanced;
+          px = p.state.x;
+          pz = p.state.z;
+          /* A body that is trying to move and is not is pinned on
+             something. Its gait accumulator has stopped, so both legs
+             hold whatever mid-swing pose they were in; every metric
+             below would then describe the collider. */
+          if (moving && p.state.grounded
+            && p.state.speed > 0.35 && advanced < (p.state.speed / 60) * 0.5) {
+            blocked += 1;
+            prev[0] = null; prev[1] = null;
+            t += 1 / 60;
+            return;
+          }
+          const now = sample();
+          for (let i = 0; i < 2; i += 1) {
+            const r = now[i];
+            const a = acc[i];
+            if (r.missM > a.missM) a.missM = r.missM;
+            if (r.ankleDev < a.devMin) a.devMin = r.ankleDev;
+            if (r.ankleDev > a.devMax) {
+              a.devMax = r.ankleDev;
+              a.worstDevAt = {
+                t: Number(t.toFixed(2)),
+                swinging: r.swinging,
+                kneeDeg: Number(r.kneeDeg.toFixed(1)),
+                missM: Number(r.missM.toFixed(3)),
+              };
+            }
+            if (r.kneeDeg > a.kneeMax) a.kneeMax = r.kneeDeg;
+            if (r.soleDeg < a.soleMin) a.soleMin = r.soleDeg;
+            if (r.soleDeg > a.soleMax) a.soleMax = r.soleDeg;
+            /* ONLY WHERE THE ANKLE HAD ROOM LEFT.
+               A sole off the ground with the ankle already at its
+               limit is not a pose fault, it is a leg doing all it
+               can - on a hill steeper than a joint, or a shin the
+               stride put past what a joint can recover, the heel
+               comes up and that is correct. Scoring those made the
+               gate unreachable. Scoring the frames where the ankle
+               still had degrees to spend and did not use them is the
+               question actually worth asking; the rest are counted
+               and reported, not graded. */
+            if (r.contact) {
+              a.contactFrames += 1;
+              if (Math.abs(r.ankleDev) >= LIMIT_DEG - 1) {
+                a.clampedFrames += 1;
+              } else if (Math.abs(r.soleDeg) > a.stanceSoleMax) {
+                a.stanceSoleMax = Math.abs(r.soleDeg);
+                a.worstSoleAt = {
+                  t: Number(t.toFixed(2)),
+                  soleDeg: Number(r.soleDeg.toFixed(1)),
+                  ankleDev: Number(r.ankleDev.toFixed(1)),
+                };
+              }
+            }
+            if (prev[i]) {
+              a.steps.push({
+                d: Math.hypot(
+                  r.ankleX - prev[i].x, r.ankleY - prev[i].y, r.ankleZ - prev[i].z
+                ),
+                t,
+                swinging: r.swinging,
+                speed: p.state.speed,
+                gait: p.state.gait % 1,
+              });
+            } else {
+              a.steps.push(null);
+            }
+            prev[i] = { x: r.ankleX, y: r.ankleY, z: r.ankleZ };
+          }
+          /* A FOOT LEFT IN THE AIR WHILE THE BODY STOPS.
+             The gait is driven by DISTANCE, so a decelerating body
+             advances it more and more slowly and a swing that has
+             already lifted simply hangs there - the boot parked at
+             knee height while the trooper coasts to a halt. It is
+             not a slip, not a snap and not an angle, so nothing else
+             here sees it; what it is, is seconds. */
+          if (p.state.speed < 1.2 && p.state.grounded) {
+            let flying = false;
+            for (let i = 0; i < 2; i += 1) {
+              const g = api.collide.groundHeight(
+                p.legs[i].foot.x, p.legs[i].foot.z
+              );
+              if (Number.isFinite(g) && now[i].rawY - g > rig.ankle + 0.12) flying = true;
+            }
+            if (flying) {
+              hang += 1 / 60;
+              if (hang > maxHang) maxHang = hang;
+            } else hang = 0;
+          } else hang = 0;
+          if (series) {
+            series.push({
+              t: Number(t.toFixed(3)),
+              gait: Number((p.state.gait % 1).toFixed(3)),
+              spd: Number(p.state.speed.toFixed(2)),
+              gnd: p.state.grounded ? 1 : 0,
+              legs: [0, 1].map((k) => ({
+                x: Number(now[k].ankleX.toFixed(4)),
+                y: Number(now[k].ankleY.toFixed(4)),
+                z: Number(now[k].ankleZ.toFixed(4)),
+                sw: now[k].swinging ? 1 : 0,
+                dev: Number(now[k].ankleDev.toFixed(1)),
+                knee: Number(now[k].kneeDeg.toFixed(1)),
+                fol: Number((p.legs[k].footFollow || 0).toFixed(2)),
+                fd: Number((p.legs[k].footDev || 0).toFixed(3)),
+              })),
+            });
+          }
+          frames += 1;
+          t += 1 / 60;
+        };
+
+        for (const step of spec.legs) {
+          const [seconds, mx, mz, flags] = step;
+          if (flags && flags.jet !== undefined) hook.setJetInput(!!flags.jet);
+          if (mx === null) p.input.inject(null);
+          else p.input.inject(mx, mz);
+          const steps = Math.round(seconds * 60);
+          const settle = !!(flags && flags.settle);
+          for (let i = 0; i < steps; i += 1) {
+            api.step(1 / 60, false);
+            if (settle) { px = p.state.x; pz = p.state.z; continue; }
+            measure(mx !== null && (mx !== 0 || mz !== 0));
+          }
+        }
+        p.input.inject(null);
+        hook.setJetInput(false);
+        api.step(1 / 60, false);
+
+        /* A TELEPORT IS AN ISOLATED STEP, not a big one.
+           The first version of this scored the second difference of
+           the ankle's path and failed every scenario - because a
+           swing at 8m/s covers 1.1m in a sixth of a second, and the
+           acceleration that takes is genuinely 0.07m per frame
+           squared. Real motion has neighbours the same size as
+           itself; a snap does not, and what is left after taking the
+           neighbours off is the size of the snap. */
+        const jumpOf = (a) => {
+          let worst = 0;
+          let at = null;
+          for (let n = 1; n < a.steps.length - 1; n += 1) {
+            const cur = a.steps[n];
+            const before = a.steps[n - 1];
+            const after = a.steps[n + 1];
+            if (!cur || !before || !after) continue;
+            const excess = cur.d - 2 * Math.max(before.d, after.d);
+            if (excess > worst) {
+              worst = excess;
+              at = {
+                t: Number(cur.t.toFixed(2)),
+                stepM: Number(cur.d.toFixed(3)),
+                neighbourM: Number(Math.max(before.d, after.d).toFixed(3)),
+                swinging: cur.swinging,
+                speed: Number(cur.speed.toFixed(2)),
+                gait: Number(cur.gait.toFixed(3)),
+              };
+            }
+          }
+          return { worst, at };
+        };
+
+        const fmt = (a) => ({
+          maxTargetMissM: Number(a.missM.toFixed(3)),
+          ankleDevDeg: [Number(a.devMin.toFixed(1)), Number(a.devMax.toFixed(1))],
+          maxKneeBendDeg: Number(a.kneeMax.toFixed(1)),
+          soleDegRange: [Number(a.soleMin.toFixed(1)), Number(a.soleMax.toFixed(1))],
+          plantedSoleMaxDeg: Number(a.stanceSoleMax.toFixed(1)),
+          contactFrames: a.contactFrames,
+          ankleClampedPct: Number(
+            (100 * a.clampedFrames / Math.max(1, a.contactFrames)).toFixed(0)
+          ),
+          jumpM: Number(jumpOf(a).worst.toFixed(4)),
+          maxStepM: Number(a.steps.reduce((m, v) => Math.max(m, v ? v.d : 0), 0).toFixed(3)),
+          worstDevAt: a.worstDevAt,
+          worstJumpAt: jumpOf(a).at,
+          worstSoleAt: a.worstSoleAt,
+        });
+        return {
+          id: spec.id,
+          frames,
+          blockedFrames: blocked,
+          travelM: Number(travelled.toFixed(2)),
+          footHangS: Number(maxHang.toFixed(2)),
+          left: fmt(acc[0]),
+          right: fmt(acc[1]),
+          series,
+        };
+      };
+
+      /* Uphill grade in the facing direction, over the walk rule's
+         own look distance. */
+      const gradeAt = (x, z, yaw) => {
+        const dx = Math.sin(yaw);
+        const dz = Math.cos(yaw);
+        const h0 = api.collide.groundHeight(x, z);
+        const h1 = api.collide.groundHeight(x + dx * 1.6, z + dz * 1.6);
+        if (!Number.isFinite(h0) || !Number.isFinite(h1)) return 0;
+        return (h1 - h0) / 1.6;
+      };
+
+      /* Candidate ground with a requested uphill grade, facing up
+         it. Searched rather than hard-coded: the two levels this runs
+         on do not share a single hill.
+
+         SIXTEEN DIRECTIONS PER SITE, not just the fall line. For the
+         flat control the steepest ascent is a few centimetres of
+         noise and its bearing is arbitrary, which is how the first
+         version of this walked the trooper into the Choir Spires and
+         then graded the pose it froze in. */
+      const findGrades = (cx, cz, want, radius, keep) => {
+        const out = [];
+        const R = radius || 240;
+        for (let ring = 10; ring <= R; ring += 9) {
+          for (let k = 0; k < 16; k += 1) {
+            const ang = (k / 16) * Math.PI * 2 + ring * 0.31;
+            const x = cx + Math.cos(ang) * ring;
+            const z = cz + Math.sin(ang) * ring;
+            const h = api.collide.groundHeight(x, z);
+            if (!Number.isFinite(h)) continue;
+            for (let a = 0; a < 16; a += 1) {
+              const yaw = (a / 16) * Math.PI * 2;
+              const dx = Math.sin(yaw);
+              const dz = Math.cos(yaw);
+              /* Graded over the whole march, not one sample: a site
+                 whose first metre matches and whose sixth is a cliff
+                 is a scenario that measures the cliff. */
+              let worst = 0;
+              let sum = 0;
+              let steps = 0;
+              let prev = h;
+              let ok = true;
+              for (let d = 1.6; d <= 14; d += 1.6) {
+                const hh = api.collide.groundHeight(x + dx * d, z + dz * d);
+                if (!Number.isFinite(hh)) { ok = false; break; }
+                const g = (hh - prev) / 1.6;
+                if (g > 1.5 || g < -1.5) { ok = false; break; }
+                worst = Math.max(worst, Math.abs(g - want));
+                sum += g;
+                steps += 1;
+                prev = hh;
+              }
+              if (!ok || !steps) continue;
+              const grade = sum / steps;
+              out.push({ x, z, yaw, grade, err: Math.abs(grade - want) + worst * 0.35 });
+            }
+          }
+        }
+        out.sort((a, b) => a.err - b.err);
+        return out.slice(0, keep || 10);
+      };
+
+      const home = opts.at || { x: p.state.x, z: p.state.z };
+      const results = [];
+      /* Backed off down the slope so the measured window is the
+         CLIMB and not the first two strides out of a teleport. */
+      const at = (site, back = 0) => {
+        hook.teleport(
+          site.x - Math.sin(site.yaw) * back,
+          site.z - Math.cos(site.yaw) * back,
+          site.yaw
+        );
+        p.setFree(false);
+        for (let i = 0; i < 45; i += 1) api.step(1 / 60, false);
+        return Number(gradeAt(p.state.x, p.state.z, p.state.yaw).toFixed(2));
+      };
+
+      /* THE SITE HAS TO BE WALKED, not merely sampled. Height samples
+         see the terrain and nothing else, and the levels are full of
+         masonry: a pinned trooper keeps `speed` high while
+         `state.gait` stops dead, which freezes both legs mid-swing.
+         That is a real pose, but it is the building's, and grading it
+         reports a wall as a broken rig. So each candidate takes a
+         trial run and the first one that actually travels wins. */
+      const pickSite = (want, back) => {
+        const cands = findGrades(home.x, home.z, want, opts.radius, 8);
+        let fallback = null;
+        for (const site of cands) {
+          const grade = at(site, back);
+          p.input.inject(0, -1);
+          let travel = 0;
+          let stuck = 0;
+          let px = p.state.x;
+          let pz = p.state.z;
+          for (let i = 0; i < 78; i += 1) {
+            api.step(1 / 60, false);
+            const advanced = Math.hypot(p.state.x - px, p.state.z - pz);
+            px = p.state.x;
+            pz = p.state.z;
+            travel += advanced;
+            if (p.state.grounded && p.state.speed > 0.35
+              && advanced < (p.state.speed / 60) * 0.5) stuck += 1;
+          }
+          p.input.inject(null);
+          for (let i = 0; i < 24; i += 1) api.step(1 / 60, false);
+          if (!fallback) fallback = { ...site, grade, travel, stuck };
+          if (travel > 3.0 && stuck < 5) return { ...site, grade, travel, stuck };
+        }
+        return fallback;
+      };
+
+      const flat = pickSite(0, 6) || { x: home.x, z: home.z, yaw: 0, grade: 0 };
+
+      // 1. FLAT CONTROL. If this is broken nothing measured below can
+      //    be blamed on the terrain.
+      const siteOf = (site, back) => ({
+        x: Number(site.x.toFixed(2)),
+        z: Number(site.z.toFixed(2)),
+        yaw: Number(site.yaw.toFixed(4)),
+        back,
+      });
+      let grade = at(flat, 6);
+      results.push({
+        ...run({ id: "flat-walk", legs: [[2.6, 0, -1]] }),
+        grade,
+        site: siteOf(flat, 6),
+      });
+
+      // 2. BRAKING. The release is inside the measured window.
+      grade = at(flat, 6);
+      results.push({
+        ...run({ id: "run-to-stop", legs: [[2.0, 0, -1], [2.6, null, null]] }),
+        grade,
+        site: siteOf(flat, 6),
+      });
+
+      // 3. CLIMBING, at an ordinary hillside and near the walk rule's
+      //    own ceiling.
+      for (const want of [0.55, 1.15]) {
+        const site = pickSite(want, 7);
+        if (!site) { results.push({ id: `climb-${want}`, missing: true }); continue; }
+        grade = at(site, 7);
+        results.push({
+          ...run({ id: `climb-${want}`, legs: [[2.6, 0, -1]] }),
+          grade,
+          site: siteOf(site, 7),
+        });
+      }
+
+      // 4. FLIGHT, held long enough for the pose channel to reach 1.
+      at(flat, 0);
+      results.push({ ...run({
+        id: "jet-hover",
+        legs: [[1.4, 0, 0, { jet: true, settle: true }], [2.0, 0, 0, { jet: true }]],
+      }), site: siteOf(flat, 0) });
+      at(flat, 0);
+      results.push({ ...run({
+        id: "jet-forward",
+        legs: [[1.4, 0, -1, { jet: true, settle: true }], [2.0, 0, -1, { jet: true }]],
+      }), site: siteOf(flat, 0) });
+
+      api.step(1 / 60, true);
+      return {
+        rig: {
+          restPitchDeg: Number(REST_DEG.toFixed(1)),
+          flightDevDeg: Number((rig.flightDev * DEG).toFixed(1)),
+          devLimitDeg: (rig.devLimit || [0, 0]).map((v) => Number((v * DEG).toFixed(0))),
+          reachM: rig.reach.map((v) => Number(v.toFixed(3))),
+          ankleM: Number(rig.ankle.toFixed(3)),
+        },
+        scenarios: results,
+      };
+    },
+
     /**
      * Hold or release the fire button.
      *
@@ -3956,7 +4493,17 @@ export function installQa(ctx, api) {
     resetProgressionForQA() {
       if (!ctx.qa) return { ok: false, reason: "qa-only" };
       const progression = api.progression || ctx.progression;
-      return progression?.resetForQA?.()
+      return progression?.resetCareer?.({ source: "qa" })
+        ?? progression?.resetForQA?.()
+        ?? { ok: false, reason: "progression-unavailable" };
+    },
+    resetCareerForQA() {
+      if (!ctx.qa) return { ok: false, reason: "qa-only" };
+      const saves = api.saves || ctx.saves;
+      const progression = api.progression || ctx.progression;
+      return saves?.resetCareer?.({ source: "qa" })
+        ?? progression?.resetCareer?.({ source: "qa" })
+        ?? progression?.resetForQA?.()
         ?? { ok: false, reason: "progression-unavailable" };
     },
     openMenu(panel = "operation") {

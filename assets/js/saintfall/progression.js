@@ -1058,16 +1058,23 @@ export function buildProgression(ctx) {
     effects.counters = counters;
   }
 
-  function resetForQA() {
-    if (!ctx.qa) return mutationFailure("qa-only", "Progression reset is available only to QA.");
+  function resetCareer(options = {}) {
     career = freshCareer();
-    field.operationId = operationBase;
+    field.operationId = ctx.qa ? `qa-${ctx.seed}` : `op-${ctx.seed.toString(16)}-${Date.now().toString(36)}`;
     field.startedAt = Date.now();
     field.loadout = null;
-    ctx.runtime.progressionEditsLockedForQA = false;
+    if (ctx.qa) ctx.runtime.progressionEditsLockedForQA = false;
     clock = 0;
     resetEffects();
-    return notify("reset", "QA progression reset");
+    if (options.persist !== false) {
+      flushPersistence();
+    }
+    return notify("reset-career", "Progress reset", { source: options.source || "new-game" });
+  }
+
+  function resetForQA() {
+    if (!ctx.qa) return mutationFailure("qa-only", "Progression reset is available only to QA.");
+    return resetCareer({ source: "qa" });
   }
 
   function sourceReceipt(prefix, suffix) {
@@ -2132,6 +2139,8 @@ export function buildProgression(ctx) {
     validateField,
     validateFieldState: validateField,
     attachPersistence,
+    resetCareer,
+    reset: resetCareer,
     resetForQA,
     onEnemyKilled,
     modifyEnemyDamage,

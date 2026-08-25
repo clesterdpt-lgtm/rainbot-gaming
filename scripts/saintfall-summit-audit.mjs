@@ -68,6 +68,9 @@ const GATES = {
      difference between a boss arena and a hillside; the layout says
      +/-0.35 m and this allows the terrain's own sample noise on top. */
   padSpreadM: 0.45,
+  /* An arena may undulate; it may not be steep. 8% is a twentieth
+     of the walk limit and a quarter of the Via Sacra's design grade. */
+  padGradePct: 8.0,
   /* The Via Sacra is a walking road. 13% is the layout's ceiling and
      is about as steep as a real mountain road gets before it needs
      switchbacks - which this one has six of. */
@@ -172,17 +175,22 @@ async function main() {
         const s = window.__SF.summit;
         return s.stations().map((st) => ({ id: st.id, f: s.padFlatness(st.id) }));
       });
-      const worst = rows.reduce((a, b) => (b.f.spread > a.f.spread ? b : a));
-      const bad = rows.filter((r) => r.f.spread > 0.45);
+      /* GRADE, not spread. See padFlatness: an arena carrying wind
+         drift is a snowfield; one flattened to a plane is a sheet of
+         card, and the property that actually decides whether a fight
+         on it is fair is how steep it gets, not how far it ranges. */
+      const worst = rows.reduce((a, b) => (b.f.maxGradePct > a.f.maxGradePct ? b : a));
+      const bad = rows.filter((r) => r.f.maxGradePct > GATES.padGradePct);
       return {
         pass: bad.length === 0,
-        detail: `worst ${worst.id} spread ${worst.f.spread.toFixed(3)}m`
+        detail: `worst ${worst.id} ${worst.f.maxGradePct.toFixed(1)}% grade`
+          + ` (spread ${worst.f.spread.toFixed(2)}m)`
           + (bad.length ? ` - over on ${bad.map((b) => b.id).join(", ")}` : ""),
       };
     });
 
     await gate("the summit reaches its authored altitude", async () => {
-      const y = await page.evaluate(() => window.__SF.summit.altitudeAt(0, 0));
+      const y = await page.evaluate(() => window.__SF.summit.terrainAt(0, 0));
       const [lo, hi] = GATES.summitAltitudeM;
       return { pass: y >= lo && y <= hi, detail: `${y.toFixed(1)}m, want ${lo}-${hi}` };
     });
@@ -248,6 +256,15 @@ async function main() {
         pass: open.length > 0 && narrow.length === 0,
         detail: `${open.length} open of ${probes.length}, narrowest ${
           open.length ? Math.min(...open.map((p) => p.width)).toFixed(1) : "-"}m`,
+      };
+    });
+
+    await gate("the level is sealed by the encircling range", async () => {
+      const r = await page.evaluate(() => window.__SF.summit.rimProbe(72));
+      return {
+        pass: r.sealed && r.lowestCrestM > 100,
+        detail: `gentlest face ${r.gentlestFaceGrade.toFixed(2)} (limit ${r.walkLimit})`
+          + ` at ${r.gentlestFaceBearing.toFixed(0)}deg, lowest crest ${r.lowestCrestM.toFixed(0)}m`,
       };
     });
 

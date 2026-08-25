@@ -2425,6 +2425,7 @@ export function buildDropIntro(ctx, options = {}) {
     state.launchMode = "new";
     const token = ++state.startToken;
     setEntryActionsDisabled(true);
+    try { await Promise.resolve(options.onNewGame?.()); } catch (_) { /* continue */ }
     try { await audio?.unlock?.({ ambience: false }); } catch (_) { /* visual path still starts */ }
     if (token !== state.startToken || state.disposed || state.completed) return false;
     try { await audio?.beginDrop?.(); } catch (_) { /* visual path still starts */ }

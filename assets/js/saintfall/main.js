@@ -459,6 +459,10 @@ export async function start({ boot, build } = {}) {
     readSaves: () => saves.read?.() || { autosave: null, manuals: [] },
     subscribeSaves: (listener) => saves.onChange?.(listener),
     onLoad: (kind, index) => saves.load?.(kind, index),
+    onNewGame: () => {
+      saves.resetCareer?.({ source: "new-game" })
+        ?? progression.resetCareer?.({ source: "new-game" });
+    },
     settingsState: () => gameUi.settingsState?.() || {},
     onSetting: (name, value) => gameUi.setSetting?.(name, value),
     onComplete({ launchMode } = {}) {

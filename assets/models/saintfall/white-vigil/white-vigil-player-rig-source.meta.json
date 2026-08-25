@@ -1,0 +1,33 @@
+{
+  "id": "01a02e57-20c2-728f-b0d7-36cedb8cffb1",
+  "type": "image-to-3d",
+  "status": "SUCCEEDED",
+  "progress": 100,
+  "createdAt": 1787483858523,
+  "startedAt": 1787483858527,
+  "finishedAt": 1787484010907,
+  "expiresAt": 1787743210907,
+  "consumedCredits": 30,
+  "taskError": null,
+  "sourceImage": "assets/concepts/saintfall/playable-characters/white-vigil-playable-turnaround-front-v1.png",
+  "masterFile": "white-vigil-player-rig-source-master.glb",
+  "thumbnails": [
+    "white-vigil-player-rig-source-preview.png"
+  ],
+  "request": {
+    "image_url": "[local image data URI omitted]",
+    "model_type": "standard",
+    "ai_model": "meshy-6",
+    "enable_pbr": true,
+    "should_texture": true,
+    "should_remesh": true,
+    "topology": "triangle",
+    "target_polycount": 45000,
+    "pose_mode": "a-pose",
+    "image_enhancement": false,
+    "remove_lighting": true,
+    "target_formats": [
+      "glb"
+    ]
+  }
+}

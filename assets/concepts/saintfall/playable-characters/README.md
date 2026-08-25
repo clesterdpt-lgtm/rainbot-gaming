@@ -39,6 +39,32 @@ Hooded shrine-mask silhouette, rotary axe-casters, layered rib plates, and green
 
 Prompt delta: lean acrobatic build; shallow armored cowl; no conventional large pauldrons; overlapping ivory rib plates; blade-shaped verdigris forearm and calf fins; circular amber sternum reliquary; two compact rotary firearms with visible triple-cylinder chambers and substantial forward-weighted crescent axe blades.
 
+## White Vigil second playable character target
+
+![White Vigil unarmed body target](white-vigil-playable-unarmed-target-v1.png)
+
+This unarmed body reference is the current starting target for Saintfall's second playable character, who continues to the next planet, White Vigil. Both hybrid weapons were removed completely and the obscured grip areas were rebuilt as relaxed, empty armored hands with clear negative space for Meshy and humanoid rigging.
+
+Edit prompt: remove both complete handheld hybrid weapons, including grips, triggers, muzzles, firing chambers, blades, guards, and pommels; reconstruct anatomically correct relaxed hands with palms inward and gently separated fingers; preserve the exact helmet, pointed shoulder pads, armor, proportions, stance, palette, lighting, framing, and clean upper-back silhouette; add no holsters, sheaths, floating parts, scenery, or replacement equipment.
+
+Implementation rule: generate the character body from this unarmed reference. Generate each weapon as its own Meshy asset and attach it later to authored hand sockets so neither weapon becomes fused into the skinned character mesh.
+
+### White Vigil Meshy turnaround v1
+
+#### Front
+
+![White Vigil front turnaround](white-vigil-playable-turnaround-front-v1.png)
+
+#### Left profile
+
+![White Vigil left-profile turnaround](white-vigil-playable-turnaround-left-v1.png)
+
+#### Back
+
+![White Vigil back turnaround](white-vigil-playable-turnaround-back-v1.png)
+
+Turnaround prompt set: render the exact approved unarmed character in centered orthographic front, exact 90-degree left-profile, and exact 180-degree back views. Preserve identical scale, proportions, neutral A-pose, empty relaxed hands, armor construction, pointed shoulder pads, ivory/verdigris/gold/black materials, studio lighting, and framing across all three views. Infer unseen rear surfaces conservatively as compact overlapping scapular and spine plates. Add no weapons, holsters, sheaths, pack, vertical posts, antennae, lamps, exhaust fins, tubes, cape, rear glow, scenery, text, logos, or watermark.
+
 ## Heavy hammer-and-shield options
 
 ### B1 - Bastion Penitent

@@ -53,6 +53,8 @@ const BASE = `http://127.0.0.1:${PORT}`;
 const ALL_GRIPS = [
   { key: "inner", at: [0.240, 0.081, 0.000] },
   { key: "mid", at: [0.330, 0.100, 0.000] },
+  { key: "bowCentre", at: [0.280, 0.080, 0.000] },
+  { key: "bowUpper", at: [0.330, 0.200, 0.000] },
   { key: "outer", at: [0.405, 0.150, 0.000] },
   { key: "trigger", at: [0.105, 0.020, 0.000] },
   { key: "frame", at: [0.045, 0.060, 0.000] },

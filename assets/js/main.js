@@ -281,7 +281,7 @@ const RB_GAME_SEARCH_TEXT = {
 };
 
 const RB_SEARCH_SECTIONS = [
-  { href: "search.html", label: "Search Rainbot", search: "search find games articles clips pages slopwire vault directory", type: "page" },
+  { href: "search.html", label: "Search Rainbot", search: "search find games pages vault directory", type: "page" },
   { href: "games.html", label: "Games Vault", search: "games arcade browser free play vault catalog multiplayer agent after dark", type: "page" },
   { href: "community.html", label: "Community Forum", search: "community forum topics discussion leaderboard scores", type: "page" },
   { href: "after-dark.html", label: "After Dark", search: "after dark horror games vault sleep paralysis", type: "page" },
@@ -1867,7 +1867,7 @@ function openProModal(defaultPlan = "monthly") {
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="rb-pro-preview-title">
       <div class="modal__title" id="rb-pro-preview-title">Rainbot Pro Preview</div>
       <div class="modal__body">
-        Pro is still in the lab. The plan is an ad-free arcade, early access, and supporter perks—but checkout is not live yet.
+        Pro is still in the lab. The plan is early access and supporter perks—but checkout is not live yet.
       </div>
       <div class="modal__actions">
         <a class="btn btn--primary" id="rb-pro-updates" href="mailto:hello@rainbotgaming.com?subject=Rainbot%20Pro%20launch%20updates">Get launch updates</a>

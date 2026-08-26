@@ -33,13 +33,13 @@ const WHITE_VIGIL = {
     idleX: 0.205, idleY: 0.980, idleZ: 0.060,
     walkX: 0.015, walkY: 0.020, sprintX: 0.008, sprintY: 0.080,
     walkSwing: 0.135, sprintSwing: 0.065, swingLift: 0.38, liftY: 0.75,
-    /* Widened and brought forward for the crescents. The blade
-       leaves the fist ACROSS the palm, so under the jetpack - where
-       the knees come up to meet the hands - the old 0.230/-0.150
-       swept both blades through the opposite thigh for 17% of the
-       samples. Outboard alone only halved it; it takes the hands
-       forward of the tucked knee as well. */
-    flightX: 0.300, flightY: 1.050, flightZ: 0.060,
+    /* Widened and brought forward for the crescents. Under the
+       jetpack the knees come up to meet the hands, and a half-metre
+       blade held along the forearm reaches them: the stock
+       0.230/-0.150 swept both through the opposite thigh. Outboard
+       alone only halved it - it takes the hands forward of the
+       tucked knee as well. */
+    flightX: 0.340, flightY: 1.020, flightZ: 0.140,
   },
 };
 

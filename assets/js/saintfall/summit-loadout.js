@@ -20,36 +20,76 @@ const MODEL_ROOT = "../../../assets/models/saintfall/player-weapons/";
    Palm space: +X across the palm, +Y distal along the forearm, +Z the
    palm's own normal (see `holdQuaternion`).
 
-   `long` is the handle bar's axis, taken from the raycast map of the
-   model - the bar climbs 21 degrees off the frame as it runs. `roll`
-   is the direction from the palm INTO the bar, which is that axis's
-   normal in the plate's plane.
+   THE MODEL. Raycast maps of the raw GLB give: a frame carrying the
+   barrel and the energy cell, a crescent blade at its -Y end, a
+   trigger spur near (0.105, 0.020), and a bow leaving the frame at
+   (0.15,-0.13), swinging out to x 0.42 and returning at (0.13, 0.42).
+   By section the BOW is the true grip - a near-constant 34 x 17mm bar,
+   ~105mm perimeter, a sabre grip, leather-wrapped in the concept -
+   while the frame is 30 x 42mm and ~145mm, which no fist closes on.
+   The 41mm between them is the finger tunnel.
 
-   `longTo` is the one number here that anatomy will not hand you, so
-   it was swept and looked at. These gauntlets have their fingers
-   SCULPTED - one `Hand` bone, no digits - so there is exactly one
-   place a bar can sit and be gripped, and every other rake slides it
-   out of the curl: at -60 and beyond the fingers lie flat along the
-   frame like a hand resting on it, which is the same wrong picture
-   the body-space aims produced. Across the palm is the one that
-   closes the fist. */
+   AND THE RIG CANNOT EXPRESS THAT. These gauntlets have one `Hand`
+   bone with the fingers sculpted half open, so nothing closes on
+   anything. Pinning the bow's centreline to the palm - anatomically
+   the correct answer - puts the frame 77mm beyond fingers that cannot
+   reach it, and you see daylight straight through the tunnel: the
+   hand reads as not touching the weapon at all. Photographed side by
+   side, seating the FRAME in the fist wins outright, with the fingers
+   filling the tunnel and the bow arcing past the knuckles.
+
+   So `grip` is a point in the TUNNEL, and that is deliberate. A grip
+   point in empty space is not automatically wrong - what matters is
+   where the solid parts land around the hand. This one puts the frame
+   just palm-side of centre and the bow about 48mm behind it, which is
+   the knuckle surface. (The original (-0.300, 0.185) was wrong for a
+   different reason: it put the geometry itself in the wrong place.)
+
+     long   the muzzle axis, sent distally down the forearm and raked
+            27 degrees back within the plate's own plane. Straight
+            down the arm is where the barrel wants to be, but this
+            prop is MID-GRIP - 0.93 units of it sit above the hand
+            against 0.97 below - so held dead in line it pushed its
+            butt 30cm up the forearm and 42mm into the trooper's own
+            upper arm. Raking it swings that end clear (every pose to
+            0% clipping) and costs nothing: the rake is about the
+            PLATE'S NORMAL, so the face stays square to the body.
+     roll   the PLATE'S OWN NORMAL, sent along the palm's normal so
+            the flat of the weapon lies flat in the hand.
+
+   That roll is what squares the weapon to the trooper. This prop is a
+   plate 0.26 units thick against 0.97 wide, so it has a broad face
+   and a thin edge, and the two things wanted of it - palm turned in
+   toward the body, and the weapon's SIDE face presented to the side -
+   are only simultaneously possible when those two normals share an
+   axis. Rolled the old way (plate normal across the palm) they sat 90
+   degrees apart and the wrist could satisfy one or the other: squared
+   to the side the palm faced backwards, palm turned in the weapon
+   faced front. Measured, not guessed - at the best wrist angle the
+   old hold reached |plate.x| 0.95 with the palm at 0.06, or the
+   reverse. Sharing the axis, ONE wrist angle gets both to 0.95.
+
+   The right palm frame is reflected across the body, but remains
+   right-handed. Its across-palm target therefore needs one explicit
+   X reflection below: without it the right pommel points skyward and
+   the crescent toes into the hip even though the left remains sound. */
 const HYBRID_HOLD = {
-  long: [0.33, 0.945, 0],
-  roll: [0.945, -0.33, 0],
-  longTo: [1, 0, 0],
-  rollTo: [0, 0, 1],
+  long: [0, -1, 0],
+  roll: [0, 0, 1],
+  /* Five degrees nearer the forearm than the first squared hold.
+     The elbow fold rotates the forearm forward; this counters that
+     at the grip, leaving the crescent lower while its active end
+     still projects forward of the hand. */
+  longTo: [-0.450, 0.893, 0],
+  rollTo: [0, 0, -1],
 };
 
-/* THE TWO PALM FRAMES ARE NOT COPIES, AND NOT QUITE MIRRORS.
-   player.js builds each wrist as X = Y cross Z from a palm normal
-   that points inboard on both sides, so hand 1's basis is hand 0's
-   reflected with X negated - the negation is what keeps it
-   right-handed. A hold handed to both unchanged therefore comes out
-   rotated half a turn on the right, not mirrored, and the measured
-   cost of that was a right muzzle 59 degrees off a left one that was
-   on target. Negating the palm-space X puts the pair back in mirror,
-   and forward lies IN the mirror plane, so both blades still point
-   down the same shot. */
+/* The hand bases are right-handed but reflected across the body.
+   Reusing the left target unchanged therefore reverses the right
+   prop's fore-aft component: its closed pommel points up and the
+   crescent toes into the hip. Reflecting the palm-space X target
+   once restores the intended paired carry while leaving the shared
+   grip point, size and muzzle socket untouched. */
 const mirrorHold = (hold) => ({
   ...hold,
   longTo: [-hold.longTo[0], hold.longTo[1], hold.longTo[2]],
@@ -63,41 +103,26 @@ const LOADOUTS = {
       file: "white-vigil-crescent-emitter.glb",
       hand: 0,
       sizeAxis: "y",
-      /* Halved from 0.86. At that size each hybrid stood 0.99m on a
-         1.74m trooper - a polearm carried in one hand - and the pair
-         of them owned more silhouette than the operative did. */
-      targetSize: 0.52,
-      /* MEASURED OFF THE MODEL, not inferred from its centroid.
-         `saintfall-weapon-inspect.mjs` renders the raw GLB
-         orthographically down each of its own axes over a grid in
-         model units; the grip can then be read rather than guessed.
-
-         This prop is a D-GUARD, not a pistol butt: the hand passes
-         into the opening between the barrel body and the outer curved
-         bar, palm against the bar at +X, fingers wrapping it. The
-         opening spans x 0.12..0.30, y 0.05..0.58 and the model is
-         flat in Z, so the palm centre is (0.24, 0.28, 0).
-
-         It was authored at (-0.300, 0.185, 0) - on the OTHER SIDE of
-         the barrel, in open air half a model-unit from any geometry.
-         That is why three rounds of re-aiming never seated it: the
-         mount puts this point on the palm, so the palm was being held
-         to a spot the weapon does not occupy, and no rotation about
-         a wrong centre can fix a wrong centre. */
-      /* ON THE BAR, and measured off the mesh rather than off the
-         silhouette. A -Z raycast grid over the handle region puts the
-         frame at x <= 0.07, an open finger gap, then the handle bar's
-         centreline running (0.220,-0.102) -> (0.344, 0.219). The palm
-         presses the bar's INNER face: that centreline pushed half a
-         bar-thickness back along the bar's own normal. The old point
-         sat in the middle of the finger GAP, 45mm up the bar from the
-         fist - the hand was closing on air beside it. */
-      grip: [0.240, 0.081, 0.000],
+      /* 0.62 measures 0.70m tall in world on a 1.74m trooper. Read
+         against the two dual-wield references this is about right for
+         a heavy sidearm: big enough to have presence in the hand,
+         short of the 0.99m polearm that 0.86 produced. */
+      targetSize: 0.62,
+      /* IN THE FINGER TUNNEL, between frame and bow - see the hold
+         above for why that beats the anatomically-correct bow
+         centreline on a hand whose fingers cannot close. */
+      grip: [0.105, 0.020, 0.000],
       /* The v2 prop has one active end. Its crescent and embedded
          energy aperture both live on model -Y; +Y is a sealed pommel.
          Keeping an explicit socket/axis here means a discharge can
          only originate on the blade side. */
-      emitter: [0.000, -0.790, 0.000],
+      /* CLEAR OF THE MUZZLE, not inside it. (0,-0.790) was buried in
+         solid material - a Z-cast there returns a span -0.037..0.035
+         and the point is 35mm from any surface - so every pulse and
+         every flash was born inside the blade and left through its
+         own cutting edge. Casting -Y down the barrel line puts the
+         last surface at y -0.896..-0.928; this sits just past it. */
+      emitter: [0.045, -0.960, 0.000],
       emitterAxis: [0, -1, 0],
       /* Offsets found by `saintfall-loadout-fit.mjs`, which scores a
          candidate mount against a capsule body over seven captured
@@ -145,21 +170,18 @@ const LOADOUTS = {
       file: "white-vigil-crescent-emitter.glb",
       hand: 1,
       sizeAxis: "y",
-      targetSize: 0.52,
-      /* ON THE BAR, and measured off the mesh rather than off the
-         silhouette. A -Z raycast grid over the handle region puts the
-         frame at x <= 0.07, an open finger gap, then the handle bar's
-         centreline running (0.220,-0.102) -> (0.344, 0.219). The palm
-         presses the bar's INNER face: that centreline pushed half a
-         bar-thickness back along the bar's own normal. The old point
-         sat in the middle of the finger GAP, 45mm up the bar from the
-         fist - the hand was closing on air beside it. */
-      grip: [0.240, 0.081, 0.000],
-      emitter: [0.000, -0.790, 0.000],
+      targetSize: 0.62,
+      /* Identical grip seat to the left; only the across-palm aim is
+         reflected by `mirrorHold` below. */
+      grip: [0.105, 0.020, 0.000],
+      /* CLEAR OF THE MUZZLE, not inside it. (0,-0.790) was buried in
+         solid material - a Z-cast there returns a span -0.037..0.035
+         and the point is 35mm from any surface - so every pulse and
+         every flash was born inside the blade and left through its
+         own cutting edge. Casting -Y down the barrel line puts the
+         last surface at y -0.896..-0.928; this sits just past it. */
+      emitter: [0.045, -0.960, 0.000],
       emitterAxis: [0, -1, 0],
-      /* Offsets found by `saintfall-loadout-fit.mjs`, which scores a
-         candidate mount against a capsule body over seven captured
-         poses at once. Palm space, like the mount they sit on. */
       /* ON THE LOCATOR, and that is a measured result rather than a
          default. These are PALM-LOCATOR units, which are BONE units:
          the armature carries a 0.01 scale, so one of them is about a
@@ -300,8 +322,9 @@ function aimQuaternion(THREE, aim, figure, palm) {
    across the palm - so a hold expressed here is a constant, and the
    weapon is welded into the fist for every pose there will ever be.
    Aiming is then the wrist's job, which is also whose job it is on a
-   real arm. Mirrored automatically: the two palm frames are mirror
-   images, so both hands take the SAME numbers. */
+   real arm. The two palm frames are reflected but right-handed, so a
+   loadout may explicitly reflect its across-palm target once when a
+   paired prop needs a true visual mirror. */
 function holdQuaternion(THREE, hold) {
   const model = pairBasis(THREE, hold.long, hold.roll || [0, 0, 1]);
   const palm = pairBasis(THREE, hold.longTo, hold.rollTo || [0, 0, 1]);
@@ -346,16 +369,26 @@ export async function buildSummitLoadout(ctx, player) {
      a hammer wants one. */
   const CARRY = {
     "white-vigil": {
-      /* Paired half-metre crescents need a wider lane than empty
-         hands. Eight centimetres outboard keeps the active edges off
-         the opposite thighs through the walk cycle while the reduced
-         stroke preserves a quick dual-wielder cadence. */
-      0: { pose: [0.080, 0.015, 0.025], swing: 0.58, turn: 0 },
-      1: { pose: [-0.080, 0.015, 0.025], swing: 0.58, turn: 0 },
+      /* Paired crescents need a wider lane than empty hands, and the
+         D-guard hold needs a wider one still: held along the forearm
+         the blade hangs past the fist toward the knee, so 8cm
+         outboard left it 43mm inside the far thigh at rest. 13cm out
+         and 10cm forward clears every ground pose outright while the
+         reduced stroke preserves a quick dual-wielder cadence. The
+         extra centimetre of lift is deliberately small: it changes
+         the near-locked 178/166-degree elbows to a relaxed 165/157
+         without turning the low carry into a raised guard. */
+      0: { pose: [0.130, 0.025, 0.100], swing: 0.58, turn: -0.60 },
+      1: { pose: [-0.130, 0.025, 0.100], swing: 0.58, turn: 0.60 },
     },
     "bastion-penitent": {
       /* `turn` rolls the wrist so the palm is presented to what the
-         hand is carrying. It is the only grip lever these rigs have:
+         hand is carrying. On White Vigil it is also what squares the
+         weapon: -0.60 radians brings BOTH the palm's normal and the
+         plate's face to within 18 degrees of the body's own lateral
+         axis, so the palm turns in toward the trooper and the pistol
+         shows its side to the side. Opposite signs because the roll
+         is applied about each forearm directly, with no side factor. It is the only grip lever these rigs have:
          the gauntlets are a single `Hand` bone with the fingers
          sculpted open, so nothing can close on a haft. */
       0: { pose: [0.010, 0.105, 0.170], swing: 0.10, turn: 0.62 },
@@ -371,12 +404,14 @@ export async function buildSummitLoadout(ctx, player) {
       1: { pose: [0.000, 0.020, 0.030], swing: 0.72, turn: -0.48 },
     },
   };
-  /* Swept and measured: at y 0.26 the forearm comes up in line with
-     the shot and the muzzle lands 52 degrees off it; held at 0.05 the
-     forearm stays near vertical and both blades come onto the
-     crosshair within 5 degrees. Forward reach is free - it is the
-     LIFT that ruins the aim - so the hands still present. */
-  const FIRE_POSE = { x: 0.105, y: 0.050, z: 0.220 };
+  /* Swept and measured against the new hold. With the barrel now in
+     line with the FOREARM, raising the hands is what aims the weapon
+     rather than what ruins it - the exact reverse of the across-palm
+     hold this replaced, which needed them held down at 0.05. Below
+     0.18 the arm has not come up far enough and the muzzle lands 30
+     degrees off; from 0.18 up it is on the crosshair, and 0.30 buys
+     the extended, presented arm the reference photographs show. */
+  const FIRE_POSE = { x: 0.105, y: 0.320, z: 0.260 };
   const carry = CARRY[ctx.playerCharacter?.id] || null;
   const isWhiteVigil = ctx.playerCharacter?.id === "white-vigil";
   let aimBlend = 0;
@@ -394,14 +429,10 @@ export async function buildSummitLoadout(ctx, player) {
            pulse leaves, and the hands stay separated - these are not
            a two-handed rifle.
 
-           THE FOREARM DELIBERATELY DOES NOT POINT AT THE TARGET.
-           The blade leaves the fist across the palm, so a forearm
-           aimed down the shot puts the muzzle square to it and no
-           amount of wrist recovers that: the aim came back 52
-           degrees off. Kept nearer vertical, the same muzzle sweeps
-           a horizontal circle as the forearm rolls, and the shot is
-           on that circle - so the trooper aims by turning the wrist
-           over, which is what you do with a blade held at your side. */
+           The carry keeps the muzzle only 27 degrees off the
+           forearm, so this reach does most of the presentation. The
+           wrist solver below then supplies the smaller convergence
+           correction without moving the grip inside the hand. */
         out.x += side * FIRE_POSE.x * aimBlend;
         out.y += FIRE_POSE.y * aimBlend;
         out.z += FIRE_POSE.z * aimBlend;
@@ -567,19 +598,12 @@ export async function buildSummitLoadout(ctx, player) {
      the basis the free-hand solve would otherwise have used.
 
      Smallest, and CLAMPED - but not by one number, because a wrist
-     is not one joint. The crescent's blade leaves the fist ACROSS
-     the palm (it has to: the handle bar and the blade share an axis,
-     so a hand wrapped round the bar points the blade sideways), and
-     swinging a sideways blade onto a forward crosshair is most of a
-     right angle. A single limit either refuses that - the plates
-     came back with the muzzle 28 degrees off the shot it had just
-     fired - or allows it everywhere and snaps the wrist.
-
-     So the rotation is split about the forearm. The part that is
-     FOREARM ROLL is pronation, which a real arm has about 150
-     degrees of and which reads as natural at all of it. What is left
-     is wrist flexion and deviation, which a real wrist barely has,
-     and that is the part kept inside about 35 degrees. */
+     is not one joint. The carry already rakes the muzzle close to the
+     forearm, while reticle convergence varies with camera pitch and
+     bearing. The remaining correction is split about the forearm:
+     the twist component is pronation, which has a wide anatomical
+     range, while the bend component is wrist flexion/deviation and
+     stays inside about 35 degrees. */
   const ROLL_LIMIT = 2.35;
   const BEND_LIMIT = 0.62;
   const restBasis = new THREE.Matrix4();
@@ -730,6 +754,23 @@ export async function buildSummitLoadout(ctx, player) {
     return part.spec.hold;
   };
 
+  /* For the carry-pose sweep: same shape as a CARRY entry's `pose`,
+     applied to both hands with x mirrored. */
+  const setCarryPose = (pose = {}) => {
+    if (!carry) return null;
+    for (const i of [0, 1]) {
+      const rule = carry[i];
+      if (!rule) continue;
+      const sign = i === 0 ? 1 : -1;
+      if (Number.isFinite(pose.x)) rule.pose[0] = sign * pose.x;
+      if (Number.isFinite(pose.y)) rule.pose[1] = pose.y;
+      if (Number.isFinite(pose.z)) rule.pose[2] = pose.z;
+      if (Number.isFinite(pose.swing)) rule.swing = pose.swing;
+      if (Number.isFinite(pose.turn)) rule.turn = sign * pose.turn;
+    }
+    return carry;
+  };
+
   /* For the fire-pose sweep. */
   const setFirePose = (pose = {}) => {
     for (const key of ["x", "y", "z"]) {
@@ -751,7 +792,7 @@ export async function buildSummitLoadout(ctx, player) {
   };
 
   return {
-    group, parts, status, setTransform, setHold, setFirePose, update,
+    group, parts, status, setTransform, setHold, setFirePose, setCarryPose, update,
     armPose, armSwing, handTurn, handBasis, aimPoint, CONVERGE_RANGE,
   };
 }

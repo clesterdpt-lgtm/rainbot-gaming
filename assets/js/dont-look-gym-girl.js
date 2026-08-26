@@ -1807,7 +1807,7 @@
         countEl.textContent = "×" + count;
       } else {
         btn.dataset.empty = "true";
-        countEl.textContent = "+AD";
+        countEl.textContent = "+1";
       }
     });
   }
@@ -1836,10 +1836,10 @@
       { key: "decoy",     icon: "🎭", label: "Dropped Deadlift",  desc: "Everyone turns · 2.5s" }
     ];
     document.getElementById("gym-powers").innerHTML = defs.map(d => `
-      <button class="gym-power" data-power="${d.key}" data-empty="true" title="${d.desc} — watch a rewarded ad to earn one">
+      <button class="gym-power" data-power="${d.key}" data-empty="true" title="${d.desc} — tap to claim one">
         <span>${d.icon}</span>
         <span>${d.label}</span>
-        <span class="gym-power__count" data-count="${d.key}">+AD</span>
+        <span class="gym-power__count" data-count="${d.key}">+1</span>
       </button>
     `).join("");
     document.querySelectorAll(".gym-power").forEach(btn => {

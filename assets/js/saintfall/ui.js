@@ -34,9 +34,9 @@ const WHEEL_POINTS = Object.freeze([
 
 const ICONS = Object.freeze({
   crest: `<svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16 3c6 0 10 5 10 11 0 7-4 11-10 15C10 25 6 21 6 14 6 8 10 3 16 3Z"/><path d="M10 15h12M16 9v13"/></svg>`,
-  orbital: `<svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16 2v9M11 7l5 5 5-5M7 25h18M10 21h12"/><path d="m16 12 4 8h-8Z"/></svg>`,
-  cluster: `<svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16 4v7M16 21v7M4 16h7M21 16h7M7.5 7.5l5 5M19.5 19.5l5 5M24.5 7.5l-5 5M12.5 19.5l-5 5"/><circle cx="16" cy="16" r="4"/></svg>`,
-  resupply: `<svg viewBox="0 0 32 32" aria-hidden="true"><path d="m16 3 10 6v14l-10 6-10-6V9Z"/><path d="M16 9v14M9 16h14"/></svg>`,
+  orbital: `<svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16 2v8M11 6l5 5 5-5M16 12v17"/><path d="M7 25h18M10 29h12"/></svg>`,
+  cluster: `<svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16 3v9M12 8l4 4 4-4"/><circle cx="8" cy="23" r="3"/><circle cx="16" cy="26" r="3"/><circle cx="24" cy="23" r="3"/></svg>`,
+  resupply: `<svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16 2v8M12 6l4 4 4-4"/><path d="M7 13h18v15H7zM16 16v9M11.5 20.5h9"/></svg>`,
   operation: `<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="m12 7 3 5-3 5-3-5Z"/></svg>`,
   map: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 5 5-2 6 2 5-2v16l-5 2-6-2-5 2Z"/><path d="M9 3v16M15 5v16"/><circle cx="15" cy="11" r="2"/></svg>`,
   doctrine: `<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="2.4"/><path d="M12 3v6M20.6 9.2l-5.7 1.9M17.3 19l-3.5-4.9M6.7 19l3.5-4.9M3.4 9.2l5.7 1.9"/><path d="m12 3 8.6 6.2-3.3 9.8H6.7L3.4 9.2Z"/></svg>`,

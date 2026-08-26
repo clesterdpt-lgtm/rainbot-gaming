@@ -1,8 +1,7 @@
 /* ============================================
-   RAINBOT GAMING — ad & subscription system
+   RAINBOT GAMING — rewards & subscription system
    --------------------------------------------
-   - AdMob / AdSense / Adsterra are all pluggable
-   - For local dev we use a mock that simulates a 5s rewarded ad
+   - Ads are disabled site-wide; RB.showRewarded() grants instantly
    - Subscription state is in localStorage (replace with your auth/paywall later)
    ============================================ */
 

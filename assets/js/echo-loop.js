@@ -775,7 +775,7 @@
       api.toast("Pro perk: free echo undo", "good");
       return;
     }
-    // Rewarded ad grants a Chrono Shard, which we immediately spend
+    // Grants a Chrono Shard, which we immediately spend
     const wasPlaying = phase === "play";
     if (wasPlaying) setPaused(true);
     api.showRewarded().then((ok) => {

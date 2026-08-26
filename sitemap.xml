@@ -171,6 +171,11 @@
     <priority>.8</priority>
   </url>
   <url>
+    <loc>https://clesterdpt-lgtm.github.io/rainbot-gaming/games/saintfall.html</loc>
+    <lastmod>2026-08-26</lastmod>
+    <priority>.8</priority>
+  </url>
+  <url>
     <loc>https://clesterdpt-lgtm.github.io/rainbot-gaming/games/strait-of-hormuz.html</loc>
     <lastmod>2026-08-06</lastmod>
     <priority>.8</priority>
@@ -222,11 +227,6 @@
   </url>
   <url>
     <loc>https://clesterdpt-lgtm.github.io/rainbot-gaming/search.html</loc>
-    <lastmod>2026-08-06</lastmod>
-    <priority>.7</priority>
-  </url>
-  <url>
-    <loc>https://clesterdpt-lgtm.github.io/rainbot-gaming/videos.html</loc>
     <lastmod>2026-08-06</lastmod>
     <priority>.7</priority>
   </url>

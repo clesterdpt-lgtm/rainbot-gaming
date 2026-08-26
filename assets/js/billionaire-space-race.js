@@ -8,7 +8,7 @@
    on an increasingly tiny / moving platform.
 
    100% vanilla canvas. Uses the shared RB API
-   (ads.js) for scores, rewarded-ad upgrades and
+   (ads.js) for scores, free upgrades and
    toasts. Infinite, procedurally harder levels.
    ============================================ */
 
@@ -189,7 +189,7 @@
     stars: [],
     particles: [],
 
-    // per-level upgrade flags (granted by rewarded-ad gate)
+    // per-level upgrade flags (granted by the upgrade pick)
     pendingUpgrades: { fuelBonus: 0, padBonus: 0, slowmo: false, autostab: false },
     shield: false,           // survive one crash
     bestAltitude: 0,
@@ -1006,7 +1006,7 @@
         </p>
         <div class="bsr-card__actions">
           <button class="btn btn--primary" id="bsr-next">Next launch →</button>
-          <button class="btn btn--secondary" id="bsr-upgrade">🎁 Watch ad: pick an upgrade</button>
+          <button class="btn btn--secondary" id="bsr-upgrade">🎁 Claim an upgrade</button>
           <button class="btn btn--ghost" id="bsr-home2">Cash out</button>
         </div>
       </div>`;
@@ -1031,7 +1031,7 @@
     mount.innerHTML = `
       <div class="bsr-card bsr-gate">
         <h3 class="bsr-card__title" style="color:var(--accent-3)">🎁 PICK AN UPGRADE</h3>
-        <p class="bsr-card__msg">${RB.isAdFree() ? "Pro perk: pick one free." : "Watch a short ad to claim one. (Or stay pure.)"}</p>
+        <p class="bsr-card__msg">Pick one free. (Or stay pure.)</p>
         <div class="bsr-gate__grid">
           ${pick.map((k) => `
             <button class="bsr-gate__opt" data-kind="${k}">
@@ -1066,7 +1066,7 @@
     if (RB.isAdFree()) { proceed(); return; }
     RB.showRewarded().then((finished) => {
       if (finished) proceed();
-      else RB.toast("Ad not finished — no upgrade", "bad");
+      else RB.toast("No upgrade claimed", "bad");
     });
   }
 

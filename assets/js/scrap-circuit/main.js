@@ -3067,7 +3067,7 @@
     });
   }
 
-  // ---------- sponsor drop (rewarded ad loop) ----------
+  // ---------- sponsor drop (free reward loop) ----------
   function sponsorDrop() {
     if (state.phase !== "running" || state.sponsorUsed || !state.player || state.player.wrecked) return;
     state.sponsorUsed = true;

@@ -72,7 +72,7 @@ import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 
 const JOB = ${JSON.stringify(job)};
-const W = 900, H = 900;
+const W = 1200, H = 1200;
 const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
 renderer.setSize(W, H);
 renderer.setPixelRatio(1);
@@ -139,10 +139,14 @@ for (const mark of JOB.marks) {
 scene.add(model);
 
 const VIEWS = [
-  { id: "front-negZ", eye: [0, 0, 1], up: [0, 1, 0], note: "looking down -Z   right=+X  up=+Y" },
-  { id: "side-negX", eye: [1, 0, 0], up: [0, 1, 0], note: "looking down -X   right=-Z  up=+Y" },
-  { id: "top-negY", eye: [0, 1, 0], up: [0, 0, -1], note: "looking down -Y   right=+X  up=-Z" },
-  { id: "iso", eye: [0.8, 0.6, 0.9], up: [0, 1, 0], note: "iso" },
+  { id: "A-front-negZ", eye: [0, 0, 1], up: [0, 1, 0], note: "camera on +Z looking -Z   right=+X  up=+Y" },
+  { id: "B-back-posZ", eye: [0, 0, -1], up: [0, 1, 0], note: "camera on -Z looking +Z   right=-X  up=+Y" },
+  { id: "C-side-negX", eye: [1, 0, 0], up: [0, 1, 0], note: "camera on +X looking -X   right=-Z  up=+Y" },
+  { id: "D-side-posX", eye: [-1, 0, 0], up: [0, 1, 0], note: "camera on -X looking +X   right=+Z  up=+Y" },
+  { id: "E-top-negY", eye: [0, 1, 0], up: [0, 0, -1], note: "camera on +Y looking -Y   right=+X  up=-Z" },
+  { id: "F-bottom-posY", eye: [0, -1, 0], up: [0, 0, 1], note: "camera on -Y looking +Y   right=+X  up=+Z" },
+  { id: "G-iso", eye: [0.8, 0.6, 0.9], up: [0, 1, 0], note: "iso from +X +Y +Z" },
+  { id: "H-iso2", eye: [-0.8, -0.5, 0.9], up: [0, 1, 0], note: "iso from -X -Y +Z" },
 ];
 const half = span * 0.72;
 const cam = new THREE.OrthographicCamera(-half, half, half, -half, -span * 8, span * 8);
@@ -175,7 +179,7 @@ async function main() {
       channel: "chromium", headless: true,
       args: ["--use-angle=default", "--enable-gpu", "--enable-unsafe-swiftshader", "--mute-audio"],
     });
-    const page = await (await browser.newContext({ viewport: { width: 940, height: 960 } })).newPage();
+    const page = await (await browser.newContext({ viewport: { width: 1240, height: 1260 } })).newPage();
     page.on("pageerror", (e) => console.error("PAGE ERROR", e.message));
     page.on("console", (m) => { if (m.type() === "error") console.error("CONSOLE", m.text()); });
 

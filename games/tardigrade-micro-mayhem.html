@@ -1446,8 +1446,6 @@
     body.micro-play-active .mobile-controls,
     body.micro-play-active .micro-meter,
     body.micro-play-active .micro-panel-note,
-    body.micro-play-active #ad-leaderboard,
-    body.micro-play-active #ad-rectangle,
     body.micro-play-active .game-side__howto {
       display: none !important;
     }
@@ -2445,9 +2443,6 @@
           <div class="micro-panel-note" id="lab-log">Lab log: no mayhem yet.</div>
         </div>
 
-        <div id="ad-leaderboard"></div>
-        <div id="ad-rectangle" style="display:flex; justify-content:center;"></div>
-
         <details class="game-side__howto">
           <summary>Controls</summary>
           <ul>
@@ -2520,10 +2515,6 @@
         });
       });
     })();
-  </script>
-  <script>
-    renderAdSlot(document.getElementById("ad-leaderboard"), "leaderboard");
-    renderAdSlot(document.getElementById("ad-rectangle"), "rectangle");
   </script>
 </body>
 </html>

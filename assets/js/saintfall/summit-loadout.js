@@ -66,7 +66,7 @@ const LOADOUTS = {
       /* Halved from 0.86. At that size each hybrid stood 0.99m on a
          1.74m trooper - a polearm carried in one hand - and the pair
          of them owned more silhouette than the operative did. */
-      targetSize: 0.43,
+      targetSize: 0.52,
       /* MEASURED OFF THE MODEL, not inferred from its centroid.
          `saintfall-weapon-inspect.mjs` renders the raw GLB
          orthographically down each of its own axes over a grid in
@@ -104,7 +104,18 @@ const LOADOUTS = {
          poses at once. Palm space, like the mount they sit on.
          Halved with the prop, since they were solving a reach that
          is now half as long. */
-      position: [-0.001, 0.003, -0.107],
+      /* ON THE LOCATOR, and that is a measured result rather than a
+         default. These are PALM-LOCATOR units, which are BONE units:
+         the armature carries a 0.01 scale, so one of them is about a
+         centimetre, and the old [-0.001, 0.003, -0.107] here was a
+         tenth of a millimetre - it had never done anything.
+
+         Given real values to try, every offset was worse. Seating the
+         bar out at the sculpted finger pads (0, 4.8, 2.2) dropped
+         grip-to-hand contact from 24 samples to ZERO - the weapon
+         hanging off the fingertips rather than held - and pushed walk
+         clipping up. The locator is where the hand closes. */
+      position: [0.000, 0.000, 0.000],
       /* Measured v2 axes: -Y is the crescent/emitter end, +Y the
          CLOSED pommel, +X the crescent width and +Z its thickness.
          The old prop aimed +Y and thereby presented a generated
@@ -134,7 +145,7 @@ const LOADOUTS = {
       file: "white-vigil-crescent-emitter.glb",
       hand: 1,
       sizeAxis: "y",
-      targetSize: 0.43,
+      targetSize: 0.52,
       /* ON THE BAR, and measured off the mesh rather than off the
          silhouette. A -Z raycast grid over the handle region puts the
          frame at x <= 0.07, an open finger gap, then the handle bar's
@@ -149,7 +160,18 @@ const LOADOUTS = {
       /* Offsets found by `saintfall-loadout-fit.mjs`, which scores a
          candidate mount against a capsule body over seven captured
          poses at once. Palm space, like the mount they sit on. */
-      position: [-0.100, -0.040, -0.020],
+      /* ON THE LOCATOR, and that is a measured result rather than a
+         default. These are PALM-LOCATOR units, which are BONE units:
+         the armature carries a 0.01 scale, so one of them is about a
+         centimetre, and the old [-0.001, 0.003, -0.107] here was a
+         tenth of a millimetre - it had never done anything.
+
+         Given real values to try, every offset was worse. Seating the
+         bar out at the sculpted finger pads (0, 4.8, 2.2) dropped
+         grip-to-hand contact from 24 samples to ZERO - the weapon
+         hanging off the fingertips rather than held - and pushed walk
+         clipping up. The locator is where the hand closes. */
+      position: [0.000, 0.000, 0.000],
       hold: mirrorHold(HYBRID_HOLD),
     },
   ],
@@ -242,7 +264,7 @@ const finiteArray = (value, fallback) => Array.isArray(value)
  */
 function pairBasis(THREE, a, b) {
   const x = new THREE.Vector3().fromArray(a).normalize();
-  const y = new THREE.Vector3().fromArray(b).normalize().addScaledVector(x, 0);
+  const y = new THREE.Vector3().fromArray(b).normalize();
   y.addScaledVector(x, -y.dot(x));
   if (y.lengthSq() < 1e-8) {
     const alt = new THREE.Vector3(x.z, x.x, x.y);

@@ -586,25 +586,14 @@ section { padding: 80px 24px; max-width: 1200px; margin: 0 auto; }
 .footer__links { display: flex; gap: 18px; justify-content: center; margin-bottom: 6px; flex-wrap: wrap; }
 .footer__small { font-size: 11px; opacity: 0.7; margin-top: 6px; }
 
-/* ===== Ad slot ===== */
-.ad-slot {
-  margin: 24px auto;
-  max-width: 728px;
-  background: var(--panel);
-  border: 2px dashed var(--ink-dim);
-  border-radius: 8px;
-  padding: 14px;
-  text-align: center;
-  color: var(--ink-dim);
-  font-family: var(--font-mono);
-  font-size: 12px;
-  letter-spacing: 1.5px;
-  min-height: 90px;
-  display: grid; place-items: center;
+/* ===== Ad slot (disabled) ===== */
+.ad-slot,
+.ad-slot--leaderboard,
+.ad-slot--rectangle,
+.ad-slot--mobile,
+.games-ad-slot {
+  display: none !important;
 }
-.ad-slot--leaderboard { max-width: 728px; }
-.ad-slot--rectangle { max-width: 336px; min-height: 280px; }
-.ad-slot--mobile { max-width: 320px; min-height: 100px; }
 
 /* ===== Game page ===== */
 .game-page {

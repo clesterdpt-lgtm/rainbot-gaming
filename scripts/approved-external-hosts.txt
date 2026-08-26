@@ -18,5 +18,8 @@ pagead2.googlesyndication.com
 pixabay.com
 qzvrrpzmalskayushbrv.supabase.co
 raw.githubusercontent.com
+schema.org
 unpkg.com
+www.halopedia.org
+www.mariowiki.com
 www.profitabledisplaynetwork.com

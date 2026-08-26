@@ -163,7 +163,7 @@ const SCENES = {
     tiles.push(H.tile("drop +6f", 6));
     return tiles;
   }`,
-  /* Seraph Aegis dome (capstone), stationary hold. */
+  /* Seraph Aegis dome (capstone), unfolded by a perfect guard. */
   dome: `async () => {
     const T = window.__SF; const H = window.__VFXH;
     H.reset();
@@ -171,13 +171,13 @@ const SCENES = {
     T.setCam(0.5, 0.0, 7.6); H.settle(30);
     T.setShieldInput(true);
     const tiles = [];
-    tiles.push(H.tile("hold +20f", 20));
-    tiles.push(H.tile("+50f", 30));
-    tiles.push(H.tile("+80f", 30));
+    tiles.push(H.tile("raise +1f", 1));
     const ps = T.player.state;
     T.shield.tryBlock(40, { x: ps.x + Math.sin(ps.yaw + 1.2) * 6, y: ps.y + 1, z: ps.z + Math.cos(ps.yaw + 1.2) * 6, source: "attack" });
-    tiles.push(H.tile("block +2f", 2));
-    tiles.push(H.tile("+8f", 6));
+    tiles.push(H.tile("unfold +2f", 2));
+    tiles.push(H.tile("+10f", 8));
+    tiles.push(H.tile("+30f", 20));
+    tiles.push(H.tile("+60f", 30));
     T.setShieldInput(false);
     tiles.push(H.tile("release +8f", 8));
     return tiles;

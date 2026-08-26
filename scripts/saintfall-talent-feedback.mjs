@@ -1370,22 +1370,24 @@ async function semanticContractsPass(page, definitions) {
     event.talentId === "wing_unbroken_circuit");
   const circuitSegments = circuitEvents.filter((event) => event.stage === "segment");
   const circuitCompletes = circuitEvents.filter((event) => event.stage === "complete");
-  check("Unbroken Circuit's third verb emits one complete VFX and no segment three",
-    circuitSegments.length === 2
-      && circuitSegments.every((event) => event.count === 1 || event.count === 2)
+  check("Unbroken Circuit's second distinct Wing verb emits one complete VFX",
+    circuitSegments.length === 1
+      && circuitSegments[0]?.count === 1
       && circuitCompletes.length === 1
       && finite(semantic.circuit.after?.vfx?.accepted)
         - finite(semantic.circuit.before?.vfx?.accepted) === semantic.circuit.events.length
       && semantic.circuit.after?.vfx?.last?.talentId === "wing_unbroken_circuit"
       && semantic.circuit.after?.vfx?.last?.stage === "complete"
       && semantic.circuit.afterFirst?.effects?.circuitSegments?.length === 1
-      && semantic.circuit.afterSecond?.effects?.circuitSegments?.length === 2
+      && semantic.circuit.afterSecond?.effects?.circuitSegments?.length === 0
+      && semantic.circuit.afterSecond?.effects?.circuitSurgeActive === true
       && semantic.circuit.after?.progression?.effects?.circuitSegments?.length === 0
+      && semantic.circuit.after?.progression?.effects?.circuitSurgeActive === true
       && !!semantic.circuit.after?.progression?.effects?.wake,
     JSON.stringify(semantic.circuit));
   check("Unbroken Circuit completion audio survives its preceding Wake cue",
     audioCueCount(semantic.circuit.after?.audio, "wing:circuit")
-      === audioCueCount(semantic.circuit.before?.audio, "wing:circuit") + 3
+      === audioCueCount(semantic.circuit.before?.audio, "wing:circuit") + 2
       && audioCueCount(semantic.circuit.after?.audio, "wing:wake")
         === audioCueCount(semantic.circuit.before?.audio, "wing:wake") + 1
       && semantic.circuit.after?.audio?.doctrine?.lastCue?.cue === "circuit"
@@ -1460,15 +1462,17 @@ async function semanticContractsPass(page, definitions) {
   const shieldCues = semantic.haloBlock.events.filter((event) =>
     shieldCueIds.has(event.talentId));
   check("shield and Reversal feedback stays centred on the player",
-    shieldCues.length >= 4 && shieldCues.every((event) => nearPoint(event, event.qaPlayer)),
+    shieldCues.length >= 3 && shieldCues.every((event) => nearPoint(event, event.qaPlayer)),
     JSON.stringify(shieldCues));
-  check("Votive Parry and Reversal consume audio survive their same-block cues",
+  check("Votive Parry sounds while the Seraph release keeps capstone audio priority",
     audioCueCount(semantic.haloBlock.afterBlock, "halo:parry")
       === audioCueCount(semantic.haloBlock.before, "halo:parry") + 1
-      && audioCueCount(semantic.haloBlock.afterBoost, "halo:reversal")
-        === audioCueCount(semantic.haloBlock.before, "halo:reversal") + 1
-      && semantic.haloBlock.afterBoost?.doctrine?.lastCue?.cue === "reversal"
-      && semantic.haloBlock.afterBoost?.doctrine?.lastCue?.stage === "consume",
+      && semantic.haloBlock.events.some((event) =>
+        event.talentId === "halo_pilgrims_reversal" && event.stage === "consume")
+      && audioCueCount(semantic.haloBlock.afterBoost, "halo:seraph")
+        === audioCueCount(semantic.haloBlock.before, "halo:seraph") + 2
+      && semantic.haloBlock.afterBoost?.doctrine?.lastCue?.cue === "seraph"
+      && semantic.haloBlock.afterBoost?.doctrine?.lastCue?.stage === "release",
     JSON.stringify(semantic.haloBlock));
 
   await prepareOrder(page, definitions, "halo");
@@ -1486,11 +1490,11 @@ async function semanticContractsPass(page, definitions) {
     }));
     const before = T.audioState();
     T.setShieldInput(true);
-    T.advanceTime(1.06, 1 / 120);
     const attacker = T.enemies.spawn("thresher", ps.x + 2.4, ps.z, {
       id: "qa-semantic-seraph-attacker", health: 500,
     });
     T.invulnerable(false);
+    T.renderOnce(1 / 120);
     T.combat.hurtPlayer(60, {
       source: "enemy-melee", enemyId: attacker.id, enemyKey: attacker.key,
       x: attacker.x, y: attacker.y + 1, z: attacker.z,
@@ -1506,7 +1510,7 @@ async function semanticContractsPass(page, definitions) {
   const domeCues = semantic.seraphAudio.events.filter((event) =>
     event.talentId === "halo_seraph_aegis" || event.talentId === "halo_pilgrims_reversal");
   check("Seraph dome feedback is player-centred and its release audio is not suppressed",
-    domeCues.length >= 3 && domeCues.every((event) => nearPoint(event, event.qaPlayer))
+    domeCues.length >= 4 && domeCues.every((event) => nearPoint(event, event.qaPlayer))
       && audioCueCount(semantic.seraphAudio.after, "halo:seraph")
         === audioCueCount(semantic.seraphAudio.before, "halo:seraph") + 1
       && semantic.seraphAudio.after?.doctrine?.lastCue?.cue === "seraph"

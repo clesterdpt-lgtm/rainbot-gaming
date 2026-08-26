@@ -885,11 +885,10 @@ async function gameplayEffectsPass(page, definitions) {
       && wingbeatProbe.afterJet.fuel > wingbeatProbe.fuelBeforeJet - 1,
     JSON.stringify(evidence.wingbeatReleaseTiming));
 
-  /* Unbroken Circuit is completed by three production-owned verbs. Boost
-     triggers its real movement module, jet ignition crosses the actual input
-     edge in jetpack.update, and Penitent's Fall goes through slam.trigger.
-     The observable reward is the jetpack's shared charge and restore reason,
-     plus progression's effect counter/cooldown. */
+  /* Unbroken Circuit is completed by two production-owned Wing verbs. Boost
+     triggers its real movement module and jet ignition crosses the actual
+     input edge in jetpack.update. Penitent's Fall then proves the surge's
+     free action cost and empowered impact contract. */
   await invoke(page, "resetProgressionForQA");
   await grantToRank(page, definitions, 12, "qa:effect:circuit-rank");
   const wing = definitions.orders.find((order) => order.id === "wing")
@@ -921,6 +920,8 @@ async function gameplayEffectsPass(page, definitions) {
     T.setJetInput(true);
     T.renderOnce(1 / 60);
     const afterJet = T.progressionState();
+    const afterJetpack = T.jetpackState();
+    const completionRestoreReason = T.jetpack.state.lastRestoreReason || "";
     T.setJetInput(false);
     T.renderOnce(1 / 60);
 
@@ -938,6 +939,7 @@ async function gameplayEffectsPass(page, definitions) {
     const afterSlam = T.jetpackState();
     const completed = T.progressionState();
     const restoreReason = T.jetpack.state.lastRestoreReason || "";
+    const empoweredFall = T.progression.modifySlam({ radius: 7, damage: 120 });
     T.setJetInput(false);
     T.resetBoost(true);
     T.resetSlam(true);
@@ -948,6 +950,11 @@ async function gameplayEffectsPass(page, definitions) {
       boost,
       verbsAfterBoost: afterBoost?.effects?.circuitVerbs || [],
       verbsAfterJet: afterJet?.effects?.circuitVerbs || [],
+      surgeAfterJet: afterJet?.effects?.circuitSurgeRemaining || 0,
+      cooldownAfterJet: afterJet?.effects?.circuitCooldown || 0,
+      circuitsAfterJet: afterJet?.effects?.counters?.circuitsCompleted || 0,
+      afterJetpack,
+      completionRestoreReason,
       beforeSlam,
       altitude,
       slam,
@@ -956,6 +963,7 @@ async function gameplayEffectsPass(page, definitions) {
       verbsAfterSlam: completed?.effects?.circuitVerbs || [],
       cooldown: completed?.effects?.circuitCooldown || 0,
       circuitsCompleted: completed?.effects?.counters?.circuitsCompleted || 0,
+      empoweredFall,
     };
   });
   evidence.circuitEffect = {
@@ -966,19 +974,24 @@ async function gameplayEffectsPass(page, definitions) {
     equip: circuitEquip,
     probe: circuitProbe,
   };
-  check("Unbroken Circuit completes through boost, jet, and slam and restores 25 charge",
+  check("Unbroken Circuit completes through boost and jet, then empowers a free Fall",
     !!wing && wingFill?.ok === true && circuitEquip?.ok === true
       && circuitProbe.boost?.triggered === true
       && circuitProbe.verbsAfterBoost.includes("boost")
-      && circuitProbe.verbsAfterJet.includes("boost")
-      && circuitProbe.verbsAfterJet.includes("jet")
+      && circuitProbe.verbsAfterJet.length === 0
+      && circuitProbe.circuitsAfterJet === 1
+      && circuitProbe.surgeAfterJet > 5.8
+      && circuitProbe.cooldownAfterJet > 13.8
+      && circuitProbe.completionRestoreReason === "unbroken-circuit"
       && circuitProbe.altitude >= 1.5
       && circuitProbe.slam?.triggered === true
       && circuitProbe.verbsAfterSlam.length === 0
       && circuitProbe.circuitsCompleted === 1
-      && circuitProbe.cooldown > 11
-      && circuitProbe.restoreReason === "unbroken-circuit"
-      && Math.abs(circuitProbe.afterSlam.fuel - circuitProbe.beforeSlam.fuel - 5) < 0.15,
+      && circuitProbe.cooldown > 13
+      && circuitProbe.restoreReason === "unbroken-circuit-surge"
+      && Math.abs(circuitProbe.afterSlam.fuel - circuitProbe.beforeSlam.fuel) < 0.15
+      && Math.abs(circuitProbe.empoweredFall?.radius - 10) < 0.05
+      && Math.abs(circuitProbe.empoweredFall?.damage - 168) < 0.05,
     JSON.stringify(evidence.circuitEffect));
 
   await invoke(page, "resetProgressionForQA");
@@ -1230,7 +1243,12 @@ async function haloEffectsPass(page, definitions) {
       if (event?.source === "seraph-aegis") waves.push({ ...event });
     });
     T.setShieldInput(true);
-    T.advanceTime(1.1, 1 / 120);
+    T.renderOnce(1 / 120);
+    const activationDamage = T.combat.hurtPlayer(40, {
+      source: "enemy-melee", enemyId: "qa-seraph-front", enemyKey: "harrow",
+      x: ps.x, y: ps.y + 1, z: ps.z + 3,
+    });
+    T.renderOnce(1 / 120);
     const dome = T.shieldState();
     /* Spawn after formation so ordinary AI cannot wander beyond the blast
        while this probe is proving the shield response rather than pursuit. */
@@ -1249,6 +1267,7 @@ async function haloEffectsPass(page, definitions) {
     const release = T.shield.lastRelease();
     const result = {
       dome,
+      activationDamage,
       afterBlock,
       blockedDamage,
       release,
@@ -1264,19 +1283,21 @@ async function haloEffectsPass(page, definitions) {
     return result;
   });
   evidence.haloSeraph = { equip: capstoneEquip, probe: seraphProbe };
-  check("Seraph Aegis forms a stationary all-round dome and returns rear damage",
+  check("Seraph Aegis turns a perfect guard into a mobile all-round dome and blast",
     capstoneEquip?.ok === true
       && seraphProbe.dome?.dome === true
       && seraphProbe.dome?.mode === "dome"
       && seraphProbe.dome?.omniDirectional === true
-      && seraphProbe.dome?.movementLocked === true
-      && seraphProbe.dome?.moveSpeed === 0
+      && seraphProbe.dome?.movementLocked === false
+      && seraphProbe.dome?.moveSpeed === 3
       && seraphProbe.dome?.baseMoveSpeed === 3
-      && seraphProbe.dome?.drainMultiplier === 2
+      && seraphProbe.dome?.drainMultiplier === 1
+      && seraphProbe.activationDamage === 0
       && seraphProbe.blockedDamage === 0
-      && seraphProbe.afterBlock?.sessionAbsorbed === 40
+      && seraphProbe.afterBlock?.sessionAbsorbed === 80
       && seraphProbe.release?.dome === true
-      && seraphProbe.release?.absorbed === 40
+      && seraphProbe.release?.absorbed === 80
+      && Math.abs(seraphProbe.progression?.effects?.lastDomeBlast - 100) < 0.05
       && seraphProbe.healthAfter < seraphProbe.healthBefore
       && seraphProbe.waves.some((wave) => wave.source === "seraph-aegis"),
     JSON.stringify(evidence.haloSeraph));
@@ -1562,7 +1583,7 @@ async function edictEffectsPass(page, definitions) {
       if (firstPending) T.advanceTime(firstPending.remaining + 0.08, 1 / 120);
       const fieldsAfterFirst = T.mission.activeFields();
       const targetAfterFirst = target?.health ?? null;
-      T.mission.cooldowns[second] = 0;
+      T.mission.cooldowns[second] = 37;
       const secondCall = T.mission.call(second);
       const secondPending = T.mission.pending()[0] || null;
       if (secondPending) T.advanceTime(secondPending.remaining + 0.08, 1 / 120);
@@ -1607,14 +1628,18 @@ async function edictEffectsPass(page, definitions) {
       && !!fusion
       && probe.impacts?.some((impact) => impact.fusionId === fusionCase.id)
       && probe.progression?.effects?.lastFusion?.id === fusionCase.id
-      && probe.progression?.effects?.fusionCooldown > 29
+      && probe.progression?.effects?.fusionCooldown > 17
+      && Math.abs((fusion.outcome?.cooldownRefundFraction || 0) - 0.35) < 0.001
+      && Object.keys(fusion.outcome?.cooldownsBefore || {}).every((key) =>
+        Math.abs(fusion.outcome.cooldownsAfter[key]
+          - fusion.outcome.cooldownsBefore[key] * 0.65) < 0.05)
       && (probe.progression?.effects?.counters?.combinedLiturgies || 0) === 1
       && (probe.progression?.effects?.counters?.fusionsResolved || 0) === 1;
     if (fusionCase.id === "sunshard") {
       check("Combined Liturgy resolves Orbital plus Cluster into a damaging Sunshard",
         common
           && fusion.outcome?.targetId === "qa-sunshard-target"
-          && fusion.outcome?.damage > 140
+          && fusion.outcome?.damage > 500
           && probe.targetAfterFusion < probe.targetAfterFirst,
         JSON.stringify(evidence.edictFusions[fusionCase.id]));
     } else if (fusionCase.id === "halo_bastion") {
@@ -1622,16 +1647,19 @@ async function edictEffectsPass(page, definitions) {
         (field) => field.fusionId === "halo_bastion");
       check("Combined Liturgy resolves Orbital plus Resupply into a projectile-blocking Halo Bastion",
         common && !!bastion && bastion.blocksProjectiles === true
+          && bastion.radius === 11
+          && bastion.heatPerSecond === 0.08
+          && bastion.chargePerSecond === 5
           && fusion.outcome?.fieldId === bastion.id,
         JSON.stringify(evidence.edictFusions[fusionCase.id]));
     } else {
-      check("Combined Liturgy resolves Cluster plus Resupply into seven live Reliquary mines",
+      check("Combined Liturgy resolves Cluster plus Resupply into nine live Reliquary mines",
         common
-          && probe.fieldsAfterFusion?.mines?.length === 7
-          && fusion.outcome?.count === 7
+          && probe.fieldsAfterFusion?.mines?.length === 9
+          && fusion.outcome?.count === 9
           && probe.mines?.some((event) => event.triggered
             && event.targetId === "qa-reliquary-mine-target")
-          && probe.fieldsAfterResponse?.mines?.length === 6
+          && probe.fieldsAfterResponse?.mines?.length === 8
           && probe.mineTargetAfter < probe.mineTargetBefore,
         JSON.stringify(evidence.edictFusions[fusionCase.id]));
     }

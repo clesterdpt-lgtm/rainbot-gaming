@@ -19,6 +19,7 @@ import {
   MAX_POINTS_PER_ORDER,
   CAPSTONE_ELIGIBILITY_POINTS,
   MAX_ACTIVE_CAPSTONES,
+  VOW_RULES,
 } from "saintfall/progression-config.js";
 import { makeBus } from "saintfall/core.js";
 
@@ -194,12 +195,12 @@ const MVP_COPY = Object.freeze({
     description: "After a connected third strike, landing the next first strike within 1.5 seconds releases a Bellstrike and restores 8 Reliquary charge. Every clean verse can continue the Litany.",
   },
   wing_unbroken_circuit: {
-    summary: "Complete a circuit of distinct Reliquary actions.",
-    description: "Use any 3 distinct Reliquary verbs - boost, jet, Penitent's Fall, or perfect guard - within 8 seconds to restore 25 charge and release a 6-metre halo shockwave. The Circuit then cools down for 12 seconds.",
+    summary: "Turn chained movement into a window of unrestricted flight.",
+    description: "Chain any 2 distinct Wing actions - boost, jet ignition, or Penitent's Fall - within 6 seconds to restore 40 charge and release a 7-metre shockwave. For the next 6 seconds those actions cost no charge and Penitent's Fall gains 40% damage and 3 metres of radius. The Circuit cools down for 14 seconds after ignition.",
   },
   halo_seraph_aegis: {
-    summary: "Commit the Reliquary to a stationary defensive dome.",
-    description: "Hold Aegis while stationary for 1 second to form a 360-degree dome. Movement is locked and shield drain is doubled; releasing returns up to 150 damage absorbed by the dome as an 8-metre radial blast. A dome release supersedes Stored Wrath.",
+    summary: "Let a perfect guard unfold into an advancing fortress.",
+    description: "A perfect guard immediately unfolds Aegis into a mobile 360-degree dome for the rest of that guard. The dome uses normal shield drain and stores 125% of absorbed damage, up to 200. Releasing it detonates the stored force in a 9-metre blast, with a minimum of 60 damage. A dome release supersedes Stored Wrath.",
   },
   edict_siren_beacon: {
     summary: "Make offensive command markers gather their own targets.",
@@ -218,8 +219,8 @@ const MVP_COPY = Object.freeze({
     summary: "Turn a reinforcement pod into a contested sanctuary.",
   },
   edict_combined_liturgy: {
-    summary: "Fuse two different commands into one authored battlefield event.",
-    description: "Each command impact leaves an 8-second, 9-metre sigil. Calling a different command inside it consumes that sigil and fuses the pair; Combined Liturgy then has a 30-second shared cooldown.",
+    summary: "Make every command open a powerful second verse.",
+    description: "Each command impact leaves an 18-second, 14-metre sigil. Calling a different command inside it consumes the sigil and forms a fusion, even if that second command is cooling down. A fusion refunds 35% of every command cooldown; Combined Liturgy then cools down for 18 seconds.",
   },
 });
 
@@ -356,7 +357,7 @@ export function buildProgression(ctx) {
     feathers: 0,
     wake: null,
     ramPrimeUntil: 0,
-    circuit: { verbs: new Map(), readyAt: 0 },
+    circuit: { verbs: new Map(), readyAt: 0, surgeUntil: 0 },
     comboTargets: new Set(),
     comboConnected: false,
     comboMercyUsed: false,
@@ -519,7 +520,8 @@ export function buildProgression(ctx) {
       .filter((effect) => effect.remaining > 0);
     const circuitSegments = [...effects.circuit.verbs.entries()].map(([verb, at]) => ({
       verb,
-      remaining: Number(Math.max(0, 8 - (clock - finite(at))).toFixed(3)),
+      remaining: Number(Math.max(0,
+        VOW_RULES.wing.circuitWindow - (clock - finite(at))).toFixed(3)),
     })).filter((segment) => segment.remaining > 0);
     const wakeRemaining = effects.wake ? remaining(effects.wake.until) : 0;
     const orders = DOCTRINE_ORDERS.map((order) => {
@@ -635,6 +637,8 @@ export function buildProgression(ctx) {
         circuitWindowRemaining: circuitSegments.length
           ? Math.min(...circuitSegments.map((segment) => segment.remaining)) : 0,
         circuitCooldown: Math.max(0, effects.circuit.readyAt - clock),
+        circuitSurgeRemaining: remaining(effects.circuit.surgeUntil),
+        circuitSurgeActive: remaining(effects.circuit.surgeUntil) > 0,
         storedWrath: Number(effects.halo.storedWrath.toFixed(2)),
         reversalUntil: Math.max(0, effects.halo.reversalUntil - clock),
         reversalPending: effects.halo.reversalPending && effects.halo.reversalUntil >= clock,
@@ -1032,6 +1036,7 @@ export function buildProgression(ctx) {
     effects.ramPrimeUntil = 0;
     effects.circuit.verbs.clear();
     effects.circuit.readyAt = 0;
+    effects.circuit.surgeUntil = 0;
     effects.comboTargets.clear();
     effects.comboConnected = false;
     effects.comboMercyUsed = false;
@@ -1399,11 +1404,24 @@ export function buildProgression(ctx) {
       z: finite(event.playerZ, ps.z),
       yaw: finite(event.yaw, ps.yaw),
     };
-    if (event.dome && capstoneActive("halo_seraph_aegis")) {
+    const seraph = capstoneActive("halo_seraph_aegis");
+    const unfoldsDome = seraph && !!event.perfect && !effects.halo.domeActive;
+    const domeBlock = seraph && (!!event.dome || effects.halo.domeActive || !!event.perfect);
+    if (domeBlock) {
       effects.halo.domeActive = true;
-      effects.halo.domeStored = Math.min(150, effects.halo.domeStored + amount);
+      effects.halo.domeStored = Math.min(VOW_RULES.halo.storageCap,
+        effects.halo.domeStored + amount * VOW_RULES.halo.storageMultiplier);
       effects.halo.domeBlocks += 1;
       bump("seraphBlocks");
+      if (unfoldsDome) {
+        bump("seraphGuards");
+        cue("halo", "seraph", {
+          ...event, ...guardOrigin,
+          radius: Math.max(0.75, finite(ctx.shield?.config?.domeRadius, 2.62)),
+          intensity: 0.9, capstone: true,
+          talentId: "halo_seraph_aegis", stage: "arm",
+        });
+      }
       cue("halo", "dome", {
         ...event, ...guardOrigin,
         radius: Math.max(0.75, finite(ctx.shield?.config?.domeRadius, 2.62)),
@@ -1478,17 +1496,16 @@ export function buildProgression(ctx) {
 
   function modifyShieldFrame(event = {}) {
     const seraph = capstoneActive("halo_seraph_aegis");
-    const earnedDome = seraph && !!event.stationary && finite(event.activeFor) >= 1;
-    const dome = seraph && (effects.halo.domeActive || earnedDome);
+    const dome = seraph && effects.halo.domeActive;
     effects.halo.domeActive = dome;
     const mercy = talentRank("halo_mercy_circuit");
     const protectedRelay = !!event.missionChanneling && mercy > 0;
-    let drainMultiplier = dome ? 2 : 1;
+    let drainMultiplier = 1;
     if (protectedRelay && mercy === 1) drainMultiplier *= 1.5;
     return {
       drainMultiplier,
-      moveSpeed: dome ? 0 : finite(event.baseMoveSpeed, 3),
-      movementLocked: dome,
+      moveSpeed: finite(event.baseMoveSpeed, 3),
+      movementLocked: false,
       omniDirectional: dome,
       dome,
       source: dome ? "seraph-aegis" : protectedRelay ? "mercy-circuit" : "",
@@ -1503,20 +1520,22 @@ export function buildProgression(ctx) {
     const yaw = finite(event.yaw, ps.yaw);
     const domeRelease = effects.halo.domeActive || !!event.dome;
     if (domeRelease) {
-      const force = Math.min(150, Math.max(0, effects.halo.domeStored));
+      const force = Math.min(VOW_RULES.halo.storageCap,
+        Math.max(VOW_RULES.halo.minimumRelease, effects.halo.domeStored));
       if (force > 0) {
         ctx.combat?.shockwave?.(x, y, z, {
-          radius: 8,
-          innerRadius: 2.5,
+          radius: VOW_RULES.halo.release.radius,
+          innerRadius: VOW_RULES.halo.release.innerRadius,
           damage: force,
-          edgeFalloff: 0.68,
-          stun: 1,
-          knockSpeed: 10,
+          edgeFalloff: VOW_RULES.halo.release.edgeFalloff,
+          stun: VOW_RULES.halo.release.stun,
+          knockSpeed: VOW_RULES.halo.release.knockSpeed,
           source: "seraph-aegis",
         });
         bump("seraphBlasts");
         cue("halo", "seraph", {
-          x, y, z, yaw, radius: 8, value: force, intensity: Math.min(1, 0.55 + force / 300),
+          x, y, z, yaw, radius: VOW_RULES.halo.release.radius, value: force,
+          intensity: Math.min(1, 0.55 + force / 300),
           capstone: true, talentId: "halo_seraph_aegis", stage: "release",
         });
       }
@@ -1569,6 +1588,9 @@ export function buildProgression(ctx) {
     const rank = talentRank("halo_pilgrims_reversal");
     if (rank <= 0 || !effects.halo.reversalPending || effects.halo.reversalUntil < clock) {
       if (effects.halo.reversalUntil < clock) effects.halo.reversalPending = false;
+      if (capstoneActive("wing_unbroken_circuit") && effects.circuit.surgeUntil > clock) {
+        return { cost: 0, source: "unbroken-circuit" };
+      }
       return undefined;
     }
     const serial = Math.max(1, Math.floor(finite(event.anticipatedBoostIndex, 1)));
@@ -1627,6 +1649,7 @@ export function buildProgression(ctx) {
   }
 
   function noteVerb(verb, event = {}) {
+    const wingVerb = VOW_RULES.wing.verbs.includes(verb);
     const wingbeat = talentRank("wing_wingbeat_conversion");
     const circuitEvent = verb === "perfectGuard" ? {
       ...event,
@@ -1679,31 +1702,43 @@ export function buildProgression(ctx) {
       }
     }
 
-    if (capstoneActive("wing_unbroken_circuit") && clock >= effects.circuit.readyAt) {
+    const circuitActive = capstoneActive("wing_unbroken_circuit");
+    if (circuitActive && wingVerb && effects.circuit.surgeUntil > clock) {
+      const refund = verb === "jet" ? finite(event.ignitionCost)
+        : verb === "slam" ? finite(event.fuelCost) : 0;
+      if (refund > 0) ctx.jetpack?.restoreCharge?.(refund, "unbroken-circuit-surge");
+    }
+
+    if (circuitActive && wingVerb && clock >= effects.circuit.readyAt
+      && clock >= effects.circuit.surgeUntil) {
       for (const [key, at] of effects.circuit.verbs) {
-        if (clock - at > 8) effects.circuit.verbs.delete(key);
+        if (clock - at > VOW_RULES.wing.circuitWindow) effects.circuit.verbs.delete(key);
       }
       const circuitSize = effects.circuit.verbs.size;
       effects.circuit.verbs.set(verb, clock);
-      if (effects.circuit.verbs.size > circuitSize && effects.circuit.verbs.size < 3) {
+      if (effects.circuit.verbs.size > circuitSize
+        && effects.circuit.verbs.size < VOW_RULES.wing.distinctActions) {
         cue("wing", "circuit", {
           ...circuitEvent, count: effects.circuit.verbs.size, radius: 2.2,
-          intensity: 0.4 + Math.min(3, effects.circuit.verbs.size) * 0.12,
+          intensity: 0.4 + Math.min(VOW_RULES.wing.distinctActions,
+            effects.circuit.verbs.size) * 0.12,
           capstone: true, talentId: "wing_unbroken_circuit", stage: "segment",
         });
       }
-      if (effects.circuit.verbs.size >= 3) {
-        ctx.jetpack?.restoreCharge?.(25, "unbroken-circuit");
+      if (effects.circuit.verbs.size >= VOW_RULES.wing.distinctActions) {
+        ctx.jetpack?.restoreCharge?.(VOW_RULES.wing.chargeReturn, "unbroken-circuit");
         const ps = ctx.player?.state || event;
         ctx.combat?.shockwave?.(finite(ps.x), finite(ps.y), finite(ps.z), {
-          radius: 6, damage: 38, edgeFalloff: 0.5, stun: 0.65, knockSpeed: 8,
+          ...VOW_RULES.wing.shockwave, edgeFalloff: 0.5,
           source: "unbroken-circuit",
         });
         effects.circuit.verbs.clear();
-        effects.circuit.readyAt = clock + 12;
+        effects.circuit.surgeUntil = clock + VOW_RULES.wing.surgeDuration;
+        effects.circuit.readyAt = clock + VOW_RULES.wing.cooldown;
         bump("circuitsCompleted");
         cue("wing", "circuit", {
-          ...ps, radius: 6, count: 3, intensity: 1, capstone: true,
+          ...ps, radius: VOW_RULES.wing.shockwave.radius,
+          count: VOW_RULES.wing.distinctActions, intensity: 1, capstone: true,
           talentId: "wing_unbroken_circuit", stage: "complete",
         });
       }
@@ -1713,6 +1748,11 @@ export function buildProgression(ctx) {
 
   function modifySlam(options = {}) {
     const changed = {};
+    if (capstoneActive("wing_unbroken_circuit") && effects.circuit.surgeUntil > clock) {
+      changed.radius = finite(options.radius) + VOW_RULES.wing.fall.radiusBonus;
+      changed.damage = finite(options.damage) * VOW_RULES.wing.fall.damageMultiplier;
+      changed.source = "unbroken-circuit-fall";
+    }
     const gospel = talentRank("wing_falling_gospel");
     if (gospel > 0 && effects.feathers > 0) {
       const feathers = effects.feathers;
@@ -1810,8 +1850,11 @@ export function buildProgression(ctx) {
     }
 
     if (capstoneActive("edict_combined_liturgy")) {
-      change.sigil = { duration: 8, radius: 9 };
-      if (clock >= effects.edict.fusionReadyAt && finite(request.cooldownRemaining) <= 0) {
+      change.sigil = {
+        duration: VOW_RULES.edict.sigilDuration,
+        radius: VOW_RULES.edict.sigilRadius,
+      };
+      if (clock >= effects.edict.fusionReadyAt) {
         const target = request.target || {};
         const sigil = activeSigilRecords(request.sigils).find((candidate) => {
           const candidateKey = candidate.key || candidate.commandKey;
@@ -1824,8 +1867,10 @@ export function buildProgression(ctx) {
         const fusionId = sigil ? commandFusionId(sigilKey, key) : "";
         if (sigil && fusionId) {
           change.consumeSigilId = sigil.id;
+          change.allowWhileCooldown = finite(request.cooldownRemaining) > 0;
           change.fusion = {
             id: fusionId,
+            cooldownRefundFraction: VOW_RULES.edict.cooldownRefundFraction,
             anchor: {
               id: sigil.id,
               key: sigilKey,
@@ -1834,7 +1879,7 @@ export function buildProgression(ctx) {
               z: finite(sigil.z),
             },
           };
-          effects.edict.fusionReadyAt = clock + 30;
+          effects.edict.fusionReadyAt = clock + VOW_RULES.edict.sharedCooldown;
           effects.edict.lastFusion = { id: fusionId, at: clock, first: sigilKey, second: key };
           effects.edict.sigils.delete(sigil.id);
           bump("combinedLiturgies");
@@ -1976,11 +2021,12 @@ export function buildProgression(ctx) {
       x: finite(sigil.x),
       y: finite(sigil.y),
       z: finite(sigil.z),
-      radius: Math.max(0, finite(sigil.radius, 9)),
+      radius: Math.max(0, finite(sigil.radius, VOW_RULES.edict.sigilRadius)),
       remaining: Math.max(0, finite(sigil.remaining, sigil.duration)),
     });
     cue("edict", "sigil", {
-      ...sigil, radius: Math.max(0, finite(sigil.radius, 9)), intensity: 0.62,
+      ...sigil, radius: Math.max(0, finite(sigil.radius, VOW_RULES.edict.sigilRadius)),
+      intensity: 0.62,
       capstone: true, talentId: "edict_combined_liturgy", stage: "form",
     });
     return event;
@@ -2008,7 +2054,8 @@ export function buildProgression(ctx) {
       second: fusion.second || fusion.key || fusion.commandKey || "",
       effectPoint: point,
     };
-    effects.edict.fusionReadyAt = Math.max(effects.edict.fusionReadyAt, clock + 30);
+    effects.edict.fusionReadyAt = Math.max(effects.edict.fusionReadyAt,
+      clock + VOW_RULES.edict.sharedCooldown);
     bump("fusionsResolved");
     cue("edict", "fusion", {
       ...fusion, ...point,
@@ -2058,7 +2105,7 @@ export function buildProgression(ctx) {
       }
     }
     for (const [verb, at] of effects.circuit.verbs) {
-      if (clock - at > 8) effects.circuit.verbs.delete(verb);
+      if (clock - at > VOW_RULES.wing.circuitWindow) effects.circuit.verbs.delete(verb);
     }
   }
 

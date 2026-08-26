@@ -17,7 +17,7 @@
    own trigger is performed with the verb it actually keys on -
    precision hits aimed at the head sphere from `combat.hitbox`, a
    vent started inside the 85-99% heat band, a melee combo long
-   enough to reach the third step, a block held until the dome forms.
+   enough to reach the third step, and a perfect guard that unfolds the dome.
 
    The verdict comes from `state().effects.feedback.counts`, which
    progression increments inside `cue()` on every authoritative proc.
@@ -268,15 +268,26 @@ function auditInPage(only) {
       adv(1.6);
     },
     halo_mercy_circuit() { blockHits(2.0, 6); },
-    halo_seraph_aegis() { blockHits(5.5, 11); },
+    halo_seraph_aegis() {
+      const ps = T.player.state;
+      T.setShieldInput(true);
+      T.renderOnce(1 / 120);
+      T.combat.hurtPlayer(40, {
+        source: "qa-seraph-audit", enemyId: "qa-seraph-audit",
+        enemyKey: "thresher", x: ps.x, y: ps.y + 1, z: ps.z + 3,
+      });
+      T.renderOnce(1 / 120);
+      T.setShieldInput(false);
+      adv(0.2);
+    },
 
     edict_siren_beacon() { T.stratagem("orbital"); adv(3.4); },
     edict_live_fuse() { T.stratagem("cluster"); adv(4.2); },
     edict_recall_rite() { T.stratagem("resupply"); adv(3.4); },
     edict_field_chapel() { T.stratagem("boon"); adv(3.4); },
     edict_combined_liturgy() {
-      T.stratagem("orbital"); adv(1.2);
-      T.stratagem("cluster"); adv(4.5);
+      T.stratagem("orbital"); adv(4.5);
+      T.stratagem("cluster"); adv(3.2);
     },
   };
 

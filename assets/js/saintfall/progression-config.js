@@ -24,6 +24,42 @@ export const CAPSTONE_ELIGIBILITY_POINTS = 6;
 export const MAX_ACTIVE_CAPSTONES = 2;
 export const VOW_SEAL_RANKS = deepFreeze([12, 22]);
 
+/* Capstone mechanics live beside their player-facing Doctrine data so the
+   runtime, command resolver, and QA all read one balance contract. */
+export const VOW_RULES = deepFreeze({
+  wing: {
+    verbs: ["boost", "jet", "slam"],
+    distinctActions: 2,
+    circuitWindow: 6,
+    surgeDuration: 6,
+    cooldown: 14,
+    chargeReturn: 40,
+    shockwave: { radius: 7, damage: 65, stun: 0.9, knockSpeed: 10 },
+    fall: { damageMultiplier: 1.4, radiusBonus: 3 },
+  },
+  halo: {
+    storageMultiplier: 1.25,
+    storageCap: 200,
+    minimumRelease: 60,
+    release: { radius: 9, innerRadius: 2.5, edgeFalloff: 0.68, stun: 1.15, knockSpeed: 11 },
+  },
+  edict: {
+    sigilDuration: 18,
+    sigilRadius: 14,
+    sharedCooldown: 18,
+    cooldownRefundFraction: 0.35,
+    sunshardDamage: 520,
+    bastion: {
+      duration: 14,
+      radius: 11,
+      heatPerSecond: 0.08,
+      chargePerSecond: 5,
+      drawRadius: 18,
+    },
+    minefield: { count: 9, ringRadius: 7, radius: 3.6, damage: 125, duration: 20 },
+  },
+});
+
 /** Cumulative career XP required to enter each rank; index 0 is Rank 1. */
 export const FIELD_RANK_XP_THRESHOLDS = deepFreeze([
   0,
@@ -466,9 +502,9 @@ export const DOCTRINE_ORDERS = deepFreeze([
       orderId: "wing",
       kind: "capstone",
       name: "Unbroken Circuit",
-      summary: "Complete a circuit of distinct Reliquary actions.",
+      summary: "Turn chained movement into a window of unrestricted flight.",
       requires: { orderPoints: 6, vowSeal: true },
-      description: "Use any 3 distinct Reliquary verbs - boost, jet, Penitent's Fall, or a successful Aegis block - within 8 seconds to restore 25 charge and release a 6-metre halo shockwave. Each verb counts once; the Circuit then has a 12-second cooldown.",
+      description: "Chain any 2 distinct Wing actions - boost, jet ignition, or Penitent's Fall - within 6 seconds to restore 40 charge and release a 7-metre shockwave. For the next 6 seconds those actions cost no charge and Penitent's Fall gains 40% damage and 3 metres of radius. The Circuit cools down for 14 seconds after ignition.",
     },
   },
   {
@@ -565,9 +601,9 @@ export const DOCTRINE_ORDERS = deepFreeze([
       orderId: "halo",
       kind: "capstone",
       name: "Seraph Aegis",
-      summary: "Commit the Reliquary to a stationary defensive dome.",
+      summary: "Let a perfect guard unfold into an advancing fortress.",
       requires: { orderPoints: 6, vowSeal: true },
-      description: "Hold Aegis while stationary for 1 second to form a 360-degree dome. Movement is disabled and charge drain is doubled; releasing the dome returns up to 150 absorbed damage as a radial blast.",
+      description: "A perfect guard immediately unfolds Aegis into a mobile 360-degree dome for the rest of that guard. The dome uses normal shield drain and stores 125% of absorbed damage, up to 200. Releasing it detonates the stored force in a 9-metre blast, with a minimum of 60 damage. A dome release supersedes Stored Wrath.",
     },
   },
   {
@@ -664,27 +700,27 @@ export const DOCTRINE_ORDERS = deepFreeze([
       orderId: "edict",
       kind: "capstone",
       name: "Combined Liturgy",
-      summary: "Fuse two different commands into one authored battlefield event.",
+      summary: "Make every command open a powerful second verse.",
       requires: { orderPoints: 6, vowSeal: true },
-      description: "Each command impact leaves an 8-second sigil. Placing a different command inside it consumes the sigil and fuses the pair; Combined Liturgy then has a 30-second shared cooldown.",
+      description: "Each command impact leaves an 18-second, 14-metre sigil. Calling a different command inside it consumes the sigil and forms a fusion, even if that second command is cooling down. A fusion refunds 35% of every command cooldown; Combined Liturgy then cools down for 18 seconds.",
       fusions: [
         {
           id: "sunshard",
           commandIds: ["orbital", "cluster"],
           name: "Sunshard",
-          description: "A concentrated follow-up strikes the highest-health enemy inside the Orbital Lance footprint.",
+          description: "A 520-damage judgment strikes the highest-health enemy inside the Orbital Lance footprint.",
         },
         {
           id: "halo_bastion",
           commandIds: ["orbital", "resupply"],
           name: "Halo Bastion",
-          description: "The recovery zone gains a temporary projectile-blocking halo after the Orbital Lance lands.",
+          description: "A 14-second sanctuary blocks projectiles, cools the lance, and restores Reliquary charge.",
         },
         {
           id: "reliquary_minefield",
           commandIds: ["cluster", "resupply"],
           name: "Reliquary Minefield",
-          description: "Unspent cluster shards arm around the recovery zone as proximity mines.",
+          description: "Nine heavy cluster shards arm around the recovery zone as long-lived proximity mines.",
         },
       ],
     },

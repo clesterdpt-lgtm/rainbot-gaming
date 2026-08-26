@@ -20,6 +20,7 @@ import { clamp, clamp01, makeBus, makeRng } from "saintfall/core.js";
 import { patchBasicMaterial } from "saintfall/art.js";
 import { DISTRICTS, roadPointAtZ } from "saintfall/terrain.js";
 import { DISTRICT_BOSS_SITES } from "saintfall/district-bosses.js";
+import { VOW_RULES } from "saintfall/progression-config.js";
 
 /* Codes are entered on the arrow keys / WASD-adjacent direction
    pad. Short enough to be muscle memory, long enough that entering
@@ -341,6 +342,10 @@ export function buildMission(ctx) {
       commandKey: field.commandKey || null,
       blocksProjectiles: field.blocksProjectiles || false,
       fusionId: field.fusionId || null,
+      heatPerSecond: Math.max(0, finite(field.heatPerSecond)),
+      chargePerSecond: Math.max(0, finite(field.chargePerSecond)),
+      drawRadius: Math.max(0, finite(field.drawRadius)),
+      damage: Math.max(0, finite(field.damage)),
       impactTargets: Array.isArray(field.impactTargets)
         ? field.impactTargets.map((target) => ({ ...target })) : [],
     };
@@ -624,11 +629,12 @@ export function buildMission(ctx) {
   }
 
   function createMinefield(source, x, z) {
-    const count = 7;
+    const rule = VOW_RULES.edict.minefield;
+    const count = rule.count;
     const created = [];
     for (let i = 0; i < count; i += 1) {
       const angle = (i / count) * Math.PI * 2 + Math.PI * 0.16;
-      const ring = i === count - 1 ? 0 : 6.4;
+      const ring = i === count - 1 ? 0 : rule.ringRadius;
       const mx = x + Math.cos(angle) * ring;
       const mz = z + Math.sin(angle) * ring;
       const mine = {
@@ -639,9 +645,9 @@ export function buildMission(ctx) {
         x: mx,
         y: groundY(mx, mz),
         z: mz,
-        radius: 3.4,
-        damage: 105,
-        remaining: 16,
+        radius: rule.radius,
+        damage: rule.damage,
+        remaining: rule.duration,
         fusionId: "reliquary_minefield",
         marker: makeFieldDisc(mx, mz, 0.72, "#ffd15c", 0.21),
       };
@@ -684,7 +690,7 @@ export function buildMission(ctx) {
         if (!target || finite(inst.health) > finite(target.health)) target = inst;
       }
       if (target) {
-        const damage = STRATAGEMS.cluster.damage * 0.78;
+        const damage = VOW_RULES.edict.sunshardDamage;
         const dealt = combat.damageEnemy(target, damage, {
           source: "sunshard",
           x: target.x,
@@ -705,14 +711,33 @@ export function buildMission(ctx) {
         && Math.hypot(item.x - recovery.x, item.z - recovery.z) <= 2);
       if (field) {
         field.blocksProjectiles = true;
-        field.remaining = Math.max(field.remaining, 10);
+        field.remaining = Math.max(field.remaining, VOW_RULES.edict.bastion.duration);
+        field.heatPerSecond = Math.max(field.heatPerSecond || 0,
+          VOW_RULES.edict.bastion.heatPerSecond);
+        field.chargePerSecond = Math.max(field.chargePerSecond || 0,
+          VOW_RULES.edict.bastion.chargePerSecond);
+        field.drawRadius = Math.max(field.drawRadius || 0,
+          VOW_RULES.edict.bastion.drawRadius);
         field.fusionId = fusion.id;
-        field.marker.fill.material.opacity = Math.max(field.marker.fill.material.opacity, 0.12);
+        if (field.radius < VOW_RULES.edict.bastion.radius) {
+          disposeField(field);
+          field.radius = VOW_RULES.edict.bastion.radius;
+          field.marker = makeFieldDisc(field.x, field.z, field.radius, "#a9eaff", 0.12);
+        } else {
+          field.marker.fill.material.color.set("#a9eaff");
+          field.marker.rim.material.color.set("#a9eaff");
+          field.marker.fill.material.opacity = Math.max(field.marker.fill.material.opacity, 0.12);
+        }
         bus.emit("sanctuary", fieldRecord(field));
       } else {
-        field = createSanctuary(shot, { radius: 10 }, {
+        field = createSanctuary(shot, {
+          radius: VOW_RULES.edict.bastion.radius,
+          heatPerSecond: VOW_RULES.edict.bastion.heatPerSecond,
+          chargePerSecond: VOW_RULES.edict.bastion.chargePerSecond,
+          drawRadius: VOW_RULES.edict.bastion.drawRadius,
+        }, {
           ...recovery,
-          duration: 10,
+          duration: VOW_RULES.edict.bastion.duration,
           blocksProjectiles: true,
           fusionId: fusion.id,
         });
@@ -724,8 +749,24 @@ export function buildMission(ctx) {
       const recovery = fusionPoint(shot, "resupply") || { x: shot.x, y: shot.y, z: shot.z };
       const created = createMinefield(shot, recovery.x, recovery.z);
       effectPoint = { x: recovery.x, y: groundY(recovery.x, recovery.z), z: recovery.z };
-      effectRadius = 9.8;
+      effectRadius = VOW_RULES.edict.minefield.ringRadius
+        + VOW_RULES.edict.minefield.radius;
       outcome = { mineIds: created.map((field) => field.id), count: created.length };
+    }
+    const cooldownRefundFraction = clamp(finite(fusion.cooldownRefundFraction), 0, 0.9);
+    if (cooldownRefundFraction > 0) {
+      const before = {};
+      for (const key of Object.keys(cooldowns)) {
+        before[key] = Math.max(0, finite(cooldowns[key]));
+        cooldowns[key] = before[key] * (1 - cooldownRefundFraction);
+      }
+      outcome = {
+        ...outcome,
+        cooldownRefundFraction,
+        cooldownsBefore: before,
+        cooldownsAfter: Object.fromEntries(Object.entries(cooldowns)
+          .map(([key, value]) => [key, Math.max(0, finite(value))])),
+      };
     }
     const event = {
       id: fusion.id,

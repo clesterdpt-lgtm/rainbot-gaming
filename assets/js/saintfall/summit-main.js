@@ -33,12 +33,15 @@
    ------------------------------------------------------------
    WHAT IS OMITTED, AND THE EVIDENCE
 
-   enemies, combat, weapons, jetpack, boost, shield, slam,
+   enemies, combat, campaign weapons, boost, shield, slam,
    progression, breaches, every boss module, save, intro, pod,
    tutorial, audio. Every reference to those inside player.js and
    collide.js is optional-chained or mode-gated - melee swings
    still play, they just deal no damage; the plain 6.4 m/s jump is
-   untouched. The one exception is `ctx.mission`, which is STUBBED
+   untouched. The separate Meshy props and their non-damaging
+   crescent discharge are Kenosis-local proofs built below; they do
+   not reintroduce the campaign weapon/combat graph. The one
+   exception is `ctx.mission`, which is STUBBED
    rather than omitted: ui.js gates the entire field interface on
    it, so without a stub there is no Esc menu, no settings, no
    quality switch and no map. The stub is inert, not a fake
@@ -69,6 +72,8 @@ import { buildSummitWeather } from "saintfall/summit-weather.js";
 import { buildSummitHud } from "saintfall/summit-hud.js";
 import { installSummitQa } from "saintfall/summit-qa.js";
 import { chooseSummitCharacter } from "saintfall/summit-characters.js";
+import { buildSummitLoadout } from "saintfall/summit-loadout.js";
+import { buildSummitDischarge } from "saintfall/summit-discharge.js";
 
 /* The LABELS are alpine and the ROW NAMES are not - see
    summit-art.js's header: `goldenhour`/`dusk`/`night` set
@@ -335,6 +340,19 @@ export async function start({ boot, build } = {}) {
      is measured 900m away over ground that does not exist here. */
   player.spawn(BASECAMP.x, BASECAMP.z, BASECAMP.yaw);
 
+  progress(0.945, "Arming the vigil");
+  ctx.playerLoadout = await buildSummitLoadout(ctx, player);
+  /* player.js reads the carry rules through `ctx.loadout`, and reads
+     it optional-chained, so this is the whole wiring: how a shield
+     arm braces and how much stroke each hand keeps. */
+  ctx.loadout = ctx.playerLoadout;
+  /* A contained equipment proof, not the campaign combat stack:
+     White Vigil primary fire alternates two short-range crescent
+     pulses from blade-side sockets on the separately loaded props.
+     No guardian, damage or progression code is introduced here. */
+  ctx.playerDischarge = buildSummitDischarge(ctx, player, ctx.playerLoadout);
+  let lastShotCount = 0;
+
   /* THE JETPACK, and on this level it is traversal rather than
      a combat mobility tool.
 
@@ -370,6 +388,11 @@ export async function start({ boot, build } = {}) {
   progress(0.96, "Opening the operation");
   const hud = buildSummitHud(ctx, hudHost);
   ctx.hud = hud;
+  /* The reticle belongs to a figure that has something to aim. Set
+     here and not beside the discharge, because `hud` is a const
+     declared further down and reaching it earlier is a dead-zone
+     throw, not an undefined. */
+  hud.setReticle?.(!!ctx.playerDischarge?.status?.()?.supported);
   const touch = buildTouchControls(ctx, player, touchHost, stage);
   ctx.touch = touch;
   ctx.mission = makeVigilStub();
@@ -475,6 +498,11 @@ export async function start({ boot, build } = {}) {
     }
     terrain.updateLod(render.camera);
     player.postUpdate?.(d);
+    /* The arm solver raises both hands first; the mount then resolves
+       its blade-forward firing orientation against those live palms;
+       only after both are final may a pulse read its emitter socket. */
+    ctx.playerLoadout.update?.(d);
+    ctx.playerDischarge.update(d);
     /* AFTER postUpdate, exactly as main.js:1016 has it. The pack's
        nozzles and plume are parented to the figure's rig, so a
        visual tick before the pose is resolved draws last frame's
@@ -483,6 +511,15 @@ export async function start({ boot, build } = {}) {
     ctx.vfx.update(d, render.camera);
     ctx.weather.update(d, render.camera);
     touch.update?.(d);
+    /* The reticle belongs to a figure that has something to aim, and
+       its kick is the only feedback a discharge with no impact yet
+       gives back. `fired` is a running count, so a rise in it is a
+       shot that actually left the weapon this frame. */
+    const shotCount = ctx.playerDischarge?.status?.()?.fired ?? 0;
+    if (shotCount > lastShotCount) {
+      hud.reticleKick?.(0.9);
+      lastShotCount = shotCount;
+    }
     hud.update(d, player, render.camera);
     gameUi.update?.(d);
     if (draw) render.render(render.camera);
@@ -525,6 +562,8 @@ export async function start({ boot, build } = {}) {
     vfx: ctx.vfx, weather: ctx.weather,
     player, collide: ctx.collide, hud, touch, gameUi,
     jetpack: ctx.jetpack,
+    loadout: ctx.playerLoadout,
+    discharge: ctx.playerDischarge,
     runtime: ctx.runtime,
     fps: 0, frameMs: 0,
     resize, step, frameOnce: frame,

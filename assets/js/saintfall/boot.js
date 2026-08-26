@@ -7,7 +7,7 @@
 (() => {
   "use strict";
 
-  const BUILD = "20260825-bastion-heavy-2";
+  const BUILD = "20260825-coulter-head-roll-1";
   const THREE_VERSION = "0.180.0";
   const CDN_BASES = [
     `https://cdn.jsdelivr.net/npm/three@${THREE_VERSION}/`,
@@ -100,7 +100,7 @@
   // shipped fix look like it did not work.
   const MODULES = [
     "core", "keybinds", "art", "sky", "terrain", "structures", "world", "collide", "intro-models",
-    "vfx", "render", "player", "jetpack", "boost", "slam", "shield", "boss-surface", "enemies", "weapons", "ik", "combat", "difficulty", "reveal-camera",
+    "vfx", "render", "player", "jetpack", "jetpack-kit", "jetpacks", "boost", "slam", "shield", "boss-surface", "enemies", "weapons", "ik", "combat", "difficulty", "reveal-camera",
     "mission", "breaches", "abbess", "coulter", "distaff", "garner", "matriarch", "stylite", "winnower", "district-bosses", "apostate", "undercroft", "progression-config", "progression", "audio", "hud", "touch", "tutorial", "intro", "pod", "save", "ui", "qa", "main",
     /* THE SECOND WORLD. Kenosis - "The White Vigil" - is a parallel
        content pack rather than a fork: it reuses render, player,
@@ -110,7 +110,7 @@
        its own exact-specifier key or the browser serves it with no
        cache key at all - see the block comment below. */
     "summit-art", "summit-terrain", "summit-structures", "summit-weather",
-    "summit-sky", "summit-world", "summit-hud", "summit-player", "summit-characters", "summit-qa", "summit-main",
+    "summit-sky", "summit-world", "summit-hud", "summit-player", "summit-characters", "summit-loadout", "summit-discharge", "summit-qa", "summit-main",
   ];
 
   /* WHICH ENTRY POINT. A level page declares its own with

@@ -1428,11 +1428,38 @@ export async function buildEnemies(ctx, onProgress) {
        file. A worm coming out of the sand at fifty degrees is doing the
        only thing it does that a yaw-only transform cannot express, and
        it is also the frame the whole encounter is sold on. */
-    _dir.copy(body.dir);
-    if (_dir.lengthSq() < 1e-8) _dir.set(0, 0, 1);
-    _dir.normalize();
-    _b.set(0, 0, 1);
-    body.quat.setFromUnitVectors(_b, _dir);
+    /* AND IT IS BUILT FROM YAW AND PITCH, NOT FROM THE DIRECTION
+       VECTOR. `setFromUnitVectors(+Z, dir)` is the shortest arc onto
+       the heading, and the shortest arc onto a heading near -Z is a
+       180-degree rotation about an axis that is only well defined
+       while the pitch is exactly zero: the axis is (-dir.y, dir.x, 0),
+       so a pitched animal travelling north (heading near PI, dir.x
+       near 0) swings that axis off +Y and onto +X and the head rolls
+       right over onto its back. That is the twist - it fired whenever
+       the Coulter craned or dived while heading roughly -Z, and it
+       snapped back as soon as it turned away.
+
+       Yaw-then-pitch has no such degeneracy and no roll term at all,
+       which is the correct answer for an animal that has never banked:
+       Euler(-pitch, heading, 0, "YXZ") maps +Z onto exactly the same
+       direction `dir` carries, and keeps the belly down while it does
+       it. `heading`/`pitch` are what `dir` is written FROM (see the
+       burrower's own move step), so this is the same aim, not a new
+       one - it is only the roll that changes, and only where the roll
+       was arbitrary. */
+    const heading = Number.isFinite(body.heading)
+      ? body.heading
+      : Math.atan2(body.dir.x, body.dir.z);
+    const pitch = Number.isFinite(body.pitch)
+      ? body.pitch
+      : Math.asin(clamp(body.dir.y, -1, 1));
+    _euler.set(-pitch, heading, 0, "YXZ");
+    body.quat.setFromEuler(_euler);
+    /* `dir` is kept in step with the frame that was actually used, so
+       anything reading it downstream (the trail sampler's idea of
+       forward, the mouth muzzle point) agrees with what is drawn. */
+    body.dir.set(Math.sin(heading) * Math.cos(pitch), Math.sin(pitch),
+      Math.cos(heading) * Math.cos(pitch));
   }
 
   /**
@@ -1519,6 +1546,7 @@ export async function buildEnemies(ctx, onProgress) {
 
   const _a = new THREE.Vector3();
   const _b = new THREE.Vector3();
+  const _euler = new THREE.Euler();
   const _knee = new THREE.Vector3();
   const _head = new THREE.Vector3();
   const _dir = new THREE.Vector3();

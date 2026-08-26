@@ -1,0 +1,21 @@
+{
+  "taskId": "01a0396e-1cd5-7097-a355-dee23f1763a4",
+  "taskType": "image-to-3d",
+  "input": "assets/concepts/saintfall/meshy/white-vigil-crescent-hybrid-weapon-meshy-source-v1.png",
+  "request": {
+    "image_url": "[local image data URI omitted]",
+    "model_type": "standard",
+    "ai_model": "meshy-6",
+    "enable_pbr": true,
+    "should_texture": true,
+    "should_remesh": true,
+    "topology": "triangle",
+    "target_polycount": 18000,
+    "pose_mode": "",
+    "image_enhancement": false,
+    "remove_lighting": true,
+    "target_formats": [
+      "glb"
+    ]
+  }
+}

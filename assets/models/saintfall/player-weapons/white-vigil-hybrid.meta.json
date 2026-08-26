@@ -1,0 +1,33 @@
+{
+  "id": "01a0396e-1cd5-7097-a355-dee23f1763a4",
+  "type": "image-to-3d",
+  "status": "SUCCEEDED",
+  "progress": 100,
+  "createdAt": 1787669916333,
+  "startedAt": 1787669916345,
+  "finishedAt": 1787670110107,
+  "expiresAt": 1787929310107,
+  "consumedCredits": 30,
+  "taskError": null,
+  "sourceImage": "assets/concepts/saintfall/meshy/white-vigil-crescent-hybrid-weapon-meshy-source-v1.png",
+  "masterFile": "white-vigil-hybrid-master.glb",
+  "thumbnails": [
+    "white-vigil-hybrid-preview.png"
+  ],
+  "request": {
+    "image_url": "[local image data URI omitted]",
+    "model_type": "standard",
+    "ai_model": "meshy-6",
+    "enable_pbr": true,
+    "should_texture": true,
+    "should_remesh": true,
+    "topology": "triangle",
+    "target_polycount": 18000,
+    "pose_mode": "",
+    "image_enhancement": false,
+    "remove_lighting": true,
+    "target_formats": [
+      "glb"
+    ]
+  }
+}

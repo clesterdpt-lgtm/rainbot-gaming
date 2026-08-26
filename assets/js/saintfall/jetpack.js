@@ -7,9 +7,14 @@
    ============================================================ */
 
 import { clamp, clamp01, damp, lerp } from "saintfall/core.js";
-import { patchMaterial } from "saintfall/art.js";
-import { flareTexture } from "saintfall/weapons.js";
 import { keybindDown } from "saintfall/keybinds.js";
+import { buildPackFor } from "saintfall/jetpacks.js";
+
+/* How much fold-to-powered travel a plate needs before its live
+   angle is treated as a statement about how far the pack has
+   deployed. Below this the ratio is dominated by its own decoration
+   rather than by the deployment - see `slowestProgress`. */
+const PROGRESS_RANGE_MIN = 0.20;
 
 export const JETPACK_CONFIG = Object.freeze({
   maxFuel: 100,
@@ -41,616 +46,6 @@ export const JETPACK_CONFIG = Object.freeze({
   terminalFall: 20.0,
   sweepStep: 0.20,
 });
-
-function makeMaterial(ctx, name, color, roughness, metalness, emissive = 0) {
-  const { THREE } = ctx;
-  const mat = new THREE.MeshStandardMaterial({
-    name,
-    color,
-    roughness,
-    metalness,
-    emissive,
-    emissiveIntensity: emissive ? 1 : 0,
-    flatShading: true,
-  });
-  patchMaterial(mat, ctx.atmos, { rim: emissive ? 0.35 : 0.9, glitter: 0 });
-  return mat;
-}
-
-function makeCeramicMaterial(ctx) {
-  const { THREE } = ctx;
-  const mat = new THREE.MeshPhysicalMaterial({
-    name: "jetpack-seraph-ceramic",
-    color: 0xd9c9a6,
-    roughness: 0.24,
-    metalness: 0.18,
-    clearcoat: 0.72,
-    clearcoatRoughness: 0.20,
-    flatShading: true,
-  });
-  patchMaterial(mat, ctx.atmos, { rim: 1.15, glitter: 0 });
-  return mat;
-}
-
-function wingPlateGeometry(THREE, side, length, width, drop, depth = 0.026) {
-  /* A faceted, tapered mechanical feather authored around its hinge.
-     Separate mirrored contours preserve front-face winding on both
-     wings without relying on a negative object scale. */
-  const x = (n) => side * n;
-  const points = [
-    new THREE.Vector2(0, width * 0.42),
-    new THREE.Vector2(x(length * 0.20), width * 0.62),
-    new THREE.Vector2(x(length * 0.63), width * 0.24 - drop * 0.28),
-    new THREE.Vector2(x(length), -drop),
-    new THREE.Vector2(x(length * 0.90), -drop - width * 0.22),
-    new THREE.Vector2(x(length * 0.54), -drop * 0.62 - width * 0.48),
-    new THREE.Vector2(x(length * 0.15), -width * 0.54),
-    new THREE.Vector2(0, -width * 0.32),
-  ];
-  const shape = new THREE.Shape(points);
-  const geometry = new THREE.ExtrudeGeometry(shape, {
-    depth,
-    steps: 1,
-    bevelEnabled: true,
-    bevelSegments: 1,
-    bevelSize: 0.008,
-    bevelThickness: 0.006,
-    curveSegments: 1,
-  });
-  geometry.translate(0, 0, -depth * 0.5);
-  geometry.computeVertexNormals();
-  return geometry;
-}
-
-function wingVeinGeometry(THREE, side, length, drop) {
-  const curve = new THREE.QuadraticBezierCurve3(
-    new THREE.Vector3(side * length * 0.10, 0, -0.025),
-    new THREE.Vector3(side * length * 0.53, 0.015 - drop * 0.30, -0.025),
-    new THREE.Vector3(side * length * 0.86, -drop * 0.76, -0.025)
-  );
-  return new THREE.TubeGeometry(curve, 7, 0.006, 5, false);
-}
-
-function shieldGeometry(THREE) {
-  const shape = new THREE.Shape([
-    new THREE.Vector2(0, 0.20),
-    new THREE.Vector2(0.12, 0.10),
-    new THREE.Vector2(0.095, -0.14),
-    new THREE.Vector2(0, -0.23),
-    new THREE.Vector2(-0.095, -0.14),
-    new THREE.Vector2(-0.12, 0.10),
-  ]);
-  const geometry = new THREE.ExtrudeGeometry(shape, {
-    depth: 0.055,
-    steps: 1,
-    bevelEnabled: true,
-    bevelSegments: 2,
-    bevelSize: 0.012,
-    bevelThickness: 0.009,
-    curveSegments: 1,
-  });
-  geometry.translate(0, 0, -0.0275);
-  geometry.computeVertexNormals();
-  return geometry;
-}
-
-function chamferedRectGeometry(THREE, width, height, depth, corner = 0.035) {
-  /* A compact aerospace enclosure: broad planar faces for the sacred
-     hardware read, clipped corners so it never falls back to a plain
-     debug box, and a shallow bevel that catches the desert key light. */
-  const hw = width * 0.5;
-  const hh = height * 0.5;
-  const c = Math.min(corner, hw * 0.45, hh * 0.45);
-  const shape = new THREE.Shape([
-    new THREE.Vector2(-hw + c, hh),
-    new THREE.Vector2(hw - c, hh),
-    new THREE.Vector2(hw, hh - c),
-    new THREE.Vector2(hw, -hh + c),
-    new THREE.Vector2(hw - c, -hh),
-    new THREE.Vector2(-hw + c, -hh),
-    new THREE.Vector2(-hw, -hh + c),
-    new THREE.Vector2(-hw, hh - c),
-  ]);
-  const geometry = new THREE.ExtrudeGeometry(shape, {
-    depth,
-    steps: 1,
-    bevelEnabled: true,
-    bevelSegments: 1,
-    bevelSize: Math.min(0.008, c * 0.28),
-    bevelThickness: Math.min(0.006, depth * 0.14),
-    curveSegments: 1,
-  });
-  geometry.translate(0, 0, -depth * 0.5);
-  geometry.computeVertexNormals();
-  return geometry;
-}
-
-function rectangularPlumeGeometry(THREE, width, depth, length, taper = 0.42) {
-  /* One broad, open rectangular exhaust sheet. Four tapered walls keep
-     the plume readable from rear, profile and low angles without the
-     tubular-rocket silhouette the former cone pair produced. */
-  const hw = width * 0.5;
-  const hd = depth * 0.5;
-  const tw = hw * taper;
-  const td = hd * taper;
-  const positions = new Float32Array([
-    -hw, 0, -hd,   hw, 0, -hd,   hw, 0, hd,   -hw, 0, hd,
-    -tw, -length, -td,   tw, -length, -td,
-    tw, -length, td,   -tw, -length, td,
-  ]);
-  const indices = [
-    0, 4, 1, 1, 4, 5,
-    1, 5, 2, 2, 5, 6,
-    2, 6, 3, 3, 6, 7,
-    3, 7, 0, 0, 7, 4,
-  ];
-  const geometry = new THREE.BufferGeometry();
-  geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
-  geometry.setIndex(indices);
-  geometry.computeVertexNormals();
-  geometry.computeBoundingBox();
-  geometry.computeBoundingSphere();
-  return geometry;
-}
-
-function mergeGeometryList(THREE, geometries) {
-  /* These pieces share a solid-colour material, so UVs and groups are
-     unnecessary. Collapsing them here keeps every feather articulated
-     while avoiding a draw call for each tiny quill, light and inset. */
-  const list = geometries.map((geometry) => {
-    if (!geometry.getAttribute("normal")) geometry.computeVertexNormals();
-    return geometry.index ? geometry.toNonIndexed() : geometry;
-  });
-  const vertexCount = list.reduce(
-    (sum, geometry) => sum + geometry.getAttribute("position").count,
-    0
-  );
-  const positions = new Float32Array(vertexCount * 3);
-  const normals = new Float32Array(vertexCount * 3);
-  let cursor = 0;
-  for (const geometry of list) {
-    const p = geometry.getAttribute("position");
-    const n = geometry.getAttribute("normal");
-    positions.set(p.array, cursor * 3);
-    normals.set(n.array, cursor * 3);
-    cursor += p.count;
-  }
-  const merged = new THREE.BufferGeometry();
-  merged.setAttribute("position", new THREE.BufferAttribute(positions, 3));
-  merged.setAttribute("normal", new THREE.BufferAttribute(normals, 3));
-  merged.computeBoundingBox();
-  merged.computeBoundingSphere();
-  return merged;
-}
-
-function mesh(THREE, geometry, material, name, parent, position, rotation = null) {
-  const out = new THREE.Mesh(geometry, material);
-  out.name = name;
-  out.position.set(position[0], position[1], position[2]);
-  if (rotation) out.rotation.set(rotation[0], rotation[1], rotation[2]);
-  out.castShadow = !material.transparent && !(material.emissive?.getHex?.() > 0);
-  out.receiveShadow = !material.transparent;
-  parent.add(out);
-  return out;
-}
-
-function buildPack(ctx, player) {
-  const { THREE } = ctx;
-  const figure = player.figure;
-  const root = new THREE.Group();
-  root.name = "jetpack-root";
-  root.userData.equipment = "jetpack";
-
-  const iron = makeMaterial(ctx, "jetpack-seraph-iron", 0x17130e, 0.30, 0.86);
-  const ivory = makeCeramicMaterial(ctx);
-  const bronze = makeMaterial(ctx, "jetpack-seraph-alloy", 0xb18435, 0.24, 0.82);
-  const amber = makeMaterial(ctx, "jetpack-seraph-ion", 0xffcf67, 0.15, 0.18, 0xb76b18);
-  const chargeMaterial = amber.clone();
-  chargeMaterial.name = "jetpack-seraph-charge";
-  const energy = new THREE.MeshBasicMaterial({
-    name: "jetpack-seraph-energy",
-    color: 0xffbd4a,
-    transparent: true,
-    opacity: 0.28,
-    depthWrite: false,
-    depthTest: true,
-    blending: THREE.AdditiveBlending,
-    side: THREE.DoubleSide,
-    toneMapped: true,
-  });
-
-  /* A narrow load-bearing gold spine is the only fixed solid between
-     the hinges. A broad static box occupies the feather sweep and the
-     landing-compressed torso no matter how carefully it is beveled;
-     breadth instead comes from the articulated gold root fairings.
-     This keeps the engine visibly close without hiding intersections. */
-  mesh(THREE, chamferedRectGeometry(THREE, 0.080, 0.300, 0.045, 0.018), bronze,
-    "jetpack-central-thruster-housing", root, [0, -0.005, -0.080]);
-  const shieldInset = new THREE.Mesh(shieldGeometry(THREE), iron);
-  shieldInset.name = "jetpack-reliquary-inset";
-  shieldInset.position.set(0, 0.005, -0.082);
-  shieldInset.scale.set(0.73, 0.74, 0.20);
-  shieldInset.castShadow = false;
-  root.add(shieldInset);
-
-  mesh(THREE, new THREE.BoxGeometry(0.31, 0.038, 0.075), bronze,
-    "jetpack-upper-yoke", root, [0, 0.145, -0.005]);
-  const halo = mesh(THREE, new THREE.TorusGeometry(0.148, 0.009, 5, 28), bronze,
-    "jetpack-seraph-halo", root, [0, 0.045, -0.095]);
-  const haloLight = mesh(THREE, new THREE.TorusGeometry(0.132, 0.004, 4, 24), amber,
-    "jetpack-seraph-halo-light", root, [0, 0.045, -0.105]);
-  halo.castShadow = false;
-  haloLight.castShadow = false;
-  mesh(THREE, new THREE.BoxGeometry(0.018, 0.255, 0.014), amber,
-    "jetpack-core-rail-l", root, [-0.039, -0.01, -0.088]);
-  mesh(THREE, new THREE.BoxGeometry(0.018, 0.255, 0.014), amber,
-    "jetpack-core-rail-r", root, [0.039, -0.01, -0.088]);
-  const chargeWindow = mesh(THREE, new THREE.OctahedronGeometry(0.060, 1), chargeMaterial,
-    "jetpack-charge-window", root, [0, -0.012, -0.115]);
-  chargeWindow.scale.set(0.70, 1.28, 0.40);
-
-  const wings = [];
-  const featherLengths = [0.70, 0.67, 0.62, 0.56, 0.50];
-  const featherWidths = [0.145, 0.140, 0.132, 0.122, 0.110];
-  const featherDrops = [0.015, 0.035, 0.065, 0.095, 0.125];
-  const foldedAngles = [-75, -79, -83, -87, -91];
-  const poweredAngles = [32, 16, 0, -18, -24];
-  /* The lowest glide feather stays slightly higher than its powered
-     counterpart. Besides sharpening the trailing silhouette, this
-     keeps the drawn lance clear through the full low-throttle flutter
-     cycle instead of grazing the left tip plate. */
-  const glideAngles = [12, 2, -8, -20, -18];
-
-  for (let i = 0; i < 2; i += 1) {
-    const side = i === 0 ? -1 : 1;
-    const wing = new THREE.Group();
-    wing.name = side < 0 ? "jetpack-wing-l" : "jetpack-wing-r";
-    /* Hinges pulled forward from z -0.075. The saddle that used to
-       bridge this gap is gone: the fix is the wings actually being
-       closer, not a plate filling the space where they were not. */
-    wing.position.set(side * 0.135, 0.105, -0.042);
-    wing.rotation.y = side * 0.46;
-    root.add(wing);
-
-    const rootFairing = new THREE.Mesh(
-      wingPlateGeometry(THREE, side, 0.255, 0.135, 0.015, 0.035), bronze
-    );
-    rootFairing.name = `${wing.name}-root-fairing`;
-    rootFairing.position.z = -0.050;
-    rootFairing.castShadow = true;
-    rootFairing.receiveShadow = true;
-    wing.add(rootFairing);
-
-    const hinge = mesh(THREE, new THREE.TorusGeometry(0.050, 0.012, 5, 12), bronze,
-      `${wing.name}-hinge`, wing, [0, 0, -0.038]);
-    const hingeLight = mesh(THREE, new THREE.TorusGeometry(0.031, 0.005, 4, 12), amber,
-      `${wing.name}-hinge-light`, wing, [0, 0, -0.052]);
-    hinge.castShadow = false;
-    hingeLight.castShadow = false;
-    const feathers = [];
-
-    for (let f = 0; f < featherLengths.length; f += 1) {
-      const feather = new THREE.Group();
-      feather.name = `${wing.name}-feather-${f}`;
-      feather.position.set(side * (0.014 + f * 0.008), 0.055 - f * 0.030, -0.012 - f * 0.004);
-      wing.add(feather);
-
-      const plate = new THREE.Mesh(
-        wingPlateGeometry(THREE, side, featherLengths[f], featherWidths[f], featherDrops[f]),
-        ivory
-      );
-      plate.name = `${feather.name}-ceramic-blade`;
-      plate.castShadow = true;
-      plate.receiveShadow = true;
-      feather.add(plate);
-
-      const insetGeometry = wingPlateGeometry(
-        THREE,
-        side,
-        featherLengths[f] * 0.72,
-        featherWidths[f] * 0.48,
-        featherDrops[f] * 0.58,
-        0.008
-      );
-      insetGeometry.translate(0, 0, -0.018);
-      const frontInsetGeometry = wingPlateGeometry(
-        THREE,
-        side,
-        featherLengths[f] * 0.72,
-        featherWidths[f] * 0.48,
-        featherDrops[f] * 0.58,
-        0.008
-      );
-      frontInsetGeometry.translate(0, 0, 0.018);
-      const quillGeometry = new THREE.CylinderGeometry(
-        0.012, 0.018, featherLengths[f] * 0.30, 6, 1
-      );
-      quillGeometry.rotateZ(-side * Math.PI / 2);
-      quillGeometry.translate(
-        side * featherLengths[f] * 0.15,
-        -featherDrops[f] * 0.10,
-        -0.006
-      );
-      const mechanism = new THREE.Mesh(
-        mergeGeometryList(THREE, [insetGeometry, frontInsetGeometry, quillGeometry]), iron
-      );
-      mechanism.name = `${feather.name}-recessed-mechanism`;
-      mechanism.castShadow = false;
-      feather.add(mechanism);
-
-      const veinGeometry = wingVeinGeometry(
-        THREE, side, featherLengths[f], featherDrops[f]
-      );
-      const frontVeinGeometry = wingVeinGeometry(
-        THREE, side, featherLengths[f], featherDrops[f]
-      );
-      frontVeinGeometry.translate(0, 0, 0.050);
-      const tipGeometry = new THREE.OctahedronGeometry(0.015, 0);
-      tipGeometry.scale(1.45, 0.62, 0.40);
-      tipGeometry.translate(
-        side * featherLengths[f] * 0.86,
-        -featherDrops[f] * 0.74,
-        -0.029
-      );
-      const frontTipGeometry = new THREE.OctahedronGeometry(0.015, 0);
-      frontTipGeometry.scale(1.45, 0.62, 0.40);
-      frontTipGeometry.translate(
-        side * featherLengths[f] * 0.86,
-        -featherDrops[f] * 0.74,
-        0.029
-      );
-      const ionDetails = new THREE.Mesh(
-        mergeGeometryList(
-          THREE,
-          [veinGeometry, frontVeinGeometry, tipGeometry, frontTipGeometry]
-        ),
-        amber
-      );
-      ionDetails.name = `${feather.name}-ion-details`;
-      ionDetails.castShadow = false;
-      feather.add(ionDetails);
-
-      feather.userData.foldAngle = side * foldedAngles[f] * Math.PI / 180;
-      feather.userData.poweredAngle = side * poweredAngles[f] * Math.PI / 180;
-      feather.userData.glideAngle = side * glideAngles[f] * Math.PI / 180;
-      feather.userData.phase = f * 0.63 + (side < 0 ? 0.35 : 0);
-      feather.rotation.z = feather.userData.foldAngle;
-      feathers.push(feather);
-    }
-
-    /* A restrained ion veil supports the wing read without replacing
-       the modeled feather silhouette with transparent glow. */
-    const veilShape = new THREE.Shape([
-      new THREE.Vector2(0, 0.035),
-      new THREE.Vector2(side * 0.50, 0.20),
-      new THREE.Vector2(side * 0.44, -0.18),
-      new THREE.Vector2(side * 0.08, -0.20),
-    ]);
-    const veil = new THREE.Mesh(new THREE.ShapeGeometry(veilShape), energy);
-    veil.name = `${wing.name}-ion-veil`;
-    veil.position.z = -0.038;
-    veil.scale.set(0.10, 0.35, 1);
-    veil.renderOrder = 2;
-    wing.add(veil);
-
-    wings.push({
-      side,
-      root: wing,
-      feathers,
-      hinge,
-      hingeLight,
-      veil,
-      wallTuck: 0,
-      visualSpread: 0,
-      deployCant: 0,
-      plumeThrottle: 0,
-    });
-  }
-
-  const nozzles = [];
-  const flames = [];
-  /* THE PLUME IS A SHADER, NOT A TINTED BOX.
-     Two translucent boxes at fixed opacity read as exactly that - a
-     pair of orange lampshades hanging off the pack. A rocket plume is
-     read from three things the boxes could not do: a white-hot throat
-     that goes gold and then transparent down its length, a fast
-     turbulence running away from the nozzle, and the bright ladder of
-     shock diamonds just outside the throat. Both sheets share one
-     program; the inner one is hotter and carries the diamonds. */
-  const FLAME_VERT = /* glsl */`
-    varying vec3 vLocal;
-    void main() {
-      vLocal = position;
-      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-    }
-  `;
-  const FLAME_FRAG = /* glsl */`
-    uniform vec3 uHot;
-    uniform vec3 uCold;
-    uniform float uTime;
-    uniform float uThrottle;
-    uniform float uLength;
-    uniform vec2 uHalf;
-    uniform float uTaper;
-    uniform float uGain;
-    uniform float uInner;
-    varying vec3 vLocal;
-    void main() {
-      float t = clamp(-vLocal.y / uLength, 0.0, 1.0);
-      float w = mix(1.0, uTaper, t);
-      // Across each wall: 0 at the wall's middle, 1 at the corner, so
-      // the box reads as a rounded column of gas.
-      float sx = abs(vLocal.x) / max(0.001, uHalf.x * w);
-      float sz = abs(vLocal.z) / max(0.001, uHalf.y * w);
-      float across = 1.0 - pow(clamp(min(sx, sz), 0.0, 1.0), 2.0);
-      // Turbulence running away from the throat, two rates.
-      float turb = 0.72 + 0.28 * sin(t * 38.0 - uTime * 58.0 + sin(t * 9.0 + uTime * 13.0));
-      float turb2 = 0.85 + 0.15 * sin(t * 71.0 - uTime * 97.0);
-      float throat = exp(-t * t * 9.0);
-      float tail = pow(1.0 - t, 1.6);
-      float diamonds = pow(sin(t * 26.0 - uTime * 3.0) * 0.5 + 0.5, 7.0) * exp(-t * 5.0) * uInner;
-      float ends = smoothstep(0.0, 0.05, t) * (1.0 - smoothstep(0.85, 1.0, t));
-      float lum = (tail * (0.28 + across * 0.9) * turb * turb2 + throat * 0.9 + diamonds * 1.2)
-        * ends * (0.35 + uThrottle * 0.65) * uGain;
-      vec3 c = mix(uCold, uHot, clamp(throat * 1.2 + diamonds + across * 0.25 * (1.0 - t), 0.0, 1.0));
-      gl_FragColor = vec4(c * lum, 1.0);
-    }
-  `;
-  const flameMat = (inner) => {
-    const mat = new THREE.ShaderMaterial({
-      name: inner ? "jetpack-flame-inner" : "jetpack-flame-outer",
-      uniforms: {
-        uHot: { value: new THREE.Color(inner ? 0xfff8ea : 0xffe7b0) },
-        uCold: { value: new THREE.Color(inner ? 0xffb545 : 0xff8a2a) },
-        uTime: { value: 0 },
-        uThrottle: { value: 0 },
-        uLength: { value: inner ? 0.29 : 0.44 },
-        uHalf: { value: new THREE.Vector2(inner ? 0.037 : 0.071, inner ? 0.018 : 0.034) },
-        uTaper: { value: inner ? 0.30 : 0.38 },
-        uGain: { value: inner ? 1.35 : 0.85 },
-        uInner: { value: inner ? 1 : 0 },
-      },
-      vertexShader: FLAME_VERT,
-      fragmentShader: FLAME_FRAG,
-      transparent: true,
-      depthWrite: false,
-      depthTest: true,
-      blending: THREE.AdditiveBlending,
-      side: THREE.DoubleSide,
-      forceSinglePass: true,
-      toneMapped: true,
-    });
-    mat.customProgramCacheKey = () => "sf-jet-flame";
-    return mat;
-  };
-  const outerFlameMat = flameMat(false);
-  const innerFlameMat = flameMat(true);
-
-  /* ONE CENTRAL VECTOR CELL.
-
-     The old pair sat almost thirty centimetres behind the armour and
-     created the visible backpack void in profile. The fixed gold spine
-     above is the housing; this group supplies its dark rear recess,
-     reactor vanes and single rectangular thrust aperture. */
-  const centralThruster = new THREE.Group();
-  centralThruster.name = "jetpack-central-thruster";
-  centralThruster.position.set(0, 0, 0);
-  root.add(centralThruster);
-  mesh(
-    THREE,
-    chamferedRectGeometry(THREE, 0.162, 0.215, 0.012, 0.022),
-    iron,
-    "jetpack-central-thruster-recess",
-    centralThruster,
-    [0, -0.005, -0.108]
-  );
-  const reactorBars = [];
-  for (let i = -1; i <= 1; i += 1) {
-    const bar = new THREE.BoxGeometry(0.018, i === 0 ? 0.154 : 0.126, 0.012);
-    bar.translate(i * 0.050, i === 0 ? 0.004 : -0.010, 0);
-    reactorBars.push(bar);
-  }
-  mesh(
-    THREE,
-    mergeGeometryList(THREE, reactorBars),
-    amber,
-    "jetpack-central-thruster-reactor-grid",
-    centralThruster,
-    [0, -0.005, -0.118]
-  );
-  mesh(
-    THREE,
-    new THREE.BoxGeometry(0.100, 0.018, 0.090),
-    iron,
-    "jetpack-central-thruster-aperture",
-    centralThruster,
-    [0, -0.245, -0.095]
-  );
-
-  const locator = new THREE.Object3D();
-  locator.name = "jetpack-nozzle-center";
-  locator.position.set(0, -0.258, -0.095);
-  centralThruster.add(locator);
-  nozzles.push(locator);
-
-  const outer = mesh(
-    THREE,
-    rectangularPlumeGeometry(THREE, 0.142, 0.068, 0.44, 0.38),
-    outerFlameMat,
-    "jetpack-nozzle-center-flame-outer",
-    locator,
-    [0, -0.006, 0]
-  );
-  const inner = mesh(
-    THREE,
-    rectangularPlumeGeometry(THREE, 0.074, 0.036, 0.29, 0.30),
-    innerFlameMat,
-    "jetpack-nozzle-center-flame-inner",
-    locator,
-    [0, -0.004, 0]
-  );
-  outer.castShadow = false;
-  inner.castShadow = false;
-  outer.visible = false;
-  inner.visible = false;
-  /* The throat's glare: three crossed flare cards at the aperture, so
-     the pack has a hot point that blooms from any bearing - the plume
-     sheet is a sliver seen end on, and end on is exactly how the
-     chase camera sees it. */
-  const flareMat = new THREE.MeshBasicMaterial({
-    name: "jetpack-throat-flare",
-    color: 0xffd08a,
-    map: flareTexture(THREE),
-    transparent: true,
-    opacity: 0,
-    blending: THREE.AdditiveBlending,
-    depthWrite: false,
-    depthTest: true,
-    toneMapped: false,
-    side: THREE.DoubleSide,
-  });
-  const flareRig = new THREE.Group();
-  flareRig.name = "jetpack-throat-flare";
-  const flareGeo = new THREE.PlaneGeometry(0.30, 0.30);
-  for (let i = 0; i < 3; i += 1) {
-    const quad = new THREE.Mesh(flareGeo, flareMat);
-    quad.rotation.set(Math.PI * 0.5, 0, (i / 3) * Math.PI);
-    quad.renderOrder = 890;
-    flareRig.add(quad);
-  }
-  flareRig.position.set(0, -0.05, 0);
-  flareRig.visible = false;
-  locator.add(flareRig);
-  flames.push({ outer, inner, flare: flareRig, flareMat });
-
-  /* Author in figure-root metre space, then preserve that transform
-     while reparenting to the imported Spine. Direct bone-local metre
-     values are wrong because the GLB armature is centimetre-scaled. */
-  /* Brought 0.10m forward. A finely-sampled per-node sweep put the
-     CLOSEST part of the pack 122mm off the back and the farthest at
-     212mm - it was not near the trooper at all. An earlier coarse
-     probe reported 3mm and sent two rounds of work chasing a contact
-     that did not exist. */
-  root.position.set(0, 1.40, -0.100);
-  figure.root.add(root);
-  figure.root.updateMatrixWorld(true);
-  if (figure.chest) figure.chest.attach(root);
-  figure.root.updateMatrixWorld(true);
-
-  return {
-    root,
-    wings,
-    nozzles,
-    flames,
-    centralThruster,
-    halo,
-    haloLight,
-    chargeWindow: root.getObjectByName("jetpack-charge-window"),
-    materials: [
-      iron, ivory, bronze, amber, chargeMaterial, energy, outerFlameMat, innerFlameMat,
-    ],
-  };
-}
 
 function buildExhaust(ctx) {
   const { THREE } = ctx;
@@ -727,7 +122,13 @@ export function buildJetpack(ctx, player, options = {}) {
   const unlimitedFuel = options.unlimitedFuel === true;
   const freeFlight = () => unlimitedFuel
     || ctx.mission?.boon?.()?.active === true;
-  const visual = buildPack(ctx, player);
+  /* WHICH PACK. The figure names it (`figure.jetpack`); everything
+     that does not name one wears the Seraph, so Vesper-IX needed no
+     change when this became a choice. Only the DESIGN varies - fuel,
+     flight, collision and the HUD contract below are shared, because
+     a pack is decoration and a traversal tool is a mechanic. */
+  const visual = buildPackFor(ctx, player);
+  const pose = visual.pose;
   const exhaust = buildExhaust(ctx);
   const nozzlePosition = [new THREE.Vector3()];
   const nozzleQuaternion = [new THREE.Quaternion()];
@@ -1132,7 +533,8 @@ export function buildJetpack(ctx, player, options = {}) {
        is delayed until the authored 0.42s weapon draw is complete. */
     const weaponClear = stowPhase <= 0.0001 ? 1 : 0;
     const wingTarget = deployed ? weaponClear : state.landPulse * 0.24;
-    wingSpread = damp(wingSpread, wingTarget, deployed ? 12.5 : 5.5, dt);
+    wingSpread = damp(wingSpread, wingTarget,
+      deployed ? pose.openRate : pose.closeRate, dt);
     const clock = player.state.clock || 0;
     const spreadEase = wingSpread * wingSpread * (3 - 2 * wingSpread);
     /* The weapon clears first, then the hinges cant the folded blades
@@ -1149,13 +551,36 @@ export function buildJetpack(ctx, player, options = {}) {
     let slowestProgress = 0;
     for (const wing of visual.wings) {
       let wingSlowest = 1;
+      let counted = 0;
       for (const feather of wing.feathers) {
         const range = feather.userData.poweredAngle - feather.userData.foldAngle;
-        const progress = Math.abs(range) > 1e-6
-          ? clamp01((feather.rotation.z - feather.userData.foldAngle) / range)
-          : 1;
-        wingSlowest = Math.min(wingSlowest, progress);
+        /* A PLATE THAT BARELY MOVES CANNOT REPORT PROGRESS.
+           This divides by the plate's own fold-to-powered travel, so
+           a plate whose two endpoints are a degree apart turns any
+           wobble at all into a full swing of `progress` - and the
+           Augur has one, because its BOOM does the folding and its
+           innermost vane only trims. Measured: that vane's ratio slammed
+           between 0 and 1 at the flutter rate, which slammed
+           `settleEase`, which slammed 14 degrees of clearance cant
+           into the wing root 1.46 times a second. That is the
+           reported stutter, and its period was the flutter rate to
+           three figures. Skip the plates with nothing to say; if a
+           wing has none, the eased spread is the honest answer. */
+        if (Math.abs(range) < PROGRESS_RANGE_MIN) continue;
+        counted += 1;
+        /* THE SETTLED ANGLE, NOT THE DRAWN ONE. `rotation.z` carries
+           the decorative flutter on top of the deployment, and
+           reading it back here fed that decoration into a gate whose
+           whole window is seven percent wide. */
+        const settled = Number.isFinite(feather.userData.settled)
+          ? feather.userData.settled
+          : feather.rotation.z;
+        wingSlowest = Math.min(
+          wingSlowest,
+          clamp01((settled - feather.userData.foldAngle) / range)
+        );
       }
+      if (!counted) wingSlowest = spreadEase;
       slowestProgress = Math.max(slowestProgress, wingSlowest);
     }
     const settleT = clamp01((slowestProgress - 0.92) / (0.99 - 0.92));
@@ -1243,16 +668,24 @@ export function buildJetpack(ctx, player, options = {}) {
       const sideSpread = spreadEase * (1 - wing.wallTuck);
       wing.visualSpread = sideSpread;
       wing.root.userData.wallTuck = wing.wallTuck;
+      /* ON THE GROUP AS WELL AS THE RECORD. `onVisual` is handed the
+         pack's own objects, not this loop's bookkeeping, so a pack
+         with per-side hardware (the Augur's outriggers) has no other
+         way to ask how far ITS side opened - and reading the missing
+         field off the group returned undefined, which multiplied
+         into a NaN rotation and collapsed the whole pack's bounding
+         box to NaN in one frame. */
+      wing.root.userData.spread = sideSpread;
       const modeAngleY = wing.side * (
-        deployed ? (powered ? 0.34 : 0.20) : 0.46
+        deployed ? (powered ? pose.poweredYaw : pose.glideYaw) : pose.stowYaw
       );
-      const rootYawTarget = lerp(wing.side * 0.46, modeAngleY, sideSpread);
+      const rootYawTarget = lerp(wing.side * pose.stowYaw, modeAngleY, sideSpread);
       wing.root.rotation.y = forcedWallClose
         ? rootYawTarget
         : damp(wing.root.rotation.y, rootYawTarget, 9, dt);
       const rootPitchTarget = lerp(
-        0.035,
-        powered ? -0.075 : -0.025,
+        pose.stowPitch,
+        powered ? pose.poweredPitch : pose.glidePitch,
         sideSpread
       );
       wing.root.rotation.x = forcedWallClose
@@ -1262,32 +695,52 @@ export function buildJetpack(ctx, player, options = {}) {
       wing.deployCant = clearanceCant;
       for (let f = 0; f < wing.feathers.length; f += 1) {
         const feather = wing.feathers[f];
-        const delay = f * 0.038;
+        const delay = f * pose.featherDelay;
         const localSpread = clamp01((sideSpread - delay) / Math.max(0.01, 1 - delay));
         const deployedAngle = powered
           ? feather.userData.poweredAngle
           : feather.userData.glideAngle;
         const flutter = powered
-          ? Math.sin(clock * 7.4 + feather.userData.phase) * 0.012 * localSpread * throttle
-          : Math.sin(clock * 2.6 + feather.userData.phase) * 0.004 * localSpread;
+          ? Math.sin(clock * pose.flutterPoweredRate + feather.userData.phase)
+            * pose.flutterPowered * localSpread * throttle
+          : Math.sin(clock * pose.flutterGlideRate + feather.userData.phase)
+            * pose.flutterGlide * localSpread;
+        /* DAMP THE DEPLOYMENT, THEN DRAW THE FLUTTER ON TOP.
+           The flutter used to be part of the target the damp chased,
+           which both smeared it and - fatally - made it part of the
+           angle `slowestProgress` reads back above. Keeping the
+           settled angle separate leaves the deployment a clean
+           damped ramp and the flutter a crisp decoration. */
         const featherAngleTarget = lerp(
           feather.userData.foldAngle,
           deployedAngle,
           localSpread
-        ) + flutter;
-        feather.rotation.z = forcedWallClose
+        );
+        const settled = forcedWallClose
           ? featherAngleTarget
-          : damp(feather.rotation.z, featherAngleTarget, 13, dt);
-        const featherYawTarget = wing.side
-          * lerp(0.08, powered ? 0.015 : 0.055, localSpread);
+          : damp(
+            Number.isFinite(feather.userData.settled)
+              ? feather.userData.settled
+              : feather.rotation.z,
+            featherAngleTarget, 13, dt
+          );
+        feather.userData.settled = settled;
+        feather.rotation.z = settled + flutter;
+        const featherYawTarget = wing.side * lerp(
+          pose.plateYawStow,
+          powered ? pose.plateYawPowered : pose.plateYawGlide,
+          localSpread
+        );
         feather.rotation.y = forcedWallClose
           ? featherYawTarget
           : damp(feather.rotation.y, featherYawTarget, 11, dt);
       }
-      wing.veil.scale.x = lerp(0.10, 1, sideSpread);
-      wing.veil.scale.y = lerp(0.35, powered ? 0.92 : 1, sideSpread);
-      wing.hinge.rotation.z = clock * wing.side * 0.18;
-      wing.hingeLight.rotation.z = -clock * wing.side * 0.28;
+      wing.veil.scale.x = lerp(0.10, pose.veilOpenX, sideSpread);
+      wing.veil.scale.y = lerp(
+        pose.veilOpenY[0], powered ? pose.veilOpenY[2] : pose.veilOpenY[1], sideSpread
+      );
+      wing.hinge.rotation.z = clock * wing.side * pose.hingeSpin;
+      wing.hingeLight.rotation.z = clock * wing.side * pose.hingeLightSpin;
     }
     visual.root.userData.wingSpread = wingSpread;
     visual.root.userData.wallTuckL = visual.wings[0]?.wallTuck || 0;
@@ -1295,17 +748,32 @@ export function buildJetpack(ctx, player, options = {}) {
     if (visual.halo) visual.halo.rotation.z = Math.sin(clock * 0.72) * 0.035 * spreadEase;
     if (visual.haloLight) visual.haloLight.rotation.z = -Math.sin(clock * 0.92) * 0.055 * spreadEase;
     const energyMat = visual.wings[0]?.veil?.material;
-    if (energyMat) energyMat.opacity = lerp(0.035, powered ? 0.24 : 0.13, spreadEase);
+    if (energyMat) {
+      energyMat.opacity = lerp(
+        pose.veilOpacity[0],
+        powered ? pose.veilOpacity[2] : pose.veilOpacity[1],
+        spreadEase
+      );
+    }
 
-    const centralNozzle = visual.nozzles[0];
-    centralNozzle.getWorldPosition(nozzlePosition[0]);
-    centralNozzle.getWorldQuaternion(nozzleQuaternion[0]);
+    /* EVERY APERTURE, not the first one. The Seraph has a single
+       central cell and the Augur hangs one pod off each boom tip;
+       both are driven from here, so a twin-engine pack does not need
+       its own copy of the ignition, flare and exhaust logic (and
+       cannot drift out of step with the single-engine one). */
+    for (let n = 0; n < visual.nozzles.length; n += 1) {
+      if (!nozzlePosition[n]) nozzlePosition[n] = new THREE.Vector3();
+      if (!nozzleQuaternion[n]) nozzleQuaternion[n] = new THREE.Quaternion();
+      visual.nozzles[n].getWorldPosition(nozzlePosition[n]);
+      visual.nozzles[n].getWorldQuaternion(nozzleQuaternion[n]);
+    }
     const flicker = 0.92 + Math.sin(player.state.clock * 37) * 0.08;
     /* The central aperture does not belong to either wing. Delay its
        solid ribbon through the opening sweep, then keep it alive when
        one side folds beside masonry; a one-sided wall tuck must not
        make the only engine appear to cut out. */
-    const flameThrottle = throttle * clamp01((spreadEase - 0.76) / 0.14);
+    const flameThrottle = throttle
+      * clamp01((spreadEase - pose.flameGate) / pose.flameGateSpan);
     const wallPlumeTuck = Math.max(
       visual.wings[0]?.wallTuck || 0,
       visual.wings[1]?.wallTuck || 0
@@ -1316,43 +784,50 @@ export function buildJetpack(ctx, player, options = {}) {
        pass through the folding feathers. */
     const wallPlumeLength = lerp(1, 0.26, wallPlumeTuck);
     for (const wing of visual.wings) wing.plumeThrottle = flameThrottle;
-    const centralFlame = visual.flames[0];
-    /* A tucked feather crosses the rectangular aperture footprint, not
-       merely the ribbon's length. Preserve the gold reactor glow beside
-       masonry, but hide the free exhaust sheet until both wings are back
-       outside that footprint. */
+    /* A tucked plate crosses the aperture footprint, not merely the
+       ribbon's length. Preserve the reactor glow beside masonry, but
+       hide the free exhaust sheet until both wings are back outside
+       that footprint. */
     const flameOn = flameThrottle > 0.025 && wallPlumeTuck <= 0.02;
     /* Ignition: the first frame the plume lights is a burst, not a
-       fade-in - a throat of gas catching. */
+       fade-in - a throat of gas catching. Fired from every aperture,
+       because on a twin-pod pack one burst on the centreline is a
+       flash from a place there is no engine. */
     if (flameOn && !flameWasOn && ctx.vfx?.jetIgnite) {
-      plumeDirection.set(0, -1, 0).applyQuaternion(nozzleQuaternion[0]).normalize();
-      ctx.vfx.jetIgnite(nozzlePosition[0].x, nozzlePosition[0].y, nozzlePosition[0].z,
-        plumeDirection.x, plumeDirection.y, plumeDirection.z, flameThrottle);
+      for (let n = 0; n < visual.nozzles.length; n += 1) {
+        plumeDirection.set(0, -1, 0).applyQuaternion(nozzleQuaternion[n]).normalize();
+        ctx.vfx.jetIgnite(nozzlePosition[n].x, nozzlePosition[n].y, nozzlePosition[n].z,
+          plumeDirection.x, plumeDirection.y, plumeDirection.z, flameThrottle);
+      }
     }
     flameWasOn = flameOn;
-    centralFlame.outer.visible = flameOn;
-    centralFlame.inner.visible = flameOn;
-    if (centralFlame.flare) {
-      centralFlame.flare.visible = flameOn;
-      const g = flameThrottle * (0.55 + 0.45 * flicker);
-      centralFlame.flareMat.opacity = flameOn ? 0.55 + g * 0.65 : 0;
-      centralFlame.flare.scale.setScalar(0.7 + g * 0.6);
+    for (const flame of visual.flames) {
+      const s0 = flame.baseScale || 1;
+      flame.outer.visible = flameOn;
+      flame.inner.visible = flameOn;
+      if (flame.flare) {
+        flame.flare.visible = flameOn;
+        const g = flameThrottle * (0.55 + 0.45 * flicker);
+        const gain = flame.flareGain ?? 1;
+        flame.flareMat.opacity = flameOn ? (0.55 + g * 0.65) * gain : 0;
+        flame.flare.scale.setScalar(0.7 + g * 0.6);
+      }
+      for (const m of [flame.outer.material, flame.inner.material]) {
+        if (!m.uniforms) continue;
+        m.uniforms.uTime.value = player.state.clock || 0;
+        m.uniforms.uThrottle.value = flameThrottle;
+      }
+      flame.outer.scale.set(
+        s0 * lerp(0.62, 1, flameThrottle),
+        s0 * lerp(0.38, 1, flameThrottle) * flicker * wallPlumeLength,
+        s0 * lerp(0.62, 1, flameThrottle)
+      );
+      flame.inner.scale.set(
+        s0 * lerp(0.66, 1, flameThrottle),
+        s0 * lerp(0.46, 1, flameThrottle) * (2 - flicker) * wallPlumeLength,
+        s0 * lerp(0.66, 1, flameThrottle)
+      );
     }
-    for (const m of [centralFlame.outer.material, centralFlame.inner.material]) {
-      if (!m.uniforms) continue;
-      m.uniforms.uTime.value = player.state.clock || 0;
-      m.uniforms.uThrottle.value = flameThrottle;
-    }
-    centralFlame.outer.scale.set(
-      lerp(0.62, 1, flameThrottle),
-      lerp(0.38, 1, flameThrottle) * flicker * wallPlumeLength,
-      lerp(0.62, 1, flameThrottle)
-    );
-    centralFlame.inner.scale.set(
-      lerp(0.66, 1, flameThrottle),
-      lerp(0.46, 1, flameThrottle) * (2 - flicker) * wallPlumeLength,
-      lerp(0.66, 1, flameThrottle)
-    );
 
     const windowMat = visual.chargeWindow?.material;
     if (windowMat) {
@@ -1360,8 +835,14 @@ export function buildJetpack(ctx, player, options = {}) {
       windowMat.emissiveIntensity = lerp(0.35, 1.7, fuelN)
         * (state.recharging ? 0.88 + Math.sin(player.state.clock * 4) * 0.12 : 1);
       const low = fuelN < 0.18;
-      windowMat.color.setHex(low ? 0xa52b38 : 0xffcf67);
-      windowMat.emissive.setHex(low ? 0xff2338 : 0xb76b18);
+      /* Per pack: the Augur's tank is ice-green and the Censer's is
+         a firebox, and neither of them can go amber at full and red
+         at empty like the Seraph without looking like a bug. */
+      const hue = visual.chargeColours || {
+        full: 0xffcf67, fullEmissive: 0xb76b18, low: 0xa52b38, lowEmissive: 0xff2338,
+      };
+      windowMat.color.setHex(low ? hue.low : hue.full);
+      windowMat.emissive.setHex(low ? hue.lowEmissive : hue.fullEmissive);
     }
 
     if (wallPlumeTuck > 0.02 && (exhaust.alive > 0 || spawnAccumulator > 0)) {
@@ -1371,9 +852,15 @@ export function buildJetpack(ctx, player, options = {}) {
       spawnAccumulator += dt * lerp(34, 82, flameThrottle);
       const count = Math.min(16, Math.floor(spawnAccumulator));
       spawnAccumulator -= count;
+      /* Round-robin across the apertures. Splitting one pool between
+         two pods rather than doubling it keeps a twin-engine pack at
+         the same particle cost as the single, which is the honest
+         thing to do when the budget was set by the pack that had
+         one. */
       for (let n = 0; n < count; n += 1) {
-        plumeDirection.set(0, -1, 0).applyQuaternion(nozzleQuaternion[0]).normalize();
-        spawnParticle(nozzlePosition[0], plumeDirection,
+        const which = visual.nozzles.length > 1 ? n % visual.nozzles.length : 0;
+        plumeDirection.set(0, -1, 0).applyQuaternion(nozzleQuaternion[which]).normalize();
+        spawnParticle(nozzlePosition[which], plumeDirection,
           player.state.clock + n * 0.113, throttle);
       }
     }
@@ -1422,6 +909,19 @@ export function buildJetpack(ctx, player, options = {}) {
     exhaust.geo.attributes.position.needsUpdate = true;
     exhaust.geo.attributes.color.needsUpdate = true;
     exhaust.points.visible = alive > 0;
+
+    /* WHAT THE SHARED LOOP CANNOT SAY. Everything above is a fold
+       angle, a plume or a tank; a gimbal that points, a stack that
+       vents and a shutter that glows are none of those, and pushing
+       them into the generic path would mean every pack carrying
+       fields for hardware it does not have. Last, so a pack sees the
+       frame the loop has finished composing. */
+    visual.onVisual?.({
+      dt, clock, throttle, powered, deployed,
+      spread: spreadEase,
+      flameThrottle,
+      fuel: clamp01(state.fuel / config.maxFuel),
+    });
   }
 
   function status(playerState = player.state) {

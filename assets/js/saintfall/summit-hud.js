@@ -92,6 +92,24 @@ const ALTIMETER_CSS = `
 .sf-alt__read{position:absolute;right:0;top:-6px;text-align:right;
   font-size:15px;letter-spacing:.02em;color:#f2f7ff}
 .sf-alt__read small{display:block;font-size:8px;opacity:.55;letter-spacing:.16em}
+
+/* ---------------------------- reticle ----------------------------
+   Four ticks and a centre bead, in the operative's own verdigris.
+   A crosshair on this level is not decoration: the crescent
+   discharge is aimed down the camera ray, so without something at
+   the centre of the screen the player is firing at a direction they
+   cannot see. The gap OPENS as the weapon fires, which is the only
+   feedback a shot with no impact yet has. */
+.sf-cross{position:absolute;left:50%;top:50%;width:0;height:0;
+  pointer-events:none;opacity:0;transition:opacity .18s ease}
+.sf-cross.is-live{opacity:1}
+.sf-cross i{position:absolute;background:#bfeee0;display:block;
+  box-shadow:0 0 4px rgba(80,200,180,.75),0 0 1px rgba(0,0,0,.9);
+  transform-origin:50% 50%}
+.sf-cross__n,.sf-cross__s{width:2px;height:9px;left:-1px}
+.sf-cross__e,.sf-cross__w{width:9px;height:2px;top:-1px}
+.sf-cross__dot{width:3px;height:3px;left:-1.5px;top:-1.5px;border-radius:50%;
+  background:#eafff8;box-shadow:0 0 6px rgba(120,240,215,.9)}
 `;
 
 export function buildSummitHud(ctx, host) {
@@ -129,6 +147,11 @@ export function buildSummitHud(ctx, host) {
       <div id="sf-alt-marks"></div>
       <div class="sf-alt__me" id="sf-alt-me" style="top:100%"></div>
     </div>
+    <div class="sf-cross" id="sf-cross" aria-hidden="true">
+      <i class="sf-cross__n"></i><i class="sf-cross__s"></i>
+      <i class="sf-cross__e"></i><i class="sf-cross__w"></i>
+      <i class="sf-cross__dot"></i>
+    </div>
     ${ctx.qa ? '<output class="sf-hud__readout" id="sf-readout" aria-label="QA world coordinates"></output>' : ""}
   `;
 
@@ -141,6 +164,14 @@ export function buildSummitHud(ctx, host) {
   const altMarks = el.querySelector("#sf-alt-marks");
   const altMe = el.querySelector("#sf-alt-me");
   const altRead = el.querySelector("#sf-alt-read");
+  const crossEl = el.querySelector("#sf-cross");
+  const crossArms = {
+    n: crossEl.querySelector(".sf-cross__n"),
+    s: crossEl.querySelector(".sf-cross__s"),
+    e: crossEl.querySelector(".sf-cross__e"),
+    w: crossEl.querySelector(".sf-cross__w"),
+  };
+  let crossSpread = 0;
   const g2 = canvas.getContext("2d");
 
   /* ---------------------------- compass ---------------------------- */
@@ -348,7 +379,19 @@ export function buildSummitHud(ctx, host) {
 
   return {
     el,
+    /** Shown only for a figure that has something to aim. */
+    setReticle(on) { crossEl.classList.toggle("is-live", !!on); },
+    /** `kick` is 0..1; the gap opens with it and settles on its own. */
+    reticleKick(kick) { crossSpread = Math.max(crossSpread, clamp01(kick)); },
     update(dt, player, camera) {
+      /* The gap: 7px at rest, 17 under fire. Settling is framerate
+         independent so a hitch does not leave it open. */
+      crossSpread *= Math.exp(-7 * Math.max(0, dt));
+      const gap = 7 + crossSpread * 10;
+      crossArms.n.style.top = `${-gap - 9}px`;
+      crossArms.s.style.top = `${gap}px`;
+      crossArms.w.style.left = `${-gap - 9}px`;
+      crossArms.e.style.left = `${gap}px`;
       const p = player.position;
 
       // District banner.

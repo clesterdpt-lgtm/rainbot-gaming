@@ -56,7 +56,7 @@
 import {
   TAU, clamp, clamp01, lerp, smoothstep, sstep, makeRng, makeNoise2D, makeRamp,
 } from "saintfall/core.js";
-import { paintGeometry, paintByHeight, paintFlat } from "saintfall/art.js";
+import { paintGeometry, paintByHeight, paintFlat, patchMaterial } from "saintfall/art.js";
 import { mergeGeometries, cleanGeometry } from "saintfall/structures.js";
 import { makeSummitKit } from "saintfall/summit-structures.js";
 import {
@@ -67,6 +67,7 @@ import {
 import {
   STATIONS, STATION_ORDER, VIA_SACRA_PATH, VIA_SACRA_TURNS,
   VIA_SACRA_SPURS, BASECAMP, CREVASSES, MOULINS, MAP_HALF,
+  viaSacraPointAt, VIA_SACRA_LENGTH,
 } from "saintfall/summit-terrain.js";
 
 const K = SUMMIT_PALETTE;
@@ -174,7 +175,7 @@ function makeBatcher(ctx, root) {
    ============================================================ */
 
 export async function buildSummitWorld(ctx, onProgress) {
-  const { THREE, scene, terrain } = ctx;
+  const { THREE, scene, terrain, atmos } = ctx;
   const field = terrain.field;
   const kit = makeSummitKit(THREE);
   const root = new THREE.Group();
@@ -188,6 +189,64 @@ export async function buildSummitWorld(ctx, onProgress) {
   const banners = [];
   const stationSites = [];
   let meshes = [];
+  /* ------------------------------------------------------------
+     THE WHEEL-CROSS
+
+     The one object this level shares with Vesper, and the only
+     reason it is loaded rather than rebuilt from the summit kit:
+     it is the mark of the order, so it has to be the SAME object in
+     both worlds. A snow-country variant of a religious symbol is not
+     the same symbol - a player who walked past seventeen of these in
+     the Gilded Reach has to recognise this one at a glance, at
+     range, in a whiteout, or the thread between the two maps is
+     decoration instead of doctrine.
+
+     It arrives as authored GLB meshes rather than through the
+     batcher, exactly as world.js handles it, which means it is
+     outside the station bins: each cross is its own draw call and
+     its own bounding sphere. That is affordable at this count and
+     it is what lets the same asset carry its own collision.
+     ------------------------------------------------------------ */
+  const authoredMeshes = [];
+  const authoredLandmarks = [];
+  let crossAsset = null;
+  const crossAssetReady = (async () => {
+    try {
+      const { GLTFLoader } = await import("three/addons/loaders/GLTFLoader.js");
+      const loader = new GLTFLoader();
+      const url = new URL(
+        "../../../assets/models/saintfall/meshy/gilded-reach-choir-wheel.glb",
+        import.meta.url
+      );
+      if (ctx.build) url.searchParams.set("v", ctx.build);
+      const gltf = await loader.loadAsync(url.href);
+      const source = gltf.scene;
+      source.updateMatrixWorld(true);
+      const box = new THREE.Box3().setFromObject(source);
+      const size = box.getSize(new THREE.Vector3());
+      if (!(size.y > 1e-6)) throw new Error("model has no measurable height");
+      const seen = new Set();
+      source.traverse((node) => {
+        if (!node.isMesh) return;
+        const list = Array.isArray(node.material) ? node.material : [node.material];
+        for (const material of list) {
+          if (!material || seen.has(material)) continue;
+          seen.add(material);
+          material.envMapIntensity = 0.82;
+          /* A HIGHER RIM THAN VESPER GIVES IT, and for the reason
+             every ramp on this mountain has a lifted floor: the key
+             is 7 degrees off the SSE, so a north or west face of a
+             1.9m-slender object takes fill alone. Vesper's 0.78 is
+             tuned against a desert bounce that does not exist here. */
+          patchMaterial(material, atmos, { rim: 0.95, glitter: 0 });
+        }
+      });
+      crossAsset = { source, box, size };
+    } catch (error) {
+      console.warn("[saintfall] wheel-cross failed to load; Kenosis goes without", error);
+      crossAsset = null;
+    }
+  })();
   /* The cathedral's own ground plane, published upward out of
      `buildSummitStation` so the beauty shots can frame the building
      rather than the parvis it stands on. It is the parvis elevation
@@ -216,7 +275,7 @@ export async function buildSummitWorld(ctx, onProgress) {
   const N = (x, z) => field.normalAt(x, z);
 
   let step = 0;
-  const STEPS = 12;
+  const STEPS = 14;
   async function progress(label) {
     step += 1;
     if (onProgress) onProgress(clamp01(step / STEPS), label);
@@ -384,6 +443,16 @@ export async function buildSummitWorld(ctx, onProgress) {
       maxBed: opts.maxBed ?? 1.1,
       load: opts.load ?? 1.0,
       bins: opts.capBins ?? 20,
+      /* `loadOn: false` turns off the snow lying ON the prop and
+         keeps only the collar around it. It exists for a prop that
+         is never drawn - the wheel-cross's proxy footing - where a
+         load slab is snow sitting on a prism nobody can see. It also
+         keeps that bin's bounding sphere honest: the load is built
+         in the geometry's LOCAL frame while the collar is already in
+         world Y, so a bin carrying both spans from the prop's own
+         height up to its altitude, and a bin whose sphere is four
+         hundred metres tall is never culled. */
+      loadOn: opts.loadOn !== false,
     });
     const seat = (cap.extras && Number.isFinite(cap.extras.seatY))
       ? cap.extras.seatY : ground(x, z);
@@ -440,12 +509,25 @@ export async function buildSummitWorld(ctx, onProgress) {
        attempt at this removed four road blocks out of sixty-seven.
        A distinct tag is a distinct bin, and a distinct bin gets its
        own opts. */
-    batch.add(station, matName, geo, {
-      tag: inRoad ? `${opts.tag || "prop"}-onroad` : opts.tag,
-      collisionSolid: inRoad ? false : (opts.collisionSolid !== false),
-      noCollide: inRoad ? true : (opts.noCollide === true),
-      name: opts.name,
-    });
+    /* `visual: false` runs the whole placement - bedding, the drift
+       collar, the drift walk-floor - and then throws the prop
+       geometry away. It exists for the wheel-cross, which is an
+       authored GLB rather than a merged geometry and so cannot go
+       into a station bin: a squat proxy prism the size of its plinth
+       is bedded here purely to MEASURE the seat and to grow the
+       drift the wind would have piled against it, and the real
+       object is then stood on the number that comes back. Without
+       this the cross is the one thing on the mountain standing ON
+       the snow, which is the failure rule 2 of this file's header
+       exists to prevent. */
+    if (opts.visual !== false) {
+      batch.add(station, matName, geo, {
+        tag: inRoad ? `${opts.tag || "prop"}-onroad` : opts.tag,
+        collisionSolid: inRoad ? false : (opts.collisionSolid !== false),
+        noCollide: inRoad ? true : (opts.noCollide === true),
+        name: opts.name,
+      });
+    }
     if (cap.geo && cap.geo.attributes && cap.geo.attributes.position
       && cap.geo.attributes.position.count > 0 && opts.cap !== false) {
       cap.geo.translate(x, opts.lift || 0, z);
@@ -531,6 +613,113 @@ export async function buildSummitWorld(ctx, onProgress) {
   const seatOf = (extras, x, z) => (
     extras && Number.isFinite(extras.seatY) ? extras.seatY : H(x, z)
   );
+
+  /* ------------------------------------------------------------
+     ONE WHEEL-CROSS
+
+     `height` is the finished world height of the monument, exactly
+     as world.js means it, so the two maps are commensurable: an 8m
+     wayside cross here is the same object at the same size as an 8m
+     one in the desert would be.
+
+     MEASURED OFF THE MESH, not eyeballed off the preview render.
+     The model is 1.008 x 1.898 x 0.707 in its own units, and every
+     vertex below half its height lies inside a SQUARE 0.187 of the
+     height each way - the stepped footing - while the arms reach
+     0.266. So the footing that has to be bedded and drifted is
+     0.187 * height in half-width, and 0.20 is that with the margin
+     a drift collar wants. Both numbers live here and nowhere else.
+
+     A caller may override the collar radius with `footR` where the
+     real footing would grow an absurd drift - see the great cross.
+     ------------------------------------------------------------ */
+  const CROSS_FOOT_RATIO = 0.20;
+
+  function placeWheelCross(opts) {
+    if (!crossAsset) return null;
+    const { x, z, height } = opts;
+    const yaw = opts.yaw || 0;
+    const tiltX = opts.tiltX || 0;
+    const tiltZ = opts.tiltZ || 0;
+
+    /* --- bed and drift, through the level's own placer ---------- */
+    const footR = Math.max(0.8, opts.footR || height * CROSS_FOOT_RATIO);
+    const proxy = kit.prism({
+      h: Math.max(0.9, height * 0.16), rBottom: footR, rTop: footR * 0.86, sides: 8,
+    });
+    const bin = opts.bin || "waycross";
+    const extras = place(bin, "granite", proxy, x, z, {
+      tag: opts.tag || "waycross",
+      visual: false,
+      noFloatAudit: true,
+      /* Bedded harder than a serac and softer than a fence post. The
+         thing has a stone footing that was dug in when it was raised
+         and has been drifting over ever since. */
+      bedFactor: opts.bedFactor ?? 0.80,
+      maxBed: opts.maxBed ?? Math.min(1.5, height * 0.10),
+      capBins: 16,
+      cap: opts.cap !== false,
+      capMat: "powder",
+      // The proxy is never drawn, so snow cannot lie on it.
+      loadOn: false,
+      collisionSolid: false,
+      noCollide: true,
+    });
+    const seat = seatOf(extras, x, z);
+
+    /* --- the object itself -------------------------------------- */
+    const pivot = new THREE.Group();
+    pivot.name = opts.name || opts.key;
+    pivot.rotation.order = "YXZ";
+    pivot.rotation.set(tiltX, yaw, tiltZ);
+    pivot.position.set(x, seat, z);
+
+    const fitted = new THREE.Group();
+    const visual = crossAsset.source.clone(true);
+    const scale = height / crossAsset.size.y;
+    fitted.scale.setScalar(scale);
+    fitted.position.set(
+      -((crossAsset.box.min.x + crossAsset.box.max.x) * 0.5) * scale,
+      -crossAsset.box.min.y * scale,
+      -((crossAsset.box.min.z + crossAsset.box.max.z) * 0.5) * scale
+    );
+    fitted.add(visual);
+    pivot.add(fitted);
+
+    const meshList = [];
+    visual.traverse((node) => {
+      if (!node.isMesh) return;
+      node.name = `${pivot.name}-mesh`;
+      node.castShadow = true;
+      node.receiveShadow = true;
+      node.userData.station = opts.station || "waycross";
+      /* Same tag world.js gives it, and for the same reason: Meshy
+         triangulates the panels finer than collide.js's half-metre
+         clutter filter, so without this the collider keeps a few
+         slivers and the player walks through the monument. */
+      node.userData.collisionSolid = opts.solid !== false;
+      node.userData.authoredLandmark = opts.key;
+      if (opts.solid !== false) authoredMeshes.push(node);
+      meshList.push(node);
+    });
+    root.add(pivot);
+    pivot.updateMatrixWorld(true);
+
+    authoredLandmarks.push({
+      key: opts.key,
+      root: pivot,
+      meshes: meshList,
+      placement: {
+        variant: opts.variant || "wayside",
+        targetHeight: height,
+        yaw, tiltX, tiltZ,
+        rotOrder: "YXZ",
+        seatY: seat,
+        ground: H(x, z),
+      },
+    });
+    return pivot;
+  }
 
   /* ------------------------------------------------------------
      THE RIME PASS
@@ -4075,6 +4264,87 @@ export async function buildSummitWorld(ctx, onProgress) {
     steps.translate(0, BASE_Y, 0);
     batch.add("summit", "granite", steps, { tag: "steps", collisionSolid: true });
 
+    /* ============================================================
+       THE GREAT CROSS OF THE NINTH ASCENT
+
+       One monument, on the west shoulder, taller than the building
+       it stands beside.
+
+       WHY IT IS ALLOWED TO BE BIGGER THAN THE CATHEDRAL, when this
+       function's own header says building a bigger chapel would make
+       the mountain smaller. Those are not the same claim. A larger
+       BUILDING competes with the peak for mass and wins, because
+       mass is what a mountain is made of; the eye compares volumes
+       and the summit loses. A cross is a LINE. It has no volume to
+       speak of - eighty-two metres of it is a thirty-metre-square
+       footing and two crossed spars - so it does not take bulk off
+       the mountain, it puts a vertical accent on it, which is
+       exactly what a peak already is. It is also the whole point:
+       the order's mark has to be the thing you see from the valley
+       floor, at 452m, 4.6km out, before the chapel behind it has
+       resolved into anything but a lump.
+
+       THE SIZE IS DERIVED, NOT PICKED. The cathedral's crossing
+       spire tops out at 520.2m - measured, not authored here - which
+       is 68.2m above the parvis. Eighty-two metres puts the cross
+       fourteen metres over it: enough that the two never read as the
+       same height from any bearing, not so much that the building
+       becomes its plinth.
+
+       THE FOOTING IS THE CONSTRAINT AND IT IS MEASURED. The model's
+       base is square in plan at 0.187 of its height each way, so an
+       82m cross stands on a 30.7m square. That does not fit on the
+       cliff shoulder outside the parapet - the ground there falls
+       17m across thirty metres, which is a footing with half of it
+       in the air - so it stands on the flat of the parvis, hard
+       against the west parapet, with the drop starting five metres
+       behind it. Turned a quarter so the arms run north-south: the
+       arms reach 21.8m and pointed east they would be inside the
+       chapel's transept.
+       ============================================================ */
+    const GREAT = {
+      /* x IS SET BY THE PARAPET, not by taste. The footing is 15.35m
+         half-width and the arms reach 21.8m, so the far ground
+         corner sits at hypot(|x| + 15.35, 21.8) from the pad centre
+         and the parapet's inner face is at 74.75. At -54 that corner
+         is 72.7 - two metres of daylight - and the monument's
+         outboard face still stands 5.6m short of the wall with the
+         drop starting five metres beyond it. At -58, which this
+         started at, the corner was 0.15m inside the parapet: it
+         would have rendered as a monument growing out of a wall and
+         nothing would have failed. */
+      x: -54, z: 0,
+      height: 82,
+      /* Arms north-south. See above - and it also presents the wheel
+         face to the great flight and to the basecamp gate, which are
+         the two places anyone looks at it from. */
+      yaw: Math.PI / 2,
+    };
+    /* The shrine sits in the cross's WIND SHADOW, and that is why it
+       is on this side rather than the other. SUMMIT_WIND travels
+       toward (0.927, 0.375); a candle on the windward face of an
+       eighty-metre monument at 31 m/s is not a candle. */
+    const SHRINE = {
+      x: GREAT.x + SUMMIT_WIND.x * 26,
+      z: GREAT.z + SUMMIT_WIND.z * 26,
+    };
+    /* The shrine is authored with local +X pointing AT the cross,
+       which - because SHRINE is GREAT plus the wind vector - is also
+       exactly WINDWARD. Every lean and every run-off in the block
+       below is therefore toward local -X, and that is not a
+       coincidence to be rediscovered later: the cross is the
+       windbreak, so downwind is away from it. */
+    const SHRINE_FACE = Math.atan2(GREAT.z - SHRINE.z, GREAT.x - SHRINE.x);
+    const shrineLocal = (ox, oz) => [
+      SHRINE.x + Math.cos(SHRINE_FACE) * ox - Math.sin(SHRINE_FACE) * oz,
+      SHRINE.z + Math.sin(SHRINE_FACE) * ox + Math.cos(SHRINE_FACE) * oz,
+    ];
+    /* OFF THE DAIS, not on it. Sited at the platform's downwind
+       corner: standing on the shrine it hid the altar behind its own
+       flame sprite from every approach, and a brazier bedded 30cm
+       into a stone platform is a bowl growing out of the floor. */
+    const SHRINE_BRAZIER = shrineLocal(-8.4, 7.0);
+
     /* --- the nine braziers ---
        THE ONLY WARM LIGHT ABOVE 400m, and the reason you can tell
        from the basecamp gate that someone is still up there.
@@ -4082,12 +4352,23 @@ export async function buildSummitWorld(ctx, onProgress) {
        NINE LIGHTS AND NO MORE. world.js caps the level at twelve
        point lights, and the fumarole vents want the other three.
        Each brazier is a real light AND an emitter; nothing else on
-       this mountain gets one. */
+       this mountain gets one.
+
+       ONE OF THE NINE HAS MOVED. Brazier 4 of the ring sits at
+       (-66, 0), which the great cross's footing now occupies to
+       within a metre - so rather than delete it and leave the ring
+       nine-eighths lit, or add a tenth light and break a budget this
+       file states twice, it is re-sited at the foot of the cross.
+       That is also the answer to "how is the shrine lit": it is lit
+       by the brazier the community moved to it, which is what would
+       have happened. The ring keeps its count; the parvis keeps its
+       twelve. */
+    const MOVED_BRAZIER = 4;
     for (let i = 0; i < 9; i += 1) {
       const a = (i / 9) * TAU + 0.35;
       const r = S.padR - 12;
-      const x = Math.cos(a) * r;
-      const z = Math.sin(a) * r;
+      const x = i === MOVED_BRAZIER ? SHRINE_BRAZIER[0] : Math.cos(a) * r;
+      const z = i === MOVED_BRAZIER ? SHRINE_BRAZIER[1] : Math.sin(a) * r;
 
       const bowl = kit.ringSolid([
         { y: 0, r: 0.34, sides: 8, phase: 0 },
@@ -4122,6 +4403,294 @@ export async function buildSummitWorld(ctx, onProgress) {
       root.add(light);
       lightObjects.push(light);
       emitters.push({ kind: "fire", x, y: Y + 2.4, z, scale: 0.9 });
+    }
+
+    /* --- the monument and the shrine at its foot ---------------- */
+    {
+      await crossAssetReady;
+      const srng = makeRng(0x9c2055);
+
+      placeWheelCross({
+        key: "summit-great-cross",
+        name: "summit-great-cross",
+        station: "summit",
+        tag: "great-cross",
+        bin: "summit-cross",
+        x: GREAT.x, z: GREAT.z,
+        yaw: GREAT.yaw,
+        tiltX: 0, tiltZ: 0,
+        height: GREAT.height,
+        variant: "great",
+        /* Bedded barely at all. The parvis is a levelled pad that
+           the summit wind keeps scoured; the monument stands on the
+           rock the pad is cut into, not in a drift. */
+        bedFactor: 0.35, maxBed: 0.9,
+        /* THE COLLAR IS SIZED SEPARATELY FROM THE FOOTING, and it
+           has to be. `snowCap` runs its lee tail out to 2.2 footprint
+           radii, so the real 15.4m footing would grow a drift skirt
+           fifty metres across on a flat pad - which is precisely the
+           "flat untextured white hexagon, an obvious unshipped
+           plane" that this file's own notes record losing a frame
+           to. The seat is unchanged either way: the pad is dead
+           level, so measuring the support over a 9.5m disc and over
+           a 15.4m one gives the same number. */
+        footR: 9.5,
+      });
+
+      /* ----------------------------------------------------------
+         THE SHRINE
+
+         The evidence that anyone still climbs up here. It is the
+         one place on the mountain with wax on the ground, and it
+         reads at three ranges: the brazier and the flame glow from
+         the basecamp gate, the flag run and the dais from the
+         parvis, and the individual guttered stubs from two metres.
+
+         Everything is authored in the shrine's own local frame with
+         y = 0 at the parvis and +X pointing AT the cross, then
+         turned and placed once - the same order the stations use,
+         and the reason the candles end up in rows facing the
+         monument rather than facing north.
+         ---------------------------------------------------------- */
+      const toCross = SHRINE_FACE;
+      const stone = [];
+      const bronze = [];
+      const waxG = [];
+      const flameG = [];
+
+      /* The dais: two swept courses, the upper one short of the
+         lower so it has a tread to stand on. Every level in this
+         block is derived from these four numbers rather than typed
+         in twice - the first draft had the altar table floating
+         19cm inside the altar block and the candles inside the
+         table, because six y values were written out by hand. */
+      const COURSE_0 = 0.42;
+      const COURSE_1 = 0.34;
+      const DAIS_0 = COURSE_0 - 0.14;                 // lower tread
+      const DAIS_1 = DAIS_0 + COURSE_1;               // upper tread
+      const ALTAR_TOP = DAIS_1 + 0.95;
+      const TABLE_TOP = ALTAR_TOP + 0.18;
+      stone.push(kit.slab(11.0, COURSE_0, 15.0, 0.07).translate(0, -0.14, 0));
+      stone.push(kit.slab(7.4, COURSE_1, 10.6, 0.06).translate(-0.6, DAIS_0, 0));
+
+      /* The altar, at the cross-facing edge, with its back to the
+         monument so an offering is laid facing it. */
+      stone.push(kit.slab(1.50, 0.95, 3.40, 0.06).translate(2.35, DAIS_1, 0));
+      stone.push(kit.slab(1.95, 0.18, 3.90, 0.04).translate(2.35, ALTAR_TOP, 0));
+
+      /* Nine candle stands, one for each ascent, in an arc that
+         opens toward the cross. Nine is the level's number and it is
+         the count the braziers on the ring already use. */
+      const addCluster = (cx, cy, cz, count, spread) => {
+        for (let k = 0; k < count; k += 1) {
+          const a2 = srng() * TAU;
+          const rr = Math.pow(srng(), 0.6) * spread;
+          const kx = cx + Math.cos(a2) * rr;
+          const kz = cz + Math.sin(a2) * rr;
+          const ch = srng.range(0.16, 0.46);
+          const cr = srng.range(0.035, 0.062);
+          const stub = kit.prism({ h: ch, rBottom: cr * 1.15, rTop: cr, sides: 5 });
+          /* Guttered, not moulded. A candle that has burned in a
+             31 m/s wind leans downwind and runs down that side; a
+             row of upright cylinders reads as a fence of pegs. */
+          kit.transform(stub, { rot: [srng.jit(0.10), 0, 0.10 + srng.jit(0.10)] });
+          stub.translate(kx, cy, kz);
+          waxG.push(stub);
+          const pool = kit.prism({ h: 0.035, rBottom: cr * 2.6, rTop: cr * 1.7, sides: 6 });
+          // Run-off pools downwind, which in this frame is local -X.
+          pool.translate(kx - cr * 1.2, cy, kz);
+          waxG.push(pool);
+          const fl = kit.prism({ h: srng.range(0.10, 0.19), rBottom: cr * 0.9, rTop: 0.008, sides: 5 });
+          /* The flame leans with the wind too, and it is the only
+             part of the shrine that is UNLIT - see the ice glazing
+             above for why an emissive here and a lit surface there
+             are not interchangeable. */
+          kit.transform(fl, { rot: [0, 0, 0.34] });
+          fl.translate(kx, cy + ch, kz);
+          flameG.push(fl);
+        }
+      };
+
+      /* A RANK IN FRONT OF THE ALTAR, not a ring around it. The
+         first pass put the arc's centre ON the altar block, so five
+         of the nine stands stood inside it. They belong between the
+         altar and whoever is facing it, bowed very slightly so the
+         row is not a fence. */
+      for (let i = 0; i < 9; i += 1) {
+        const t = (i / 8) - 0.5;
+        const px = 0.10 - (1 - Math.cos(t * 1.6)) * 0.9;
+        const pz = t * 7.2;
+        const ph = srng.range(0.72, 1.06);
+        stone.push(kit.prism({ h: ph, rBottom: 0.30, rTop: 0.25, sides: 6 })
+          .translate(px, DAIS_1, pz));
+        const bowl = kit.ringSolid([
+          { y: 0, r: 0.24, sides: 8 },
+          { y: 0.16, r: 0.40, sides: 8, phase: 0.2 },
+          { y: 0.30, r: 0.44, sides: 8, phase: 0.3 },
+        ], { capTop: false, capBottom: true });
+        bowl.translate(px, DAIS_1 + ph, pz);
+        bronze.push(bowl);
+        addCluster(px, DAIS_1 + ph + 0.16, pz, 4 + srng.int(0, 3), 0.26);
+      }
+
+      // Two censers on the altar table, and the offerings on it.
+      for (const sgn of [-1, 1]) {
+        const c = kit.ringSolid([
+          { y: 0, r: 0.16, sides: 6 },
+          { y: 0.22, r: 0.30, sides: 6, phase: 0.25 },
+          { y: 0.34, r: 0.26, sides: 6, phase: 0.4 },
+        ], { capTop: false, capBottom: true });
+        c.translate(2.35, TABLE_TOP, sgn * 1.30);
+        bronze.push(c);
+      }
+      addCluster(2.35, TABLE_TOP, 0, 11, 0.95);
+
+      // Guttered stubs left on the steps by whoever could not reach
+      // a stand, which is what actually happens at a shrine.
+      addCluster(-1.2, DAIS_1, 4.4, 7, 1.0);
+      addCluster(-1.2, DAIS_1, -4.4, 6, 1.0);
+      addCluster(-3.4, DAIS_0, 0, 6, 1.6);
+      addCluster(0.4, DAIS_0, 6.4, 5, 1.2);
+      addCluster(0.4, DAIS_0, -6.4, 5, 1.2);
+
+      /* PAINTED BEFORE THE TURN, merged before the turn, and seated
+         once. `paintByHeight` reads a WORLD normal, so a surface
+         painted after it has been rotated has its facing term baked
+         for the wrong bearing - the same rule Vesper's fallen bell
+         and this file's cloister arcade both record.
+
+         Only the stone goes through `place`, because only the stone
+         has a footprint worth bedding and drifting. The bronze, the
+         wax and the flames are laid on the seat it comes back with:
+         four merged geometries pinned to one number, so nothing in
+         the shrine can float independently of the dais it stands
+         on. */
+      const shrineY = (() => {
+        const merged = [];
+        /* RIMED, over the object's OWN bounding box - which is what
+           `paintRimed` does when `min`/`max` are left off, and the
+           reason they are left off. The first pass handed a 1.9m
+           dais an absolute 0..1.6 band via `paintByHeight`, which
+           put every horizontal tread - the surfaces anyone actually
+           sees - in the bottom fifth of the ramp, and the whole
+           shrine rendered as a black rectangle on a white pad.
+           `normalWeight` is up at 0.40 for the same reason it is on
+           the cathedral's west front: under a 7-degree key, FACING
+           is what separates the treads from the risers, and height
+           over a two-metre object separates nothing. */
+        const sg = rimeProp(kit.merge(stone), {
+          ramp: GRANITE_RAMP, feathers: 0.10,
+          rime: 0.85, threshold: 0.06, bias: 0.16,
+          normalWeight: 0.40, jitter: 0.08,
+        });
+        if (bronze.length) {
+          const bg = kit.merge(bronze);
+          paintByHeight(THREE, bg, BELL_RAMP, { lo: 0.15, hi: 0.95, jitter: 0.07 });
+          merged.push([bg, "bronze", { tag: "shrine-bronze" }]);
+        }
+        if (waxG.length) {
+          const wg = kit.merge(waxG);
+          paintFlat(THREE, wg, "#efe2c4", 0.10);
+          merged.push([wg, "bone", { tag: "shrine-wax" }]);
+        }
+        if (flameG.length) {
+          const fg = kit.merge(flameG);
+          paintFlat(THREE, fg, "#ffb04c", 0.16);
+          merged.push([fg, "emissive", {
+            tag: "shrine-flame", castShadow: false, receiveShadow: false,
+          }]);
+        }
+
+        kit.transform(sg, { rot: [0, -toCross, 0] });
+        /* `load: 0.26`, and the dais is the reason the knob exists to
+           be turned down. `snowCap` runs its lee rise at the full
+           ambient depth, which on an 11x15m platform came out as a
+           metre-high skirt that buried the lower course and every
+           candle on it - measured, and it is exactly the "flat
+           untextured white hexagon" this file's powder note records
+           losing a frame to. A quarter load leaves a scoured moat on
+           the windward side and a thin tail on the lee, which is
+           what a swept, tended platform in a 31 m/s wind looks
+           like, and the stone still reads. */
+        const extras = place("summit-shrine", "granite", sg, SHRINE.x, SHRINE.z, {
+          tag: "shrine", bedFactor: 0.12, maxBed: 0.25, capBins: 14,
+          load: 0.26, collisionSolid: false, noCollide: true,
+        });
+        const seat = seatOf(extras, SHRINE.x, SHRINE.z);
+        for (const [geo, mat, opts] of merged) {
+          kit.transform(geo, { rot: [0, -toCross, 0] });
+          geo.translate(SHRINE.x, seat, SHRINE.z);
+          batch.add("summit-shrine", mat, geo,
+            { collisionSolid: false, noCollide: true, ...opts });
+        }
+        return seat;
+      })();
+
+      /* Votive cairns, on the open pad flanking the monument where
+         they are read against the sky rather than against the dais.
+
+         SITED, NOT SCATTERED, and this is the one place in the block
+         where that matters. A radial scatter around the shrine puts
+         cairns downwind of it - which is straight at the chapel's
+         west wall, sixteen metres away - and a cairn a metre off a
+         cathedral is a rock that fell off it. Every site here clears
+         the footing in x, the chapel in x, and the parapet in r. */
+      for (const [cx, cz] of [[-46, 26], [-52, 33], [-44, -25], [-51, -32], [-36, -18]]) {
+        const c = kit.cairn(srng, {
+          h: srng.range(1.1, 1.9), r: srng.range(0.42, 0.66), layers: 6,
+        });
+        paintByHeight(THREE, c, GRANITE_RAMP, { lo: 0.1, hi: 0.9, jitter: 0.10 });
+        place("summit-shrine", "granite", c, cx, cz, {
+          tag: "shrine-cairn", bedFactor: 0.5, maxBed: 0.6, capBins: 10,
+          collisionSolid: false, noCollide: true,
+        });
+      }
+
+      /* Two flag runs, off the monument's shaft to a post on either
+         flank. They are the only moving thing up here and they are
+         what says the place is TENDED rather than abandoned - the
+         same job the Via Sacra's runs do, at the end of the road.
+
+         The high anchor is deliberately a few metres INSIDE the
+         shaft. A cord that begins in open air beside a monument
+         reads as a bug; one that emerges from it reads as tied to
+         it, and nothing can see the two metres in between. */
+      for (const side of [1, -1]) {
+        const px = -34;
+        const pz = side * 30;
+        const post = kit.votiveMarker(srng, { h: 3.4, r: 0.20, sides: 6 });
+        const pg = post && post.geo ? post.geo : post;
+        paintByHeight(THREE, pg, BARK_RAMP, { lo: 0.1, hi: 0.9, jitter: 0.10 });
+        const pex = place("summit-shrine", "bark", pg, px, pz, {
+          tag: "shrine-post", bedFactor: 0.5, maxBed: 0.7, capBins: 10,
+          collisionSolid: false, noCollide: true,
+        });
+        const run = kit.prayerFlagRun([
+          [GREAT.x, Y + 26, GREAT.z + side * 5],
+          [px, seatOf(pex, px, pz) + 3.1, pz],
+        ], { flags: 16, seed: 0x9c20f1 + side, flagW: 0.52, flagH: 0.66 });
+        if (run.geo && run.geo.attributes && run.geo.attributes.position.count) {
+          batch.add("summit-shrine", "iron", run.geo,
+            { tag: "shrine-cord", collisionSolid: false, noCollide: true });
+        }
+        for (const spec of (run.extras && run.extras.flagSpecs) || []) {
+          if (spec && spec.geo && spec.geo.attributes && spec.geo.attributes.wave) {
+            banners.push(spec);
+          }
+        }
+      }
+      /* Two small flame emitters over the candle mass. The wax and
+         its flames are static geometry - forty guttered stubs is a
+         better picture than four sprites - but a shrine with no
+         MOVEMENT in it is a diorama, and at two metres the eye reads
+         the flicker before it reads the candles. Small scale: these
+         are candles, not the brazier standing beside them. */
+      for (const [ox, oz, sc] of [[2.15, 0, 0.30], [-0.4, 0, 0.34]]) {
+        const [ex, ez] = shrineLocal(ox, oz);
+        emitters.push({ kind: "fire", x: ex, y: shrineY + 1.35, z: ez, scale: sc });
+      }
+
+      poi("summit-cross", "The Great Cross", GREAT.x, GREAT.z);
     }
 
     poi("summit", S.name, 0, 0);
@@ -5034,15 +5603,172 @@ export async function buildSummitWorld(ctx, onProgress) {
     return { placed, tries };
   }
 
+  /* ================================================================
+     THE WAY OF CROSSES
+
+     The wheel-cross is the order's mark and it is the same object on
+     both worlds - see the loader at the head of this file. Vesper
+     carries it seventeen times across the Gilded Reach, once at
+     forty-four metres on the lip of the Matriarch's pan, and now
+     along the cathedral's processional. Kenosis carries it the way a
+     pilgrim route carries one: at the stations, and at intervals
+     along the road between them.
+
+     THREE RULES, and each of them is a place this could go wrong.
+
+     1. NOT ON THE ROAD. `place` disarms collision for anything
+        within 7m of the carriageway, which would leave a monument
+        you walk through. So the placer rejects a site inside 11m and
+        finds another rather than accepting a ghost.
+
+     2. NOT ON A FIGHT FLOOR. The station crosses stand at 0.86 of
+        the pad radius - the rim, where the ground is still flat and
+        a charging boss is not. The litter and anchor passes use
+        0.28 of the pad for the same reason and this is the outside
+        of the same rule.
+
+     3. SIZED BY WHERE IT IS. A wayside cross is 6-9m and a station
+        cross is 13-16m, which is the difference between a marker and
+        a monument, and it is the whole reason nine of them read as
+        the stations of a route rather than as more scatter. The
+        parvis pair is 17m and no larger: the cathedral behind them
+        is 62m to the crossing spire and anything that competes with
+        it flattens the one frame this level is built around.
+     ================================================================ */
+  async function buildWayCrosses() {
+    await crossAssetReady;
+    if (!crossAsset) return { stations: 0, wayside: 0, parvis: 0, rejected: 0 };
+    const rng = makeRng(0x5c0551);
+    let rejected = 0;
+
+    /** True if a cross may stand here at all. */
+    const siteOk = (x, z, clear) => {
+      if (Math.hypot(x, z) > MAP_HALF - 80) return false;
+      if (nearRoad(x, z, clear)) return false;
+      const n = N(x, z);
+      if (Math.acos(clamp(n[1], -1, 1)) * 180 / Math.PI > 30) return false;
+      for (const id of STATION_ORDER) {
+        const st = STATIONS[id];
+        if (Math.hypot(x - st.x, z - st.z) < st.padR * 0.34) return false;
+      }
+      return true;
+    };
+
+    /* --- the eight lower stations ------------------------------- */
+    let stations = 0;
+    for (const id of STATION_ORDER) {
+      if (id === "summit") continue;          // the parvis pair, below
+      const S = STATIONS[id];
+      /* The bearing the pilgrim leaves by - toward the peak - swung
+         off the spur so the monument is beside the way out rather
+         than standing in it. Both hands are tried, then the ring is
+         walked, so a station whose spur happens to leave on the
+         chosen side still gets its cross. */
+      const toPeak = Math.atan2(-S.x, -S.z);
+      const rim = S.padR * 0.86;
+      let sited = null;
+      const swings = [0.85, -0.85, 1.5, -1.5, 2.2, -2.2, 2.9, -2.9, 0.3, -0.3];
+      for (const swing of swings) {
+        const a2 = toPeak + swing;
+        const x = S.x + Math.sin(a2) * rim;
+        const z = S.z + Math.cos(a2) * rim;
+        if (!siteOk(x, z, 11)) { rejected += 1; continue; }
+        sited = { x, z, a2 };
+        break;
+      }
+      if (!sited) continue;
+      placeWheelCross({
+        key: `waycross-station-${id}`,
+        name: `${id}-choir-wheel`,
+        station: id,
+        tag: "waycross-station",
+        bin: `waycross-${id}`,
+        x: sited.x, z: sited.z,
+        /* Faced back at the pad, so it is presented to whoever is
+           standing at the station rather than seen edge-on. */
+        yaw: sited.a2 + Math.PI,
+        tiltX: rng.jit(0.025),
+        tiltZ: rng.jit(0.025),
+        height: rng.range(13.0, 16.0),
+        variant: "station",
+      });
+      stations += 1;
+      poi(`${id}-cross`, "A Wheel-Cross", sited.x, sited.z);
+    }
+
+    await progress("Raising the crosses");
+
+    /* NOTHING AT THE FOOT OF THE GREAT FLIGHT.
+
+       A pair of 17m crosses stood here and they were wrong twice
+       over: they flanked the one approach the level is composed
+       around, so every frame up the stair had a monument in each
+       corner of it, and at seventeen metres against a 68m building
+       they read as furniture rather than as the order's mark. The
+       summit's cross is now a single 82m one on the cliff shoulder,
+       built with the station in `buildSummitStation` because it
+       shares that function's datum. */
+
+    /* --- the road between them ---------------------------------- */
+    const WAYSIDE = 14;
+    let wayside = 0;
+    for (let i = 0; i < WAYSIDE; i += 1) {
+      const t = (i + 0.5) / WAYSIDE;
+      const p = viaSacraPointAt(t);
+      /* Alternating hands, so the eye reads a sequence rather than a
+         fence. `forward` is (sin yaw, cos yaw) in this project's
+         convention, so the right hand is (cos yaw, -sin yaw). */
+      let sited = null;
+      for (const hand of (i % 2 ? [1, -1] : [-1, 1])) {
+        for (const off of [13, 17, 22, 28]) {
+          const x = p.x + Math.cos(p.yaw) * off * hand;
+          const z = p.z - Math.sin(p.yaw) * off * hand;
+          if (!siteOk(x, z, 11)) { rejected += 1; continue; }
+          sited = { x, z, hand };
+          break;
+        }
+        if (sited) break;
+      }
+      if (!sited) continue;
+      /* Faced across the road at the traveller. The wheel is close
+         to symmetric front to back, so a half-turn error here costs
+         nothing; being edge-on to the way would cost the read. */
+      const face = Math.atan2(-sited.hand * Math.cos(p.yaw), sited.hand * Math.sin(p.yaw));
+      /* Taller low down, where the air is thick and the ground is
+         moraine, and stubbier as the route climbs into the wind.
+         Also the honest reason: a 9m monument on the summit cone is
+         in frame with a 62m cathedral. */
+      const climb = clamp01(p.y / 452);
+      placeWheelCross({
+        key: `waycross-way-${i}`,
+        name: `via-sacra-choir-wheel-${i}`,
+        station: "waycross",
+        tag: "waycross-way",
+        bin: `waycross-way-${Math.floor(i / 4)}`,
+        x: sited.x, z: sited.z,
+        yaw: face + rng.jit(0.12),
+        tiltX: rng.jit(0.05),
+        tiltZ: rng.jit(0.05),
+        height: lerp(9.0, 6.2, climb) * rng.range(0.94, 1.08),
+        variant: "wayside",
+      });
+      wayside += 1;
+    }
+
+    await progress("Marking the way");
+    return { stations, wayside, rejected };
+  }
+
   await buildSummitStation();
   const vigilStats = await buildVigilLine();
   const processionStats = await buildProcession();
   const massStats = await buildOpenGroundMasses();
   const anchorStats = await buildNearAnchors();
   const routeStats = await buildRouteMarkers();
+  const crossStats = await buildWayCrosses();
   const litterStats = await buildGroundLitter();
 
-  meshes = batch.flush();
+  meshes = batch.flush().concat(authoredMeshes);
   await progress("Setting the stones against you");
 
   /* ------------------------------------------------------------
@@ -5721,6 +6447,8 @@ export async function buildSummitWorld(ctx, onProgress) {
     routes: routeStats,
     vigil: vigilStats,
     procession: processionStats,
+    crosses: crossStats,
+    authoredLandmarks,
     stats() {
       let tris = 0;
       for (const m of meshes) {

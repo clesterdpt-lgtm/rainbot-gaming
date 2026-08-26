@@ -583,6 +583,11 @@ export function installSummitQa(ctx, api, hook) {
       locomotion: api.player?.locomotionProfile?.() || null,
     }),
 
+    loadoutState: () => ctx.playerLoadout?.status?.() || null,
+    setLoadoutTransform: (id, transform) => ctx.playerLoadout?.setTransform?.(id, transform) || null,
+    dischargeState: () => ctx.playerDischarge?.status?.() || null,
+    fireCrescent: (hand = null) => ctx.playerDischarge?.fireOnce?.(hand) || false,
+
     listTimes: () => Object.keys(SUMMIT_TIMES).map((k) => ({
       key: k, label: SUMMIT_TIMES[k].label, grade: SUMMIT_TIMES[k].grade,
     })),

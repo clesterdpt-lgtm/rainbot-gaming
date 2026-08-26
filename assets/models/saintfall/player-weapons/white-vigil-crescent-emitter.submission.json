@@ -1,0 +1,21 @@
+{
+  "taskId": "01a03ac4-4c92-7b75-8520-08679bf6edbf",
+  "taskType": "image-to-3d",
+  "input": "assets/concepts/saintfall/meshy/white-vigil-crescent-emitter-weapon-meshy-source-v2.png",
+  "request": {
+    "image_url": "[local image data URI omitted]",
+    "model_type": "standard",
+    "ai_model": "meshy-6",
+    "enable_pbr": true,
+    "should_texture": true,
+    "should_remesh": true,
+    "topology": "triangle",
+    "target_polycount": 18000,
+    "pose_mode": "",
+    "image_enhancement": false,
+    "remove_lighting": true,
+    "target_formats": [
+      "glb"
+    ]
+  }
+}

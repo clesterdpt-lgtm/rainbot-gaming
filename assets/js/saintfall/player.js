@@ -2374,6 +2374,23 @@ export async function createPlayer(ctx, canvas) {
   const PASSING_RISE_SCALE = locomotionValue("passingRiseScale", 1);
   const WEIGHT_SWAY_M = locomotionValue("weightSwayM", 0);
   const WEIGHT_ROLL = locomotionValue("weightRoll", 0);
+  /* HOW FAR THE BODY TIPS INTO ITS OWN TRAVEL, split the same way the
+     lean is applied further down: the first pair tilts the figure
+     root about the soles, the second is what the spine keeps. See the
+     long note at the lean itself for why it is split at all.
+
+     These were literals, and a literal is a claim that every figure
+     in this game carries its mass the same way. A heavier body leans
+     further at the same pace - that is most of what "heavy" looks
+     like from the side - and there is no way to say so with a
+     multiplier, because scaling one number that already spans 5.7 to
+     16 degrees either does nothing to the walk or throws the sprint
+     into a dive. Four independent radians, defaulting to exactly the
+     values that were hard-coded here. */
+  const LEAN_WALK = locomotionValue("leanWalk", 0.045);
+  const LEAN_SPRINT = locomotionValue("leanSprint", 0.155);
+  const SPINE_LEAN_WALK = locomotionValue("spineLeanWalk", 0.055);
+  const SPINE_LEAN_SPRINT = locomotionValue("spineLeanSprint", 0.025);
   /* Below this the body is no longer travelling far enough per frame
      to carry the gait, so the swing borrows a clock. Deliberately
      well under WALK: a genuine slow amble already advances the cycle
@@ -2919,6 +2936,10 @@ export async function createPlayer(ctx, canvas) {
       0.055,
       backpedal
     ) * BODY_DROP_SCALE;
+    /* The track narrows as the body picks up its own walk. The
+       planted-foot guard does NOT follow it - see `TRACK_GUARD`. */
+    trackHalf = lerp(HIP_HALF, HIP_HALF_MOVING,
+      clamp01(state.speed / Math.max(0.5, WALK)));
     return gaitSpec;
   }
 
@@ -3808,7 +3829,9 @@ export async function createPlayer(ctx, canvas) {
        walking, and now 16deg at a sprint rather than 13.2 - which
        matters because every arm pole, grip seat and hand basis in
        this file was tuned against that shoulder angle and none of
-       them needs to move.
+       them needs to move. Those two figures are the DEFAULTS of the
+       four lean constants above; a figure may author its own, and a
+       heavy one should.
 
        The legs absorb it: their IK targets are world-space foot
        plants, so tipping the hips forward is a reach they solve
@@ -3819,7 +3842,7 @@ export async function createPlayer(ctx, canvas) {
        whole trooper the way a diver tips rather than folding a spine. */
     const slamLean = ctx.slam?.state?.lean || 0;
     const backpedalPose = backpedalWeight();
-    const ordinaryLocomotionLean = (0.045 * walkLeanN + 0.155 * sprintLeanN)
+    const ordinaryLocomotionLean = (LEAN_WALK * walkLeanN + LEAN_SPRINT * sprintLeanN)
       * gaitMotion * lerp(1, 0.42, backpedalPose);
     /* Counter-lean uphill while the boots run downhill. The root is
        pitched from the soles, so a modest negative angle puts the
@@ -3830,7 +3853,8 @@ export async function createPlayer(ctx, canvas) {
       + boostPose * 0.075;
     const bodyLean = locomotionLean + slamLean
       + (Number.isFinite(actionPose.lean) ? actionPose.lean : 0);
-    const travelLean = (0.055 * walkLeanN + 0.025 * sprintLeanN) * gaitMotion
+    const travelLean = (SPINE_LEAN_WALK * walkLeanN + SPINE_LEAN_SPRINT * sprintLeanN)
+      * gaitMotion
       * lerp(1, 0.55, backpedalPose)
       - downhillPose * 0.035
       + 0.37 * jetPose;
@@ -5335,6 +5359,40 @@ export async function createPlayer(ctx, canvas) {
      reason, so the guard has to be somewhere a correct plant never
      reaches. Ankles this close are already touching. */
   const STANCE_GUARD = locomotionValue("stanceGuard", Math.max(0.055, HIP_HALF - 0.030));
+  /* HOW WIDE THE WALKING TRACK IS, which is not the same question as
+     how wide the STANDING stance is.
+
+     A figure at rest owns its ground with the sabatons apart, and a
+     broad rig should. A figure WALKING puts each boot down nearer the
+     line it is travelling along, because the mass has to pass over
+     the planted foot and a wide plant makes the body roll sideways to
+     do it. Holding one width for both is exactly what makes a broad
+     figure waddle: the Bastion planted its ankles 46cm apart at every
+     speed, which is wider than its own hip bones.
+
+     `hipHalfMoving` defaults to `hipHalf`, so a figure that does not
+     author it keeps precisely the gait it had. */
+  const HIP_HALF_MOVING = locomotionValue("hipHalfMoving", HIP_HALF);
+  /* Rewritten by `readGaitSpec` every frame; this is the standing
+     value a spawn's first foot placement uses. */
+  let trackHalf = HIP_HALF;
+  /* THE PLANTED-FOOT GUARD IS A CONSTANT, and it has to be, even
+     though the track it guards is not.
+
+     A planted foot is only ever MOVED when it is inboard of this
+     line, so a guard that follows the live track breaks the whole
+     no-slip claim from the other end: brake out of a walk and the
+     track widens back toward the standing stance, the guard widens
+     with it, and every foot planted at the narrow width is suddenly
+     "crossing" and gets pivoted outward - a foot moving under a body
+     that is trying to stop, which is precisely the artefact the
+     guard exists to prevent. Sized off the NARROWEST width the gait
+     can plant at, so it sits inboard of every legal plant at every
+     speed and a foot that never drifts never moves at all. */
+  const TRACK_GUARD = Math.min(
+    STANCE_GUARD,
+    Math.max(0.045, Math.min(HIP_HALF, HIP_HALF_MOVING) - 0.030)
+  );
 
   /**
    * Where a foot wants to stand for a body standing at
@@ -5356,7 +5414,7 @@ export async function createPlayer(ctx, canvas) {
     const spread = Number.isFinite(actionPose.stanceSpread) ? actionPose.stanceSpread : 0;
     const push = Number.isFinite(actionPose.stanceZ) ? actionPose.stanceZ : 0;
     const REACH_XZ = 0.30;
-    const lateral = leg.side * (HIP_HALF + clamp(spread, -0.16, 0.16));
+    const lateral = leg.side * (trackHalf + clamp(spread, -0.16, 0.16));
     fore += lead * clamp(push, -REACH_XZ, REACH_XZ);
     // Track the hips forward under the body lean - see leanFootShift.
     fore += leanFootShift;
@@ -5463,7 +5521,7 @@ export async function createPlayer(ctx, canvas) {
    * actually does. `blend` is how much of the violation to take out
    * this frame.
    */
-  function uncross(leg, point, bx, bz, byaw, blend, guard = HIP_HALF) {
+  function uncross(leg, point, bx, bz, byaw, blend, guard = trackHalf) {
     const dx = point.x - bx;
     const dz = point.z - bz;
     const sin = Math.sin(byaw);
@@ -5899,16 +5957,16 @@ export async function createPlayer(ctx, canvas) {
              scuffs round exactly as hard as the turn requires. */
           const pivotRate = 6 + 9 * Math.abs(state.yawRate);
           /* Guarded INSIDE the placement line, not on it. A foot is
-             put down at exactly HIP_HALF, so a guard at HIP_HALF sits
-             on top of every fresh plant and the trig that recovers
-             the lateral offset does not return the placement value to
-             the last bit - which had a correctly planted foot
-             creeping outward a tenth of a millimetre per frame
-             forever, on a straight line, for no reason. STANCE_GUARD
-             is a real near-crossing, so a plant that never drifts
-             never moves at all. */
+             put down at exactly `trackHalf`, so a guard at the same
+             width sits on top of every fresh plant and the trig that
+             recovers the lateral offset does not return the placement
+             value to the last bit - which had a correctly planted
+             foot creeping outward a tenth of a millimetre per frame
+             forever, on a straight line, for no reason. `TRACK_GUARD`
+             is inboard of the narrowest width this gait ever plants
+             at, so a plant that never drifts never moves at all. */
           if (uncross(leg, leg.plant, state.x, state.z, state.yaw,
-            1 - Math.exp(-pivotRate * dt), STANCE_GUARD)) {
+            1 - Math.exp(-pivotRate * dt), TRACK_GUARD)) {
             // A pivoted foot has moved across the ground, so it has
             // to re-read its height or it hangs off the last one.
             const pg = groundY(leg.plant.x, leg.plant.z);
@@ -6206,6 +6264,7 @@ export async function createPlayer(ctx, canvas) {
    * needs no phase offset.
    */
   const restSwing = { fore: 0, lift: 0 };
+  const loadoutArm = new THREE.Vector3();
   function restArmTarget(i, out) {
     const side = i === 0 ? 1 : -1;
     const jetPose = airbornePose();
@@ -6221,15 +6280,53 @@ export async function createPlayer(ctx, canvas) {
        from the hip on the forward stroke and tucks back on the
        return, and the hand rises as it comes forward - without that
        the arm reads as a pendulum bolted to a shoulder. */
+    /* A CARRIED WEAPON DAMPS THE STROKE IT RIDES ON, and by how much
+       depends on what it is. A hammer wants its swing; a braced tower
+       shield is held still in front of the body and does not travel
+       47cm across it twice a stride. Optional-chained, so a level
+       without a loadout - which is every level but Kenosis - keeps
+       exactly the arms it had. */
+    const carried = ctx.loadout?.armSwing?.(i);
+    if (Number.isFinite(carried)) restSwing.fore *= carried;
     restSwing.lift = Math.abs(sw) * amp * freeArmValue("swingLift", 0.38);
     const restX = side * (freeArmValue("idleX", 0.205)
       + freeArmValue("walkX", 0.015) * walkN
       + freeArmValue("sprintX", 0.008) * sprintN);
+    /* AND AN ARM SWINGING FORWARD FOLDS.
+       `swingLift` above is symmetric - it raises the hand at both
+       ends of the stroke - so on its own the elbow holds one angle
+       and the whole arm hinges at the shoulder. That is a pendulum,
+       and it is what "the arms are too stiff" looks like from the
+       side however wide the swing is.
+
+       The elbow is not authored anywhere: it falls out of how far
+       this target sits from the shoulder against the arm's own
+       length, so the only way to make it work through the cycle is to
+       move the hand nearer the shoulder on the way forward and let it
+       hang back out on the return. Signed by the stroke, so it is one
+       smooth sinusoid with no crease at the crossing, and zero by
+       default - a figure that does not ask for it swings exactly as
+       it did. */
     const restY = freeArmValue("idleY", 0.84)
       + freeArmValue("walkY", -0.01) * walkN
       + freeArmValue("sprintY", 0.11) * sprintN
-      + restSwing.lift * freeArmValue("liftY", 0.50);
+      + restSwing.lift * freeArmValue("liftY", 0.50)
+      + restSwing.fore * freeArmValue("swingFoldY", 0);
     const restZ = freeArmValue("idleZ", 0.060) + restSwing.fore;
+    /* WHERE A CARRIED HAND WANTS TO BE.
+       The free-hand pose is a hand with nothing in it. A shield arm
+       is braced - bent, and forward of the hip - and no amount of
+       damping the swing will put it there. Additive, in figure-root
+       space, before the flight blend. */
+    if (ctx.loadout?.armPose) {
+      loadoutArm.set(restX, restY, restZ);
+      ctx.loadout.armPose(i, loadoutArm, { side, walkN, sprintN, jetPose });
+      return out.set(
+        lerp(loadoutArm.x, side * freeArmValue("flightX", 0.205), jetPose),
+        lerp(loadoutArm.y, freeArmValue("flightY", 0.985), jetPose),
+        lerp(loadoutArm.z, freeArmValue("flightZ", -0.17), jetPose)
+      ).applyMatrix4(figure.root.matrixWorld);
+    }
     return out.set(
       lerp(restX, side * freeArmValue("flightX", 0.205), jetPose),
       /* Long, relaxed walking arms; a sprint raises the hands and
@@ -6294,6 +6391,33 @@ export async function createPlayer(ctx, canvas) {
        from each authored palm and turns it toward the body. */
     if (Math.abs(FREE_HAND_PALM_TURN) > 1e-6) {
       freeHandZ.applyAxisAngle(freeHandY, side * FREE_HAND_PALM_TURN);
+    }
+    /* AND A HAND HOLDING SOMETHING FACES IT.
+       These gauntlets have no finger bones - the rig carries a single
+       `Hand` - so a fist cannot close on a haft. What CAN be done is
+       roll the wrist until the palm is presented to the thing it is
+       carrying, which is most of what reads as a grip: a shield's
+       enarme and a maul's haft do not want the same wrist, so this is
+       per hand. Radians about the forearm, optional-chained. */
+    const carriedTurn = ctx.loadout?.handTurn?.(i);
+    if (Number.isFinite(carriedTurn) && Math.abs(carriedTurn) > 1e-6) {
+      freeHandZ.applyAxisAngle(freeHandY, carriedTurn);
+    }
+    /* AND A HAND THAT AIMS NEEDS MORE THAN A ROLL.
+       `handTurn` only spins the palm about the forearm, which is
+       enough to present a palm to a haft and not enough to point
+       anything: a weapon welded into the fist can only be aimed by
+       moving the WRIST. So a loadout may rewrite the whole basis -
+       both vectors, in world space - and the pair is re-squared
+       afterwards because whatever it hands back is a wish, not
+       necessarily an orthonormal one. */
+    if (ctx.loadout?.handBasis) {
+      ctx.loadout.handBasis(i, freeHandY, freeHandZ);
+      if (freeHandY.lengthSq() < 1e-8) freeHandY.set(0, -1, 0);
+      freeHandY.normalize();
+      freeHandZ.addScaledVector(freeHandY, -freeHandZ.dot(freeHandY));
+      if (freeHandZ.lengthSq() < 1e-8) freeHandZ.set(0, 0, 1);
+      freeHandZ.normalize();
     }
     freeHandX.crossVectors(freeHandY, freeHandZ).normalize();
     freeHandBasis.makeBasis(freeHandX, freeHandY, freeHandZ);
@@ -6940,12 +7064,22 @@ export async function createPlayer(ctx, canvas) {
       turnResponseScale: TURN_RESPONSE_SCALE,
       flightSpeedScale: FLIGHT_SPEED_SCALE,
       hipHalf: HIP_HALF,
+      hipHalfMoving: HIP_HALF_MOVING,
       strideScale: STRIDE_SCALE,
       stanceBias: STANCE_BIAS,
       bodyDropScale: BODY_DROP_SCALE,
       impactScale: IMPACT_SCALE,
       weightSwayM: WEIGHT_SWAY_M,
       weightRoll: WEIGHT_ROLL,
+      leanWalk: LEAN_WALK,
+      leanSprint: LEAN_SPRINT,
+      spineLeanWalk: SPINE_LEAN_WALK,
+      spineLeanSprint: SPINE_LEAN_SPRINT,
+      /* Live, not authored: the width the gait is actually running
+         at this instant, so a probe can tell a narrowing track from
+         a figure that never narrows. */
+      trackHalf,
+      trackGuard: TRACK_GUARD,
     }),
     /* The leg solver's RESOLVED constants, for the review harness.
        `footPose` is figure-authored with defaults filled in here, so a
@@ -6958,6 +7092,8 @@ export async function createPlayer(ctx, canvas) {
       devLimit: [ANKLE_DEV_MIN, ANKLE_DEV_MAX],
       hipHalf: HIP_HALF,
       stanceGuard: STANCE_GUARD,
+      trackHalf,
+      trackGuard: TRACK_GUARD,
       ankle: figure.limb.ankle,
       reach: figure.legLengths
         ? figure.legLengths.map((l) => l.thigh + l.shin)

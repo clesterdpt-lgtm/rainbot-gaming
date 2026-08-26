@@ -1,0 +1,33 @@
+{
+  "id": "01a0396e-1cf6-750f-8c97-6e237ba14945",
+  "type": "image-to-3d",
+  "status": "SUCCEEDED",
+  "progress": 100,
+  "createdAt": 1787669918257,
+  "startedAt": 1787669918267,
+  "finishedAt": 1787670107166,
+  "expiresAt": 1787929307166,
+  "consumedCredits": 30,
+  "taskError": null,
+  "sourceImage": "assets/concepts/saintfall/meshy/bastion-penitent-reliquary-hammer-red-meshy-source-v1.png",
+  "masterFile": "bastion-hammer-master.glb",
+  "thumbnails": [
+    "bastion-hammer-preview.png"
+  ],
+  "request": {
+    "image_url": "[local image data URI omitted]",
+    "model_type": "standard",
+    "ai_model": "meshy-6",
+    "enable_pbr": true,
+    "should_texture": true,
+    "should_remesh": true,
+    "topology": "triangle",
+    "target_polycount": 14000,
+    "pose_mode": "",
+    "image_enhancement": false,
+    "remove_lighting": true,
+    "target_formats": [
+      "glb"
+    ]
+  }
+}

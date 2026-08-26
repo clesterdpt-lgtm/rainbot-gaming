@@ -2462,6 +2462,99 @@ export async function buildWorld(ctx, onProgress) {
       paintH(sg, stoneRamp, { normalWeight: 0.44, jitter: 0.14, noise: 0.24 });
       batch.add("cathedral", "stone", sg);
 
+      /* --- THE PROCESSIONAL CROSSES --------------------------------
+
+         The wheel-cross is the ONE object the faith carries between
+         worlds. It stands seventeen times across the Gilded Reach and
+         once, forty-four metres tall, on the lip of the Matriarch's
+         pan; the same model marks the Via Sacra on Kenosis. So it has
+         to appear at the order's own cathedral, or the symbol reads as
+         a Reach landmark rather than as the mark of the religion.
+
+         Sited as a WAY rather than as a ring. The plaza already has a
+         ring - thirteen saints on a 96m arc - and a second concentric
+         arrangement inside it would read as decoration around the
+         first. Four pairs march out from the doors along the same axis
+         the braziers climb, and one great cross terminates the plaza a
+         hundred metres out, which is the object you walk toward from
+         the basin before the building itself resolves.
+
+         OUTBOARD OF THE BRAZIERS, not among them. The processional
+         stair's fires stand at cx +/- 14 and a 13m cross carries a
+         plinth some four metres across, so anything inside about 22m
+         of the axis puts masonry through a brazier. 27m clears both
+         and still frames the walk.
+
+         Heights are deliberately modest. The crossing spire is 190m
+         and the front towers 100m; a cross that competes with them
+         flattens the approach, and the whole point of the pair
+         nearest the doors is that the building grows OVER them as you
+         climb. */
+      {
+        const crossAsset = landmarkSources.gildedReachCross;
+        if (crossAsset) {
+          const doorZ = cz + NAVE_L / 2 + 2.6;
+          const crossRng = makeRng(0xc2055);
+
+          // The avenue: four pairs, outboard of the brazier line.
+          for (let i = 0; i < 4; i += 1) {
+            for (const side of [-1, 1]) {
+              const px = cx + side * (27 + i * 1.4);
+              const pz = doorZ + 15 + i * 17;
+              /* Faced ACROSS the way, toward the axis, so the wheel
+                 is presented to someone walking up it rather than
+                 seen edge-on. Local +Z is the model's face. */
+              const yaw = side > 0 ? -Math.PI / 2 : Math.PI / 2;
+              addAuthoredLandmark(crossAsset, {
+                key: `cathedralCross-${i}-${side > 0 ? "e" : "w"}`,
+                name: `cathedral-meshy-choir-wheel-${i}-${side > 0 ? "e" : "w"}`,
+                district: "cathedral",
+                pos: [px, 0, pz],
+                rot: [crossRng.jit(0.02), yaw + crossRng.jit(0.05), crossRng.jit(0.02)],
+                rotOrder: "YXZ",
+                height: crossRng.range(12.2, 14.4),
+                variant: "processional",
+                seatOnTerrain: { maxGap: 0, embed: 0.14 },
+              });
+            }
+          }
+
+          // The great cross at the head of the plaza, on the axis.
+          const gx = cx;
+          const gz = doorZ + 100;
+          addAuthoredLandmark(crossAsset, {
+            key: "cathedralCross-plaza",
+            name: "cathedral-meshy-choir-wheel-plaza",
+            district: "cathedral",
+            pos: [gx, 0, gz],
+            // Faced back at the doors: it is read from the basin side
+            // on the way in and from the porch on the way out.
+            rot: [0.02, Math.PI, -0.018],
+            rotOrder: "YXZ",
+            height: 26,
+            variant: "plaza",
+            seatOnTerrain: { maxGap: 0, embed: 0.18 },
+          });
+          pois.push({ id: "cathedral-cross", name: "The Plaza Cross", x: gx, z: gz });
+
+          /* One down, out by the fallen bell. A district whose every
+             cross stands upright says the order still holds this
+             ground; the bell is on its side ten metres away and the
+             breach is open at the far end. */
+          addAuthoredLandmark(crossAsset, {
+            key: "cathedralCross-fallen",
+            name: "cathedral-meshy-choir-wheel-fallen",
+            district: "cathedral",
+            pos: [cx + 50, 0, cz + NAVE_L / 2 + 54],
+            rot: [1.27, 2.31, 0.19],
+            rotOrder: "YXZ",
+            height: 17,
+            variant: "fallen",
+            seatOnTerrain: { maxGap: 0, embed: 0.22 },
+          });
+        }
+      }
+
       // The fallen bell: cracked, on its side, big enough to stand
       // in. Built as a proper bell profile - a flared lip, a waist,
       // a shoulder and a crown - because the previous smooth taper,

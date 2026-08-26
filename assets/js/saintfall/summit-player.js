@@ -17,6 +17,11 @@ const WHITE_VIGIL = {
   name: "White Vigil",
   assetPath: "../../../assets/models/saintfall/white-vigil/white-vigil-player.glb",
   assetSource: "white-vigil-player.glb",
+  /* Which reliquary pack rides the Spine. See jetpacks.js: the scout
+     carries an instrument with its engines outboard, the bulwark
+     carries a furnace with one bell. Vesper-IX names nothing and
+     keeps the Seraph. */
+  jetpack: "augur",
   roughness: 0.56,
   metalness: 0.18,
   emissiveIntensity: 0.12,
@@ -36,6 +41,7 @@ const BASTION_PENITENT = {
   name: "Bastion Penitent",
   assetPath: "../../../assets/models/saintfall/red-bastion/red-bastion-player.glb",
   assetSource: "red-bastion-player.glb",
+  jetpack: "censer",
   roughness: 0.58,
   metalness: 0.22,
   emissiveIntensity: 0.20,
@@ -49,8 +55,28 @@ const BASTION_PENITENT = {
   locomotionProfile: {
     /* A broad, deliberate bulwark rather than White Vigil at a lower
        playback rate. Lower top speed and longer response times carry
-       inertia; the gait then adds a longer cycle, more double support,
-       deeper contact compression, and visible side-to-side weight. */
+       inertia; the gait then adds more double support, deeper contact
+       compression, and visible side-to-side weight.
+
+       THE FIRST VERSION READ AS A STILT-WALK, and the measurements
+       say why. `saintfall-walk-shape-probe.mjs` put the two figures
+       side by side at their own walking paces:
+
+                        White Vigil      Bastion v1
+         stride            2.05m           2.41m
+         cadence          4.29 step/s     2.61 step/s
+         track (ankles)    0.23m           0.46m
+
+       Both of those are worse than they look as ratios. This rig is
+       1.74m to the crown - the SAME stature as White Vigil, whatever
+       the 2.00m request said - on a 1.17m leg, so a 2.41m stride is
+       2.07 leg-lengths at a pace where 1.6 is what a body that heavy
+       would take; and a 0.46m track is wider than the figure's own
+       hip bones, which are 0.33m apart. Long steps at a low cadence
+       with the feet outside the hips is the definition of a waddle,
+       and slowing the cycle further to sell weight makes it worse,
+       not better. Weight is in the DROP and the roll, which is where
+       it now lives. */
     walkSpeed: 3.15,
     sprintSpeed: 5.65,
     groundAcceleration: 1.55,
@@ -59,9 +85,20 @@ const BASTION_PENITENT = {
     flightSpeedScale: 0.82,
     gaitSettleSpeed: 1.35,
     gaitSettleCadence: 3.00,
+    /* Standing wide and walking narrow. The planted bulwark stance
+       is the read this figure was designed around and is unchanged;
+       the track it walks on closes to just inside its own hip bones,
+       because the mass has to pass over each planted foot. */
     hipHalf: 0.230,
+    hipHalfMoving: 0.150,
+    /* The CEILING on the planted-foot guard, not the guard itself:
+       once a figure narrows its track, player.js sizes that guard off
+       the narrowest width it can plant at (0.120 here) so widening
+       back out to the standing stance can never shove a planted
+       sabaton. This still holds the ceiling below the standing
+       width, which is what it was authored for. */
     stanceGuard: 0.180,
-    strideScale: 1.18,
+    strideScale: 0.92,
     stanceBias: 0.10,
     stepLiftScale: 0.90,
     bodyDropScale: 1.48,
@@ -69,13 +106,50 @@ const BASTION_PENITENT = {
     passingRiseScale: 0.68,
     weightSwayM: 0.030,
     weightRoll: 0.026,
+    /* Tipped further into the march than the default body. At the
+       shared values this figure walked at 5.7 degrees off vertical,
+       which reads as a suit of armour being carried upright rather
+       than a body driving one forward. 10 degrees at a walk is a
+       lean you can see from the side; the sprint moves much less
+       (16 -> 18) because it was already committed. */
+    leanWalk: 0.100,
+    leanSprint: 0.120,
+    spineLeanWalk: 0.075,
+    spineLeanSprint: 0.020,
   },
   freeArmPose: {
     /* Hands ride outside the thigh plates and the elbow poles stay
-       outboard, matching the concept's squared, space-owning frame. */
+       outboard, matching the concept's squared, space-owning frame.
+
+       BUT NOT AT FULL STRETCH. This rig's arm is 0.72m against White
+       Vigil's 0.55m, so the inherited hand targets left the elbow
+       carried at 143 degrees - all but locked - and travelling
+       140..149 across a whole stride. Nine degrees. The arm was a
+       plank on a hinge, and no amount of widening the SWING fixes
+       that, because a wider swing on a locked elbow is a longer
+       pendulum.
+
+       Three changes, each measured back off the joint with
+       `--sweep fold`, because the elbow is not authored anywhere: it
+       is whatever the distance from shoulder to this target leaves
+       over. The hands come 5cm inboard and 4cm up, which folds the
+       carried elbow to 125 degrees; the swing doubles; and
+       `swingFoldY` closes the elbow on the drive and lets it open on
+       the return. The joint now travels 111..125..148 - a 37-degree
+       range where there were nine. The elbow poles are untouched;
+       the side the bend chooses was never the problem.
+
+       ALL OF IT RIDES `walkX`/`walkY`, NOT THE IDLE TARGET. The
+       standing figure is the one pose nobody complained about, and
+       authoring the folded carry into `idleX`/`idleY` took its
+       elbows from 153 degrees to 129 - a different statue. These two
+       are scaled by the walk ramp, so a stationary Bastion holds
+       exactly the arms it always held and folds them as it steps
+       off. Standing: 0.385/1.015. Walking: 0.360/1.070. */
     idleX: 0.385, idleY: 1.015, idleZ: 0.020,
-    walkX: 0.025, walkY: 0.015, sprintX: 0.025, sprintY: 0.060,
-    walkSwing: 0.115, sprintSwing: 0.065, swingLift: 0.32, liftY: 0.55,
+    walkX: -0.025, walkY: 0.055, sprintX: 0.025, sprintY: 0.060,
+    walkSwing: 0.235, sprintSwing: 0.105, swingLift: 0.32, liftY: 0.55,
+    swingFoldY: 0.22,
     flightX: 0.360, flightY: 1.085, flightZ: -0.175,
     poleX: 0.42, poleSprintX: 0.08, poleY: -0.54, poleZ: -0.70,
     flightPoleX: 0.45, flightPoleY: -0.46, flightPoleZ: -0.84,
@@ -184,9 +258,9 @@ async function buildMeshyVigilTrooper(ctx, spec) {
     return worldA.distanceTo(worldB);
   };
 
-  /* Keep the existing equipment contract even though White Vigil is
-     deliberately unarmed today. Future weapon GLBs can attach here
-     without changing or regenerating the body mesh. */
+  /* Preserve the legacy chest equipment contract for shared combat
+     systems. The new character-specific weapon GLBs attach through
+     the palm locators above, without changing either body mesh. */
   const weaponMount = new THREE.Object3D();
   weaponMount.name = "weapon-mount";
   weaponMount.position.set(0.060, 1.34, 0.205);
@@ -237,6 +311,7 @@ async function buildMeshyVigilTrooper(ctx, spec) {
       upper: jointDistance(armPivots[i], elbowPivots[i]),
       fore: jointDistance(elbowPivots[i], handPivots[i]),
     })),
+    jetpack: spec.jetpack || null,
     handGripInset: spec.handGripInset,
     triggerWristOffsetLocal: new THREE.Vector3(0.85, -0.62, 0.18).normalize(),
     legBindQuaternions: legPivots.map((joint) => joint.quaternion.clone()),

@@ -11,12 +11,12 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const gamePath = path.join(root, "games", "mr-feast-mansion.html");
 const catalogPath = path.join(root, "games.html");
 const siteRuntimePath = path.join(root, "assets", "js", "main.js");
-const coverRelative = "assets/img/mr-feast/card-mr-feast-last-to-leave-ai-v1.jpg";
+const coverRelative = "assets/img/mr-feast/card-mr-feast-last-to-eat-ai-v1.jpg";
 const coverPath = path.join(root, coverRelative);
 const artifactDir = path.join(root, "output", "playwright", "mr-feast-last-to-leave-rebrand");
 const port = Number(process.env.PORT || 8000);
 const origin = `http://127.0.0.1:${port}`;
-const exactTitle = "Mr Feast: Last to Leave";
+const exactTitle = "Mr Feast: Last to Eat";
 
 async function serverResponds() {
   try {
@@ -117,10 +117,10 @@ async function run() {
     assert(game.includes(`id="${preservedId}"`), `existing in-game UI was removed: #${preservedId}`);
   }
   assert(catalog.includes(`data-title="${exactTitle}`), "catalog search title is not updated");
-  assert(catalog.includes(coverRelative), "catalog does not use the new cover");
+  assert(catalog.includes("assets/img/cards/mr-feast-mansion.avif"), "catalog does not use the new cover");
   assert(/reality-show competition/i.test(catalog) && /sabotage/i.test(catalog), "catalog description does not match the current concept");
-  assert(siteRuntime.includes('"mr-feast-mansion": { title: "Mr Feast: Last to Leave"'), "shared Rainbot title metadata is stale");
-  assert(siteRuntime.includes(`image: "${coverRelative}?v=20260723-2"`), "recently-played/shared Rainbot art metadata is stale");
+  assert(siteRuntime.includes('"mr-feast-mansion": { title: "Mr Feast: Last to Eat"'), "shared Rainbot title metadata is stale");
+  assert(siteRuntime.includes(`image: "${coverRelative}?v=20260825-1"`), "recently-played/shared Rainbot art metadata is stale");
   assert(siteRuntime.includes('dataset.rbNativeEscapeMenu === "true"'), "shared site runtime does not honor native game menus");
   assert(!game.includes("Mr Feast's Mansion") && !catalog.includes("Mr Feast's Mansion"), "outdated promotional title remains player-facing");
 

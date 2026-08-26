@@ -14,7 +14,7 @@
   // Page/runtime cache identity is deliberately separate from the large NPC
   // asset bundle so a JS-only mansion update does not re-fetch the GLB and
   // motion files.
-  const MANSION_RUNTIME_VERSION = "20260815-house-direction-clues-1";
+  const MANSION_RUNTIME_VERSION = "20260826-qa-dev-gate-1";
   // One local, license-audited sound manifest keeps every mansion cue behind
   // MansionAudio's single master gain. The first step in each material set is
   // the original shared Kenney clip; the extra variants prevent the familiar
@@ -50263,6 +50263,9 @@
     if (dom.menuLoad) dom.menuLoad.disabled = !hasSave || welcomeActive;
     if (dom.menuSave) dom.menuSave.disabled = !state.started || state.devMode || welcomeActive;
     if (dom.menuDev) {
+      // Dev Mode is a QA-only cheat; the page ships the button hidden so it
+      // never flashes for players, and only ?qa reveals it.
+      dom.menuDev.hidden = !state.qa;
       dom.menuDev.disabled = welcomeActive || feastSaysActive || competitionBlocksInvestigation();
       dom.menuDev.textContent = `Dev mode: ${state.devMode ? "On" : "Off"}`;
       dom.menuDev.setAttribute("aria-pressed", String(state.devMode));

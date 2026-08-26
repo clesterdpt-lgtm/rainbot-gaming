@@ -4383,12 +4383,12 @@
     reducedMotionScale: 0.18,
     desktopPixelRatioCap: 1.75,
     mobilePixelRatioCap: 1.35,
-    assetVersion: "20260813-clean-closeup-1",
+    assetVersion: "20260826-shipped-closeup-1",
     catchers: Object.freeze({
       "mr-feast": Object.freeze({
         label: "Mr. Feast",
         reasons: Object.freeze(["witnessed", "recorded", "feast-hunt-eliminated", "victory-feast-caught"]),
-        closeupModelPath: "../models/mr-feast/processed/mr-feast-master.glb",
+        closeupModelPath: "../models/mr-feast/scares/mr-feast-closeup.glb",
         closeupModelId: "mr-feast-closeup-2k",
         closeupYaw: 0,
         cameraFov: 43,

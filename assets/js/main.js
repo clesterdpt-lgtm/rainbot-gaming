@@ -440,6 +440,13 @@ function navigateToSearchPage(query, options = {}) {
 
 const RB_DAILY_CHALLENGES = [
   {
+    slug: "quiet-quitting",
+    metric: "score",
+    target: 2500,
+    title: "Consultant Invoice",
+    objective: "Bill $2,500+ severance payout in Quiet Quitting.",
+  },
+  {
     slug: "brainrot-2048",
     metric: "score",
     target: 2048,
@@ -484,10 +491,11 @@ const RB_DAILY_CHALLENGES = [
 ];
 
 const HOME_COMMUNITY_COMMENT_TARGETS = [
+  { contentType: "game", contentId: "quiet-quitting", title: "Quiet Quitting", href: "games/quiet-quitting.html", kicker: "Game thread" },
+  { contentType: "game", contentId: "inkblood", title: "Inkblood", href: "games/inkblood.html", kicker: "Game thread" },
   { contentType: "game", contentId: "escape-poop-cruise", title: "Escape the Poop Cruise", href: "games/escape-poop-cruise.html", kicker: "Game thread" },
   { contentType: "game", contentId: "rizz-craft", title: "Rizz-Craft", href: "games/rizz-craft.html", kicker: "Game thread" },
   { contentType: "game", contentId: "brainrot-2048", title: "Brainrot 2048", href: "games/brainrot-2048.html", kicker: "Game thread" },
-  { contentType: "game", contentId: "inkblood", title: "Inkblood", href: "games/inkblood.html", kicker: "Game thread" },
   { contentType: "game", contentId: "ai-slop-factory", title: "AI Slop Factory", href: "games/ai-slop-factory.html", kicker: "Game thread" },
 ];
 

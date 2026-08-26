@@ -13500,6 +13500,15 @@ body.arcade-home :where(a, button, input, select, textarea, [tabindex]):focus-vi
 }
 
 /* ---------------------------------------------------------------
+   Quiet Quitting card art.
+   --------------------------------------------------------------- */
+.poster-card--pacman img,
+.directory-card__poster--pacman img {
+  object-fit: cover;
+  object-position: center center;
+}
+
+/* ---------------------------------------------------------------
    SAINTFALL card art. The poster is a 3:2 frame grabbed from the
    game itself, so it needs a modest downward bias to keep the road
    and the fallen head off the crop line in the shared 16:9 card.

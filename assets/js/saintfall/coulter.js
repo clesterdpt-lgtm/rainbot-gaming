@@ -1419,11 +1419,31 @@ export function buildCoulter(ctx) {
   function layTrail(inst) {
     const b = inst.body;
     const trail = b.trail;
-    const moved = Math.hypot(b.head.x - b.prev.x, b.head.y - b.prev.y,
-      b.head.z - b.prev.z);
+    const mx = b.head.x - b.prev.x;
+    const my = b.head.y - b.prev.y;
+    const mz = b.head.z - b.prev.z;
+    const moved = Math.hypot(mx, my, mz);
     b.prev.copy(b.head);
+    /* AND THE ARC IS SIGNED, because this animal reverses.
+       `strikeSurge` coils before both the bite and the spew by driving
+       the head BACKWARDS - up to sixteen metres a second of it - and an
+       unsigned distance books that retreat as progress. The samples the
+       head is closing on get their arc pushed further away at the exact
+       moment it is arriving back at them, so the trail claims half a
+       metre of path that is not there and the body registers against it
+       a little behind where it should be.
+       The magnitude is still the measured one (see the note above about
+       `speed * dt`); only the SIGN is taken from the heading, so every
+       forward frame - which is nearly all of them - is unchanged. */
+    const advancing = mx * b.dir.x + my * b.dir.y + mz * b.dir.z >= 0;
     if (moved > 1e-6) {
-      for (let i = 0; i < trail.length; i += 1) trail[i].d += moved;
+      const step = advancing ? moved : -moved;
+      for (let i = 0; i < trail.length; i += 1) trail[i].d += step;
+      /* A sample the head has now reversed PAST is no longer behind the
+         animal, so it stops being part of the path behind it. Left in
+         place it is a point in front of the head that the neck is still
+         told to reach back for. */
+      while (trail.length > 2 && trail[0].d <= 0) trail.shift();
     }
     /* Laid, never moved. A sample records where the head WAS, and the
        gap between the newest sample and the head is covered by the

@@ -1416,6 +1416,103 @@ export async function buildEnemies(ctx, onProgress) {
     return out.set(last.x, last.y, last.z);
   }
 
+  /* How far one vertebra may turn against the one in front of it.
+     Thirteen of these cover the whole animal, so 48 degrees still lets
+     it coil through more than a full circle end to end - far more bend
+     than a hundred-metre worm ever asks for - while being nowhere near
+     enough to let one joint hinge back on itself. */
+  const MAX_BEND = Math.cos(48 * Math.PI / 180);
+  const SIN_BEND = Math.sin(48 * Math.PI / 180);
+
+  /**
+   * Make the target chain RIGID, because the bones are.
+   *
+   * `trailAt` samples the path at each vertebra's arc distance, which
+   * is the right shape and the wrong spacing: the gap between two
+   * consecutive samples is a CHORD, and a chord collapses when the path
+   * doubles back. `aimBone` only rotates - a bone keeps its rest length
+   * whatever its target does - so a 13.7m vertebra handed a target 2.9m
+   * away swings to point at it and overshoots eleven metres past, the
+   * next bone starts from that overshoot, and the neck ties itself in a
+   * knot. Measured on the real animal: consecutive segments meeting at
+   * 151 degrees, which is a body folded back through its own head.
+   *
+   * It is worth being precise about when this happens, because it is
+   * not an edge case: the crest rears the head six metres up and the
+   * bite drives it back down again in a quarter of a second, so the
+   * path over the front vertebra is a hairpin with a radius of about
+   * three metres. A thirteen-metre segment cannot follow a three-metre
+   * hairpin. Nothing is wrong with the trail - it is a faithful record
+   * of where the head went - and nothing is wrong with the clips. The
+   * body simply cannot be BOTH laid along that path and made of rigid
+   * pieces, and the pieces are the part that is real.
+   *
+   * So the sampled points are demoted to DIRECTION HINTS and the chain
+   * is walked out link by link at true bone length, each link limited
+   * to `MAX_BEND` against the one in front. Where the path is gentle -
+   * which is almost always - the hint is already about a bone length
+   * away and this moves the target by centimetres. Where it hairpins,
+   * the body cuts the corner, which is what a rigid chain does and what
+   * the animal should have been doing all along.
+   */
+  function stiffenChain(inst) {
+    const body = inst.body;
+    const arcs = inst.spineArc;
+    const joints = body.joints;
+    if (!arcs || !joints) return;
+    let px = body.head.x;
+    let py = body.head.y;
+    let pz = body.head.z;
+    /* Seeded with the body's own axis pointing BACKWARDS down the
+       animal, so the first link has something to be measured against
+       and a stationary worm keeps the heading it arrived on. */
+    let dx = -body.dir.x;
+    let dy = -body.dir.y;
+    let dz = -body.dir.z;
+    let prevArc = 0;
+    for (let i = 0; i < arcs.length; i += 1) {
+      const seg = arcs[i] - prevArc;
+      prevArc = arcs[i];
+      if (!(seg > 1e-4)) continue;
+      const j = joints[i];
+      let vx = j.x - px;
+      let vy = j.y - py;
+      let vz = j.z - pz;
+      const len = Math.hypot(vx, vy, vz);
+      if (len > 1e-4) {
+        vx /= len; vy /= len; vz /= len;
+      } else {
+        /* The hint landed on top of the last joint - a hairpin tight
+           enough to have no direction left in it at all. Carry on
+           straight rather than picking one at random. */
+        vx = dx; vy = dy; vz = dz;
+      }
+      const cos = vx * dx + vy * dy + vz * dz;
+      if (cos < MAX_BEND) {
+        /* Swing the hint back toward the previous link until it is
+           exactly MAX_BEND off it, keeping the plane the two of them
+           already share. */
+        let ex = vx - dx * cos;
+        let ey = vy - dy * cos;
+        let ez = vz - dz * cos;
+        const el = Math.hypot(ex, ey, ez);
+        if (el > 1e-5) {
+          ex /= el; ey /= el; ez /= el;
+          vx = dx * MAX_BEND + ex * SIN_BEND;
+          vy = dy * MAX_BEND + ey * SIN_BEND;
+          vz = dz * MAX_BEND + ez * SIN_BEND;
+        } else {
+          vx = dx; vy = dy; vz = dz;
+        }
+      }
+      px += vx * seg;
+      py += vy * seg;
+      pz += vz * seg;
+      j.set(px, py, pz);
+      dx = vx; dy = vy; dz = vz;
+    }
+  }
+
   /** Resolve the trail into this frame's joint targets and root frame. */
   function poseBody(inst) {
     const body = inst.body;
@@ -1423,6 +1520,18 @@ export async function buildEnemies(ctx, onProgress) {
     for (let i = 0; i < inst.spineArc.length; i += 1) {
       trailAt(body, inst.spineArc[i], body.joints[i]);
     }
+    /* THE CORPSE IS EXEMPT, and that is not a special case being
+       carved out to make something pass. A living burrower is driven by
+       its head and the body is dragged after it, which is what the
+       rigid walk below is for. A dead one is driven the other way
+       round: `stepDeath` sinks every TRAIL SAMPLE onto the sand and
+       then snaps the head onto the newest of them, so the path is
+       already smooth, already settling, and has no lunge in it to fold
+       around. Anchoring a rigid chain to that head instead hangs the
+       whole body off a point which is itself falling - measured at
+       seventy metres under the sand six seconds in - and the corpse
+       stays up in the air behind it. */
+    if (body.phase !== "dead") stiffenChain(inst);
     /* The root carries the head's full orientation, PITCH INCLUDED,
        which is the one place this differs from every walker in the
        file. A worm coming out of the sand at fifty degrees is doing the

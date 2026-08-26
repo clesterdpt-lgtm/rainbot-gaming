@@ -67,8 +67,8 @@ async function run() {
   const manifest = JSON.parse(manifestSource);
 
   assert(
-    /MANSION_RUNTIME_VERSION = "20260801-archive-workroom-haunts-1"/.test(runtime)
-      && /mr-feast-mansion\.js\?v=20260801-archive-workroom-haunts-1/.test(pageHtml),
+    /MANSION_RUNTIME_VERSION = "20260826-qa-dev-gate-1"/.test(runtime)
+      && /mr-feast-mansion\.js\?v=20260826-qa-dev-gate-1/.test(pageHtml),
     "page and runtime need the Feast Father lore cache identity",
   );
   assert(

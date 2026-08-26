@@ -54,8 +54,8 @@ const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
 
 console.log("\n=== SOURCE ===");
 check("runtime versions the house-direction cache identity",
-  /20260815-house-direction-clues-1/.test(runtime)
-    && /20260815-house-direction-clues-1/.test(pageSource));
+  /20260826-qa-dev-gate-1/.test(runtime)
+    && /20260826-qa-dev-gate-1/.test(pageSource));
 check("HOUSE_DIRECTION_CLUES is an authored table",
   /const HOUSE_DIRECTION_CLUES\s*=\s*Object\.freeze/.test(runtime)
     && /class HouseDirectionClueSystem/.test(runtime));

@@ -26,6 +26,7 @@ class MockCanvasContext {
   save() {}
   restore() {}
   translate() {}
+  scale() {}
   rotate() {}
   fillText() {}
 }
@@ -91,6 +92,21 @@ try {
 
   console.log("✓ Successfully simulated 300 frames of gameplay, AI targeting, consultant mode, and rendering without any errors!");
   console.log("Final score:", game.score, "Dots left:", game.dotsLeft, "Mode:", game.state);
+
+  // Test Level Clear Sequence
+  game.dotsLeft = 1;
+  game.dotsLeft--;
+  game.checkLevelClear();
+  console.log("State on level clear:", game.state);
+  if (game.state !== "LEVEL_CLEAR") throw new Error("Expected state to be LEVEL_CLEAR");
+
+  // Advance to next level
+  game.handlePrimaryClick();
+  console.log("State after starting next shift:", game.state, "Level:", game.level, "Dots:", game.dotsLeft);
+  if (game.state !== "PLAYING" || game.level !== 2 || game.dotsLeft <= 0) {
+    throw new Error("Failed to advance to level 2 properly");
+  }
+  console.log("✓ Level clear overlay and shift promotion logic verified!");
 } catch (e) {
   console.error("Simulation error:", e);
   process.exit(1);

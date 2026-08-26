@@ -399,6 +399,7 @@
     applySteer(dir) {
       if (!dir || dir === DIRECTIONS.NONE) return;
       if (this.state === "INIT" || this.state === "GAME_OVER") this.startNewGame();
+      if (this.state === "LEVEL_CLEAR") this.startNextLevel();
       if (this.state === "PAUSED") this.togglePause();
       if (!this.player) return;
       this.player.setNextDir(dir);
@@ -683,9 +684,8 @@
       this.state = "PLAYING";
       this.hideOverlay();
       this.updateHud();
-      try { this.canvas.focus({ preventScroll: true }); } catch (_) {}
-      this.sound.playLevelClear();
-      this.addOfficeFeed(`📈 Shift survived! Promoted to Level ${this.level}. More syncs inbound!`);
+      try { this.btnPrimary?.blur(); this.canvas.focus({ preventScroll: true }); } catch (_) {}
+      this.addOfficeFeed(`📈 Shift ${this.level} started! More micromanagers on the prowl.`);
     }
 
     initRound() {
@@ -706,8 +706,9 @@
     }
 
     isWall(col, row, isGhost = false, ghostEaten = false) {
+      if (isNaN(col) || isNaN(row)) return true;
       if (col < 0 || col >= COLS) return false;
-      if (row < 0 || row >= ROWS) return true;
+      if (row < 0 || row >= ROWS || !this.maze[row]) return true;
 
       const cell = this.maze[row][col];
       if (cell === 1) return true;
@@ -860,17 +861,29 @@
       if (this.dotsLeft <= 0) {
         this.state = "LEVEL_CLEAR";
         this.sound.playLevelClear();
-        this.addScore(1000 * this.level);
-        setTimeout(() => {
-          this.startNextLevel();
-        }, 1200);
+        const bonus = 1000 * this.level;
+        this.addScore(bonus);
+        const px = (this.player ? this.player.x : 14) * this.tileSize;
+        const py = (this.player ? this.player.y : 23) * this.tileSize;
+        this.spawnFloatText(px, py, `SHIFT BONUS +$${bonus.toLocaleString()}`, "#ffd700");
+        this.spawnCoffeeParticles(px, py, 28);
+        this.showOverlay(
+          `🎉 SHIFT ${this.level} SURVIVED!`,
+          `Outstanding work! You collected every paycheck and dodged all micromanagers without getting PIP'd.<br><br>` +
+          `Shift Completion Bonus: <strong>+$${bonus.toLocaleString()}</strong><br>` +
+          `Total Payout: <strong>$${this.score.toLocaleString()}</strong>`,
+          `Clock In for Shift ${this.level + 1}`
+        );
+        this.addOfficeFeed(`🏆 Shift ${this.level} complete! Bonus +$${bonus.toLocaleString()} added to paycheck.`);
+        this.updateHud();
       }
     }
 
     // --- GAME LOOP ---
     loop(timestamp) {
-      const dt = Math.min((timestamp - this.lastFrameTime) / 1000, 0.1);
-      this.lastFrameTime = timestamp;
+      const now = typeof timestamp === "number" ? timestamp : performance.now();
+      const dt = Math.min(Math.max((now - this.lastFrameTime) / 1000, 0.001), 0.1);
+      this.lastFrameTime = now;
 
       this.update(dt);
       this.render();
@@ -1165,7 +1178,7 @@
       this.y = row;
       this.dir = DIRECTIONS.LEFT;
       this.nextDir = DIRECTIONS.LEFT;
-      this.speed = 10.5;
+      this.speed = 7.5;
       this.walkTimer = 0;
     }
 
@@ -1179,8 +1192,8 @@
 
     tryCommitDir(dir) {
       if (!dir || dir === DIRECTIONS.NONE) return false;
-      const isAlignedX = Math.abs(this.x - Math.round(this.x)) < 0.18;
-      const isAlignedY = Math.abs(this.y - Math.round(this.y)) < 0.18;
+      const isAlignedX = Math.abs(this.x - Math.round(this.x)) < 0.28;
+      const isAlignedY = Math.abs(this.y - Math.round(this.y)) < 0.28;
       const movingOnX = dir.x !== 0;
       if (movingOnX ? !isAlignedY : !isAlignedX) return false;
       const nextCol = Math.round(this.x) + dir.x;
@@ -1193,13 +1206,13 @@
     }
 
     update(dt) {
-      const speedMultiplier = this.game.frightenedTimer > 0 ? 1.25 : 1.0;
+      const speedMultiplier = this.game.frightenedTimer > 0 ? 1.2 : 1.0;
       const currentSpeed = this.speed * speedMultiplier;
       const held = this.game.heldDirection?.();
       if (held) this.nextDir = held;
 
-      const isAlignedX = Math.abs(this.x - Math.round(this.x)) < 0.22;
-      const isAlignedY = Math.abs(this.y - Math.round(this.y)) < 0.22;
+      const isAlignedX = Math.abs(this.x - Math.round(this.x)) < 0.28;
+      const isAlignedY = Math.abs(this.y - Math.round(this.y)) < 0.28;
 
       if (this.nextDir !== this.dir) {
         if (this.dir === DIRECTIONS.NONE || (isAlignedX && isAlignedY)) {
@@ -1225,7 +1238,7 @@
         } else {
           this.x = nextX;
           this.y = nextY;
-          this.walkTimer += dt * 12;
+          this.walkTimer += dt * 9;
         }
       }
 
@@ -1322,7 +1335,7 @@
       this.y = startRow;
       this.dir = DIRECTIONS.UP;
       this.mode = "IN_HOUSE";
-      this.speed = 9.0;
+      this.speed = 6.2;
       this.houseTimer = releaseDelay;
       this.walkTimer = 0;
     }
@@ -1368,7 +1381,7 @@
 
       this.x = nextX;
       this.y = nextY;
-      this.walkTimer += dt * 10;
+      this.walkTimer += dt * 8;
 
       if (this.x < -0.5) this.x = COLS - 0.5;
       if (this.x > COLS - 0.5) this.x = -0.5;

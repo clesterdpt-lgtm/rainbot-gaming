@@ -79,7 +79,7 @@ async function assertSourceContract() {
   assert(/reasons:[\s\S]{0,180}?witnessed[\s\S]{0,180}?recorded[\s\S]{0,180}?feast-hunt-eliminated/.test(runtime), "Mr. Feast physical catch reasons are not explicit");
   assert(/"feast-father"[\s\S]{0,220}?reasons:[\s\S]{0,80}?victory-feast-saint/.test(runtime), "Feast Father physical catch reason is not explicit");
   assert(/cloneCatcher\(source\)[\s\S]{0,260}?SkeletonUtils/.test(runtime), "the close-up must clone the live 3D catcher model");
-  assert(/mr-feast-master\.glb/.test(runtime) && /feast-father-closeup\.glb/.test(runtime), "the scares must use the retained 2K close-up sources");
+  assert(/mr-feast-closeup\.glb/.test(runtime) && /feast-father-closeup\.glb/.test(runtime), "the scares must use the retained 2K close-up sources");
   assert(/maximumTextureSize/.test(runtime) && /LinearMipmapLinearFilter/.test(runtime), "the close-up texture-quality pass is missing");
   assert(/catchScare\(catcherId/.test(runtime), "the catch flow needs a dedicated character-specific SFX entrypoint");
   assert(/confirmedCatchOnly:\s*true/.test(runtime) && /unskippable:\s*true/.test(runtime), "confirmed-only and unskippable contracts must be diagnostic");

@@ -301,7 +301,6 @@ const RB_UNLISTED_GAME_SLUGS = new Set([
   "apop-demon-hunters",
   "blacksand",
   "drowned-orrery",
-  "saintfall",
   "tardigrade-micro-mayhem",
   "the-weight",
 ]);

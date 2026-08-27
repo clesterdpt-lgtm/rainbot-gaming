@@ -65,7 +65,7 @@ const ORDER_CONTRACTS = Object.freeze({
     cues: Object.freeze({
       procession_hooking_step: ["hook"],
       procession_third_toll: ["toll"],
-      procession_executioners_measure: ["expose"],
+      procession_executioners_measure: ["expose", "thrust"],
       procession_processional_mercy: ["mercy"],
       procession_endless_litany: ["litany"],
     }),
@@ -613,13 +613,13 @@ async function runOrderScenario(page, orderId) {
         source: "shot", head: true, x: heavy.x, y: heavy.y + 2, z: heavy.z,
       });
       firstFeedbackFrame();
-      T.fireWeapon(1);
       const light = T.enemies.spawn("thresher", ps.x + 1, ps.z + 2.2, {
         id: "qa-feedback-censer-kill", health: 1,
       });
-      T.weapons.setHeat(0.76, { reason: "qa-feedback-reprieve" });
+      T.jetpack.restoreCharge(50, "qa-feedback-reprieve");
+      T.weapons.dischargeFurnaceLance({ rank: 2 });
       T.combat.damageEnemy(light, 999, {
-        source: "shot", head: true, x: light.x, y: light.y + 1, z: light.z,
+        source: "furnace-lance", head: true, x: light.x, y: light.y + 1, z: light.z,
       });
       T.weapons.carry.venting = 0;
       T.weapons.setHeat(0.9, { reason: "qa-feedback-vent" });
@@ -753,7 +753,7 @@ async function runOrderScenario(page, orderId) {
       T.invulnerable(true);
 
       T.shield.reset(true);
-      const relay = T.mission.relays[0];
+      const relay = T.mission.relays?.[0] || { x: 655, z: 700 };
       T.player.spawn(relay.x, relay.z, 0);
       T.player.state.grounded = true;
       T.setShieldInput(true);

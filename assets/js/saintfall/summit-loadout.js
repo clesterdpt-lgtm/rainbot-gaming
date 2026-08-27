@@ -9,6 +9,10 @@
    ============================================================ */
 
 import { patchMaterial } from "saintfall/art.js";
+import {
+  makeGoldLampMaterial,
+  makeGoldLampMesh,
+} from "saintfall/summit-lights.js";
 
 const DEG = Math.PI / 180;
 const MODEL_ROOT = "../../../assets/models/saintfall/player-weapons/";
@@ -29,21 +33,20 @@ const MODEL_ROOT = "../../../assets/models/saintfall/player-weapons/";
    while the frame is 30 x 42mm and ~145mm, which no fist closes on.
    The 41mm between them is the finger tunnel.
 
-   AND THE RIG CANNOT EXPRESS THAT. These gauntlets have one `Hand`
-   bone with the fingers sculpted half open, so nothing closes on
-   anything. Pinning the bow's centreline to the palm - anatomically
-   the correct answer - puts the frame 77mm beyond fingers that cannot
-   reach it, and you see daylight straight through the tunnel: the
-   hand reads as not touching the weapon at all. Photographed side by
-   side, seating the FRAME in the fist wins outright, with the fingers
-   filling the tunnel and the bow arcing past the knuckles.
-
-   So `grip` is a point in the TUNNEL, and that is deliberate. A grip
-   point in empty space is not automatically wrong - what matters is
-   where the solid parts land around the hand. This one puts the frame
-   just palm-side of centre and the bow about 48mm behind it, which is
-   the knuckle surface. (The original (-0.300, 0.185) was wrong for a
-   different reason: it put the geometry itself in the wrong place.)
+   AND THE FIST BELONGS ON THAT BOW. The frame-seat this replaced
+   palmed the receiver with the whole D-guard hanging empty beside
+   the hand - reported from play as "the hand is not at the pistol
+   grip", and it was right. What saves the bow seat NOW is the
+   DOWN-THE-FOREARM hold below: the bar climbs 21 degrees off +Y
+   while the muzzle is raked 20 the other way, so the wrap crosses
+   the sculpted finger curl at ~40 degrees and the fingers close
+   AROUND the 34x17mm bar instead of lying along it (the failure that
+   sank the bow seat under the old across-palm hold). Photographed at
+   four seats along the bar by `saintfall-grip-seat-sweep.mjs`, then
+   arbitrated by the loadout audit: the seat rides the bar's TOP,
+   because a seat lower on the bar slides the whole prop proximally
+   and the receiver column follows the folded forearm into the
+   arm capsules - mid-span cost 8 audit rows at up to 52mm inside.
 
      long   the muzzle axis, sent distally down the forearm and raked
             27 degrees back within the plate's own plane. Straight
@@ -76,24 +79,41 @@ const MODEL_ROOT = "../../../assets/models/saintfall/player-weapons/";
 const HYBRID_HOLD = {
   long: [0, -1, 0],
   roll: [0, 0, 1],
-  /* Five degrees nearer the forearm than the first squared hold.
-     The elbow fold rotates the forearm forward; this counters that
-     at the grip, leaving the crescent lower while its active end
-     still projects forward of the hand. */
-  longTo: [-0.450, 0.893, 0],
+  /* Raked 20 degrees, down from 27. The 27 was measured against the
+     old wide-forward carry, whose forearm already leaned 17 degrees
+     outboard and 22 forward - stacked, the muzzle sat only 37 degrees
+     below horizontal and the piece read as a levelled carbine, butt
+     and bow to the sky over the hip. On the hanging carry below the
+     forearm is near vertical, so less rake is needed to clear the
+     butt from the upper arm (swept: butt axis holds 29mm+ off the
+     forearm) and the muzzle settles ~46 degrees down - the concept's
+     hang, blade beside the knee. */
+  longTo: [-0.340, 0.940, 0],
   rollTo: [0, 0, -1],
 };
 
-/* The hand bases are right-handed but reflected across the body.
-   Reusing the left target unchanged therefore reverses the right
-   prop's fore-aft component: its closed pommel points up and the
-   crescent toes into the hip. Reflecting the palm-space X target
-   once restores the intended paired carry while leaving the shared
-   grip point, size and muzzle socket untouched. */
+/* A CHIRAL PROP CANNOT MIRROR ALL THREE AXES. The palm frames are
+   reflected but right-handed, so once two model axes are told to
+   mirror, the third comes out ANTI-mirrored - a rotation cannot make
+   a left glove of a right glove. The first version of this reflected
+   only the palm-space X, which mirrors the muzzle and the shown face
+   and silently spends the anti-mirror on the BOW: measured on the
+   carry, the left D-guard/grip-bar axis read (0.06,-0.67,-0.74) -
+   down-back, tucked - while the right read (0.06,+0.69,+0.73) -
+   guard and wrapped grip pointing at the SKY. That is the reported
+   "right pistol is upside down", and no muzzle/plate check sees it.
+
+   So the reflection now spends the error on the FACE instead:
+   longTo mirrors the muzzle, and rollTo is reflected THROUGH the
+   mirror plane (y/z negated) so the right prop presents its reverse
+   cheek outboard and the bow truly mirrors. Both cheeks of this
+   Meshy plate are fully painted - the swap is invisible - and
+   `saintfall-pistol-mirror-audit.mjs` now checks the bow axis pair
+   directly. */
 const mirrorHold = (hold) => ({
   ...hold,
   longTo: [-hold.longTo[0], hold.longTo[1], hold.longTo[2]],
-  rollTo: [-hold.rollTo[0], hold.rollTo[1], hold.rollTo[2]],
+  rollTo: [hold.rollTo[0], -hold.rollTo[1], -hold.rollTo[2]],
 });
 
 const LOADOUTS = {
@@ -108,10 +128,16 @@ const LOADOUTS = {
          a heavy sidearm: big enough to have presence in the hand,
          short of the 0.99m polearm that 0.86 produced. */
       targetSize: 0.62,
-      /* IN THE FINGER TUNNEL, between frame and bow - see the hold
-         above for why that beats the anatomically-correct bow
-         centreline on a hand whose fingers cannot close. */
-      grip: [0.105, 0.020, 0.000],
+      /* ON THE WRAPPED BAR, mid-span. The bar's centreline runs
+         (0.220,-0.102) -> (0.344, 0.219) in model units - the
+         leather-wrapped sabre grip inside the D-guard, gold ferrule
+         at its foot. Seated here the fist is visibly ON the grip
+         with the guard around it; seated at the frame's edge
+         (0.105, y) the guard hung empty beside a hand palming the
+         receiver. High (0.34, 0.19) crowds the guard head, low
+         (0.24,-0.05) sits on the ferrule; mid reads best from every
+         bearing. The bar is centred at z 0. */
+      grip: [0.335, 0.205, 0.000],
       /* The v2 prop has one active end. Its crescent and embedded
          energy aperture both live on model -Y; +Y is a sealed pommel.
          Keeping an explicit socket/axis here means a discharge can
@@ -171,9 +197,9 @@ const LOADOUTS = {
       hand: 1,
       sizeAxis: "y",
       targetSize: 0.62,
-      /* Identical grip seat to the left; only the across-palm aim is
-         reflected by `mirrorHold` below. */
-      grip: [0.105, 0.020, 0.000],
+      /* Identical grip seat to the left; `mirrorHold` reflects the
+         aim and swaps the presented cheek so the guard mirrors. */
+      grip: [0.335, 0.205, 0.000],
       /* CLEAR OF THE MUZZLE, not inside it. (0,-0.790) was buried in
          solid material - a Z-cast there returns a span -0.037..0.035
          and the point is 35mm from any surface - so every pulse and
@@ -369,17 +395,33 @@ export async function buildSummitLoadout(ctx, player) {
      a hammer wants one. */
   const CARRY = {
     "white-vigil": {
-      /* Paired crescents need a wider lane than empty hands, and the
-         D-guard hold needs a wider one still: held along the forearm
-         the blade hangs past the fist toward the knee, so 8cm
-         outboard left it 43mm inside the far thigh at rest. 13cm out
-         and 10cm forward clears every ground pose outright while the
-         reduced stroke preserves a quick dual-wielder cadence. The
-         extra centimetre of lift is deliberately small: it changes
-         the near-locked 178/166-degree elbows to a relaxed 165/157
-         without turning the low carry into a raised guard. */
-      0: { pose: [0.130, 0.025, 0.100], swing: 0.58, turn: -0.60 },
-      1: { pose: [-0.130, 0.025, 0.100], swing: 0.58, turn: 0.60 },
+      /* A HANGING carry, matched to the concept's rest pose. The
+         13cm-out / 10cm-forward lane was authored against the old
+         across-palm hold, whose blade crossed toward the far thigh;
+         the down-the-forearm hold hangs the blade beside the OWN
+         leg, so the wide lane bought nothing and cost the read: the
+         forearm leaned 17 degrees outboard, that lean leaked into
+         the muzzles (x +-0.27), and from the chase camera both butts
+         flared skyward and toed inboard over the hips.
+
+         6cm out and 3cm forward hangs the arm near vertical: muzzle
+         leak drops to +-0.14, the piece settles ~46 degrees below
+         horizontal, and the butt tucks along the forearm instead of
+         over the hip. The near-flat lift keeps the elbows at a soft
+         151/147 degrees, bending BACK (bend z -0.067/-0.079) - a
+         relaxed hang, not a raised guard. Swept and photographed by
+         `saintfall-carry-sweep.mjs`; clearance re-proven by the
+         loadout audit. */
+      /* `sprint` opens the fold at speed, scaled by sprintN. The
+         sprint pump tucks the fists toward the biceps, and a stock
+         that rides above the fist follows them in: at the bar seat
+         the audit put 3-4 samples 22mm inside the upper arm at full
+         sprint, and raking the hold did not touch it. Dropping the
+         carried hands 4.5cm and 3.5cm forward at sprint opens the
+         elbow those few degrees instead - a body sprinting with a
+         heavy pistol in each hand lowers its pump anyway. */
+      0: { pose: [0.060, 0.005, 0.030], sprint: [0.012, -0.045, 0.035], swing: 0.58, turn: -0.60 },
+      1: { pose: [-0.060, 0.005, 0.030], sprint: [-0.012, -0.045, 0.035], swing: 0.58, turn: 0.60 },
     },
     "bastion-penitent": {
       /* `turn` rolls the wrist so the palm is presented to what the
@@ -416,12 +458,18 @@ export async function buildSummitLoadout(ctx, player) {
   const isWhiteVigil = ctx.playerCharacter?.id === "white-vigil";
   let aimBlend = 0;
   const armPose = carry || isWhiteVigil
-    ? (i, out) => {
+    ? (i, out, gait) => {
       const rule = carry?.[i];
       if (rule) {
         out.x += rule.pose[0];
         out.y += rule.pose[1];
         out.z += rule.pose[2];
+        const sprintN = gait?.sprintN ?? 0;
+        if (rule.sprint && sprintN > 0.001) {
+          out.x += rule.sprint[0] * sprintN;
+          out.y += rule.sprint[1] * sprintN;
+          out.z += rule.sprint[2] * sprintN;
+        }
       }
       if (isWhiteVigil && aimBlend > 0.001) {
         const side = i === 0 ? 1 : -1;
@@ -429,7 +477,7 @@ export async function buildSummitLoadout(ctx, player) {
            pulse leaves, and the hands stay separated - these are not
            a two-handed rifle.
 
-           The carry keeps the muzzle only 27 degrees off the
+           The carry keeps the muzzle only 20 degrees off the
            forearm, so this reach does most of the presentation. The
            wrist solver below then supplies the smaller convergence
            correction without moving the grip inside the hand. */
@@ -560,11 +608,41 @@ export async function buildSummitLoadout(ctx, player) {
       emitter.position.fromArray(spec.emitter);
       asset.add(emitter);
     }
+    let goldGlow = null;
+    if (spec.file === "bastion-shield.glb") {
+      const material = makeGoldLampMaterial(THREE, atmos, {
+        name: "bastion-shield-gold-glow",
+        intensity: 4.35,
+      });
+      /* +Y is the raw shield height and +Z its face. The inset's
+         complete aperture straddles the generated mesh centre; the
+         earlier x 0.040 / 38mm card sat on only its right ridge.
+         Centre and widen this fill while staying inside the existing
+         gold surround, then carry it through both pointed ends. */
+      const mesh = makeGoldLampMesh(THREE, {
+        name: "bastion-shield-core-gold",
+        material,
+        targets: [{
+          name: "bastion-shield-core",
+          position: [0.020, 0.115, 0.110],
+          normal: [0, 0, 1],
+          up: [0, 1, 0],
+          widthM: 0.074,
+          heightM: 0.640,
+          perimeterBrightness: 0.88,
+        }],
+        /* raw model units per final world metre */
+        unitsPerMetre: sourceSpan / spec.targetSize,
+        standoffM: 0.003,
+      });
+      asset.add(mesh);
+      goldGlow = { mesh, material };
+    }
     mount.updateWorldMatrix(true, true);
 
     parts.push({
       spec, parent, mount, asset, contact, emitter, sourceBox, sourceSize, scalar,
-      triangles: Math.round(triangles), materialState,
+      triangles: Math.round(triangles), materialState, goldGlow,
     });
   }
 
@@ -680,6 +758,15 @@ export async function buildSummitLoadout(ctx, player) {
     const rate = firing ? 22 : 8;
     aimBlend += (Number(firing) - aimBlend)
       * (1 - Math.exp(-rate * Math.max(0, dt)));
+    for (const part of parts) {
+      if (!part.goldGlow) continue;
+      const dusk = Math.max(0, Math.min(1, atmos.duskFactor || 0));
+      const night = Math.max(0, Math.min(1, atmos.nightFactor || 0));
+      const target = 4.35 + dusk * 1.25 + night * 2.15;
+      part.goldGlow.material.emissiveIntensity += (target
+        - part.goldGlow.material.emissiveIntensity)
+        * (1 - Math.exp(-8 * Math.max(0, dt)));
+    }
     if (!isWhiteVigil) return;
     /* Nothing to do to the mounts: a held weapon does not move in the
        hand. The pose changes entirely through `armPose` and
@@ -729,6 +816,12 @@ export async function buildSummitLoadout(ctx, player) {
             metalnessMap: !!material.metalnessMap,
             roughnessMap: !!material.roughnessMap,
           })),
+          goldGlow: part.goldGlow ? {
+            mesh: part.goldGlow.mesh.name,
+            targets: part.goldGlow.mesh.userData.sfGoldTargets,
+            emissive: part.goldGlow.material.emissive.getHexString(),
+            emissiveIntensity: Number(part.goldGlow.material.emissiveIntensity.toFixed(2)),
+          } : null,
           position: part.mount.position.toArray().map((value) => Number(value.toFixed(3))),
           rotationDeg: [part.mount.rotation.x, part.mount.rotation.y, part.mount.rotation.z]
             .map((value) => Number((value / DEG).toFixed(2))),

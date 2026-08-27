@@ -2724,6 +2724,88 @@ export function buildVfx(ctx, world) {
       (energy ? 0.68 : 0.6) * scale, tint);
   }
 
+  /** The gathering of furnace pressure in the lance tip. */
+  function furnaceCharge(x, y, z, progress = 0, rank = 1) {
+    const p = clamp01(progress);
+    if (p <= 0.01) return;
+    flashes.emit(x, y, z, (0.35 + p * 0.75) * (rank >= 2 ? 1.25 : 1.0), 0.045, 1.0);
+    if (Math.random() < 0.75 + p * 0.25) {
+      const a = Math.random() * TAU;
+      const r = (1.8 * (1 - p * 0.7) + 0.3);
+      const px = x + Math.cos(a) * r;
+      const py = y + (Math.random() - 0.5) * r * 0.6;
+      const pz = z + Math.sin(a) * r;
+      const dx = x - px;
+      const dy = y - py;
+      const dz = z - pz;
+      impacts.emitDirected(px, py, pz, 1, dx, dy, dz, 4.5 + p * 4.0, 0.45, 2.0, 0.4, IK_GLINT);
+      if (Math.random() < 0.45 + p * 0.3) {
+        sparks.write(px, py, pz, dx * 5.0, dy * 5.0, dz * 5.0, 0.22, 0.012, 1.0);
+        sparks.flush();
+      }
+    }
+    if (p > 0.6 && Math.random() < 0.28) {
+      ringFx(x, y, z, 0.8 * (1 - p * 0.5), 0.15, 0.22, "#ffbd3e", 0.8, "#fff1c8", 1.0);
+    }
+  }
+
+  /** The gathering of reliquary kinetic charge for Executioner's Thrust. */
+  function meleePierceCharge(x, y, z, progress = 0, rank = 1) {
+    const p = clamp01(progress);
+    if (p <= 0.01) return;
+    flashes.emit(x, y + 1.2, z, (0.4 + p * 0.8) * (rank >= 2 ? 1.3 : 1.0), 0.045, 2.0);
+    const a = Math.random() * TAU;
+    const r = (2.2 * (1 - p * 0.75) + 0.4);
+    const px = x + Math.cos(a) * r;
+    const py = y + 1.0 + (Math.random() - 0.5) * 0.8;
+    const pz = z + Math.sin(a) * r;
+    const dx = x - px;
+    const dy = (y + 1.2) - py;
+    const dz = z - pz;
+    impacts.emitDirected(px, py, pz, 1, dx, dy, dz, 5.0 + p * 6.0, 0.45, 2.0, 0.4, IK_GLINT);
+    if (Math.random() < 0.6 + p * 0.35) {
+      sparks.write(px, py, pz, dx * 6.0, dy * 6.0, dz * 6.0, 0.25, 0.014, 2.0);
+      sparks.flush();
+    }
+    if (p > 0.5 && Math.random() < 0.35) {
+      ringFx(x, y + 1.1, z, 1.0 * (1 - p * 0.6), 0.2, 0.25, "#ffd269", 0.9, "#ffffff", 1.0);
+    }
+  }
+
+  /** The concentrated high-density furnace beam discharge. */
+  function furnaceBeam(x, y, z, dx, dy, dz, distance, rank = 1) {
+    if (!(distance > 0) || !Number.isFinite(distance)) return;
+    const span = Math.min(distance, 900);
+    const hot = rank >= 2;
+
+    const beamWidth = hot ? 0.75 : 0.52;
+    tracers.emit(x, y, z, dx, dy, dz, span, beamWidth, 1, 1200);
+
+    flashes.emit(x, y, z, hot ? 2.4 : 1.8, 0.20, 1.0);
+    flashes.emit(x + dx * 0.2, y + dy * 0.2, z + dz * 0.2, hot ? 1.5 : 1.1, 0.25, 2.0);
+    ringFx(x, y, z, 0.25, hot ? 3.2 : 2.2, 0.32, "#ffbd3e", 1.2, "#fff8e0", 1.3);
+    impacts.emitDirected(x + dx * 0.25, y + dy * 0.25, z + dz * 0.25,
+      hot ? 24 : 16, dx, dy, dz, 12.0, 0.85, 1.0, 0.8, IK_GLINT);
+
+    const ix = x + dx * span;
+    const iy = y + dy * span;
+    const iz = z + dz * span;
+    const ig = terrain.heightAt(ix, iz);
+
+    flashes.emit(ix, iy, iz, hot ? 2.8 : 2.0, 0.28, 2.0);
+    sparks.burst(ix, iy, iz, hot ? 40 : 28, -dx * 0.6, 0.55, -dz * 0.6, hot ? 16 : 12, 0.85, 2.0, 0.6, 0.030);
+    impacts.emitDirected(ix, iy, iz, hot ? 32 : 20, -dx * 0.5, 0.6, -dz * 0.5, 10.0, 1.1, 2.0, 0.7, IK_EMBER);
+    scorchFx(ix, iz, hot ? 4.2 : 2.8, 7.0, "#221108", 0.45);
+    ringFx(ix, ig + 0.16, iz, 0.4, hot ? 5.6 : 3.8, 0.48, "#ff9a28", 1.1, "#fff2cc", 1.1);
+
+    if (hot) {
+      later(0.08, () => {
+        ringFx(ix, ig + 0.25, iz, 2.0, 6.8, 0.55, "#ff4a20", 0.9, "#ffe0a0", 0.9);
+        doctrineEmbers(ix, ig, iz, 3.5, 14, 0.85, "censer", false, 1.8);
+      });
+    }
+  }
+
 
   /* ============================================================
      THE GLIDE AND THE FALL
@@ -4625,15 +4707,19 @@ export function buildVfx(ctx, world) {
             consumed ? 0.16 : 0.11, style);
           break;
         }
-        // A reprieve is warmth arriving, so it BLOOMS inward-out slowly
-        // and hangs, rather than snapping.
         case "reprieve":
-          ringFx(x, ringY, z, radius * 1.25, radius * 0.38, 0.64, colour, 0.86);
-          if (!compact) shellFx(x, ground, z, radius * 0.72, 0.72,
-            colour, accent, 0.42);
-          flashes.emit(x, visualY, z, 0.58 * scale, 0.17, style);
-          doctrineWave(x, ringY, z, radius * 0.9, 14, 1.5, 2.4,
-            0.58 * scale, style, compact, 1.6, 0.22);
+        case "furnace-lance":
+          if (stage === "charge") {
+            sigilFx(x, z, radius * 0.75, 0.45, colour, accent, folds, spin * 1.5, 0.6);
+            flashes.emit(x, visualY, z, 0.45 * scale, 0.12, style);
+          } else {
+            sigilFx(x, z, radius * 0.95, 0.62, accent, colour, folds, spin * 2.2, 0.9);
+            ringFx(x, ringY, z, radius * 0.3, radius * 1.35, 0.48, colour, 1.1, accent, 1.1);
+            if (!compact) shellFx(x, ground, z, radius * 0.75, 0.65, colour, accent, 0.6);
+            flashes.emit(x, visualY, z, 0.95 * scale, 0.22, style);
+            doctrineWave(x, ringY, z, radius * 0.32, 22, 6.0, 2.2,
+              0.82 * scale, style, compact, 1.4, 0.08);
+          }
           break;
         /* MARTYR'S FURNACE. The Censer capstone, and the one moment
            this Order is allowed to be enormous. Four beats: the seal is
@@ -4669,6 +4755,21 @@ export function buildVfx(ctx, world) {
     } else if (!handled && order === "procession") {
       handled = true;
       switch (kind) {
+        /* EXECUTIONER'S THRUST: Jetpack-boosted piercing charge.
+           Penetrating golden vector wake, kinetic jet shockwave, and high-energy ion flare. */
+        case "thrust": {
+          sigilFx(x, z, radius * 0.95, 0.55, accent, colour, folds, spin * 2.0, 0.85);
+          ringFx(x, ringY, z, radius * 0.25, radius * 1.45, 0.42, colour, 1.2, accent, 1.1);
+          flashes.emit(x, visualY, z, 0.85 * scale, 0.18, style);
+          if (Math.hypot(dx, dz) > 0.01) {
+            impacts.emitDirected(x, ringY + 0.3, z,
+              Math.max(8, Math.round(24 * particleScale * intensity)),
+              dx, 0.15, dz, 14.0 * scale, 0.8 * scale, style, 1.25);
+          }
+          doctrineWave(x, ringY, z, radius * 0.35, 20, 7.5, 1.8,
+            0.75 * scale, style, compact, 1.3, 0.06);
+          break;
+        }
         /* A hook DRAGS. The ring runs inward instead of outward and the
            motes are pulled toward the trooper - the only cue in the
            tree that moves the wrong way on purpose, which is exactly
@@ -5295,6 +5396,12 @@ export function buildVfx(ctx, world) {
       reach: 2.60, arc: 0.52, centre: 0.04, roll: 0.10,
       height: 1.38, lift: 0.05, tilt: 0.02, inner: 0.34, life: 0.22, gain: 1.5,
     }),
+    /* meleePierce: Executioner's Thrust - rocket piercing charge.
+       Extreme forward reach, narrow high-speed vector ribbon piercing ahead. */
+    6: Object.freeze({
+      reach: 5.40, arc: 0.32, centre: 0.0, roll: 0.0,
+      height: 1.35, lift: 0.02, tilt: 0.01, inner: 0.12, life: 0.38, gain: 2.5,
+    }),
   });
 
   function meleeArc(x, y, z, yaw, reach, arc, hits = 0, slam = false, step = 0) {
@@ -5303,6 +5410,7 @@ export function buildVfx(ctx, world) {
        its crescent must reveal in the direction the body actually
        swept or the effect runs backwards through the spin. */
     const mirror = step < 0 ? -1 : 1;
+    const isPierce = Math.abs(step) === 6;
     const S = MELEE_SWEEPS[Math.abs(step)] || MELEE_SWEEPS[slam ? 3 : 1];
     /* Per-step, because the three sweeps present differently: the
        rising diagonal is drawn in a rolled plane and is seen close to
@@ -5312,6 +5420,18 @@ export function buildVfx(ctx, world) {
     slashFx(x, y + S.height, z, yaw, S.reach, S.arc * mirror, S.life,
       "#ffb63a", "#fff0c8", gain, S.lift, S.tilt, S.inner,
       S.centre * mirror, S.roll * mirror);
+
+    if (isPierce) {
+      const bx = -Math.sin(yaw);
+      const bz = -Math.cos(yaw);
+      // Jetpack exhaust plume behind trooper
+      impacts.emitDirected(x + bx * 0.4, y + 1.2, z + bz * 0.4, 16, bx, 0.2, bz, 9.5, 0.65, 2.0, 1.2, IK_GLINT);
+      sparks.burst(x + bx * 0.4, y + 1.2, z + bz * 0.4, 12, bx, 0.2, bz, 8.0, 0.4, 2.0, 0.25, 0.016);
+      // Supersonic shock ring
+      const ringSlot = ringFx(x + Math.sin(yaw) * 1.5, y + 1.2, z + Math.cos(yaw) * 1.5, 0.3, 1.6, 0.38,
+        "#ffd269", 0.9, "#ffffff", 1.0);
+      ringSlot.wall = 0.2;
+    }
 
     /* The streaks come off the TIP at the end of the measured sweep -
        the same place the crescent ends - rather than off a bearing
@@ -5324,8 +5444,8 @@ export function buildVfx(ctx, world) {
     sparks.burst(tx, ty, tz, hits ? 10 : 5, Math.cos(endYaw), slam ? -0.5 : 0.3,
       -Math.sin(endYaw), hits ? 7 : 4.5, 0.55, 2.0, 0.32, 0.014);
     if (hits) {
-      impacts.emit(tx, ty, tz, 6, 2.4, 0.7, 2.0, 0.4, IK_GLINT);
-      flashes.emit(tx, ty, tz, 0.55, 0.075, 2.0);
+      impacts.emit(tx, ty, tz, isPierce ? 10 : 6, isPierce ? 3.2 : 2.4, isPierce ? 0.8 : 0.7, 2.0, 0.4, IK_GLINT);
+      flashes.emit(tx, ty, tz, isPierce ? 0.85 : 0.55, isPierce ? 0.12 : 0.075, 2.0);
     }
     if (slam) {
       const g = terrain.heightAt(x, z);
@@ -5703,6 +5823,9 @@ export function buildVfx(ctx, world) {
     consecration,
     gild,
     tracer,
+    furnaceCharge,
+    furnaceBeam,
+    meleePierceCharge,
     muzzle,
     boostImpact,
     slamCharge,

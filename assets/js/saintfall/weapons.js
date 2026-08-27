@@ -806,6 +806,13 @@ export function buildWeapons(ctx) {
     stowWant: 0,
     stow: 0,
     handRelease: 0,
+    furnaceCharge: {
+      charging: false,
+      time: 0,
+      maxTime: 0.55,
+      progress: 0,
+      ready: false,
+    },
   };
 
   function currentHeatSpec() {
@@ -1048,6 +1055,59 @@ export function buildWeapons(ctx) {
     });
     bus.emit("fire", payload);
     ctx.progression?.onWeaponFire?.(payload);
+    return true;
+  }
+
+  function startFurnaceCharge(maxTime = 0.55) {
+    if (!carry.record || carry.venting > 0 || carry.overheated || carry.record.spec?.melee) return false;
+    carry.furnaceCharge.charging = true;
+    carry.furnaceCharge.time = 0;
+    carry.furnaceCharge.maxTime = Math.max(0.1, Number(maxTime) || 0.55);
+    carry.furnaceCharge.progress = 0;
+    carry.furnaceCharge.ready = false;
+    return true;
+  }
+
+  function updateFurnaceCharge(dt) {
+    if (!carry.furnaceCharge.charging) return false;
+    carry.furnaceCharge.time += Math.max(0, Number(dt) || 0);
+    carry.furnaceCharge.progress = clamp01(carry.furnaceCharge.time / carry.furnaceCharge.maxTime);
+    carry.furnaceCharge.ready = carry.furnaceCharge.progress >= 1.0;
+    return carry.furnaceCharge.ready;
+  }
+
+  function cancelFurnaceCharge() {
+    carry.furnaceCharge.charging = false;
+    carry.furnaceCharge.time = 0;
+    carry.furnaceCharge.progress = 0;
+    carry.furnaceCharge.ready = false;
+  }
+
+  function dischargeFurnaceLance(opts = {}) {
+    if (!carry.record || carry.venting > 0 || carry.overheated) return false;
+    const rank = Math.max(1, Number(opts.rank) || 1);
+    const spec = carry.record.spec;
+    const r = spec?.recoil || { kick: 0.08, rise: 0.04, roll: 0.02 };
+    carry.sinceShot = 0;
+    carry.cooldown = Math.max(carry.cooldown, rank >= 2 ? 0.36 : 0.46);
+    carry.recoil.back = Math.min(carry.recoil.back + r.kick * 3.2, r.kick * 4.6);
+    carry.recoil.rise = Math.min(carry.recoil.rise + r.rise * 3.4, r.rise * 5.2);
+    carry.recoil.roll += (Math.random() - 0.5) * r.roll * 3.6;
+    carry.flash = 1;
+    cancelFurnaceCharge();
+    if (rank >= 2) {
+      coolHeat(0.08, { reason: "furnace-lance-rank-2" });
+    } else {
+      addHeat(0.04, { reason: "furnace-lance" });
+    }
+    const payload = weaponEvent({
+      charged: true,
+      rank,
+      heatAfter: carry.heat,
+      cooldown: carry.cooldown,
+    });
+    bus.emit("furnaceLance", payload);
+    ctx.progression?.onFurnaceLanceDischarge?.(payload);
     return true;
   }
 
@@ -1589,6 +1649,19 @@ export function buildWeapons(ctx) {
         melee: !!carry.record.spec.melee,
       };
     },
+    furnaceChargeState() {
+      return {
+        charging: carry.furnaceCharge.charging,
+        time: carry.furnaceCharge.time,
+        maxTime: carry.furnaceCharge.maxTime,
+        progress: carry.furnaceCharge.progress,
+        ready: carry.furnaceCharge.ready,
+      };
+    },
+    startFurnaceCharge,
+    updateFurnaceCharge,
+    cancelFurnaceCharge,
+    dischargeFurnaceLance,
     setAds(v) { carry.ads = clamp01(v); },
     /** Ask for the lance to be slung or drawn. The travel is animated
      *  from here; callers may set this every frame. */

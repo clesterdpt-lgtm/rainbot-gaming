@@ -1642,6 +1642,175 @@ export function buildCombat(ctx) {
     return best;
   }
 
+  function raycastEnemiesAll(ox, oy, oz, dx, dy, dz, maxDist = Infinity) {
+    const hits = [];
+    for (const inst of enemies.live) {
+      if (inst.state === "death" || inst.emerging?.active
+        || inst.encounterHidden || inst.encounterLocked) {
+        continue;
+      }
+      const box = HITBOX[inst.key] || HITBOX.thresher;
+      const legHit = inst.legs && box.legSegments
+        ? legAndBodyHit(inst, box, ox, oy, oz, dx, dy, dz, maxDist)
+        : null;
+      if (legHit && legHit.t <= maxDist) {
+        hits.push(legHit);
+        continue;
+      }
+
+      const cx = inst.x - ox;
+      const cy = inst.y + (box.y0 + box.y1) * 0.5 - oy;
+      const cz = inst.z - oz;
+      const t = cx * dx + cy * dy + cz * dz;
+      if (t < 0 || t > maxDist) continue;
+
+      const px = ox + dx * t;
+      const py = oy + dy * t;
+      const pz = oz + dz * t;
+      const hd = Math.hypot(px - inst.x, pz - inst.z);
+      const lo = inst.y + box.y0;
+      const hi = inst.y + box.y1;
+      const onBody = hd <= box.r && py >= lo && py <= hi;
+      const wt = weakHit(inst, box, ox, oy, oz, dx, dy, dz);
+      const hitsWeak = wt >= 0 && wt <= maxDist && (!onBody || wt < t);
+      if (!onBody && !hitsWeak) continue;
+
+      const useT = hitsWeak ? wt : t;
+      if (useT > maxDist) continue;
+
+      hits.push({
+        inst, t: useT, weak: hitsWeak,
+        head: !hitsWeak && headHit(inst, box, ox, oy, oz, dx, dy, dz),
+        x: ox + dx * useT, y: oy + dy * useT, z: oz + dz * useT,
+      });
+    }
+    hits.sort((a, b) => a.t - b.t);
+    return hits;
+  }
+
+  /** Fire the devastating, piercing Furnace Lance beam. */
+  function fireFurnaceBeam(origin, direction, opts = {}) {
+    const rank = Math.max(1, Number(opts.rank) || 1);
+    const damage = opts.damage ?? (rank >= 2 ? 320 : 180);
+    const range = opts.range ?? 360;
+    player.shots += 1;
+
+    dir.copy(direction).normalize();
+    const commandHit = ctx.mission?.tryHitCommandBeacon?.(origin, dir, {
+      precision: true,
+    });
+    const wall = collide.rayBlock(
+      origin.x, origin.y, origin.z, dir.x, dir.y, dir.z, range
+    );
+    const maxReach = Math.min(range, wall);
+    const allHits = raycastEnemiesAll(
+      origin.x, origin.y, origin.z, dir.x, dir.y, dir.z, maxReach
+    );
+
+    const hitEggReach = maxReach;
+    if (ctx.abbess?.hitEggs) {
+      const step = 1.4;
+      for (let m = 0; m <= hitEggReach; m += step) {
+        if (ctx.abbess.hitEggs(origin.x + dir.x * m, origin.y + dir.y * m,
+          origin.z + dir.z * m, 2.2, damage)) break;
+      }
+    }
+    if (ctx.undercroft?.hitProps) {
+      const step = 1.4;
+      for (let m = 0; m <= hitEggReach; m += step) {
+        if (ctx.undercroft.hitProps(origin.x + dir.x * m, origin.y + dir.y * m,
+          origin.z + dir.z * m, 2.2, damage)) break;
+      }
+    }
+
+    if (vfx && vfx.furnaceBeam) {
+      vfx.furnaceBeam(origin.x, origin.y, origin.z, dir.x, dir.y, dir.z, maxReach, rank);
+    } else if (vfx && vfx.tracer) {
+      vfx.tracer(origin.x, origin.y, origin.z, dir.x, dir.y, dir.z, maxReach, 0.42, true);
+    }
+
+    let primaryHit = allHits[0] || null;
+    for (const hit of allHits) {
+      player.hits += 1;
+      const box = HITBOX[hit.inst.key] || HITBOX.thresher;
+      const weakMult = hit.weak
+        ? ((box.weak && box.weak.mult) || (box.maw && box.maw.mult)
+          || (box.heart && box.heart.mult) || (box.ventral && box.ventral.mult) || 3)
+          * Math.max(0, Number(hit.inst.weakBonus) || 1)
+        : 1;
+      const thoraxMult = hit.thorax ? (box.thoraxMult || 1) : 1;
+      const sacMult = hit.sacIndex >= 0 ? (box.sacs?.mult || 1) : 1;
+      const jointMult = hit.legIndex >= 0 && hit.joint ? (box.joints?.mult || 1) : 1;
+      const dmg = damage * (hit.head ? 2.6 : 1) * weakMult * sacMult * thoraxMult * jointMult;
+
+      if (hit.sacIndex >= 0 && box.sacs) {
+        drainLift(hit.inst, box.sacs.lift || 1, hit.sacIndex,
+          { x: hit.x, y: hit.y, z: hit.z });
+      }
+
+      const dealt = hit.legIndex >= 0
+        ? damageLeg(hit.inst, hit.legIndex, dmg,
+          { x: hit.x, y: hit.y, z: hit.z, joint: !!hit.joint, source: "furnace-lance" })
+        : applyDamage(hit.inst, dmg, {
+          source: "furnace-lance",
+          head: hit.head,
+          weak: !!hit.weak,
+          sac: hit.sacIndex >= 0,
+          x: hit.x,
+          y: hit.y,
+          z: hit.z,
+          originX: origin.x,
+          originZ: origin.z,
+        });
+
+      if (hit.inst && hit.inst.state !== "death") {
+        hit.inst.stunFor = Math.max(hit.inst.stunFor || 0, rank >= 2 ? 1.2 : 0.8);
+      }
+
+      if (vfx && vfx.spark) {
+        vfx.spark(hit.x, hit.y, hit.z, hit.weak ? 3.2 : 2.2, false, true);
+      }
+
+      const identity = enemyIdentity(hit.inst);
+      bus.emit("hit", {
+        ...identity,
+        key: identity.enemyKey,
+        source: "furnace-lance",
+        head: hit.head,
+        weak: !!hit.weak,
+        joint: !!hit.joint,
+        damage: dmg,
+        actual: dealt,
+        killed: hit.inst.state === "death",
+        x: hit.x,
+        y: hit.y,
+        z: hit.z,
+      });
+    }
+
+    const endX = origin.x + dir.x * maxReach;
+    const endY = origin.y + dir.y * maxReach;
+    const endZ = origin.z + dir.z * maxReach;
+
+    if (wall !== Infinity) {
+      if (vfx && vfx.spark) vfx.spark(endX, endY, endZ, 2.0, true, true);
+      bus.emit("wallHit", { x: endX, z: endZ });
+    }
+
+    if (rank >= 2) {
+      shockwave(endX, endY, endZ, {
+        radius: 4.8,
+        damage: 65,
+        stun: 1.0,
+        knockSpeed: 7.5,
+        source: "furnace-lance-shockwave",
+      });
+    }
+
+    if (commandHit) player.hits += 1;
+    return primaryHit;
+  }
+
   /** Fire one shot from an origin along a direction. */
   function fire(origin, direction, opts = {}) {
     const damage = opts.damage ?? 22;
@@ -1928,6 +2097,7 @@ export function buildCombat(ctx) {
     const ps = ctx.player.state;
     const w = ctx.weapons && ctx.weapons.current;
     if (!w || !w.spec.melee) return 0;
+    const isPierce = Math.abs(sweepId) === 6 || comboStep === 6;
     const reach = w.spec.reach * lunge * MELEE_CONFIG.reachMultiplier;
     const dmg = (w.spec.damage || 70) * mult;
     const eyeY = ps.y + 1.4;
@@ -1974,10 +2144,18 @@ export function buildCombat(ctx) {
          anything: you are against the target, the swing lands. */
       const inv = 1 / Math.max(1e-4, dist);
       if (dist > 1.2) {
-        let rel = Math.atan2(dx, dz) - ps.yaw;
-        while (rel > Math.PI) rel -= TAU;
-        while (rel < -Math.PI) rel += TAU;
-        if (Math.abs(rel) > arc * 0.5) continue;
+        if (isPierce) {
+          const sy = Math.sin(ps.yaw);
+          const cy = Math.cos(ps.yaw);
+          const fwd = dx * sy + dz * cy;
+          const lat = Math.abs(-dx * cy + dz * sy);
+          if (fwd < -0.6 || fwd > reach + targetRadius || lat > 2.6 + targetRadius) continue;
+        } else {
+          let rel = Math.atan2(dx, dz) - ps.yaw;
+          while (rel > Math.PI) rel -= TAU;
+          while (rel < -Math.PI) rel += TAU;
+          if (Math.abs(rel) > arc * 0.5) continue;
+        }
         if (collide.rayBlock(ps.x, eyeY, ps.z, dx * inv, 0, dz * inv, dist) < dist) continue;
       }
       const wasAlive = inst.state !== "death";
@@ -2042,9 +2220,9 @@ export function buildCombat(ctx) {
            by anyone who never misses. */
         const armoured = inst.strike
           && inst.strike.t >= inst.strike.windup * ENEMY_MELEE_CONFIG.interruptWindow;
-        if (stunFor > 0 && !armoured && !box.segments && !box.legs && !box.sac
+        if ((stunFor > 0 || isPierce) && (!armoured || isPierce) && !box.segments && !box.legs && !box.sac
           && !inst.spec?.flies && !inst.spec?.perches) {
-          const seconds = stunFor * (slam ? MELEE_CONFIG.hitStunFinisher : 1);
+          const seconds = (stunFor || 0.75) * (isPierce ? 1.5 : (slam ? MELEE_CONFIG.hitStunFinisher : 1));
           if (inst.strike) cancelStrike(inst, "interrupted");
           if (enemies.stun(inst, seconds)) {
             inst.fireTimer = Math.max(inst.fireTimer || 0, seconds);
@@ -2071,12 +2249,14 @@ export function buildCombat(ctx) {
         y: hitY,
         z: hitZ,
       });
-      if (inst.key === MELEE_CONFIG.lightEnemy) {
+      if (inst.key === MELEE_CONFIG.lightEnemy || isPierce) {
         /* This API is part of the enemy-system contract. Keeping the call
            direct means a missing export becomes a test-visible failure
            instead of silently turning the feature off. */
-        if (enemies.knockback(inst, dx * inv, dz * inv,
-          MELEE_CONFIG.lightKnockbackSpeed * (slam ? 1.30 : 1))) {
+        const kx = isPierce ? Math.sin(ps.yaw) : dx * inv;
+        const kz = isPierce ? Math.cos(ps.yaw) : dz * inv;
+        const speed = isPierce ? 14 : (MELEE_CONFIG.lightKnockbackSpeed * (slam ? 1.30 : 1));
+        if (enemies.knockback(inst, kx, kz, speed)) {
           knockbacks += 1;
         }
       }
@@ -2085,7 +2265,7 @@ export function buildCombat(ctx) {
          Thresher disappear inside two white flashes at the exact read. */
       if (vfx && vfx.spark && inst.state !== "death") {
         vfx.spark(hitX, hitY, hitZ,
-          MELEE_CONFIG.hitSparkScale * (slam ? 1.18 : 1)
+          MELEE_CONFIG.hitSparkScale * (isPierce ? 1.75 : (slam ? 1.18 : 1))
             * (box.legs && legTarget.legIndex < 0 ? 1.8 : jointHit ? 1.35 : 1),
           false, true);
       }
@@ -2118,11 +2298,13 @@ export function buildCombat(ctx) {
       vfx.meleeArc(ps.x, ps.y, ps.z, ps.yaw, reach, arc, hits, slam,
         sweepId || comboStep);
     }
-    ctx.player.punch?.(slam
-      ? MELEE_CONFIG.slamPunch
-      : hits ? MELEE_CONFIG.hitPunch : MELEE_CONFIG.whiffPunch);
+    ctx.player.punch?.(isPierce
+      ? 1.4
+      : slam
+        ? MELEE_CONFIG.slamPunch
+        : hits ? MELEE_CONFIG.hitPunch : MELEE_CONFIG.whiffPunch);
     const step = Number.isInteger(comboStep) && comboStep >= 1 && comboStep <= 3
-      ? comboStep : 0;
+      ? comboStep : (isPierce ? 3 : 0);
     /* Close combat now feeds the same Reliquary reserve that powers Aegis.
        The return is per connected sweep, capped before a dense Thresher pack
        can turn one wide swing into a full tank. A dedicated Procession build
@@ -2150,7 +2332,10 @@ export function buildCombat(ctx) {
         player.healed += healed;
         if (healed > 0) {
           bus.emit("playerHealed", {
-            amount: healed, source: "melee-kill", hp: player.hp, kills,
+            amount: healed,
+            source: "melee",
+            hp: player.hp,
+            kills,
           });
         }
       }
@@ -2162,6 +2347,8 @@ export function buildCombat(ctx) {
     const meleeEvent = {
       source: "melee",
       comboStep: step,
+      isPierce,
+      sweepId: sweepId || (isPierce ? 6 : 0),
       targets,
       hits,
       kills,
@@ -3473,6 +3660,7 @@ export function buildCombat(ctx) {
     player,
     bus,
     fire,
+    fireFurnaceBeam,
     damageEnemy: applyDamage,
     damageLeg,
     drainLift,

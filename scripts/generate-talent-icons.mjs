@@ -7,6 +7,24 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const outDir = path.join(root, "assets", "img", "saintfall", "talents");
 
 const TALENT_SPECS = [
+  // Censer:
+  {
+    id: "censer_furnace_reprieve",
+    order: "censer",
+    name: "Furnace Lance",
+    color: "#f59e0b",
+    accent: "#fde68a",
+    iconType: "furnace-lance",
+  },
+  // Procession:
+  {
+    id: "procession_executioners_measure",
+    order: "procession",
+    name: "Executioner's Thrust",
+    color: "#eab308",
+    accent: "#fef08a",
+    iconType: "executioners-thrust",
+  },
   // Wing remaining:
   {
     id: "wing_rams_halo",
@@ -192,7 +210,109 @@ async function main() {
       ctx.strokeStyle = "#ffffff";
       ctx.lineWidth = 5;
 
-      if (s.iconType === "ram") {
+      if (s.iconType === "furnace-lance") {
+        // Heavy charged lance & focused furnace beam
+        ctx.beginPath();
+        ctx.moveTo(0, -105);
+        ctx.lineTo(24, -30);
+        ctx.lineTo(12, 85);
+        ctx.lineTo(-12, 85);
+        ctx.lineTo(-24, -30);
+        ctx.closePath();
+        ctx.stroke();
+        ctx.fillStyle = s.color + "66";
+        ctx.fill();
+
+        ctx.beginPath();
+        ctx.arc(-35, 10, 45, Math.PI * 0.4, Math.PI * 1.5);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(35, 10, 45, Math.PI * 1.5, Math.PI * 0.6);
+        ctx.stroke();
+
+        ctx.strokeStyle = "#ffffff";
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.moveTo(0, -120);
+        ctx.lineTo(0, 120);
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.arc(0, -25, 24, 0, Math.PI * 2);
+        ctx.fillStyle = "#ffffff";
+        ctx.fill();
+
+        ctx.strokeStyle = s.accent;
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(0, -25, 38, 0, Math.PI * 2);
+        ctx.stroke();
+
+        for (let i = 0; i < 4; i++) {
+          const angle = (i * Math.PI) / 2 + Math.PI / 4;
+          ctx.beginPath();
+          ctx.moveTo(Math.cos(angle) * 38, -25 + Math.sin(angle) * 38);
+          ctx.lineTo(Math.cos(angle) * 58, -25 + Math.sin(angle) * 58);
+          ctx.stroke();
+        }
+      } else if (s.iconType === "executioners-thrust") {
+        // Piercing Lance & Rocket Thruster Blast
+        // Rear jet thruster cone & exhaust plumes
+        ctx.fillStyle = s.color + "66";
+        ctx.beginPath();
+        ctx.moveTo(0, 30);
+        ctx.lineTo(-45, 95);
+        ctx.lineTo(45, 95);
+        ctx.closePath();
+        ctx.fill();
+
+        // Rocket plume lines
+        ctx.strokeStyle = "#ffffff";
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.moveTo(0, 35); ctx.lineTo(0, 110);
+        ctx.moveTo(-20, 45); ctx.lineTo(-35, 105);
+        ctx.moveTo(20, 45); ctx.lineTo(35, 105);
+        ctx.stroke();
+
+        // Main Piercing Spear / Lance Shaft & Head
+        ctx.strokeStyle = s.accent;
+        ctx.lineWidth = 8;
+        ctx.beginPath();
+        ctx.moveTo(0, 40);
+        ctx.lineTo(0, -70);
+        ctx.stroke();
+
+        // Broad Piercing Spearhead
+        ctx.fillStyle = "#ffffff";
+        ctx.beginPath();
+        ctx.moveTo(0, -115);
+        ctx.lineTo(36, -55);
+        ctx.lineTo(12, -50);
+        ctx.lineTo(12, -20);
+        ctx.lineTo(-12, -20);
+        ctx.lineTo(-12, -50);
+        ctx.lineTo(-36, -55);
+        ctx.closePath();
+        ctx.fill();
+        ctx.strokeStyle = s.color;
+        ctx.lineWidth = 4;
+        ctx.stroke();
+
+        // Supersonic piercing wave brackets / kinetic shockwings
+        ctx.strokeStyle = s.accent;
+        ctx.lineWidth = 5;
+        for (let dy of [-40, -10, 20]) {
+          ctx.beginPath();
+          ctx.moveTo(-65, dy + 25);
+          ctx.lineTo(-25, dy);
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.moveTo(65, dy + 25);
+          ctx.lineTo(25, dy);
+          ctx.stroke();
+        }
+      } else if (s.iconType === "ram") {
         // Vaulting ram / horn crescent
         ctx.beginPath();
         ctx.arc(-30, -20, 60, Math.PI * 0.2, Math.PI * 1.6);

@@ -108,7 +108,11 @@ const MVP_COPY = Object.freeze({
     ],
   },
   censer_furnace_reprieve: {
-    summary: "Use kills near redline to keep the lance speaking.",
+    summary: "Hold fire to channel Reliquary charge into a piercing heavy beam.",
+    ranks: [
+      "Holding fire channels 18 Reliquary charge over 0.55s. Releasing unleashes a concentrated furnace beam that pierces enemies for 180 damage and staggers targets.",
+      "Channels in 0.42s for 14 charge, dealing 320 damage, producing no heat, and releasing a searing shockwave on impact.",
+    ],
   },
   procession_hooking_step: {
     summary: "Make the second strike interrupt the brood around you.",
@@ -121,10 +125,10 @@ const MVP_COPY = Object.freeze({
     summary: "Turn a clean three-hit procession into a rupture.",
   },
   procession_executioners_measure: {
-    summary: "Expose a heavy enemy by keeping all three strikes on it.",
+    summary: "Augment melee: hold to charge a jet-propelled piercing thrust.",
     ranks: [
-      "Landing all three strikes on one Harrow or Matriarch exposes it; the next rifle hit deals 40% bonus damage.",
-      "The exposure lasts 6 seconds instead of 4 and the finisher adds a stagger pulse.",
+      "Holding melee charges Reliquary energy to unleash a high-speed jetpack thrust for 240% piercing damage.",
+      "Increases pierce speed/range, boosts damage to 340%, and the wake exposes heavy enemies for 5 seconds.",
     ],
   },
   procession_processional_mercy: {
@@ -1257,6 +1261,36 @@ export function buildProgression(ctx) {
 
   function onVentComplete(event = {}) { return event; }
 
+  function onFurnaceLanceDischarge(event = {}) {
+    const rank = talentRank("censer_furnace_reprieve");
+    if (rank <= 0) return event;
+    bump("furnaceLanceDischarges");
+    bump("furnaceReprieves");
+    cue("censer", "reprieve", {
+      ...event,
+      rank,
+      radius: rank >= 2 ? 5.5 : 3.8,
+      intensity: rank >= 2 ? 1.05 : 0.82,
+      talentId: "censer_furnace_reprieve",
+      stage: "discharge",
+    });
+    return event;
+  }
+
+  function onFurnaceLanceCharge(event = {}) {
+    const rank = talentRank("censer_furnace_reprieve");
+    if (rank <= 0) return event;
+    cue("censer", "reprieve", {
+      ...event,
+      rank,
+      radius: 1.8,
+      intensity: 0.45,
+      talentId: "censer_furnace_reprieve",
+      stage: "charge",
+    });
+    return event;
+  }
+
   function onMeleeStrike(event = {}) {
     const step = Math.floor(finite(event.comboStep));
     const connected = event.hits > 0;
@@ -1327,8 +1361,40 @@ export function buildProgression(ctx) {
       });
     }
 
-    if (step === 3) {
-      const measure = talentRank("procession_executioners_measure");
+    const measure = talentRank("procession_executioners_measure");
+    if (measure > 0 && (event.isPierce || event.sweepId === 6)) {
+      bump("piercingThrusts");
+      const targets = (event.targets || []).filter((target) => !target.killed);
+      const heavyTargets = targets.filter((target) => target.enemyKey === "harrow" || target.enemyKey === "matriarch");
+      const exposeTargets = measure >= 2 ? (heavyTargets.length ? heavyTargets : targets) : [];
+      for (const target of exposeTargets) {
+        effects.exposed.set(target.enemyId, {
+          until: clock + 5,
+          rank: measure,
+          x: finite(target.x),
+          y: finite(target.y),
+          z: finite(target.z),
+        });
+      }
+      cue("procession", "thrust", {
+        ...event,
+        radius: measure >= 2 ? 6 : 4.5,
+        rank: measure,
+        intensity: measure >= 2 ? 0.95 : 0.78,
+        talentId: "procession_executioners_measure",
+        stage: "thrust",
+      });
+      if (exposeTargets.length) {
+        const primary = exposeTargets[0];
+        cue("procession", "expose", {
+          ...event, x: primary.x, y: primary.y, z: primary.z,
+          radius: 4.5, rank: measure, count: exposeTargets.length,
+          intensity: 0.88,
+          talentId: "procession_executioners_measure", stage: "arm",
+          targetId: primary.enemyId,
+        });
+      }
+    } else if (step === 3) {
       if (measure > 0 && effects.comboConnected) {
         const current = new Set((event.targets || []).map((target) => target.enemyId));
         const armedTargets = (event.targets || []).filter((target) =>
@@ -2193,6 +2259,8 @@ export function buildProgression(ctx) {
     modifyEnemyDamage,
     onEnemyDamaged,
     onWeaponFire,
+    onFurnaceLanceDischarge,
+    onFurnaceLanceCharge,
     onVent,
     onVentComplete,
     onMeleeStrike,

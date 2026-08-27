@@ -12,6 +12,11 @@
    ============================================================ */
 
 import { patchMaterial } from "saintfall/art.js";
+import {
+  makeGoldLampMaterial,
+  makeGoldLampMesh,
+  unitsPerWorldMetre,
+} from "saintfall/summit-lights.js";
 
 const WHITE_VIGIL = {
   name: "White Vigil",
@@ -25,6 +30,55 @@ const WHITE_VIGIL = {
   roughness: 0.56,
   metalness: 0.18,
   emissiveIntensity: 0.12,
+  goldLights: {
+    material: "white-vigil-gold-glow",
+    head: [
+      {
+        name: "white-vigil-eye-left",
+        position: [-2.004, 8.197, 4.437],
+        normal: [-0.661, 0.297, 0.689],
+        /* A facet-local vertical with zero model-X component keeps
+           the lamp straight in the frontal silhouette. */
+        up: [0.000, 0.918, -0.396],
+        widthM: 0.014,
+        heightM: 0.048,
+      },
+      {
+        name: "white-vigil-eye-right",
+        position: [2.427, 8.114, 4.385],
+        normal: [0.598, 0.364, 0.714],
+        up: [0.000, 0.891, -0.454],
+        widthM: 0.014,
+        heightM: 0.048,
+      },
+    ],
+    chest: [
+      {
+        name: "white-vigil-chest-gem",
+        position: [-0.176, -4.150, 10.284],
+        normal: [0.009, 0.232, 0.973],
+        widthM: 0.046,
+        heightM: 0.114,
+        /* A jewel is a lit volume, not a face lamp. Keep nearly all
+           of the emissive energy at its perimeter so the complete
+           socket reads instead of collapsing into one hot pixel. */
+        centreBrightness: 0.88,
+        perimeterBrightness: 0.88,
+      },
+    ],
+    heart: {
+      colour: 0xffaa52,
+      intensity: 0.10,
+      distance: 1.35,
+      /* Keep the local halo, but not a near-field specular pinprick
+         on the jewel itself. */
+      offsetM: 0.090,
+      /* Ivory returns far more of a local lamp than Vesper's dark
+         plate. Keep the same time-of-day curve at a lower amplitude
+         so the night chest stays modelled instead of clipping white. */
+      scale: 0.36,
+    },
+  },
   ankle: 0.196,
   restPitch: 1.01,
   handGripInset: 0.116,
@@ -51,6 +105,24 @@ const BASTION_PENITENT = {
   roughness: 0.58,
   metalness: 0.22,
   emissiveIntensity: 0.20,
+  goldLights: {
+    material: "bastion-penitent-gold-glow",
+    head: [
+      {
+        name: "bastion-penitent-eye",
+        /* The tall visor lies on the helmet's raked centre facet.
+           `up` follows that rake, rather than cutting a vertical card
+           through the widening lower half of the helm. */
+        position: [-0.350, 25.200, 1.500],
+        normal: [0.000, 0.560, 0.828],
+        up: [0.000, 0.828, -0.560],
+        widthM: 0.016,
+        heightM: 0.172,
+      },
+    ],
+    chest: [],
+    heart: null,
+  },
   /* The second Meshy rig was requested at 2.00m. These initial
      targets preserve the same relaxed reach ratios as the proven
      1.90m figure while keeping its broader sabatons planted. */
@@ -235,6 +307,62 @@ async function buildMeshyVigilTrooper(ctx, spec) {
 
   const chest = need("Spine");
   const head = need("Head");
+  root.updateMatrixWorld(true);
+  const goldMaterial = makeGoldLampMaterial(THREE, atmos, {
+    name: spec.goldLights.material,
+    intensity: 4.2,
+  });
+  const glowMeshes = [];
+  let headGlow = null;
+  if (spec.goldLights.head.length) {
+    headGlow = makeGoldLampMesh(THREE, {
+      name: `${spec.assetSource}-face-gold`,
+      material: goldMaterial,
+      targets: spec.goldLights.head,
+      unitsPerMetre: unitsPerWorldMetre(THREE, head),
+      standoffM: 0.003,
+    });
+    head.add(headGlow);
+    glowMeshes.push(headGlow);
+  }
+  let chestMaterial = null;
+  if (spec.goldLights.chest.length) {
+    /* Vesper's chest amber runs at intensity 1 with a nearby point
+       light; its face lamps run at 4.2. Keep that hierarchy here so
+       the larger jewel glows through its frame without becoming a
+       flat yellow flare larger than the socket itself. */
+    chestMaterial = makeGoldLampMaterial(THREE, atmos, {
+      name: `${spec.assetSource}-chest-amber`,
+      intensity: 1.55,
+    });
+    chestMaterial.roughness = 0.78;
+    const chestGlow = makeGoldLampMesh(THREE, {
+      name: `${spec.assetSource}-chest-gold`,
+      material: chestMaterial,
+      targets: spec.goldLights.chest,
+      unitsPerMetre: unitsPerWorldMetre(THREE, chest),
+      standoffM: 0.003,
+    });
+    chest.add(chestGlow);
+    glowMeshes.push(chestGlow);
+  }
+  let heartLight = null;
+  if (spec.goldLights.heart && spec.goldLights.chest[0]) {
+    const source = spec.goldLights.chest[0];
+    const chestUnits = unitsPerWorldMetre(THREE, chest);
+    heartLight = new THREE.PointLight(
+      spec.goldLights.heart.colour,
+      spec.goldLights.heart.intensity,
+      spec.goldLights.heart.distance,
+      2);
+    heartLight.name = `${spec.assetSource}-heart-light`;
+    heartLight.userData.sfIntensityScale = spec.goldLights.heart.scale ?? 1;
+    heartLight.position.fromArray(source.position).addScaledVector(
+      new THREE.Vector3().fromArray(source.normal).normalize(),
+      spec.goldLights.heart.offsetM * chestUnits);
+    heartLight.castShadow = false;
+    chest.add(heartLight);
+  }
   /* Meshy's anatomical Right bones occupy model -X in the bind pose.
      player.js indexes legs by spatial side and arms by grip role, so
      these arrays intentionally match the proven Vesper adapter. */
@@ -328,8 +456,15 @@ async function buildMeshyVigilTrooper(ctx, spec) {
     imported: true,
     assetSource: spec.assetSource,
     partMeshes,
-    heartLight: null,
-    eyeGlow: null,
+    heartLight,
+    eyeGlow: { meshes: headGlow ? [headGlow] : [], material: goldMaterial },
+    glowStatus: {
+      materials: [goldMaterial.name, chestMaterial?.name].filter(Boolean),
+      meshes: glowMeshes.map((mesh) => mesh.name),
+      targets: [...spec.goldLights.head, ...spec.goldLights.chest]
+        .map((target) => target.name),
+      pointLight: heartLight?.name || null,
+    },
     readabilityMaterials,
     torsoUpLocal,
     baseScale: root.scale.clone(),

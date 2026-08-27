@@ -503,6 +503,11 @@ export async function start({ boot, build } = {}) {
   let shotAimEnemy = null;
   let shotAimReach = SHOT_RANGE;
   let lastShotSolution = null;
+  const _furnacePos = new THREE.Vector3();
+  let fireHoldTime = 0;
+  let furnaceShotQueued = false;
+  let furnaceRank = 1;
+  let furnaceDamage = 180;
 
   /* ------------------------------ loop ------------------------------ */
 
@@ -726,6 +731,72 @@ export async function start({ boot, build } = {}) {
     shotPort = null;
   }
 
+  function shootFurnaceLance() {
+    if (combat.player.dead) return false;
+    if (slam.state.active) return false;
+    if (shield.state.active) return false;
+    const rank = Math.max(1, progression.rank?.("censer_furnace_reprieve") || 1);
+    const chargeCost = rank >= 2 ? 14 : 18;
+    if ((jetpack.state.fuel || 0) < chargeCost - 1e-4) return false;
+    if (!weapons.dischargeFurnaceLance({ rank })) return false;
+
+    jetpack.spend(chargeCost, true, false);
+
+    const w = weapons.current;
+    shotPort = w ? (w.emitter || w.muzzle) : null;
+    render.camera.updateWorldMatrix(true, false);
+    shotCameraOrigin.setFromMatrixPosition(render.camera.matrixWorld);
+    render.camera.getWorldDirection(shotCameraDir);
+
+    const cameraWall = collide.rayBlock(
+      shotCameraOrigin.x, shotCameraOrigin.y, shotCameraOrigin.z,
+      shotCameraDir.x, shotCameraDir.y, shotCameraDir.z, SHOT_RANGE
+    );
+    const cameraEnemy = combat.raycastEnemies(
+      shotCameraOrigin.x, shotCameraOrigin.y, shotCameraOrigin.z,
+      shotCameraDir.x, shotCameraDir.y, shotCameraDir.z,
+      Math.min(SHOT_RANGE, cameraWall)
+    );
+    shotAimKind = cameraEnemy ? "enemy" : (cameraWall !== Infinity ? "cover" : "range");
+    shotAimEnemy = cameraEnemy ? cameraEnemy.inst.key : null;
+    shotAimReach = cameraEnemy
+      ? cameraEnemy.t
+      : Math.min(SHOT_RANGE, cameraWall);
+    shotAimPoint.copy(shotCameraOrigin).addScaledVector(shotCameraDir, shotAimReach);
+    furnaceDamage = rank >= 2 ? 320 : 180;
+    furnaceRank = rank;
+    furnaceShotQueued = true;
+    weapons.flashMuzzle();
+    return true;
+  }
+  api.shootFurnaceLance = shootFurnaceLance;
+
+  function flushFurnaceLance() {
+    if (!furnaceShotQueued) return;
+    furnaceShotQueued = false;
+    if (shotPort) {
+      shotPort.updateWorldMatrix(true, false);
+      shotOrigin.setFromMatrixPosition(shotPort.matrixWorld);
+    } else {
+      shotOrigin.copy(render.camera.position);
+    }
+    shotDir.subVectors(shotAimPoint, shotOrigin);
+    if (shotDir.lengthSq() < 1e-8) shotDir.copy(shotCameraDir);
+    else shotDir.normalize();
+
+    const hit = combat.fireFurnaceBeam(shotOrigin, shotDir, {
+      damage: furnaceDamage,
+      rank: furnaceRank,
+    });
+
+    player.punch(furnaceRank >= 2 ? 2.4 : 1.8);
+    audio.furnaceDischarge?.(shotOrigin.x, shotOrigin.z, {
+      gain: 1.15,
+      rank: furnaceRank,
+    });
+    shotPort = null;
+  }
+
   /* Two rites, one physical censer-lance. `autogun` is retained as
      the ranged-mode compatibility key; setMode changes ballistics
      without replacing the visible weapon or breaking either grip.
@@ -735,16 +806,20 @@ export async function start({ boot, build } = {}) {
      long as the swing takes. That is what makes one key enough: the
      player never has to know which mode they left it in. */
   let meleeBorrowed = false;
+  let meleeHoldTime = 0;
+  let meleeAimYaw = null;
+  let meleeCharging = false;
+
   function meleeStrike(aimYaw = null) {
-    if (combat.player.dead) return;
-    if (jetpack.state.inFlight) return;
-    if (shield.state.active) return;
+    if (combat.player.dead) return false;
+    if (jetpack.state.inFlight) return false;
+    if (shield.state.active) return false;
     /* Drawing first. The press has already reset the calm timer via
        `updateStow`, so this frame starts the draw and the swing waits
        for the lance to be in hand - a melee that begins with the
        weapon still on the trooper's back swings an empty fist. */
     calmFor = 0;
-    if (weapons.stowPhase > 0.08) return;
+    if (weapons.stowPhase > 0.08) return false;
     const wasRanged = !!weapons.current && !weapons.current.spec.melee;
     if (wasRanged) {
       weapons.setMode("melee");
@@ -757,7 +832,33 @@ export async function start({ boot, build } = {}) {
     if (!player.meleeSwing(aimYaw) && wasRanged && !player.action) {
       weapons.setMode("ranged");
       meleeBorrowed = false;
+      return false;
     }
+    return true;
+  }
+
+  function meleePierce(aimYaw = null) {
+    if (combat.player.dead) return false;
+    if (jetpack.state.inFlight) return false;
+    if (shield.state.active) return false;
+    calmFor = 0;
+    if (weapons.stowPhase > 0.08) return false;
+    const wasRanged = !weapons.current || !weapons.current.spec.melee;
+    if (wasRanged) {
+      weapons.setMode("melee");
+      meleeBorrowed = true;
+    }
+    const cost = 15;
+    if (!jetpack.spend(cost, true, true)) {
+      return meleeStrike(aimYaw);
+    }
+    if (!player.meleePierce(aimYaw) && wasRanged && !player.action) {
+      weapons.setMode("ranged");
+      meleeBorrowed = false;
+      return false;
+    }
+    audio.meleePierceLaunch?.(player.state.x, player.state.z);
+    return true;
   }
 
   /* ------------------------------------------------------------
@@ -886,10 +987,46 @@ export async function start({ boot, build } = {}) {
       else if (ev.type === "dir") mission.pushDirection(ev.dir);
       else if (ev.type === "vent") weapons.vent();
       else if (ev.type === "melee" && !boost.state.active && !shield.state.active) {
-        meleeStrike(ev.aimYaw);
+        const measureRank = progression.talentRank?.("procession_executioners_measure") || 0;
+        meleeAimYaw = ev.aimYaw;
+        if (measureRank > 0 && player.input.state.meleeHeld && (jetpack.state.fuel || 0) >= 15 - 1e-4) {
+          meleeHoldTime = 0;
+          meleeCharging = true;
+        } else {
+          meleeStrike(ev.aimYaw);
+        }
       }
     }
     const melee = weapons.current && weapons.current.spec.melee;
+
+    const measureRankVal = progression.talentRank?.("procession_executioners_measure") || 0;
+    const canChargePierce = !encounterHold && !stunned && !airborne()
+      && !boost.state.active && !shield.state.active && !slam.state.active
+      && measureRankVal > 0 && (jetpack.state.fuel || 0) >= 15 - 1e-4;
+
+    if (meleeCharging && canChargePierce && player.input.state.meleeHeld) {
+      meleeHoldTime += d;
+      const chargeMax = measureRankVal >= 2 ? 0.24 : 0.32;
+      const progress = Math.min(1.0, meleeHoldTime / chargeMax);
+      audio.meleePierceCharge?.(progress);
+      vfx.meleePierceCharge?.(player.state.x, player.state.y, player.state.z, progress, measureRankVal);
+      if (meleeHoldTime >= chargeMax) {
+        meleePierce(meleeAimYaw ?? player.state.aimViewYaw);
+        audio.meleePierceCharge?.(0);
+        meleeHoldTime = 0;
+        meleeCharging = false;
+      }
+    } else if (meleeCharging) {
+      audio.meleePierceCharge?.(0);
+      if (meleeHoldTime >= 0.16 && canChargePierce) {
+        meleePierce(meleeAimYaw ?? player.state.aimViewYaw);
+      } else if (!encounterHold && !stunned) {
+        meleeStrike(meleeAimYaw ?? player.state.aimViewYaw);
+      }
+      meleeCharging = false;
+      meleeHoldTime = 0;
+    }
+
     /* The trigger only ever fires now. Melee has its own key, and
        mapping it onto the trigger as well meant that holding fire
        through a swing chained a combo nobody asked for.
@@ -899,9 +1036,63 @@ export async function start({ boot, build } = {}) {
        the time this runs; refusing the shot until it lands is the
        difference between a weapon that was put away and a weapon
        that fires out of the player's back. */
-    if (!encounterHold && !stunned && player.input.state.firing && !melee
+    const canFire = !encounterHold && !stunned && !melee
       && !slam.state.active && !shield.state.active
-      && weapons.stowPhase < 0.08) shoot();
+      && weapons.stowPhase < 0.08;
+
+    const furnaceRankVal = progression.rank?.("censer_furnace_reprieve") || 0;
+    const furnaceCost = furnaceRankVal >= 2 ? 14 : 18;
+    const furnaceChargeDuration = furnaceRankVal >= 2 ? 0.42 : 0.55;
+    const canChargeFurnace = canFire && furnaceRankVal > 0
+      && (jetpack.state.fuel || 0) >= furnaceCost - 1e-4
+      && !weapons.current?.spec?.melee
+      && !weapons.carry?.overheated
+      && (weapons.carry?.venting || 0) <= 0;
+
+    const fireHeld = player.input.state.firing;
+
+    if (canChargeFurnace && fireHeld) {
+      fireHoldTime += d;
+      if (fireHoldTime >= 0.08) {
+        if (!weapons.furnaceChargeState().charging) {
+          weapons.startFurnaceCharge(furnaceChargeDuration);
+        }
+        const ready = weapons.updateFurnaceCharge(d);
+        const chargeState = weapons.furnaceChargeState();
+        const w = weapons.current;
+        const port = w ? (w.emitter || w.muzzle) : null;
+        let emitX = player.state.x;
+        let emitY = player.state.y + 1.2;
+        let emitZ = player.state.z;
+        if (port) {
+          port.updateWorldMatrix(true, false);
+          _furnacePos.setFromMatrixPosition(port.matrixWorld);
+          emitX = _furnacePos.x; emitY = _furnacePos.y; emitZ = _furnacePos.z;
+        }
+        vfx.furnaceCharge(emitX, emitY, emitZ, chargeState.progress, furnaceRankVal);
+        audio.furnaceCharge(chargeState.progress);
+
+        if (ready || chargeState.progress >= 1.0) {
+          shootFurnaceLance();
+          audio.furnaceCharge(0);
+          weapons.cancelFurnaceCharge();
+          fireHoldTime = 0;
+        }
+      }
+    } else {
+      if (weapons.furnaceChargeState().charging) {
+        weapons.cancelFurnaceCharge();
+        audio.furnaceCharge(0);
+      }
+      if (fireHeld && canFire) {
+        if (fireHoldTime < 0.08 || furnaceRankVal <= 0 || (jetpack.state.fuel || 0) < furnaceCost - 1e-4) {
+          shoot();
+        }
+      }
+      if (!fireHeld) {
+        fireHoldTime = 0;
+      }
+    }
     /* Hand the rite back once the swing is over. `meleeSwing` buffers
        a press during recovery into the next combo step, so the mode
        has to survive until the whole chain has run out - which is
@@ -1018,6 +1209,7 @@ export async function start({ boot, build } = {}) {
     weapons.update(d, player, render.camera);
     player.postUpdate(d);
     flushShot();
+    flushFurnaceLance();
     jetpack.updateVisual(d);
     shield.updateVisual(d);
     vfx.update(d, render.camera);

@@ -50,7 +50,7 @@ export const KEYBIND_ACTIONS = Object.freeze([
   },
   {
     id: "melee", group: "COMBAT", label: "Censer-lance strike",
-    detail: "Ground slam while airborne; hold Move forward to thrust",
+    detail: "Hold to charge a jet-propelled piercing thrust; ground slam while airborne",
     defaults: ["KeyF", null],
   },
   {

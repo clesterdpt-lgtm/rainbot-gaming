@@ -750,6 +750,236 @@ export function buildAudio(ctx) {
     }
   }
 
+  let furnaceChargeVoice = null;
+
+  function furnaceCharge(progress = 0) {
+    if (!ac || state.paused) return;
+    const p = clamp01(progress);
+    const t = now();
+    if (p <= 0.02) {
+      if (furnaceChargeVoice) {
+        try {
+          furnaceChargeVoice.gain.gain.linearRampToValueAtTime(0.0001, t + 0.05);
+          furnaceChargeVoice.osc.stop(t + 0.06);
+          furnaceChargeVoice.noise.stop(t + 0.06);
+        } catch (_) {}
+        furnaceChargeVoice = null;
+      }
+      return;
+    }
+    if (!furnaceChargeVoice) {
+      const g = voice("weapon", 1.2);
+      if (!g) return;
+      const osc = ac.createOscillator();
+      osc.type = "sawtooth";
+      osc.frequency.setValueAtTime(220, t);
+      const flt = ac.createBiquadFilter();
+      flt.type = "bandpass";
+      flt.Q.value = 4.5;
+      flt.frequency.setValueAtTime(380, t);
+      const gain = ac.createGain();
+      gain.gain.setValueAtTime(0.001, t);
+      gain.gain.linearRampToValueAtTime(0.08, t + 0.05);
+      osc.connect(flt); flt.connect(gain); gain.connect(g);
+      osc.start(t);
+
+      const noise = noiseSource(1.2);
+      const nflt = ac.createBiquadFilter();
+      nflt.type = "bandpass";
+      nflt.Q.value = 2.0;
+      nflt.frequency.setValueAtTime(450, t);
+      const ngain = ac.createGain();
+      ngain.gain.setValueAtTime(0.001, t);
+      ngain.gain.linearRampToValueAtTime(0.04, t + 0.05);
+      noise.connect(nflt); nflt.connect(ngain); ngain.connect(g);
+      noise.start(t);
+
+      furnaceChargeVoice = { osc, flt, gain, noise, nflt, ngain, g };
+    }
+    const freq = 220 + p * 680;
+    const filterFreq = 380 + p * 1400;
+    furnaceChargeVoice.osc.frequency.setTargetAtTime(freq, t, 0.03);
+    furnaceChargeVoice.flt.frequency.setTargetAtTime(filterFreq, t, 0.03);
+    furnaceChargeVoice.nflt.frequency.setTargetAtTime(500 + p * 1200, t, 0.03);
+    furnaceChargeVoice.gain.gain.setTargetAtTime(0.06 + p * 0.12, t, 0.03);
+  }
+
+  function furnaceDischarge(x, z, opts = {}) {
+    if (furnaceChargeVoice) {
+      try {
+        const t = now();
+        furnaceChargeVoice.gain.gain.linearRampToValueAtTime(0.0001, t + 0.03);
+        furnaceChargeVoice.osc.stop(t + 0.04);
+        furnaceChargeVoice.noise.stop(t + 0.04);
+      } catch (_) {}
+      furnaceChargeVoice = null;
+    }
+    const t = now();
+    const rank = opts.rank || 1;
+    const dur = rank >= 2 ? 0.65 : 0.48;
+    const g = voice("weapon", dur);
+    if (!g) return;
+    const p = place(g, x ?? state.listenerX, z ?? state.listenerZ, 45, 800);
+    if (!p) return;
+    const out = p.node;
+    const amp = (opts.gain ?? 0.85) * p.atten * (rank >= 2 ? 1.35 : 1.0);
+
+    const crack = noiseSource(dur);
+    const ch = ac.createBiquadFilter();
+    ch.type = "highpass";
+    ch.frequency.setValueAtTime(1100, t);
+    const cb = ac.createBiquadFilter();
+    cb.type = "peaking";
+    cb.frequency.setValueAtTime(2800, t);
+    cb.Q.value = 1.2;
+    cb.gain.value = 14;
+    const cg = ac.createGain();
+    cg.gain.setValueAtTime(amp * 6.5, t);
+    cg.gain.exponentialRampToValueAtTime(0.0001, t + 0.045);
+    crack.connect(ch); ch.connect(cb); cb.connect(cg); cg.connect(out);
+    crack.start(t); crack.stop(t + 0.05);
+
+    const sub = ac.createOscillator();
+    sub.type = "sine";
+    sub.frequency.setValueAtTime(180, t);
+    sub.frequency.exponentialRampToValueAtTime(32, t + 0.12);
+    const subg = ac.createGain();
+    subg.gain.setValueAtTime(amp * 5.2, t);
+    subg.gain.exponentialRampToValueAtTime(0.0001, t + 0.22);
+    sub.connect(subg); subg.connect(out);
+    sub.start(t); sub.stop(t + 0.24);
+
+    const bell = ac.createOscillator();
+    bell.type = "triangle";
+    bell.frequency.setValueAtTime(520, t);
+    bell.frequency.exponentialRampToValueAtTime(370, t + dur * 0.7);
+    const bg = ac.createGain();
+    bg.gain.setValueAtTime(amp * 1.8, t);
+    bg.gain.exponentialRampToValueAtTime(0.0001, t + dur * 0.85);
+    bell.connect(bg); bg.connect(out);
+    bell.start(t); bell.stop(t + dur);
+
+    const ash = noiseSource(dur);
+    const af = ac.createBiquadFilter();
+    af.type = "bandpass";
+    af.frequency.setValueAtTime(1200, t);
+    af.frequency.exponentialRampToValueAtTime(420, t + dur);
+    af.Q.value = 1.8;
+    const ag = ac.createGain();
+    ag.gain.setValueAtTime(amp * 2.2, t);
+    ag.gain.exponentialRampToValueAtTime(0.0001, t + dur * 0.95);
+    ash.connect(af); af.connect(ag); ag.connect(out);
+    ash.start(t); ash.stop(t + dur);
+  }
+
+  let meleePierceVoice = null;
+
+  function meleePierceCharge(progress = 0) {
+    if (!ac || state.paused) return;
+    const p = clamp01(progress);
+    const t = now();
+    if (p <= 0.02) {
+      if (meleePierceVoice) {
+        try {
+          meleePierceVoice.gain.gain.linearRampToValueAtTime(0.0001, t + 0.04);
+          meleePierceVoice.osc.stop(t + 0.05);
+          meleePierceVoice.noise.stop(t + 0.05);
+        } catch (_) {}
+        meleePierceVoice = null;
+      }
+      return;
+    }
+    if (!meleePierceVoice) {
+      const g = voice("weapon", 1.0);
+      if (!g) return;
+      const osc = ac.createOscillator();
+      osc.type = "sawtooth";
+      osc.frequency.setValueAtTime(260, t);
+      const flt = ac.createBiquadFilter();
+      flt.type = "bandpass";
+      flt.Q.value = 6.0;
+      flt.frequency.setValueAtTime(420, t);
+      const gain = ac.createGain();
+      gain.gain.setValueAtTime(0.001, t);
+      gain.gain.linearRampToValueAtTime(0.09, t + 0.04);
+      osc.connect(flt); flt.connect(gain); gain.connect(g);
+      osc.start(t);
+
+      const noise = noiseSource(1.0);
+      const nflt = ac.createBiquadFilter();
+      nflt.type = "bandpass";
+      nflt.Q.value = 3.2;
+      nflt.frequency.setValueAtTime(600, t);
+      const ngain = ac.createGain();
+      ngain.gain.setValueAtTime(0.001, t);
+      ngain.gain.linearRampToValueAtTime(0.05, t + 0.04);
+      noise.connect(nflt); nflt.connect(ngain); ngain.connect(g);
+      noise.start(t);
+
+      meleePierceVoice = { osc, flt, gain, noise, nflt, ngain, g };
+    }
+    const freq = 260 + p * 820;
+    const filterFreq = 420 + p * 1600;
+    meleePierceVoice.osc.frequency.setTargetAtTime(freq, t, 0.025);
+    meleePierceVoice.flt.frequency.setTargetAtTime(filterFreq, t, 0.025);
+    meleePierceVoice.nflt.frequency.setTargetAtTime(600 + p * 1400, t, 0.025);
+    meleePierceVoice.gain.gain.setTargetAtTime(0.08 + p * 0.14, t, 0.025);
+  }
+
+  function meleePierceLaunch(x, z) {
+    if (meleePierceVoice) {
+      try {
+        const t = now();
+        meleePierceVoice.gain.gain.linearRampToValueAtTime(0.0001, t + 0.03);
+        meleePierceVoice.osc.stop(t + 0.04);
+        meleePierceVoice.noise.stop(t + 0.04);
+      } catch (_) {}
+      meleePierceVoice = null;
+    }
+    const t = now();
+    const dur = 0.52;
+    const g = voice("weapon", dur);
+    if (!g) return;
+    const p = place(g, x ?? state.listenerX, z ?? state.listenerZ, 45, 800);
+    if (!p) return;
+    const out = p.node;
+    const amp = 0.95 * p.atten;
+
+    // Rocket thruster roar
+    const roar = noiseSource(dur);
+    const rf = ac.createBiquadFilter();
+    rf.type = "lowpass";
+    rf.frequency.setValueAtTime(1400, t);
+    rf.frequency.exponentialRampToValueAtTime(320, t + dur);
+    const rg = ac.createGain();
+    rg.gain.setValueAtTime(amp * 4.5, t);
+    rg.gain.exponentialRampToValueAtTime(0.0001, t + dur * 0.9);
+    roar.connect(rf); rf.connect(rg); rg.connect(out);
+    roar.start(t); roar.stop(t + dur);
+
+    // Piercing supersonic crack
+    const crack = noiseSource(0.12);
+    const cf = ac.createBiquadFilter();
+    cf.type = "highpass";
+    cf.frequency.setValueAtTime(2200, t);
+    const cg = ac.createGain();
+    cg.gain.setValueAtTime(amp * 6.0, t);
+    cg.gain.exponentialRampToValueAtTime(0.0001, t + 0.08);
+    crack.connect(cf); cf.connect(cg); cg.connect(out);
+    crack.start(t); crack.stop(t + 0.09);
+
+    // Deep sub drop
+    const sub = ac.createOscillator();
+    sub.type = "sine";
+    sub.frequency.setValueAtTime(240, t);
+    sub.frequency.exponentialRampToValueAtTime(45, t + 0.22);
+    const sg = ac.createGain();
+    sg.gain.setValueAtTime(amp * 5.0, t);
+    sg.gain.exponentialRampToValueAtTime(0.0001, t + 0.28);
+    sub.connect(sg); sg.connect(out);
+    sub.start(t); sub.stop(t + 0.30);
+  }
+
   /** A round landing: flesh, or stone. */
   function impact(x, z, kind = "flesh") {
     const t = now();
@@ -2555,6 +2785,8 @@ export function buildAudio(ctx) {
   return {
     context: ac,
     shot,
+    furnaceCharge,
+    furnaceDischarge,
     vent,
     ventReady,
     impact,
@@ -2574,6 +2806,8 @@ export function buildAudio(ctx) {
     slamCharge,
     slamPlunge,
     slamImpact,
+    meleePierceCharge,
+    meleePierceLaunch,
     doctrineCue,
     detachDoctrine() {
       doctrineStop?.();
@@ -2661,12 +2895,13 @@ function makeSilentApi() {
   const noPromise = () => Promise.resolve(false);
   return {
     context: null,
-    shot: noop, impact: noop, death: noop, explosion: noop, inbound: noop,
+    shot: noop, furnaceCharge: noop, furnaceDischarge: noop, impact: noop, death: noop, explosion: noop, inbound: noop,
     rumble: noop, surface: noop, hiss: noop,
     step: noop, hurt: noop, blip: noop, chord: noop, attach: noop,
     jetIgnite: noop, jetCutoff: noop, jetEmpty: noop, jetLand: noop,
     boostIgnite: noop, boostCut: noop, boostHit: noop,
     slamCharge: noop, slamPlunge: noop, slamImpact: noop,
+    meleePierceCharge: noop, meleePierceLaunch: noop,
     doctrineCue: no, detachDoctrine: noop,
     update: noop, unlock: noPromise, startAmbience: noop, startMusic: noop, setEnabled: noop,
     setMasterVolume: noop, setMusicVolume: noop, setSfxVolume: noop, setVolumes: noop,

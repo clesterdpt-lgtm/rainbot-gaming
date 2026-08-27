@@ -179,10 +179,13 @@ function auditInPage(only) {
     },
     censer_furnace_reprieve() {
       ring("thresher", 3, 6);
-      notes.push(`furnace_reprieve killed at heat ${(heatTo(0.8) * 100).toFixed(0)}%`);
-      const live = (T.enemies.live || []).filter((e) => e.state !== "death");
-      if (live[0]) T.combat.damageEnemy(live[0], 99999, { source: "shot" });
-      adv(0.7);
+      T.jetpack.restoreCharge(50, "audit");
+      T.weapons.setMode("ranged");
+      T.player.input.state.firing = true;
+      adv(0.65);
+      T.player.input.state.firing = false;
+      adv(0.4);
+      notes.push("furnace_lance charged and discharged");
     },
     censer_martyrs_furnace() {
       ring("thresher", 4, 5);
@@ -195,9 +198,9 @@ function auditInPage(only) {
     procession_hooking_step() { meleeAt(3); },
     procession_third_toll() { meleeAt(7); },
     procession_executioners_measure() {
-      meleeAt(4);
-      T.pullTrigger();
-      adv(0.5);
+      ring("thresher", 3, 5);
+      T.player.meleePierce?.();
+      adv(0.8);
     },
     procession_processional_mercy() { meleeAt(7); },
     procession_endless_litany() { meleeAt(9); },
@@ -369,10 +372,16 @@ async function main() {
       viewport: { width: 1280, height: 720 }, deviceScaleFactor: 1,
     })).newPage();
     const errors = [];
-    page.on("pageerror", (e) => errors.push(String(e)));
-    page.on("console", (m) => { if (m.type() === "error") errors.push(m.text()); });
+    page.on("pageerror", (e) => {
+      console.error("[browser error]", e);
+      errors.push(String(e));
+    });
+    page.on("console", (m) => {
+      console.log(`[browser ${m.type()}]`, m.text());
+      if (m.type() === "error") errors.push(m.text());
+    });
 
-    await page.goto(`${BASE}/games/saintfall.html?qa=1&intro=0&time=goldenhour&seed=talents`,
+    await page.goto(`${BASE}/games/saintfall.html?qa=1&intro=skip&quality=high&time=goldenhour&seed=talents`,
       { waitUntil: "domcontentloaded", timeout: 60000 });
     await page.waitForFunction(() => window.__SF && window.__SF.isReady(), null, { timeout: 180000 });
 

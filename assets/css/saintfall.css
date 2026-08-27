@@ -581,6 +581,11 @@ html.sf-maximised .sf-stage.is-maxed { z-index: 2147483000; }
   left: calc(50% + var(--sf-reticle-gap));
   height: 2px; width: var(--sf-reticle-arm);
 }
+.sf-hud__reticle[data-charging="1"] i {
+  background: #ffbd3e;
+  box-shadow: 0 0 8px rgba(255, 189, 62, .95), 0 0 16px rgba(255, 150, 40, .6);
+  filter: brightness(1.35);
+}
 
 /* The damage flash. Driven by a class toggle rather than by an
    inline opacity ramp so the browser owns the timing - a JS-driven

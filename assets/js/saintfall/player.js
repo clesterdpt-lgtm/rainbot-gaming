@@ -1868,6 +1868,7 @@ function makeInput(canvas, captureMeleeAim = null) {
        crossing two kilometres of open basin. */
     sprint: false,
     boostHeld: false,
+    meleeHeld: false,
     jump: false,
     jumpPressed: false,
     jetpack: false,
@@ -1891,6 +1892,7 @@ function makeInput(canvas, captureMeleeAim = null) {
     move: { x: 0, y: 0 },
     sprint: false,
     boostHeld: false,
+    melee: false,
     crouch: false,
     jetpack: false,
     block: false,
@@ -1938,6 +1940,7 @@ function makeInput(canvas, captureMeleeAim = null) {
     touch.move.x = 0;
     touch.move.y = 0;
     touch.sprint = false;
+    touch.melee = false;
     touch.jetpack = false;
     touch.block = false;
     touch.firing = false;
@@ -1960,6 +1963,8 @@ function makeInput(canvas, captureMeleeAim = null) {
     state.look.x = 0;
     state.look.y = 0;
     state.sprint = false;
+    state.boostHeld = false;
+    state.meleeHeld = false;
     state.jump = false;
     state.jumpPressed = false;
     state.jetpack = false;
@@ -2000,7 +2005,7 @@ function makeInput(canvas, captureMeleeAim = null) {
     /* MELEE IS AN ACTION, NOT A MODE.
        One key, one swing: main.js takes the rite over for the length
        of the animation and hands it back. */
-    if (keybindMatches("melee", k)) {
+    if (keybindMatches("melee", k) || k === "KeyQ" || k === "KeyF") {
       /* Bind the swing to the reticle that existed at keydown. The
          event is drained after player.update(), so sampling there
          would let mouse-look during the same frame silently redirect
@@ -2029,6 +2034,7 @@ function makeInput(canvas, captureMeleeAim = null) {
     state.jumpPressed = false;
     state.jetpack = false;
     state.boostHeld = false;
+    state.meleeHeld = false;
     clearTouch();
   });
   document.addEventListener("visibilitychange", () => {
@@ -2087,8 +2093,10 @@ function makeInput(canvas, captureMeleeAim = null) {
           - (keybindDown(keys, "moveForward") ? 1 : 0);
       }
       const boostHeld = keybindDown(keys, "boost");
+      const meleeHeld = keybindDown(keys, "melee") || keys.has("KeyQ") || keys.has("KeyF");
       state.sprint = touch.sprint;
       state.boostHeld = boostHeld || touch.boostHeld;
+      state.meleeHeld = meleeHeld || touch.melee;
       state.crouch = false;
       state.jump = keybindDown(keys, "jump");
       state.jetpack = (state.jump && boostHeld) || touch.jetpack;
@@ -2461,6 +2469,9 @@ export async function createPlayer(ctx, canvas) {
      ramps it in, holds it through the closing dash and fades it during
      recovery, so it never becomes a sustained sprint. */
   const MELEE_LUNGE_SPEED = 16.5;
+  /* Peak speed of the jetpack-powered piercing thrust. Explodes at
+     over double the standard lunge speed to pierce through entire lines. */
+  const MELEE_PIERCE_SPEED = 34.0;
   /* Walking and flight-to-ground handoff must agree about what terrain
      the trooper can occupy. Keeping these gates in one classifier avoids
      a middle band where a slope is freely walkable but a descending
@@ -3128,6 +3139,24 @@ export async function createPlayer(ctx, canvas) {
         [0.82, 0.0, 0.0, 0.0, 0, 0, 0, "settle"],
       ],
     },
+    /* THE PIERCE - the Executioner's Thrust jetpack-powered piercing charge.
+       Coils low and drives forward in an explosive vector burst that cuts
+       cleanly through multiple ranks of enemies. */
+    meleePierce: {
+      dur: 0.68, hit: [0.06, 0.40], damage: 2.4, arc: 0.85, lunge: 2.8,
+      sweep: 6,
+      drive: { start: 0.02, ramp: 0.06, end: 0.32, fade: 0.20 },
+      keys: [
+        [0.00, 0.0, 0.0, 0.0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, "load"],
+        // Coil forward into a streamlined spear thrust, lance dead ahead
+        [0.12, 0.10, -0.04, 0.26, -0.04, 0.02, 0.0, 0.60, -0.32, 0.08, -0.14, 0.38, 0.14, 0.35, 0.30, "strike"],
+        // Piercing penetration at full rocket speed
+        [0.34, 0.14, -0.03, 0.30, -0.02, 0.01, 0.0, 0.66, -0.36, 0.06, -0.16, 0.42, 0.15, 0.40, 0.36, "strike"],
+        // Settle & recover
+        [0.54, 0.05, -0.01, 0.12, -0.03, 0.0, 0.0, 0.28, -0.14, 0.04, -0.07, 0.20, 0.09, 0.18, 0.14, "settle"],
+        [0.68, 0.0, 0.0, 0.0, 0, 0, 0, "settle"],
+      ],
+    },
     /* ------------------------------------------------------------
        THE FALL.
 
@@ -3457,6 +3486,23 @@ export async function createPlayer(ctx, canvas) {
       return beginAction("meleeLunge", aimYaw);
     }
     return beginAction(`melee${action.combo}`, aimYaw);
+  }
+
+  /** Jetpack-powered piercing thrust: straight-line rocket dash that penetrates all enemies. */
+  function meleePierce(capturedAimYaw = null) {
+    const w = ctx.weapons && ctx.weapons.current;
+    if (!w || !w.spec.melee) return false;
+    const aimYaw = Number.isFinite(capturedAimYaw)
+      ? capturedAimYaw
+      : Number.isFinite(state.aimViewYaw) ? state.aimViewYaw : state.camYaw;
+    action.combo = 1;
+    action.comboAt = state.clock;
+    action.queuedAimYaw = null;
+    const rank = ctx.progression?.talentRank?.("procession_executioners_measure") || 1;
+    const spec = ACTIONS.meleePierce;
+    spec.damage = rank >= 2 ? 3.4 : 2.4;
+    spec.lunge = rank >= 2 ? 3.6 : 2.8;
+    return beginAction("meleePierce", aimYaw);
   }
 
   /* Save/load and other hard handoffs must never resume a half-applied hit
@@ -4200,10 +4246,12 @@ export async function createPlayer(ctx, canvas) {
          the hoist in createPlayer) hiding has to be an intensity,
          never a visibility flip, or the light count changes and the
          whole level recompiles. */
+      const heartScale = figure.heartLight.userData.sfIntensityScale ?? 1;
       const targetHeart = showFigure
         ? 0.16 + duskLight * 0.32 + nightLight * 0.24 + doctrineLevel * 0.92
         : 0;
-      figure.heartLight.intensity = damp(figure.heartLight.intensity, targetHeart, 8, dt);
+      figure.heartLight.intensity = damp(
+        figure.heartLight.intensity, targetHeart * heartScale, 8, dt);
       if (doctrineHeartBase) {
         figure.heartLight.color.copy(doctrineHeartBase)
           .lerp(doctrineGlow.colour, doctrineLevel * 0.68);
@@ -4383,8 +4431,9 @@ export async function createPlayer(ctx, canvas) {
         : GROUND_DECEL_RESPONSE;
       state.speed = damp(state.speed, wanted, speedResponse, dt);
       if (lungeDrive > 0) {
+        const driveMax = action.name === "meleePierce" ? MELEE_PIERCE_SPEED : MELEE_LUNGE_SPEED;
         state.speed = Math.max(state.speed,
-          MELEE_LUNGE_SPEED * lungeDrive * state.slowFactor);
+          driveMax * lungeDrive * state.slowFactor);
       }
     }
     if (flightMode) jetState.horizontalSpeed = state.speed;
@@ -7102,6 +7151,7 @@ export async function createPlayer(ctx, canvas) {
     beginAction,
     sampleActionAt,
     meleeSwing,
+    meleePierce,
     die,
     cancelTransientActions,
     listActions: () => Object.keys(ACTIONS),

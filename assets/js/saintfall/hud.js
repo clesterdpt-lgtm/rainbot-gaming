@@ -1729,6 +1729,8 @@ export function buildHud(ctx, host) {
       reticleGapPx = Math.min(44, Math.max(6, conePx));
       reticleEl.style.setProperty("--sf-reticle-gap", `${reticleGapPx.toFixed(2)}px`);
       reticleEl.dataset.aiming = ctx.weapons?.carry?.ads > 0.5 ? "1" : "0";
+      const furnaceCharge = ctx.weapons?.furnaceChargeState?.();
+      reticleEl.dataset.charging = furnaceCharge?.charging ? "1" : "0";
       reticleEl.style.opacity = combat.player.dead || shield?.active
         || ctx.slam?.state?.active ? "0" : "1";
     },

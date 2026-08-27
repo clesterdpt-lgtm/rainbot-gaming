@@ -16,6 +16,7 @@ console.log("--- 1. Testing Talent Config & Naming ---");
 const progConfig = await import("../assets/js/saintfall/progression-config.js");
 const allTalents = progConfig.DOCTRINE_ORDERS.flatMap((o) => o.talents);
 const measure = allTalents.find((t) => t.id === "procession_executioners_measure");
+const furnace = allTalents.find((t) => t.id === "censer_furnace_reprieve");
 
 assert(!!measure, "procession_executioners_measure found in TALENTS");
 assert(measure.name === "Executioner's Thrust", `Name is 'Executioner's Thrust' (got '${measure.name}')`);
@@ -24,14 +25,21 @@ assert(measure.ranks[0].description.includes("15 charge"), "Rank 1 description m
 assert(measure.ranks[0].description.includes("240%"), "Rank 1 description mentions 240% damage");
 assert(measure.ranks[1].description.includes("340%"), "Rank 2 description mentions 340% damage");
 assert(measure.ranks[1].description.includes("exposes heavy enemies"), "Rank 2 description mentions exposing heavy enemies");
+assert(!!furnace, "censer_furnace_reprieve found in TALENTS");
+assert(progConfig.FURNACE_LANCE_RULES.ranks[1].chargeSeconds === 1.2,
+  "Furnace Lance rank 1 requires a 1.2-second charge");
+assert(progConfig.FURNACE_LANCE_RULES.ranks[2].damage === 160,
+  "Furnace Lance rank 2 damage is capped at 160");
+assert(furnace.summary.includes("alternate fire"), "Furnace Lance copy names alternate fire");
 
 console.log("\n--- 2. Testing Keybinds ---");
 const keybindsModule = await import("../assets/js/saintfall/keybinds.js");
 const meleeAction = keybindsModule.KEYBIND_ACTIONS.find((a) => a.id === "melee");
 const wheelAction = keybindsModule.KEYBIND_ACTIONS.find((a) => a.id === "wheel");
-assert(meleeAction.defaults.includes("KeyQ"), "melee default includes KeyQ");
+const furnaceAction = keybindsModule.KEYBIND_ACTIONS.find((a) => a.id === "furnace");
 assert(meleeAction.defaults.includes("KeyF"), "melee default includes KeyF");
-assert(wheelAction.defaults.includes("KeyT") || wheelAction.defaults.includes("KeyG"), "wheel default uses KeyT/KeyG");
+assert(furnaceAction.defaults.includes("KeyG"), "Furnace Lance has a distinct G default");
+assert(wheelAction.defaults.includes("KeyQ"), "command wheel retains Q");
 
 console.log("\n--- 3. Testing Icon Asset ---");
 const iconPath = path.join(root, "assets", "img", "saintfall", "talents", "procession_executioners_measure.jpg");
@@ -45,15 +53,24 @@ assert(playerCode.includes("MELEE_PIERCE_SPEED = 34.0"), "player.js defines MELE
 assert(playerCode.includes("meleePierce: {"), "player.js defines ACTIONS.meleePierce");
 assert(playerCode.includes("function meleePierce("), "player.js defines meleePierce method");
 assert(playerCode.includes("meleePierce,"), "player.js exports meleePierce");
+assert(playerCode.includes('ctx.progression?.rank?.("procession_executioners_measure")'),
+  "player.js reads Executioner's Thrust through the live progression API");
 
 const combatCode = readFileSync(path.join(root, "assets", "js", "saintfall", "combat.js"), "utf-8");
 assert(combatCode.includes("const isPierce = Math.abs(sweepId) === 6 || comboStep === 6;"), "combat.js identifies piercing melee attacks");
 assert(combatCode.includes("isPierce,"), "combat.js emits isPierce in meleeEvent");
+assert(combatCode.includes("const damage = opts.damage ?? rule.damage;"),
+  "Furnace beam damage reads the shared balance contract");
+assert(!combatCode.includes("rank >= 2 ? 320 : 180"),
+  "the old 180/320 Furnace damage path is gone");
 
 const mainCode = readFileSync(path.join(root, "assets", "js", "saintfall", "main.js"), "utf-8");
 assert(mainCode.includes("function meleePierce("), "main.js defines meleePierce");
 assert(mainCode.includes("meleeCharging"), "main.js tracks meleeCharging state");
 assert(mainCode.includes("canChargePierce"), "main.js checks canChargePierce");
+assert(!mainCode.includes("progression.talentRank"), "main.js does not call the nonexistent talentRank API");
+assert(mainCode.includes("player.input.state.furnaceHeld"),
+  "main.js routes Furnace Lance through distinct alternate-fire input");
 
 const vfxCode = readFileSync(path.join(root, "assets", "js", "saintfall", "vfx.js"), "utf-8");
 assert(vfxCode.includes("6: Object.freeze({"), "vfx.js has MELEE_SWEEPS[6]");

@@ -1869,6 +1869,7 @@ function makeInput(canvas, captureMeleeAim = null) {
     sprint: false,
     boostHeld: false,
     meleeHeld: false,
+    furnaceHeld: false,
     jump: false,
     jumpPressed: false,
     jetpack: false,
@@ -1886,7 +1887,7 @@ function makeInput(canvas, captureMeleeAim = null) {
        difference between an orbital lance and "CODE REJECTED". */
     events: [],
   };
-  const mouse = { firing: false, ads: false };
+  const mouse = { firing: false, ads: false, furnace: false };
   const touch = {
     moveActive: false,
     move: { x: 0, y: 0 },
@@ -1897,6 +1898,7 @@ function makeInput(canvas, captureMeleeAim = null) {
     jetpack: false,
     block: false,
     firing: false,
+    furnace: false,
     ads: false,
   };
 
@@ -1944,8 +1946,10 @@ function makeInput(canvas, captureMeleeAim = null) {
     touch.jetpack = false;
     touch.block = false;
     touch.firing = false;
+    touch.furnace = false;
     touch.ads = false;
     state.firing = mouse.firing;
+    state.furnaceHeld = mouse.furnace;
     state.ads = mouse.ads;
   }
 
@@ -1957,6 +1961,7 @@ function makeInput(canvas, captureMeleeAim = null) {
     keys.clear();
     mouse.firing = false;
     mouse.ads = false;
+    mouse.furnace = false;
     state.injected = null;
     state.move.x = 0;
     state.move.y = 0;
@@ -1965,6 +1970,7 @@ function makeInput(canvas, captureMeleeAim = null) {
     state.sprint = false;
     state.boostHeld = false;
     state.meleeHeld = false;
+    state.furnaceHeld = false;
     state.jump = false;
     state.jumpPressed = false;
     state.jetpack = false;
@@ -2035,6 +2041,7 @@ function makeInput(canvas, captureMeleeAim = null) {
     state.jetpack = false;
     state.boostHeld = false;
     state.meleeHeld = false;
+    state.furnaceHeld = false;
     clearTouch();
   });
   document.addEventListener("visibilitychange", () => {
@@ -2060,10 +2067,12 @@ function makeInput(canvas, captureMeleeAim = null) {
   window.addEventListener("mousedown", (e) => {
     if (!state.locked || e.defaultPrevented) return;
     if (e.button === 0) { mouse.firing = true; state.firing = true; }
+    if (e.button === 1) { mouse.furnace = true; state.furnaceHeld = true; }
     if (e.button === 2) { mouse.ads = true; state.ads = true; }
   });
   window.addEventListener("mouseup", (e) => {
     if (e.button === 0) { mouse.firing = false; state.firing = touch.firing; }
+    if (e.button === 1) { mouse.furnace = false; state.furnaceHeld = touch.furnace; }
     if (e.button === 2) { mouse.ads = false; state.ads = touch.ads; }
   });
   window.addEventListener("contextmenu", (e) => {
@@ -2072,7 +2081,9 @@ function makeInput(canvas, captureMeleeAim = null) {
   window.addEventListener("blur", () => {
     mouse.firing = false;
     mouse.ads = false;
+    mouse.furnace = false;
     state.firing = false;
+    state.furnaceHeld = false;
     state.ads = false;
   });
 
@@ -2094,9 +2105,11 @@ function makeInput(canvas, captureMeleeAim = null) {
       }
       const boostHeld = keybindDown(keys, "boost");
       const meleeHeld = keybindDown(keys, "melee") || keys.has("KeyQ") || keys.has("KeyF");
+      const furnaceHeld = keybindDown(keys, "furnace") || mouse.furnace;
       state.sprint = touch.sprint;
       state.boostHeld = boostHeld || touch.boostHeld;
       state.meleeHeld = meleeHeld || touch.melee;
+      state.furnaceHeld = furnaceHeld || touch.furnace;
       state.crouch = false;
       state.jump = keybindDown(keys, "jump");
       state.jetpack = (state.jump && boostHeld) || touch.jetpack;
@@ -3498,7 +3511,7 @@ export async function createPlayer(ctx, canvas) {
     action.combo = 1;
     action.comboAt = state.clock;
     action.queuedAimYaw = null;
-    const rank = ctx.progression?.talentRank?.("procession_executioners_measure") || 1;
+    const rank = ctx.progression?.rank?.("procession_executioners_measure") || 1;
     const spec = ACTIONS.meleePierce;
     spec.damage = rank >= 2 ? 3.4 : 2.4;
     spec.lunge = rank >= 2 ? 3.6 : 2.8;

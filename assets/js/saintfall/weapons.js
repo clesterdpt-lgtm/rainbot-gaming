@@ -28,6 +28,7 @@ import {
   PALETTE, paintByHeight, paintFlat, patchMaterial, patchBasicMaterial,
 } from "saintfall/art.js";
 import { makeKit } from "saintfall/structures.js";
+import { FURNACE_LANCE_RULES } from "saintfall/progression-config.js";
 
 /* The reliquary lamp at rest, and how fast a shot's flash decays off
    it. 1/0.045s: long enough to be caught at 60fps from any frame the
@@ -809,7 +810,7 @@ export function buildWeapons(ctx) {
     furnaceCharge: {
       charging: false,
       time: 0,
-      maxTime: 0.55,
+      maxTime: FURNACE_LANCE_RULES.ranks[1].chargeSeconds,
       progress: 0,
       ready: false,
     },
@@ -1058,11 +1059,14 @@ export function buildWeapons(ctx) {
     return true;
   }
 
-  function startFurnaceCharge(maxTime = 0.55) {
+  function startFurnaceCharge(maxTime = FURNACE_LANCE_RULES.ranks[1].chargeSeconds) {
     if (!carry.record || carry.venting > 0 || carry.overheated || carry.record.spec?.melee) return false;
     carry.furnaceCharge.charging = true;
     carry.furnaceCharge.time = 0;
-    carry.furnaceCharge.maxTime = Math.max(0.1, Number(maxTime) || 0.55);
+    carry.furnaceCharge.maxTime = Math.max(
+      0.1,
+      Number(maxTime) || FURNACE_LANCE_RULES.ranks[1].chargeSeconds
+    );
     carry.furnaceCharge.progress = 0;
     carry.furnaceCharge.ready = false;
     return true;
@@ -1086,20 +1090,17 @@ export function buildWeapons(ctx) {
   function dischargeFurnaceLance(opts = {}) {
     if (!carry.record || carry.venting > 0 || carry.overheated) return false;
     const rank = Math.max(1, Number(opts.rank) || 1);
+    const rule = FURNACE_LANCE_RULES.ranks[rank >= 2 ? 2 : 1];
     const spec = carry.record.spec;
     const r = spec?.recoil || { kick: 0.08, rise: 0.04, roll: 0.02 };
     carry.sinceShot = 0;
-    carry.cooldown = Math.max(carry.cooldown, rank >= 2 ? 0.36 : 0.46);
+    carry.cooldown = Math.max(carry.cooldown, rule.cooldownSeconds);
     carry.recoil.back = Math.min(carry.recoil.back + r.kick * 3.2, r.kick * 4.6);
     carry.recoil.rise = Math.min(carry.recoil.rise + r.rise * 3.4, r.rise * 5.2);
     carry.recoil.roll += (Math.random() - 0.5) * r.roll * 3.6;
     carry.flash = 1;
     cancelFurnaceCharge();
-    if (rank >= 2) {
-      coolHeat(0.08, { reason: "furnace-lance-rank-2" });
-    } else {
-      addHeat(0.04, { reason: "furnace-lance" });
-    }
+    if (rule.heatDelta > 0) addHeat(rule.heatDelta, { reason: "furnace-lance" });
     const payload = weaponEvent({
       charged: true,
       rank,

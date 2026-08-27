@@ -17,6 +17,7 @@ export const TOUCH_CONFIG = Object.freeze({
 
 const HOLD_ACTIONS = Object.freeze({
   fire: "firing",
+  furnace: "furnace",
   aim: "ads",
   shield: "block",
   jet: "jetpack",
@@ -64,6 +65,7 @@ function buildMarkup() {
     <div class="sf-touch__stack" data-touch-actions aria-label="Combat controls">
       <div class="sf-touch__utility">
         ${actionButton("vent", "↻", "VENT", "tap")}
+        ${actionButton("furnace", "◆", "LANCE", "hold")}
         <button class="sf-touch__button sf-touch__button--command" type="button"
           data-touch-command aria-label="Hold and drag to select battlefield support"
           aria-haspopup="dialog" style="min-width:48px;min-height:48px">
@@ -368,6 +370,13 @@ export function buildTouchControls(ctx, player, host, stage) {
       ? "active"
       : fuel <= 0 ? "low" : "ready");
     setButtonState("fire", ctx.weapons?.carry?.overheated ? "low" : "ready");
+    const furnaceRank = ctx.progression?.rank?.("censer_furnace_reprieve") || 0;
+    const furnaceButton = actionButtons.get("furnace");
+    if (furnaceButton) furnaceButton.hidden = furnaceRank <= 0;
+    const furnaceState = ctx.weapons?.furnaceChargeState?.();
+    setButtonState("furnace", furnaceState?.charging
+      ? (furnaceState.ready ? "ready" : "active")
+      : furnaceRank <= 0 || fuel <= 0 || ctx.weapons?.carry?.overheated ? "low" : "ready");
     setButtonState("vent", (ctx.weapons?.carry?.venting || 0) > 0 ? "active" : "ready");
     const dead = !!ctx.combat?.player?.dead;
     if (dead && !wasDead) releaseAll();
@@ -387,6 +396,7 @@ export function buildTouchControls(ctx, player, host, stage) {
       },
       holds: {
         fire: input.touch.firing,
+        furnace: input.touch.furnace,
         aim: input.touch.ads,
         shield: input.touch.block,
         jet: input.touch.jetpack,

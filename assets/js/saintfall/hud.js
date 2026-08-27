@@ -1731,6 +1731,9 @@ export function buildHud(ctx, host) {
       reticleEl.dataset.aiming = ctx.weapons?.carry?.ads > 0.5 ? "1" : "0";
       const furnaceCharge = ctx.weapons?.furnaceChargeState?.();
       reticleEl.dataset.charging = furnaceCharge?.charging ? "1" : "0";
+      reticleEl.dataset.chargeReady = furnaceCharge?.ready ? "1" : "0";
+      reticleEl.style.setProperty("--sf-furnace-progress",
+        String(Math.max(0, Math.min(1, furnaceCharge?.progress || 0))));
       reticleEl.style.opacity = combat.player.dead || shield?.active
         || ctx.slam?.state?.active ? "0" : "1";
     },
@@ -1739,6 +1742,8 @@ export function buildHud(ctx, host) {
         gapPx: Number(reticleGapPx.toFixed(2)),
         coneRad: Number(reticleConeRad.toFixed(5)),
         aiming: reticleEl.dataset.aiming === "1",
+        furnaceCharging: reticleEl.dataset.charging === "1",
+        furnaceReady: reticleEl.dataset.chargeReady === "1",
       };
     },
     minimapState() {

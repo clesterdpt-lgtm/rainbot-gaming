@@ -20,6 +20,7 @@ import {
   CAPSTONE_ELIGIBILITY_POINTS,
   MAX_ACTIVE_CAPSTONES,
   VOW_RULES,
+  FURNACE_LANCE_RULES,
 } from "saintfall/progression-config.js";
 import { makeBus } from "saintfall/core.js";
 
@@ -108,10 +109,10 @@ const MVP_COPY = Object.freeze({
     ],
   },
   censer_furnace_reprieve: {
-    summary: "Hold fire to channel Reliquary charge into a piercing heavy beam.",
+    summary: "Hold alternate fire, then release a fully charged piercing beam.",
     ranks: [
-      "Holding fire channels 18 Reliquary charge over 0.55s. Releasing unleashes a concentrated furnace beam that pierces enemies for 180 damage and staggers targets.",
-      "Channels in 0.42s for 14 charge, dealing 320 damage, producing no heat, and releasing a searing shockwave on impact.",
+      `Hold the Furnace Lance input for ${FURNACE_LANCE_RULES.ranks[1].chargeSeconds} seconds, then release to spend ${FURNACE_LANCE_RULES.ranks[1].chargeCost} Reliquary charge and fire a ${FURNACE_LANCE_RULES.ranks[1].damage}-damage piercing beam. Releasing early cancels the shot.`,
+      `Charges in ${FURNACE_LANCE_RULES.ranks[2].chargeSeconds} second for ${FURNACE_LANCE_RULES.ranks[2].chargeCost} Reliquary charge, deals ${FURNACE_LANCE_RULES.ranks[2].damage} damage without adding heat, and releases a modest searing shockwave at the endpoint.`,
     ],
   },
   procession_hooking_step: {

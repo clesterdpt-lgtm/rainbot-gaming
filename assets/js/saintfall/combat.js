@@ -16,6 +16,7 @@
 
 import { clamp, clamp01, damp, makeBus } from "saintfall/core.js";
 import { DIFFICULTY, DEFAULT_DIFFICULTY } from "saintfall/difficulty.js";
+import { FURNACE_LANCE_RULES } from "saintfall/progression-config.js";
 
 const TAU = Math.PI * 2;
 
@@ -1691,7 +1692,8 @@ export function buildCombat(ctx) {
   /** Fire the devastating, piercing Furnace Lance beam. */
   function fireFurnaceBeam(origin, direction, opts = {}) {
     const rank = Math.max(1, Number(opts.rank) || 1);
-    const damage = opts.damage ?? (rank >= 2 ? 320 : 180);
+    const rule = FURNACE_LANCE_RULES.ranks[rank >= 2 ? 2 : 1];
+    const damage = opts.damage ?? rule.damage;
     const range = opts.range ?? 360;
     player.shots += 1;
 
@@ -1764,7 +1766,7 @@ export function buildCombat(ctx) {
         });
 
       if (hit.inst && hit.inst.state !== "death") {
-        hit.inst.stunFor = Math.max(hit.inst.stunFor || 0, rank >= 2 ? 1.2 : 0.8);
+        hit.inst.stunFor = Math.max(hit.inst.stunFor || 0, rule.staggerSeconds);
       }
 
       if (vfx && vfx.spark) {
@@ -1799,10 +1801,7 @@ export function buildCombat(ctx) {
 
     if (rank >= 2) {
       shockwave(endX, endY, endZ, {
-        radius: 4.8,
-        damage: 65,
-        stun: 1.0,
-        knockSpeed: 7.5,
+        ...FURNACE_LANCE_RULES.shockwave,
         source: "furnace-lance-shockwave",
       });
     }

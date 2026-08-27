@@ -41,6 +41,7 @@ import { buildDistrictBosses } from "saintfall/district-bosses.js";
 import { buildApostate } from "saintfall/apostate.js";
 import { buildUndercroft } from "saintfall/undercroft.js";
 import { buildProgression } from "saintfall/progression.js";
+import { FURNACE_LANCE_RULES } from "saintfall/progression-config.js";
 import { buildAudio } from "saintfall/audio.js";
 import { buildWeapons } from "saintfall/weapons.js";
 import { buildHud } from "saintfall/hud.js";
@@ -504,10 +505,9 @@ export async function start({ boot, build } = {}) {
   let shotAimReach = SHOT_RANGE;
   let lastShotSolution = null;
   const _furnacePos = new THREE.Vector3();
-  let fireHoldTime = 0;
   let furnaceShotQueued = false;
   let furnaceRank = 1;
-  let furnaceDamage = 180;
+  let furnaceDamage = FURNACE_LANCE_RULES.ranks[1].damage;
 
   /* ------------------------------ loop ------------------------------ */
 
@@ -736,11 +736,11 @@ export async function start({ boot, build } = {}) {
     if (slam.state.active) return false;
     if (shield.state.active) return false;
     const rank = Math.max(1, progression.rank?.("censer_furnace_reprieve") || 1);
-    const chargeCost = rank >= 2 ? 14 : 18;
-    if ((jetpack.state.fuel || 0) < chargeCost - 1e-4) return false;
+    const rule = FURNACE_LANCE_RULES.ranks[rank >= 2 ? 2 : 1];
+    if ((jetpack.state.fuel || 0) < rule.chargeCost - 1e-4) return false;
     if (!weapons.dischargeFurnaceLance({ rank })) return false;
 
-    jetpack.spend(chargeCost, true, false);
+    jetpack.spend(rule.chargeCost, true, false);
 
     const w = weapons.current;
     shotPort = w ? (w.emitter || w.muzzle) : null;
@@ -763,7 +763,7 @@ export async function start({ boot, build } = {}) {
       ? cameraEnemy.t
       : Math.min(SHOT_RANGE, cameraWall);
     shotAimPoint.copy(shotCameraOrigin).addScaledVector(shotCameraDir, shotAimReach);
-    furnaceDamage = rank >= 2 ? 320 : 180;
+    furnaceDamage = rule.damage;
     furnaceRank = rank;
     furnaceShotQueued = true;
     weapons.flashMuzzle();
@@ -809,6 +809,7 @@ export async function start({ boot, build } = {}) {
   let meleeHoldTime = 0;
   let meleeAimYaw = null;
   let meleeCharging = false;
+  let meleePending = null;
 
   function meleeStrike(aimYaw = null) {
     if (combat.player.dead) return false;
@@ -859,6 +860,30 @@ export async function start({ boot, build } = {}) {
     }
     audio.meleePierceLaunch?.(player.state.x, player.state.z);
     return true;
+  }
+
+  /* A press must survive the ordinary low-ready/sheathed carry. Previously
+     the input was consumed while the lance was still on the trooper's back;
+     by the time the draw finished there was no action left to perform. */
+  function queueMelee(kind, aimYaw = null) {
+    calmFor = 0;
+    weapons.setStow(false);
+    meleePending = { kind, aimYaw };
+  }
+
+  function resolveQueuedMelee(canChargePierce, blocked) {
+    if (!meleePending) return false;
+    if (blocked) {
+      meleePending = null;
+      return false;
+    }
+    if (weapons.stowPhase > 0.08) return false;
+    const pending = meleePending;
+    meleePending = null;
+    if (pending.kind === "pierce" && canChargePierce) {
+      return meleePierce(pending.aimYaw);
+    }
+    return meleeStrike(pending.aimYaw);
   }
 
   /* ------------------------------------------------------------
@@ -926,7 +951,12 @@ export async function start({ boot, build } = {}) {
     }
     if (!autoStow) { calmFor = 0; weapons.setStow(false); return; }
     const busy = player.input.state.firing
+      || player.input.state.furnaceHeld
+      || player.input.state.meleeHeld
       || player.input.state.ads
+      || meleeCharging
+      || !!meleePending
+      || weapons.furnaceChargeState().charging
       || !!player.action
       || boost.state.active
       || shield.state.active
@@ -987,30 +1017,33 @@ export async function start({ boot, build } = {}) {
       else if (ev.type === "dir") mission.pushDirection(ev.dir);
       else if (ev.type === "vent") weapons.vent();
       else if (ev.type === "melee" && !boost.state.active && !shield.state.active) {
-        const measureRank = progression.talentRank?.("procession_executioners_measure") || 0;
+        const measureRank = progression.rank?.("procession_executioners_measure") || 0;
         meleeAimYaw = ev.aimYaw;
+        calmFor = 0;
+        weapons.setStow(false);
         if (measureRank > 0 && player.input.state.meleeHeld && (jetpack.state.fuel || 0) >= 15 - 1e-4) {
           meleeHoldTime = 0;
           meleeCharging = true;
         } else {
-          meleeStrike(ev.aimYaw);
+          queueMelee("strike", ev.aimYaw);
         }
       }
     }
-    const melee = weapons.current && weapons.current.spec.melee;
 
-    const measureRankVal = progression.talentRank?.("procession_executioners_measure") || 0;
+    const measureRankVal = progression.rank?.("procession_executioners_measure") || 0;
     const canChargePierce = !encounterHold && !stunned && !airborne()
       && !boost.state.active && !shield.state.active && !slam.state.active
       && measureRankVal > 0 && (jetpack.state.fuel || 0) >= 15 - 1e-4;
+    const meleeBlocked = encounterHold || stunned || combat.player.dead || airborne()
+      || boost.state.active || shield.state.active || slam.state.active;
 
     if (meleeCharging && canChargePierce && player.input.state.meleeHeld) {
-      meleeHoldTime += d;
       const chargeMax = measureRankVal >= 2 ? 0.24 : 0.32;
+      meleeHoldTime = Math.min(chargeMax, meleeHoldTime + d);
       const progress = Math.min(1.0, meleeHoldTime / chargeMax);
       audio.meleePierceCharge?.(progress);
       vfx.meleePierceCharge?.(player.state.x, player.state.y, player.state.z, progress, measureRankVal);
-      if (meleeHoldTime >= chargeMax) {
+      if (meleeHoldTime >= chargeMax && weapons.stowPhase <= 0.08) {
         meleePierce(meleeAimYaw ?? player.state.aimViewYaw);
         audio.meleePierceCharge?.(0);
         meleeHoldTime = 0;
@@ -1018,14 +1051,15 @@ export async function start({ boot, build } = {}) {
       }
     } else if (meleeCharging) {
       audio.meleePierceCharge?.(0);
-      if (meleeHoldTime >= 0.16 && canChargePierce) {
-        meleePierce(meleeAimYaw ?? player.state.aimViewYaw);
-      } else if (!encounterHold && !stunned) {
-        meleeStrike(meleeAimYaw ?? player.state.aimViewYaw);
+      if (!meleeBlocked) {
+        queueMelee(meleeHoldTime >= 0.16 && canChargePierce ? "pierce" : "strike",
+          meleeAimYaw ?? player.state.aimViewYaw);
       }
       meleeCharging = false;
       meleeHoldTime = 0;
     }
+    resolveQueuedMelee(canChargePierce, meleeBlocked);
+    const melee = weapons.current && weapons.current.spec.melee;
 
     /* The trigger only ever fires now. Melee has its own key, and
        mapping it onto the trigger as well meant that holding fire
@@ -1041,24 +1075,30 @@ export async function start({ boot, build } = {}) {
       && weapons.stowPhase < 0.08;
 
     const furnaceRankVal = progression.rank?.("censer_furnace_reprieve") || 0;
-    const furnaceCost = furnaceRankVal >= 2 ? 14 : 18;
-    const furnaceChargeDuration = furnaceRankVal >= 2 ? 0.42 : 0.55;
+    const furnaceRule = FURNACE_LANCE_RULES.ranks[furnaceRankVal >= 2 ? 2 : 1];
     const canChargeFurnace = canFire && furnaceRankVal > 0
-      && (jetpack.state.fuel || 0) >= furnaceCost - 1e-4
+      && (jetpack.state.fuel || 0) >= furnaceRule.chargeCost - 1e-4
       && !weapons.current?.spec?.melee
       && !weapons.carry?.overheated
       && (weapons.carry?.venting || 0) <= 0;
 
     const fireHeld = player.input.state.firing;
+    const furnaceHeld = player.input.state.furnaceHeld;
+    let furnaceCharge = weapons.furnaceChargeState();
 
-    if (canChargeFurnace && fireHeld) {
-      fireHoldTime += d;
-      if (fireHoldTime >= 0.08) {
-        if (!weapons.furnaceChargeState().charging) {
-          weapons.startFurnaceCharge(furnaceChargeDuration);
+    /* Primary fire remains the automatic Volley at every hold duration.
+       Furnace Lance owns a distinct, remappable hold and discharges only on
+       release at full charge, so neither action has to guess what the player
+       meant from the length of one mouse press. */
+    if (furnaceHeld) {
+      calmFor = 0;
+      weapons.setStow(false);
+      if (canChargeFurnace) {
+        if (!furnaceCharge.charging) {
+          weapons.startFurnaceCharge(furnaceRule.chargeSeconds);
         }
-        const ready = weapons.updateFurnaceCharge(d);
-        const chargeState = weapons.furnaceChargeState();
+        weapons.updateFurnaceCharge(d);
+        furnaceCharge = weapons.furnaceChargeState();
         const w = weapons.current;
         const port = w ? (w.emitter || w.muzzle) : null;
         let emitX = player.state.x;
@@ -1069,30 +1109,20 @@ export async function start({ boot, build } = {}) {
           _furnacePos.setFromMatrixPosition(port.matrixWorld);
           emitX = _furnacePos.x; emitY = _furnacePos.y; emitZ = _furnacePos.z;
         }
-        vfx.furnaceCharge(emitX, emitY, emitZ, chargeState.progress, furnaceRankVal);
-        audio.furnaceCharge(chargeState.progress);
-
-        if (ready || chargeState.progress >= 1.0) {
-          shootFurnaceLance();
-          audio.furnaceCharge(0);
-          weapons.cancelFurnaceCharge();
-          fireHoldTime = 0;
-        }
-      }
-    } else {
-      if (weapons.furnaceChargeState().charging) {
+        vfx.furnaceCharge(emitX, emitY, emitZ, furnaceCharge.progress, furnaceRankVal);
+        audio.furnaceCharge(furnaceCharge.progress);
+      } else if (furnaceCharge.charging) {
         weapons.cancelFurnaceCharge();
         audio.furnaceCharge(0);
       }
-      if (fireHeld && canFire) {
-        if (fireHoldTime < 0.08 || furnaceRankVal <= 0 || (jetpack.state.fuel || 0) < furnaceCost - 1e-4) {
-          shoot();
-        }
-      }
-      if (!fireHeld) {
-        fireHoldTime = 0;
-      }
+    } else if (furnaceCharge.charging) {
+      if (furnaceCharge.ready && canChargeFurnace) shootFurnaceLance();
+      weapons.cancelFurnaceCharge();
+      audio.furnaceCharge(0);
+      furnaceCharge = weapons.furnaceChargeState();
     }
+
+    if (fireHeld && canFire && !furnaceHeld && !furnaceCharge.charging) shoot();
     /* Hand the rite back once the swing is over. `meleeSwing` buffers
        a press during recovery into the next combo step, so the mode
        has to survive until the whole chain has run out - which is

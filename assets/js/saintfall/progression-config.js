@@ -24,6 +24,37 @@ export const CAPSTONE_ELIGIBILITY_POINTS = 6;
 export const MAX_ACTIVE_CAPSTONES = 2;
 export const VOW_SEAL_RANKS = deepFreeze([12, 22]);
 
+/* Furnace Lance is an alternate firing rite, not a replacement for the
+   Volley's held trigger. Keeping its full combat contract here prevents the
+   charge input, Doctrine copy, damage path, recoil, and QA from drifting into
+   five different versions of the same talent. */
+export const FURNACE_LANCE_RULES = deepFreeze({
+  ranks: {
+    1: {
+      chargeSeconds: 1.2,
+      chargeCost: 24,
+      damage: 110,
+      staggerSeconds: 0.65,
+      cooldownSeconds: 0.65,
+      heatDelta: 0.04,
+    },
+    2: {
+      chargeSeconds: 1.0,
+      chargeCost: 20,
+      damage: 160,
+      staggerSeconds: 0.85,
+      cooldownSeconds: 0.55,
+      heatDelta: 0,
+    },
+  },
+  shockwave: {
+    radius: 4.2,
+    damage: 24,
+    stun: 0.65,
+    knockSpeed: 6.5,
+  },
+});
+
 /* Capstone mechanics live beside their player-facing Doctrine data so the
    runtime, command resolver, and QA all read one balance contract. */
 export const VOW_RULES = deepFreeze({
@@ -283,18 +314,18 @@ export const DOCTRINE_ORDERS = deepFreeze([
         orderId: "censer",
         kind: "talent",
         name: "Furnace Lance",
-        summary: "Hold fire to channel Reliquary charge into a piercing heavy beam.",
+        summary: "Hold alternate fire, then release a fully charged piercing beam.",
         tier: 3,
         requires: { orderPoints: 4 },
         maxRank: 2,
         ranks: [
           {
             rank: 1,
-            description: "Holding fire channels 18 Reliquary charge over 0.55s. Releasing unleashes a concentrated furnace beam that pierces enemies for 180 damage and staggers targets.",
+            description: `Hold the Furnace Lance input for ${FURNACE_LANCE_RULES.ranks[1].chargeSeconds} seconds, then release to spend ${FURNACE_LANCE_RULES.ranks[1].chargeCost} Reliquary charge and fire a ${FURNACE_LANCE_RULES.ranks[1].damage}-damage piercing beam. Releasing early cancels the shot.`,
           },
           {
             rank: 2,
-            description: "Channels in 0.42s for 14 charge, dealing 320 damage, producing no heat, and releasing a searing shockwave on impact.",
+            description: `Charges in ${FURNACE_LANCE_RULES.ranks[2].chargeSeconds} second for ${FURNACE_LANCE_RULES.ranks[2].chargeCost} Reliquary charge, deals ${FURNACE_LANCE_RULES.ranks[2].damage} damage without adding heat, and releases a modest searing shockwave at the endpoint.`,
           },
         ],
       },

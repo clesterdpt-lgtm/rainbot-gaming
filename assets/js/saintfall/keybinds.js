@@ -54,6 +54,11 @@ export const KEYBIND_ACTIONS = Object.freeze([
     defaults: ["KeyF", null],
   },
   {
+    id: "furnace", group: "COMBAT", label: "Furnace Lance",
+    detail: "Hold to charge, release when ready; middle mouse also works",
+    defaults: ["KeyG", null],
+  },
+  {
     id: "block", group: "COMBAT", label: "Aegis block", defaults: ["KeyE", null],
   },
   {

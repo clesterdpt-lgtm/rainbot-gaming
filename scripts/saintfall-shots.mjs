@@ -417,7 +417,19 @@ async function main() {
           const a = a0 + (k / 24) * Math.PI * 2;
           const px = tx + Math.sin(a) * r;
           const pz = tz + Math.cos(a) * r;
-          const gy = T.summit.altitudeAt(px, pz);
+          /* WORLD-AGNOSTIC GROUND. This read was `T.summit.altitudeAt`,
+             which exists only on the Kenosis page - so the raking-light
+             swing threw `Cannot read properties of undefined` on
+             Vesper-IX and took the whole authored-pose loop with it.
+             The collider's answer is the one that generalises: it is
+             what the player stands on, overrides and props included,
+             and summit-qa's own `altitudeAt` is a wrapper around
+             exactly this call (summit-qa.js:56). */
+          const gy = (T.collide && T.collide.groundHeight)
+            ? T.collide.groundHeight(px, pz)
+            : (T.summit && T.summit.altitudeAt
+              ? T.summit.altitudeAt(px, pz)
+              : T.terrain.heightAt(px, pz));
           const py = Math.max(gy + 2.0, eye.y);
           T.player.setFree(true, [px, py, pz], [tx, ty, tz], 62);
           T.renderOnce(0);

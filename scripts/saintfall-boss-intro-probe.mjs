@@ -483,6 +483,35 @@ try {
       T.ctx.apostate?.reset?.();
       T.ctx.districtBosses?.reset?.("reach");
       T.ctx.districtBosses?.reset?.("saint");
+      let bx = 0, bz = 0, appDist = 26;
+      if (key === "cathedral") {
+        const st = T.ctx.apostate.status();
+        bx = st.x; bz = st.z; appDist = 28;
+      } else if (key === "censer") {
+        const st = T.ctx.winnower.status();
+        bx = st.x; bz = st.z; appDist = 32;
+      } else if (key === "scar") {
+        const st = T.ctx.distaff.status();
+        bx = st.x; bz = st.z; appDist = 26;
+      } else if (key === "ossuary") {
+        const st = T.ctx.garner.status();
+        bx = st.x; bz = st.z; appDist = 26;
+      } else if (key === "choir") {
+        const site = T.ctx.districtBosses.sites.find((s) => s.key === "choir");
+        bx = site.x; bz = site.z; appDist = 45;
+      } else if (key === "bloom") {
+        const st = T.ctx.abbess.status();
+        bx = st.x; bz = st.z; appDist = 26;
+      } else if (key === "saint") {
+        const st = T.ctx.districtBosses.status("saint");
+        bx = st.x; bz = st.z; appDist = 55;
+      } else {
+        const st = T.ctx.districtBosses.status(key);
+        bx = st.x; bz = st.z; appDist = 26;
+      }
+
+      T._teleportRaw(bx + appDist, bz, 0);
+
       if (key === "cathedral") {
         M.state.phase = "cathedralBoss";
         for (const boss of M.bosses) boss.done = true;
@@ -502,40 +531,11 @@ try {
         if (key === "censer") T.ctx.winnower?.resetToPerch?.();
         else if (key === "scar") T.ctx.distaff?.resetToLair?.();
         else if (key === "ossuary") T.ctx.garner?.resetToPit?.();
-        else if (key === "choir") T.ctx.stylite?.reset?.();
-        else if (key === "bloom") T.ctx.abbess?.reset?.();
+        else if (key === "choir") T.ctx.stylite?.resetToPerch?.();
+        else if (key === "bloom") T.ctx.abbess?.resetToSeat?.();
         else T.ctx.districtBosses?.reset?.(key);
       }
-      for (let i = 0; i < 6; i += 1) T.renderOnce(1 / 60);
 
-      let bx = 0, bz = 0, appDist = 26;
-      if (key === "cathedral") {
-        const st = T.ctx.apostate.status();
-        bx = st.x; bz = st.z; appDist = 28;
-      } else if (key === "censer") {
-        const st = T.ctx.winnower.status();
-        bx = st.x; bz = st.z; appDist = 32;
-      } else if (key === "scar") {
-        const st = T.ctx.distaff.status();
-        bx = st.x; bz = st.z; appDist = 26;
-      } else if (key === "ossuary") {
-        const st = T.ctx.garner.status();
-        bx = st.x; bz = st.z; appDist = 26;
-      } else if (key === "choir") {
-        const site = T.ctx.districtBosses.sites.find((s) => s.key === "choir");
-        bx = site.x; bz = site.z; appDist = 30;
-      } else if (key === "bloom") {
-        const st = T.ctx.abbess.status();
-        bx = st.x; bz = st.z; appDist = 26;
-      } else if (key === "saint") {
-        const st = T.ctx.districtBosses.status("saint");
-        bx = st.x; bz = st.z; appDist = 55;
-      } else {
-        const st = T.ctx.districtBosses.status(key);
-        bx = st.x; bz = st.z; appDist = 26;
-      }
-
-      T._teleportRaw(bx + appDist, bz, 0);
       const revealFrames = key === "ossuary" ? 220 : key === "saint" ? 210 : 60;
       for (let i = 0; i < revealFrames; i += 1) T.renderOnce(1 / 60);
     }, { key: b.key });

@@ -4846,7 +4846,7 @@ export async function createPlayer(ctx, canvas) {
     }
     if (!flightMode && !shieldMode && state.grounded && jumpPressed && !input.state.jetpack
       && !rooted) {
-      state.vy = 6.4;
+      state.vy = 9.6;
       state.grounded = false;
     }
     if (flightMode) {

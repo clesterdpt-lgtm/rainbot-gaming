@@ -35,8 +35,11 @@ export const BREACH_WAVES = Object.freeze([
     subtitle: "Skitter caste",
     healthScale: 0.82,
     damageScale: 0.72,
-    clusters: 1,
-    roster: Object.freeze([{ key: "thresher", count: 4 }]),
+    clusters: 2,
+    roster: Object.freeze([
+      { key: "thresher", count: 8 },
+      { key: "gleaner", count: 2 },
+    ]),
   }),
   Object.freeze({
     name: "Needle Brood",
@@ -45,8 +48,9 @@ export const BREACH_WAVES = Object.freeze([
     damageScale: 0.82,
     clusters: 2,
     roster: Object.freeze([
-      { key: "thresher", count: 6 },
-      { key: "gleaner", count: 1 },
+      { key: "thresher", count: 12 },
+      { key: "gleaner", count: 4 },
+      { key: "harrow", count: 1 },
     ]),
   }),
   Object.freeze({
@@ -54,11 +58,11 @@ export const BREACH_WAVES = Object.freeze([
     subtitle: "Heavy caste detected",
     healthScale: 1,
     damageScale: 0.92,
-    clusters: 2,
+    clusters: 3,
     roster: Object.freeze([
-      { key: "thresher", count: 7 },
-      { key: "gleaner", count: 2 },
-      { key: "harrow", count: 1 },
+      { key: "thresher", count: 15 },
+      { key: "gleaner", count: 5 },
+      { key: "harrow", count: 3 },
     ]),
   }),
   Object.freeze({
@@ -66,11 +70,11 @@ export const BREACH_WAVES = Object.freeze([
     subtitle: "Full brood pressure",
     healthScale: 1.06,
     damageScale: 1,
-    clusters: 3,
+    clusters: 4,
     roster: Object.freeze([
-      { key: "thresher", count: 9 },
-      { key: "gleaner", count: 3 },
-      { key: "harrow", count: 2 },
+      { key: "thresher", count: 20 },
+      { key: "gleaner", count: 7 },
+      { key: "harrow", count: 4 },
     ]),
   }),
   Object.freeze({
@@ -78,11 +82,11 @@ export const BREACH_WAVES = Object.freeze([
     subtitle: "Fast caste pressure",
     healthScale: 1.02,
     damageScale: 0.96,
-    clusters: 2,
+    clusters: 3,
     roster: Object.freeze([
-      { key: "thresher", count: 8 },
-      { key: "gleaner", count: 2 },
-      { key: "harrow", count: 2 },
+      { key: "thresher", count: 18 },
+      { key: "gleaner", count: 6 },
+      { key: "harrow", count: 4 },
     ]),
   }),
   Object.freeze({
@@ -90,11 +94,11 @@ export const BREACH_WAVES = Object.freeze([
     subtitle: "Brood front at full strength",
     healthScale: 1.06,
     damageScale: 1,
-    clusters: 3,
+    clusters: 4,
     roster: Object.freeze([
-      { key: "thresher", count: 10 },
-      { key: "gleaner", count: 3 },
-      { key: "harrow", count: 2 },
+      { key: "thresher", count: 24 },
+      { key: "gleaner", count: 8 },
+      { key: "harrow", count: 5 },
     ]),
   }),
 ]);

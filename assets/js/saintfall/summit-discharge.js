@@ -53,7 +53,19 @@ export function buildSummitDischarge(ctx, player, loadout) {
   geometry.setAttribute("position", new THREE.Float32BufferAttribute(vertices, 3));
   geometry.setIndex(indices);
   geometry.computeVertexNormals();
-  const forward = new THREE.Vector3(0, 0, 1);
+  /* A VERTICAL SLICE, not a frisbee. The first pulse mapped its face
+     normal onto the flight direction, so the crescent flew face-first
+     and showed its full disc to the chase camera. It now flies
+     edge-first in a vertical plane: local +X (the belly of the arc)
+     leads along the flight direction, local +Y holds the world
+     vertical, and the face normal ends up horizontal - so the full
+     crescent reads only from a side profile, while from behind or
+     ahead it is a thin vertical slash. The geometry's horns trail
+     up-back and down-back, which is the slice silhouette. */
+  const sliceX = new THREE.Vector3();
+  const sliceY = new THREE.Vector3();
+  const sliceZ = new THREE.Vector3();
+  const sliceBasis = new THREE.Matrix4();
   const position = new THREE.Vector3();
   const direction = new THREE.Vector3();
   const shots = [];
@@ -112,10 +124,24 @@ export function buildSummitDischarge(ctx, player, loadout) {
     const core = new THREE.Mesh(geometry, coreMaterial);
     const glow = new THREE.Mesh(geometry, glowMaterial);
     glow.scale.setScalar(1.34);
-    glow.position.z = -0.012;
     root.add(glow, core);
     root.position.copy(position).addScaledVector(direction, 0.06);
-    root.quaternion.setFromUnitVectors(forward, direction);
+    /* Belly leads, plane holds the vertical. The in-plane axis is the
+       world up made perpendicular to the flight direction; firing
+       near straight up or down leaves no vertical to hold, so the
+       plane falls back to world +Z and the slice stays a slice. */
+    sliceX.copy(direction);
+    sliceY.set(0, 1, 0).addScaledVector(sliceX, -sliceX.y);
+    if (sliceY.lengthSq() < 1e-4) {
+      sliceY.set(0, 0, 1).addScaledVector(sliceX, -sliceX.z);
+    }
+    sliceY.normalize();
+    sliceZ.crossVectors(sliceX, sliceY);
+    sliceBasis.makeBasis(sliceX, sliceY, sliceZ);
+    root.quaternion.setFromRotationMatrix(sliceBasis);
+    /* A few degrees of in-plane tilt, opposite per hand, so the pair
+       does not read as one stamped sprite. Tilt is about the face
+       normal - the plane itself stays vertical. */
     root.rotateZ((part.spec.hand === 0 ? -1 : 1) * 0.14);
     group.add(root);
 
@@ -173,7 +199,9 @@ export function buildSummitDischarge(ctx, player, loadout) {
       const shot = shots[i];
       const step = DISCHARGE.speed * d;
       shot.root.position.addScaledVector(shot.direction, step);
-      shot.root.rotateZ((shot.hand === 0 ? -1 : 1) * d * 2.2);
+      /* No spin. The face-first pulse span like a shuriken to sell
+         its disc; a slice holds its plane, or the horns would swing
+         off the vertical in flight. */
       shot.distance += step;
       const fade = Math.max(0, Math.min(1, (DISCHARGE.range - shot.distance) / 2.2));
       shot.coreMaterial.opacity = 0.96 * fade;

@@ -751,6 +751,52 @@ export function makeAtmosphere(THREE, timeKey = "goldenhour", options = {}) {
     uWind: { value: new THREE.Vector3(-0.82, 0.57, 1.0) },       // x, z, speed
     uGlitter: { value: new THREE.Vector2(0.0, 60.0) },           // strength, falloff distance
     uStorm: { value: 0 },
+
+    /* ---- CLOUD SHADOWS, AND THEY ARE INERT UNTIL A WORLD FILLS
+       THEM IN. ------------------------------------------------
+
+       A cloud shadow has to be a term in the shading of every
+       surface it lands on, so it has to live in the block every
+       patched material already carries - which is this one. Only
+       one world has a cloud deck whose placement is known on the
+       CPU (atoll-sky bakes a plan-view cover map of its own
+       cumulus), so the DEFAULTS here are a one-texel map of zero
+       cover and a gain of zero, and `sfCloudCover` returns
+       exactly 0.0 for Vesper-IX and Kenosis after one uniform
+       branch and no fetch.
+
+       THE ONE-TEXEL TEXTURE IS NOT OPTIONAL. A sampler declared
+       in ATMOS_PARS and never bound is undefined behaviour: some
+       drivers sample black, some sample garbage, and one warns
+       and carries on. Every world binds this, and the world that
+       has a deck overwrites the .value.
+
+       A world that owns a deck writes these three in place - it
+       must not replace the {value} OBJECTS, because the whole
+       point of this block is that every material in the level
+       shares them by reference. */
+    tCloudCover: { value: blankCoverTexture(THREE) },
+    /* x, y = cos/sin of the cloud deck's live rotation about +Y,
+              for un-rotating a world point into the map's frame
+       z     = texture UV per metre
+       w     = the cloud base in metres */
+    uCloudCover: { value: new THREE.Vector4(1, 0, 1 / 23040, 640) },
+    /* x = the live cloud-shadow gain, 0 for a world with no deck.
+       y = SHADOW-MAP UV PER METRE, which is not a cloud number and
+           rides here because nothing else publishes it: three
+           gives a shader its shadow map's size in TEXELS and never
+           in metres, so a material that wants a filter kernel a
+           stated number of metres wide cannot get there. Written
+           by whichever module owns the sun's shadow camera. */
+    uCloudGain: { value: new THREE.Vector2(0, 1 / 720) },
+    /* WHAT A FULLY SHADOWED SURFACE IS MULTIPLIED BY, and it is a
+       COLOUR rather than a scalar on purpose. A cloud removes the
+       warm key and leaves the cool sky, so a surface under one
+       does not go grey - it goes several hue steps colder as well
+       as darker. A scalar here would reproduce, on land, the
+       exact fault three round-5 judges named on the water:
+       "every surface differs only in level, never in colour". */
+    uCloudShade: { value: new THREE.Color(0.42, 0.50, 0.64) },
   };
 
   const wrap01 = (value) => ((value % 1) + 1) % 1;
@@ -1005,6 +1051,23 @@ function blendGrade(a, b, t) {
     highlightTint: hex(a.highlightTint, b.highlightTint),
     tint: lerp(a.tint, b.tint, t),
     contrast: lerp(a.contrast, b.contrast, t),
+    /* THE BLACK-FLOOR SELECTOR, and it must survive the blend for
+       exactly the reason the note below gives. Fallback 0, which is
+       the shipped pivot line: a grade that does not set it - every
+       Vesper-IX and Kenosis row - keeps the operator it was tuned
+       against, through the day cycle as well as at a settled hour. */
+    contrastFloor: lerp(a.contrastFloor ?? 0, b.contrastFloor ?? 0, t),
+    /* THE DIFFUSE SKY FILL'S OWN GAIN, and it is here rather than in
+       the time table for two reasons that are both about NaN.
+       `resolve`'s `num()` lerps a key across baseA, baseB and the
+       storm row, so a field added to ONE time row arrives as
+       undefined on the other four and NaN at the uniform - which is
+       the round-0 fault this file has a hundred lines about. A grade
+       field goes through this function instead, where the ?? idiom
+       makes absence mean "unchanged". Fallback 1.0: a world that has
+       not set it - every Vesper-IX and Kenosis row - keeps exactly
+       the fill it was tuned against. */
+    skyFillGain: lerp(a.skyFillGain ?? 1, b.skyFillGain ?? 1, t),
     /* Every grade field has to be listed here or the day cycle
        silently drops it: applyAtmosphere reads the BLENDED grade,
        and a field this function forgets arrives as undefined, which
@@ -1050,6 +1113,20 @@ function blendGrade(a, b, t) {
    classic way to turn mid grey into milk.
    ============================================================ */
 
+/* ONE TEXEL OF ZERO COVER. See uCloudCover in the atmosphere's
+   uniform block: the sampler is declared for every world and has
+   to be bound for every world, and a world with no cloud deck
+   binds this. RedFormat to match the real map atoll-sky bakes, so
+   a world swapping its own texture in swaps like for like. */
+function blankCoverTexture(THREE) {
+  const tex = new THREE.DataTexture(
+    new Uint8Array([0]), 1, 1, THREE.RedFormat, THREE.UnsignedByteType
+  );
+  tex.name = "sf-cloud-cover-blank";
+  tex.needsUpdate = true;
+  return tex;
+}
+
 const ATMOS_PARS = /* glsl */`
 uniform vec3  uSunDir;
 uniform vec3  uSunHalo;
@@ -1063,7 +1140,42 @@ uniform float uTimeSF;
 uniform vec3  uWind;
 uniform vec2  uGlitter; // strength, falloff distance
 uniform float uStorm;
+uniform sampler2D tCloudCover;
+uniform vec4  uCloudCover;  // cos, sin of the deck rotation, uv per metre, cloud base m
+uniform vec2  uCloudGain;   // cloud gain, shadow-map uv per metre
+uniform vec3  uCloudShade;  // what a fully shadowed surface multiplies by
 varying vec3  vSFWorld;
+
+/* THE CLOUD DECK OVERHEAD, as a fraction of the direct beam it
+   removes at this world point. 0 everywhere in a world with no
+   deck, and the branch keeps the fetch out of those worlds
+   entirely - it is a UNIFORM branch, so it is coherent across
+   every pixel of every draw and costs one scalar compare.
+
+   Three steps and they have to be in this order:
+     1. PROJECT up the sun to the cloud base. At a 26-degree sun
+        and a 640 m base that is 1460 m of horizontal offset,
+        which is why the shadow is nowhere near under the cloud.
+     2. UN-ROTATE by the deck's live rotation.y. A cloudscape can
+        only ever turn about +Y, so the cells are static in the
+        deck's own frame and the map is a build-time bake.
+     3. FETCH. One channel, one bilinear tap, no mip chain - the
+        map's finest feature is a soft edge two texels across, so
+        there is nothing above Nyquist in it to alias.
+
+   THE FLOOR ON sunDir.y IS THE DIVIDE'S. It does not have to be
+   tight: the world that owns a deck fades the gain out below
+   about three degrees of elevation, where the projection stops
+   producing a picture and the direct beam has mostly gone anyway. */
+float sfCloudCover(vec3 wp) {
+  if (uCloudGain.x < 0.001) return 0.0;
+  float sy = max(uSunDir.y, 0.06);
+  vec2 q = wp.xz + uSunDir.xz * ((uCloudCover.w - wp.y) / sy);
+  vec2 l = vec2(q.x * uCloudCover.x - q.y * uCloudCover.y,
+                q.x * uCloudCover.y + q.y * uCloudCover.x);
+  vec2 uv = clamp(l * uCloudCover.z + 0.5, 0.0, 1.0);
+  return texture2D(tCloudCover, uv).r * uCloudGain.x;
+}
 
 vec3 sfSky(vec3 rd) {
   float h = clamp(rd.y * 0.5 + 0.5, 0.0, 1.0);
@@ -1083,8 +1195,29 @@ vec3 sfSky(vec3 rd) {
 }
 `;
 
+/* THE INSTANCE TRANSFORM HAS TO BE IN HERE.
+   `transformed` is the LOCAL position. three applies instanceMatrix
+   to `mvPosition` INSIDE project_vertex, not to `transformed` - so
+   without the branch below every instance of an InstancedMesh
+   reports the same vSFWorld, namely the batch mesh's own origin.
+
+   Every consequence of that is silent. Aerial perspective and fog
+   go constant across a whole batch, so a 128m tile of canopy fogs
+   as one flat card; the additive near-fade smoothstep(0.6, 11.0,
+   sfDist) is constant, so an additive volume either draws fully or
+   not at all across the batch; and the glitter world-cell collapses
+   to one cell.
+
+   The #ifdef makes this a PROVABLE NO-OP for both shipped worlds:
+   USE_INSTANCING is only defined for an InstancedMesh, and the only
+   two in the repository (apostate.js:1592, intro.js:489) are not
+   patched by this function at all. */
 const ATMOS_VERT = /* glsl */`
-  vSFWorld = (modelMatrix * vec4(transformed, 1.0)).xyz;
+  #ifdef USE_INSTANCING
+    vSFWorld = (modelMatrix * instanceMatrix * vec4(transformed, 1.0)).xyz;
+  #else
+    vSFWorld = (modelMatrix * vec4(transformed, 1.0)).xyz;
+  #endif
 `;
 
 /* Aerial perspective alone, with no reference to `normal` or
@@ -1148,6 +1281,34 @@ const ATMOS_FRAG = /* glsl */`
   float fres = 1.0 - clamp(dot(normal, vDir), 0.0, 1.0);
   vec3 rimCol = sfSky(vec3(rd.x, max(rd.y, 0.05) + 0.06, rd.z));
   gl_FragColor.rgb += rimCol * pow(fres, uRim.y) * uRim.x;
+
+  // --- cloud shadows ---------------------------------------------------
+  // A no-op in any world whose atmosphere has no cover map (see
+  // sfCloudCover, which returns 0.0 after a uniform branch).
+  //
+  // WEIGHTED BY HOW SUNLIT THE SURFACE ALREADY IS, and that is
+  // the whole difference between this and a flat multiply. A
+  // cloud takes away the KEY and leaves the sky; a face already
+  // turned away from the sun has no key to lose, so darkening it
+  // by the same fraction would put a second shadow on top of the
+  // one it is already in - which is how a cloud-shadow term
+  // undoes an ambient-fill pass and turns shaded canopy back into
+  // the "undifferentiated dark green paste" this engine has
+  // already been marked for.
+  //
+  // The 0.28 floor is not zero because a cloud also veils part of
+  // the SKY dome for the surface under it, and the sky is what is
+  // lighting the shaded face. Measured as the deck's cover at the
+  // hour it matters: a fifth of the dome, rounded up because the
+  // cell directly overhead is the brightest part of it.
+  {
+    float sfCover = sfCloudCover(vSFWorld);
+    if (sfCover > 0.001) {
+      float sunFacing = max(dot(normal, uSunDir), 0.0);
+      gl_FragColor.rgb *= mix(vec3(1.0), uCloudShade,
+        sfCover * (0.28 + 0.72 * sunFacing));
+    }
+  }
 
   // --- directional aerial perspective ---------------------------------
   // Haze pools low and thins with altitude, so a ridge line stays

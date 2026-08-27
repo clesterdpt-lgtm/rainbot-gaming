@@ -2727,33 +2727,51 @@ export function buildStylite(ctx) {
     group.visible = !hidden;
   }
 
+  function findClearCameraPosition(targetPos, dist = 32, upOffset = 4.5) {
+    const spires = perches || [];
+    let best = null;
+    for (let i = 0; i < 32; i += 1) {
+      const a = (i / 32) * TAU;
+      const cx = targetPos.x + Math.cos(a) * dist;
+      const cz = targetPos.z + Math.sin(a) * dist;
+      const cy = targetPos.y + upOffset;
+      let clear = Infinity;
+      for (const n of spires) {
+        const own = Math.hypot(n.x - targetPos.x, n.z - targetPos.z) < (n.rad || 6) + 3
+          && targetPos.y > (n.y || targetPos.y) - 6;
+        if (own) continue;
+        const t01 = clamp01((Math.min(targetPos.y, cy) - (n.baseY || 0))
+          / Math.max(1, (n.y || targetPos.y) - (n.baseY || 0)));
+        const r = (n.baseRad || n.rad || 6) + ((n.rad || 6) - (n.baseRad || 6)) * Math.pow(t01, 2.3);
+        for (let t = 0.1; t <= 1.0; t += 0.1) {
+          const px = targetPos.x + (cx - targetPos.x) * t;
+          const pz = targetPos.z + (cz - targetPos.z) * t;
+          clear = Math.min(clear, Math.hypot(n.x - px, n.z - pz) - r);
+        }
+      }
+      if (!best || clear > best.clear) best = { cx, cy, cz, clear };
+    }
+    return best || { cx: targetPos.x + 13, cy: targetPos.y + upOffset, cz: targetPos.z - 32 };
+  }
+
   function beginRouse() {
     state.phase = "rouse";
     state.timer = C.rouseSeconds;
     setEncounterGate(false, true);
     bus.emit("aggro", { x: state.pos.x, y: state.pos.y, z: state.pos.z });
-    /* Authored hero framing: from the central open plaza floor looking
-       straight up at the Stylite clinging to the apex needle,
-       unobstructed by surrounding needle shafts regardless of approach. */
+    /* Authored hero framing: elevated vantage looking directly at the Stylite
+       clinging to the apex needle crown, fully clear of all surrounding spires. */
     if (state.revealed) return;
     state.revealed = true;
     if (ctx.player?.setFree && !ctx.player.state.free) {
-      const camX = state.pos.x + 22;
-      const camZ = state.pos.z + 26;
-      const camY = groundAt(camX, camZ) + 3.8;
-      /* Ray-tested before use. The Choir is a forest of the exact
-         thing that blocks a ground-level shot at a crown-height body:
-         from a third of the compass this authored lens opened on the
-         flank of a nearer needle. The solver keeps the bearing where
-         it can see the animal and fans around the spiral where it
-         cannot. See reveal-camera.js. */
+      const clearCam = findClearCameraPosition(state.pos, 32, 4.5);
       revealCamera(ctx, {
         label: "stylite",
-        preferred: [camX, camY, camZ],
-        target: [state.pos.x, state.pos.y, state.pos.z],
+        preferred: [clearCam.cx, clearCam.cy, clearCam.cz],
+        target: [state.pos.x, state.pos.y + 0.5, state.pos.z],
         halfHeight: 4.5, halfWidth: 4,
         floorY: state.pos.y - 1.5,
-        fov: 52,
+        fov: 46,
       });
       state.releaseCameraAt = 0.7;
     }

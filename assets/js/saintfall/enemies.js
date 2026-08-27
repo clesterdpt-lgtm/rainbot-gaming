@@ -2075,69 +2075,88 @@ export async function buildEnemies(ctx, onProgress) {
      ground by the same terrain sampler the legs solve against.
      ============================================================ */
   const GARRISONS = [
-    // --- The Bloom: the hive. Nothing sends you here; it is here so
-    //     that the map has a place that is visibly worse than the
-    //     mission, and so the north-west horizon is never empty.
-    { key: "thresher", at: [-655, -655], r: 245, n: 26 },
-    { key: "gleaner", at: [-655, -655], r: 225, n: 7 },
-    { key: "harrow", at: [-655, -655], r: 190, n: 4 },
-    { key: "thresher", at: [-700, -560], r: 105, n: 9 },    // The Throat
+    // --- The Bloom: the hive. The primary stronghold with heavy swarms,
+    //     high-threat ranged sentries, and armored breaker broods.
+    { key: "thresher", at: [-655, -655], r: 255, n: 42 },
+    { key: "gleaner", at: [-655, -655], r: 235, n: 14 },
+    { key: "harrow", at: [-655, -655], r: 195, n: 7 },
+    { key: "thresher", at: [-700, -560], r: 110, n: 16 },    // The Throat
+    { key: "gleaner", at: [-700, -560], r: 110, n: 5 },
+    { key: "harrow", at: [-700, -560], r: 90, n: 3 },
 
-    // --- Relay BETA, the Choir Spires. Spires are cover, so this one
-    //     is weighted toward the ranged caste: the spires give the
-    //     player cover too, and Gleaners are the reason to leave it.
-    { key: "thresher", at: [-820, -95], r: 200, n: 13 },
-    { key: "gleaner", at: [-820, -95], r: 215, n: 7 },
-    { key: "harrow", at: [-820, -95], r: 150, n: 2 },
+    // --- Relay BETA, the Choir Spires. Towering wind-carved needles providing
+    //     cover for snipers and dense ground rover packs.
+    { key: "thresher", at: [-820, -95], r: 210, n: 24 },
+    { key: "gleaner", at: [-820, -95], r: 220, n: 14 },
+    { key: "harrow", at: [-820, -95], r: 160, n: 5 },
 
-    // --- Relay GAMMA, the Vault-Cathedral. Interiors and a nave: the
-    //     Harrows are in here because a heavy in a corridor is a
-    //     different problem from a heavy in the open.
-    { key: "thresher", at: [-95, -725], r: 190, n: 14 },
-    { key: "gleaner", at: [-95, -725], r: 205, n: 6 },
-    { key: "harrow", at: [-95, -725], r: 145, n: 3 },
+    // --- Relay GAMMA, the Vault-Cathedral. Heavy nave guardians, colonnade
+    //     watchers, and wide plaza swarms.
+    { key: "thresher", at: [-95, -725], r: 200, n: 26 },
+    { key: "gleaner", at: [-95, -725], r: 210, n: 12 },
+    { key: "harrow", at: [-95, -725], r: 155, n: 6 },
 
-    // --- Relay ALPHA, the Censer Works. The first relay most players
-    //     walk to, so it is the lightest of the three.
-    { key: "thresher", at: [655, 700], r: 185, n: 12 },
-    { key: "gleaner", at: [655, 700], r: 195, n: 5 },
-    { key: "harrow", at: [655, 700], r: 130, n: 2 },
+    // --- Relay ALPHA, the Censer Works. Sprawling rusted works with
+    //     scavenger swarms, duct snipers, and furnace heavies.
+    { key: "thresher", at: [655, 700], r: 195, n: 22 },
+    { key: "gleaner", at: [655, 700], r: 205, n: 10 },
+    { key: "harrow", at: [655, 700], r: 140, n: 5 },
 
-    // --- The Fallen Saint: extraction. Calling the shuttle re-homes
-    //     the whole map onto this point, so what is standing here at
-    //     the start is only the seed of the last fight.
-    { key: "thresher", at: [0, -20], r: 205, n: 12 },
-    { key: "gleaner", at: [0, -20], r: 190, n: 5 },
-    { key: "harrow", at: [0, -20], r: 150, n: 2 },
+    // --- The Fallen Saint: extraction basin and outer dunes.
+    { key: "thresher", at: [0, -20], r: 215, n: 22 },
+    { key: "gleaner", at: [0, -20], r: 200, n: 10 },
+    { key: "harrow", at: [0, -20], r: 155, n: 5 },
 
-    // --- Off-route districts. No objective sends the player to any of
-    //     these; they are garrisoned because an open-world level whose
-    //     enemies are only where the quest markers are is a corridor
-    //     wearing a map.
-    { key: "thresher", at: [645, -640], r: 205, n: 10 },    // The Ossuary
-    { key: "gleaner", at: [645, -640], r: 195, n: 4 },
-    { key: "harrow", at: [645, -640], r: 140, n: 2 },
-    { key: "thresher", at: [790, 95], r: 195, n: 9 },       // The Glass Scar
-    { key: "gleaner", at: [790, 95], r: 185, n: 4 },
-    { key: "thresher", at: [-600, 545], r: 225, n: 9 },     // The Gilded Reach
-    { key: "gleaner", at: [-600, 545], r: 200, n: 3 },
+    // --- Off-route districts.
+    { key: "thresher", at: [645, -640], r: 210, n: 20 },    // The Ossuary
+    { key: "gleaner", at: [645, -640], r: 200, n: 9 },
+    { key: "harrow", at: [645, -640], r: 150, n: 5 },
+    { key: "thresher", at: [790, 95], r: 205, n: 18 },       // The Glass Scar
+    { key: "gleaner", at: [790, 95], r: 195, n: 8 },
+    { key: "harrow", at: [790, 95], r: 140, n: 4 },
+    { key: "thresher", at: [-600, 545], r: 230, n: 18 },     // The Gilded Reach
+    { key: "gleaner", at: [-600, 545], r: 210, n: 7 },
+    { key: "harrow", at: [-600, 545], r: 150, n: 4 },
 
-    // --- The Pilgrim's Road. Small packs strung along the causeway,
-    //     so the two-kilometre walk between districts is a journey
-    //     through held ground rather than a loading screen you have
-    //     to operate yourself.
-    { key: "thresher", at: [-8, 300], r: 95, n: 5 },
-    { key: "thresher", at: [-24, 40], r: 90, n: 5 },
-    { key: "thresher", at: [-52, -238], r: 100, n: 6 },
-    { key: "gleaner", at: [-66, -382], r: 115, n: 3 },
+    // --- The Pilgrim's Road causeways. Frequent patrol packs along transit routes.
+    { key: "thresher", at: [-8, 300], r: 105, n: 10 },
+    { key: "gleaner", at: [-8, 300], r: 105, n: 3 },
+    { key: "thresher", at: [-24, 40], r: 95, n: 10 },
+    { key: "gleaner", at: [-24, 40], r: 95, n: 4 },
+    { key: "harrow", at: [-24, 40], r: 85, n: 2 },
+    { key: "thresher", at: [-52, -238], r: 110, n: 12 },
+    { key: "gleaner", at: [-52, -238], r: 110, n: 4 },
+    { key: "harrow", at: [-52, -238], r: 90, n: 2 },
+    { key: "thresher", at: [-66, -382], r: 120, n: 10 },
+    { key: "gleaner", at: [-66, -382], r: 120, n: 5 },
 
-    // --- The Threshold. Four, at the far edge of the drop zone: the
-    //     player has to be able to see what is coming before it is a
-    //     problem, once, at the start.
-    { key: "thresher", at: [0, 700], r: 150, n: 4 },
+    // --- The Threshold. Drop zone outer perimeter.
+    { key: "thresher", at: [0, 700], r: 160, n: 8 },
+    { key: "gleaner", at: [0, 700], r: 150, n: 3 },
 
-    // No Matriarch here. The unique boss is raised by the final Bloom
-    // breach, after the player has survived the four lesser surges.
+    // --- Wilderness patrols & intermediate transit crossings.
+    //     Fills the vast desert dunes, mountain passes, and canyon ravines.
+    { key: "thresher", at: [710, 390], r: 140, n: 12 },     // East desert dunes (Censer to Scar)
+    { key: "gleaner", at: [710, 390], r: 130, n: 4 },
+    { key: "harrow", at: [710, 390], r: 100, n: 2 },
+
+    { key: "thresher", at: [690, -270], r: 140, n: 12 },    // Southeast canyon (Scar to Ossuary)
+    { key: "gleaner", at: [690, -270], r: 130, n: 4 },
+    { key: "harrow", at: [690, -270], r: 100, n: 2 },
+
+    { key: "thresher", at: [-710, 230], r: 140, n: 12 },    // West pass (Reach to Choir)
+    { key: "gleaner", at: [-710, 230], r: 130, n: 4 },
+    { key: "harrow", at: [-710, 230], r: 100, n: 2 },
+
+    { key: "thresher", at: [-460, -410], r: 150, n: 14 },   // Southwest wasteland (Cathedral to Choir)
+    { key: "gleaner", at: [-460, -410], r: 140, n: 5 },
+    { key: "harrow", at: [-460, -410], r: 110, n: 3 },
+
+    { key: "thresher", at: [340, 340], r: 130, n: 10 },     // Northeast basin dunes (Saint to Censer)
+    { key: "gleaner", at: [340, 340], r: 120, n: 3 },
+
+    { key: "thresher", at: [-310, 270], r: 130, n: 10 },    // Northwest basin dunes (Saint to Reach)
+    { key: "gleaner", at: [-310, 270], r: 120, n: 3 },
   ];
 
   function garrison() {

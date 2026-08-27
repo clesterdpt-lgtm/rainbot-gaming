@@ -26,15 +26,33 @@
   const tipEl = document.getElementById("sf-boot-tip");
   let hidePromise = null;
 
-  const TIPS = [
-    "The Saint fell here in 811.M2. Nobody has ever found the rest of it.",
-    "Vesper-IX turns once every ninety hours. The sun barely moves.",
-    "The halo still holds orbit. Its shadow crosses the basin twice a day.",
-    "Sand carries sound further than you expect. So does the Choir.",
-    "The Ossuary is not a graveyard. It is one animal.",
-    "Do not drink from the Glass Scar. It is not water.",
-    "The Concord marks its dead with a pole and a ribbon. Count the ribbons.",
-  ];
+  /* WHICH POOL. The tips are level-specific flavour and the desert's
+     read as nonsense on a page about an ocean world, so the pool is
+     chosen from the same `data-sf-entry` attribute the entry module
+     comes from. Vesper's is the default, so saintfall.html needs no
+     change. */
+  const TIP_POOLS = {
+    default: [
+      "The Saint fell here in 811.M2. Nobody has ever found the rest of it.",
+      "Vesper-IX turns once every ninety hours. The sun barely moves.",
+      "The halo still holds orbit. Its shadow crosses the basin twice a day.",
+      "Sand carries sound further than you expect. So does the Choir.",
+      "The Ossuary is not a graveyard. It is one animal.",
+      "Do not drink from the Glass Scar. It is not water.",
+      "The Concord marks its dead with a pole and a ribbon. Count the ribbons.",
+    ],
+    "atoll-main": [
+      "The Antiphon carried one thing. It is still in the cradle.",
+      "Forty years of trade wind. Every palm on this ring leans west.",
+      "The lagoon is eight metres deep. The Spine is how you cross it.",
+      "The reef breaks at the crest. Past it there is nothing for nine hundred kilometres.",
+      "The drive section came in through the pass. The pass was narrower then.",
+      "Coral grows a centimetre a year. Look at what has grown on the hull.",
+      "The tide moves 1.35 metres. It is the only clock here.",
+    ],
+  };
+  const TIPS = TIP_POOLS[(document.body && document.body.dataset
+    && document.body.dataset.sfEntry) || "default"] || TIP_POOLS.default;
 
   const boot = {
     progress(value, message) {
@@ -111,6 +129,22 @@
        cache key at all - see the block comment below. */
     "summit-art", "summit-terrain", "summit-structures", "summit-weather",
     "summit-sky", "summit-world", "summit-hud", "summit-lights", "summit-player", "summit-characters", "summit-loadout", "summit-discharge", "summit-qa", "summit-main",
+    /* THE THIRD WORLD. Meridian-IV - "The Green Antiphon" - is the
+       same arrangement again: a parallel content pack reusing
+       render, player, collide, vfx, art, core, ui, qa, touch,
+       difficulty and jetpack unchanged, supplying its own
+       atmosphere, height field, sea, flora, architecture, weather,
+       sky and entry point.
+
+       It is the first world with a SEA in it, so it carries one
+       module neither of the others has - atoll-water - and that
+       module is drawn into the scene rather than into world.group,
+       because collide.js rasterises world.group once and a sea
+       plane in the collider is a solid floor at y=0 over the whole
+       map. See atoll-main.js's construction note 5. */
+    "atoll-art", "atoll-terrain", "atoll-water", "atoll-flora",
+    "atoll-structures", "atoll-world", "atoll-weather", "atoll-sky",
+    "atoll-hud", "atoll-qa", "atoll-main",
   ];
 
   /* WHICH ENTRY POINT. A level page declares its own with

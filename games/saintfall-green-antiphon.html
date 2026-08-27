@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#04141a" />
+  <title>SAINTFALL: THE GREEN ANTIPHON - Rainbot Network</title>
+  <link rel="manifest" href="../site.webmanifest" />
+  <link rel="canonical" href="https://clesterdpt-lgtm.github.io/rainbot-gaming/games/saintfall-green-antiphon.html" />
+  <meta name="description" content="Walk a two-kilometre ring atoll on Meridian-IV, where the reliquary hauler Antiphon broke into three pieces across the reef forty years ago and the jungle has had forty years to win." />
+  <meta property="og:title" content="SAINTFALL: THE GREEN ANTIPHON" />
+  <meta property="og:description" content="The third world. An ocean, a wreck, and eight arenas around a ring." />
+  <meta property="og:type" content="website" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="SAINTFALL: THE GREEN ANTIPHON" />
+  <meta name="twitter:description" content="Cross the lagoon on the spine of a dead starship." />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%2304141a'/%3E%3Cpath d='M6 66 q14 -9 28 0 t28 0 t28 0' fill='none' stroke='%232fb9b4' stroke-width='6' stroke-linecap='round'/%3E%3Cpath d='M6 82 q14 -9 28 0 t28 0 t28 0' fill='none' stroke='%238fe4d8' stroke-width='5' stroke-linecap='round'/%3E%3Cpath d='M22 52 L58 16 L74 44 Z' fill='none' stroke='%23c9a24e' stroke-width='5' stroke-linejoin='round'/%3E%3C/svg%3E" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
+  <link rel="stylesheet" href="../assets/css/styles.css?v=20260812-game-chrome-2" />
+  <link rel="stylesheet" href="../assets/css/saintfall.css?v=20260821-doctrine-chrome-1" />
+  <link rel="stylesheet" href="../assets/css/saintfall-ui.css?v=20260823-rebindable-controls-1" />
+  <link rel="stylesheet" href="../assets/css/saintfall-atoll.css?v=20260827-green-antiphon-1" />
+</head>
+<body class="rb-standalone-shell saintfall-shell saintfall-shell--antiphon"
+      data-rb-native-escape-menu="true"
+      data-sf-entry="atoll-main"
+      data-sf-world="atoll">
+  <nav class="nav"><div id="nav-slot"></div></nav>
+
+  <main class="game-page saintfall-page">
+    <div class="game-page__header">
+      <div>
+        <h1 class="game-page__title">SAINTFALL: THE GREEN ANTIPHON</h1>
+        <div class="game-page__sub">Meridian-IV &middot; a ring atoll, a wreck, nine places</div>
+      </div>
+      <a href="../games.html" class="btn btn--ghost" style="font-size:14px;padding:8px 14px;">All games</a>
+    </div>
+
+    <div class="game-layout">
+      <div class="game-stage rb-standalone-stage saintfall-stage-shell">
+        <div class="canvas-wrap rb-standalone-surface">
+          <div class="sf-stage">
+            <canvas id="sf-canvas" aria-label="SAINTFALL: The Green Antiphon playfield"></canvas>
+            <div id="sf-hud"></div>
+            <div id="sf-touch" data-touch-controls aria-label="SAINTFALL touch controls" aria-hidden="true"></div>
+            <div id="sf-tutorial" hidden aria-hidden="true"></div>
+            <div id="sf-intro" aria-hidden="true"></div>
+
+            <div id="sf-boot">
+              <a class="sf-boot__back" href="../games.html">&larr; Rainbot</a>
+              <h2 class="sf-boot__title">THE GREEN ANTIPHON</h2>
+              <div class="sf-boot__bar"><div class="sf-boot__fill" id="sf-boot-fill"></div></div>
+              <div class="sf-boot__status" id="sf-boot-status">Standing by</div>
+              <div class="sf-boot__tip" id="sf-boot-tip"></div>
+              <div class="sf-boot__err" id="sf-boot-error"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <aside class="game-side">
+        <div class="game-side__panel game-side__panel--saintfall">
+          <h3 class="game-side__title">THE SURVEY</h3>
+          <p>
+            Meridian-IV is an ocean. Ninety per cent water, a scatter of volcanic
+            atolls, and on one of them the reliquary hauler <i>Antiphon</i> came down
+            forty years ago and broke into three pieces across the reef.
+          </p>
+          <p>
+            You land on the black sand at the south gate with the whole level in one
+            frame: the lagoon, the ship's spine crossing it, the drive section standing
+            in the pass, and the Cauldron on your left.
+          </p>
+          <p>
+            <b>This is an environment build.</b> The atoll, its sea, its weather, its
+            jungle and the wreck are finished; the guardians are not here yet. Walk the
+            ring, cross the lagoon, and climb the plug.
+          </p>
+        </div>
+
+        <details class="game-side__howto" open>
+          <summary>The nine places</summary>
+          <ul>
+            <li><b>The Landing</b> &mdash; S, 4m. Black volcanic sand. Where you arrive.</li>
+            <li><b>The Prow</b> &mdash; SE. Ninety metres of bow driven into the reef at 28&deg;.</li>
+            <li><b>The Drowned Nave</b> &mdash; E. A mangrove maze in knee-deep tea-coloured water.</li>
+            <li><b>The Bone Reef</b> &mdash; NE. Bleached coral at low tide. The brightest place here.</li>
+            <li><b>The Drive Cathedral</b> &mdash; N. The reactor section, half-sunk in the pass.</li>
+            <li><b>The Weeping Steps</b> &mdash; NW, 74m. A waterfall down hexagonal basalt.</li>
+            <li><b>The Canopy Roost</b> &mdash; W, 62m. A platform in the emergent crowns.</li>
+            <li><b>The Cauldron</b> &mdash; SW, 214m. The volcanic plug. The island's peak.</li>
+            <li><b>The Reliquary Hold</b> &mdash; centre, 34m. Mid-spine, open to the sky.</li>
+          </ul>
+        </details>
+
+        <details class="game-side__howto">
+          <summary>How to play</summary>
+          <ul>
+            <li>Move with WASD, vault with Space, and click the playfield to capture the mouse.</li>
+            <li>Tap Shift to ignite the glide and <b>hold</b> it to keep gliding; hold Shift + Space for the jetpack.</li>
+            <li>Wading is slower than walking. Past thigh depth the current will push you back &mdash; the lagoon is eight metres deep and you cannot swim in that armour.</li>
+            <li>The Spine is how you cross the lagoon on foot. Find where it comes ashore.</li>
+            <li>Wet sand, dry sand, coral rubble and jungle loam all hold an edge differently.</li>
+            <li>Press <b>M</b> for the survey map. Press <b>Tab</b> or <b>Esc</b> for the field menu.</li>
+          </ul>
+        </details>
+
+        <details class="game-side__howto">
+          <summary>Parody notice</summary>
+          <p>
+            A fan-made, non-commercial homage. Not affiliated with, endorsed by, or
+            derived from any existing game or setting; every name, place and asset here
+            is original to this build and generated procedurally in your browser.
+          </p>
+        </details>
+      </aside>
+    </div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer__links">
+      <a href="../">Home</a>
+      <a href="../games.html">All games</a>
+      <a href="saintfall.html">Vesper-IX</a>
+      <a href="saintfall-white-vigil.html">Kenosis</a>
+      <a href="../legal/privacy.html">Privacy</a>
+    </div>
+    <div>&copy; 2026 Rainbot Network. Parody.</div>
+  </footer>
+
+  <script src="../assets/js/ads.js?v=20260627-profile-stats-1"></script>
+  <script src="../assets/js/main.js?v=20260814-apostate-direct-start-1"></script>
+  <script src="../assets/js/saintfall/boot.js?v=20260827-green-antiphon-2"></script>
+</body>
+</html>

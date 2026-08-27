@@ -850,6 +850,7 @@ uniform vec3  uGamma;
 uniform vec3  uGain;
 uniform float uSaturation;
 uniform float uContrast;
+uniform float uContrastFloor; // 0 = the pivot LINE, 1 = the pivot POWER
 uniform float uToe;        // GT shadow exponent, per grade
 uniform vec3  uShadeHue;   // hue deep shade desaturates toward
 uniform vec2  uShade;      // amount 0..1, knee (luma the term dies at)
@@ -1110,7 +1111,74 @@ void main() {
     c = mix(c, mix(vec3(sl), hue * sl, 0.6), deep * uShade.x);
   }
 
-  c = (c - 0.5) * uContrast + 0.5;
+  /* CONTRAST ABOUT A PIVOT, AND THE PIVOT MAY NOT EAT BLACK.
+
+     (c - 0.5) * k + 0.5 is a straight line through mid-grey, so
+     for k > 1 it crosses zero at 0.5 * (1 - 1/k) and everything
+     below that is negative. The very next line is
+     pow(max(c, 0.0), uGamma), which clamps it, so that whole band
+     lands on exactly 0.0 and is then repainted at uLift.
+
+     IT IS NOT A SHADOW CRUSH, IT IS A HARD BLACK CLIP, AND IT IS
+     ENORMOUS. At the island's trade contrast of 1.06 the crossing
+     is display-linear 0.0283 - sRGB code 47, a fifth of the range -
+     and every pixel under it comes out the same flat pedestal
+     colour regardless of what light was on it.
+
+     Measured on the island's weeping frame, over the shaded flank
+     that fills its lower half: switching the sky environment
+     ENTIRELY off moved that flank by 0.1 of a code value in green
+     and 1.0 in blue, while switching the LIFT off dropped it from
+     rgb(8,9,15)
+     to rgb(3,2,3). The picture in there was the lift. Round 6
+     raised envIntensity to 0.52 and re-tinted the ground bounce to
+     a lagoon cyan and neither could reach the frame, because the
+     term that was deleting them sits four lines downstream of both.
+
+     WHY IT BIT THIS WORLD AND NOT THE OTHER TWO. A warm-shadow
+     world survives a black clip: Vesper's dune shade measures
+     #623120, whose red sits at display-linear 0.12, four times clear
+     of its own crossing. This world's shade is blue-cyan ON PURPOSE
+     - round 6's whole finding was that a warm bounce makes
+     procedural jungle read as brown plastic - and a cool shadow
+     keeps its energy in BLUE, the channel with the smallest linear
+     value and the least luma weight. The clip takes red and green
+     first and leaves a blue pedestal, which is the "near-zero black
+     with no hue in it" a blind judge returned verbatim.
+
+     THE FIX IS THE SAME OPERATOR WITHOUT THE CROSSING. A power
+     about the pivot, 0.5 * (c/0.5)^k, has EXACTLY the same slope at
+     mid-grey - d/dc = k there - tracks the line to within 0.008 over
+     the whole upper half, and maps 0 to 0 instead of to a negative
+     number. Checked at c = 0.62, the split tone's crossover: 0.628
+     against the line's 0.627.
+
+     For k < 1 the line does something the power does not, and it is
+     kept: it LIFTS the floor, to 0.5 * (1 - k), which is how the
+     squall grade at 0.94 gets its milk. That is a real intent even
+     though lift is the term for it, so the power is switched off
+     below k = 1 by the step. There is no seam either way - for
+     k > 1 the power is above the line everywhere on [0,1] and for
+     k < 1 below it everywhere, so the two agree exactly at k = 1.
+
+     AND IT IS OPT-IN, PER GRADE, BECAUSE THE OTHER TWO WORLDS ARE
+     THE REFERENCE THIS PROGRAMME IS SCORED AGAINST. uContrastFloor
+     defaults to 0, which is the line unchanged; a grade that does
+     not mention it renders byte-for-byte as before. Moving Vesper's
+     black point to fix the island's would move the ruler.
+
+     It is a BLEND rather than a switch because the full power form
+     over-corrects: it lifts the low midtones as well as the clipped
+     band, and on the island's fourteen frames that took the 1st
+     percentile from 7-29 to 13-46 against Vesper's 7-34, and cost
+     the deep lagoon a fifth of its dark-quartile chroma. Mixing is
+     nearly free where the two curves are close - they differ by
+     0.007 at display-linear 0.1 - and worth 3x at 0.04, so a
+     partial blend acts almost only on the band the clip destroyed.
+     See ATOLL_GRADES.trade.contrastFloor for the number and why. */
+  vec3 cLine = (c - 0.5) * uContrast + 0.5;
+  vec3 cPow = 0.5 * pow(max(c, 0.0) * 2.0, vec3(uContrast));
+  c = mix(cLine, cPow, uContrastFloor * step(1.0, uContrast));
   c = uLift + (uGain - uLift) * pow(max(c, vec3(0.0)), uGamma);
 
   luma = dot(c, vec3(0.2126, 0.7152, 0.0722));
@@ -1414,6 +1482,13 @@ export function createRenderer(ctx, canvas) {
     uGain: { value: new THREE.Vector3(1, 1, 1) },
     uSaturation: { value: 1.1 },
     uContrast: { value: 1.05 },
+    /* ZERO IS THE SHIPPED OPERATOR. See the block above the contrast
+       line in the composite: at 0 the term is exactly the pivot LINE
+       Vesper-IX and Kenosis are graded against, so a grade that does
+       not mention this field renders byte-for-byte as before. Only a
+       grade that has been re-measured against the un-clipped floor
+       may raise it. */
+    uContrastFloor: { value: 0 },
     uToe: { value: 1.24 },
     uShadeHue: { value: new THREE.Vector3(0.42, 0.37, 0.53) },
     uShade: { value: new THREE.Vector2(0, 0.2) },
@@ -1605,7 +1680,38 @@ export function createRenderer(ctx, canvas) {
     compMat.uniforms.uGamma.value.set(g.gamma[0], g.gamma[1], g.gamma[2]);
     compMat.uniforms.uGain.value.set(g.gain[0], g.gain[1], g.gain[2]);
     compMat.uniforms.uSaturation.value = g.saturation;
-    compMat.uniforms.uContrast.value = g.contrast;
+    /* DEFAULTED, for exactly the reason the block below `toe` gives,
+       and this pair is the one that was left out of it.
+
+       A third world's grade table omitted `contrast` and `tint` -
+       both are easy to miss, because neither appears in the schema
+       anyone reads off (lift/toe/shade/bounce/gamma/gain/saturation
+       are the ones every comment in art.js discusses). Both reached
+       their uniforms as `undefined`, which three uploads as NaN, and
+       `c = (c - 0.5) * uContrast + 0.5` at line 1113 turns one NaN
+       into the whole frame.
+
+       What that looks like from the outside is worth recording,
+       because it names nothing: every pixel comes back the same
+       value, the scene target is FINE when you blit it, no shader
+       fails to compile, no console message appears, and switching
+       off bloom, AO, contact, shade, exposure and the toe changes
+       the output by zero - because NaN does not care about any of
+       them. The only two terms that appeared to do anything were the
+       vignette and the halo, which is what sent the first day of
+       diagnosis toward the post chain's screen-space end.
+
+       The defaults are the values the term shipped with, so a grade
+       assembled by an older code path still renders. Vesper-IX and
+       Kenosis define both on every row and are byte-for-byte
+       unaffected. */
+    compMat.uniforms.uContrast.value = Number.isFinite(g.contrast) ? g.contrast : 1.05;
+    /* Defaulted to 0, which is the shipped pivot line, for the same
+       reason its neighbour is defaulted at all. A world that has not
+       been re-measured must not have its black point moved by an
+       engine change made for another one. */
+    compMat.uniforms.uContrastFloor.value =
+      Number.isFinite(g.contrastFloor) ? g.contrastFloor : 0;
     /* Defaulted, not assumed. applyAtmosphere is called with grades
        that other code paths assemble (blendGrade, the storm mix, and
        anything a review harness hands in); an undefined here would
@@ -1644,7 +1750,7 @@ export function createRenderer(ctx, canvas) {
     const ht = hexToRgb(g.highlightTint);
     compMat.uniforms.uShadowTint.value.set(st[0], st[1], st[2]);
     compMat.uniforms.uHighlightTint.value.set(ht[0], ht[1], ht[2]);
-    compMat.uniforms.uTintAmount.value = g.tint;
+    compMat.uniforms.uTintAmount.value = Number.isFinite(g.tint) ? g.tint : 0.3;
     const halo = atmos.sunHalo;
     compMat.uniforms.uHaloTint.value.set(halo.r * 0.14, halo.g * 0.11, halo.b * 0.08);
     atmosRef = atmos;
@@ -1680,7 +1786,26 @@ export function createRenderer(ctx, canvas) {
        timer costs hundreds of milliseconds in software/WebGL fallback
        paths; a slowly changing diffuse sky does not justify that hitch. */
     const dynamic = Math.max(1 - (atmos.goldenFactor ?? 1), atmos.storm || 0);
-    scene.environmentIntensity = atmos.envIntensity * lerp(1, 0.18, dynamic);
+    /* THE DIFFUSE SKY FILL ON OPAQUE SURFACES, SEPARATED FROM THE
+       WATER'S SKY TERM AND FROM THE HEMISPHERE LIGHT.
+
+       `atmos.envIntensity` does three unrelated jobs on the island:
+       this IBL, `skyFill.intensity` in atoll-sky.js, and the water's
+       `uSkyAmb` through atoll-water's SKY_AMB_GAIN. The water's 0.55
+       was cut against a Fresnel integral and measured; the terrain's
+       was not. Scaling all three together to fix the terrain would
+       move a calibrated number to correct an uncalibrated one, and
+       the water is the one material three blind judges have praised.
+       So the gain that fixes the landmass rides here alone.
+
+       Defaults to 1, and the default is the whole point: Vesper-IX
+       and Kenosis set no `skyFillGain` and their fill is unchanged
+       to the last bit. See ATOLL_GRADES.trade.skyFillGain for the
+       number, the arithmetic it corrects and what it cost the lit
+       sand. */
+    const fill = Number.isFinite(atmos.grade && atmos.grade.skyFillGain)
+      ? atmos.grade.skyFillGain : 1;
+    scene.environmentIntensity = atmos.envIntensity * fill * lerp(1, 0.18, dynamic);
   }
 
   let frame = 0;

@@ -2042,10 +2042,18 @@ export function installQa(ctx, api) {
         runtime: { ...api.runtime },
         intro: api.intro?.status() || null,
         tutorial: api.tutorial?.status?.() || null,
+        /* OPTIONAL-CHAINED, because a level pack is allowed not to
+           have these. Kenosis and Meridian-IV are environment builds
+           with no enemies and no campaign weapons, and `report()` is
+           the LAST thing the screenshot harness calls - so a bare
+           dereference here throws after every frame has already been
+           captured and turns a successful run into a failed one.
+           `api.terrain` and `api.world` always exist; the other two
+           do not. */
         terrain: api.terrain.stats(),
         world: api.world.stats(),
-        enemies: api.enemies.stats(),
-        weapons: api.weapons.stats(),
+        enemies: api.enemies?.stats?.() || null,
+        weapons: api.weapons?.stats?.() || null,
         atmos: {
           time: ctx.atmos.time,
           storm: Number(ctx.atmos.storm.toFixed(3)),
@@ -4599,6 +4607,12 @@ export function installQa(ctx, api) {
     get render() { return api.render; },
     get world() { return api.world; },
     get terrain() { return api.terrain; },
+    /* Water is atoll-only and answers null everywhere else, so
+       `T.water?.stats()` on Vesper-IX simply does nothing rather
+       than throwing. Added so the island's foam, break band and
+       glitter can be MEASURED at a point rather than guessed at
+       from a screenshot. */
+    get water() { return api.water || ctx.water || null; },
     get player() { return api.player; },
     get sky() { return api.sky; },
     get vfx() { return api.vfx; },

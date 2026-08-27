@@ -732,6 +732,11 @@ html.sf-maximised .sf-stage.is-maxed { z-index: 2147483000; }
   font-size: clamp(1.08rem, 1.75vw, 1.52rem);
   text-shadow: 0 2px 2px #000, 0 0 10px rgba(255, 46, 67, .88), 0 0 18px rgba(255, 20, 40, .5);
 }
+.sf-damage-number.is-strong {
+  color: #b9aa8c;
+  font-size: clamp(.82rem, 1.28vw, 1.05rem);
+  text-shadow: 0 1px 0 rgba(0, 0, 0, .9);
+}
 .sf-damage-number.is-boost { color: #ffad52; font-size: clamp(1rem, 1.62vw, 1.4rem); }
 .sf-damage-number.is-kill { filter: brightness(1.3); }
 

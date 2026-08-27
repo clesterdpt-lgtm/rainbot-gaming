@@ -4152,6 +4152,9 @@ export function buildAbbess(ctx) {
       eventId: "district-boss:bloom",
     });
     if (!inst) return null;
+    /* Eggs, floor spill and additive glow shells share her encounter
+       group but are not the queen's health pool. */
+    inst.damageRoots = [head, sac.mesh, tergites.mesh];
     inst.sacSpine = spine;
     inst.sacRadius = spineRadius;
     inst.raised = 0;

@@ -3967,6 +3967,10 @@ export function buildGarner(ctx) {
     });
     if (!inst) return null;
     dressInstance();
+    /* The encounter group also contains the collapsing lid, spoil and
+       projectiles. Only the mouth and live tentacle mesh are boss
+       surfaces; everything else keeps its own interaction contract. */
+    inst.damageRoots = [maw, armMesh.mesh];
     for (const arm of arms) {
       arm.anchor.set(C.pitX, floorY, C.pitZ);
       sheathe(arm);

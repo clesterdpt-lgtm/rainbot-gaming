@@ -217,6 +217,11 @@ const HITBOX = {
        in the bestiary is killed by shooting it anywhere; this one
        has a place to shoot, and it is on the far side of the animal. */
     weak: { y: 1.95, z: -3.30, r: 1.55, mult: 4.5 },
+    /* The analytic capsule intentionally stays tight enough that the
+       gaster weak point is not swallowed by it. The rendered legs and
+       outer plates still belong to the animal, though: a direct mesh
+       hit there is armoured damage rather than a disappearing round. */
+    surface: { mult: 0.72, meleeMult: 0.82, reach: 9 },
   },
 
   /* ------------------------------------------------------------------
@@ -250,6 +255,7 @@ const HITBOX = {
        petals are across the throat and a shot into them is an ordinary
        body hit. */
     maw: { r: 1.60, forward: 1.35, mult: 4.5, open: 0.45 },
+    surface: { mult: 0.78, meleeMult: 0.82, reach: 20 },
   },
 
   /* ------------------------------------------------------------------
@@ -321,6 +327,7 @@ const HITBOX = {
     // Fallback capsule for explode()/shockwave(), which treat this as
     // an ordinary tall, narrow-based creature.
     r: 3.7, y0: 0.02, y1: 13.8, head: 12.9, headR: 1.3, headZ: 2.2,
+    surface: { mult: 0.78, meleeMult: 0.86, reach: 17 },
   },
 
   /* ------------------------------------------------------------------
@@ -371,6 +378,9 @@ const HITBOX = {
        slip rather than a decision. */
     heart: { y: -0.85, z: 0.35, r: 1.25, mult: 2.0 },
     groundedMeleeMult: 1.5,
+    /* Wings and trailing vanes used to be declared visual-only. They
+       are now honest armoured surfaces: reduced damage, never zero. */
+    surface: { mult: 0.58, meleeMult: 0.72, reach: 15 },
   },
 
   /* ------------------------------------------------------------------
@@ -435,6 +445,7 @@ const HITBOX = {
        to the crater: ordnance dropped on the rim of the pit should not
        resolve on the animal at the bottom of it. */
     r: 6.8, y0: -2.0, y1: 6.5, head: 3.5, headR: 2.0, headZ: 0,
+    surface: { mult: 0.82, meleeMult: 1.0, reach: 24 },
   },
 
   /* ------------------------------------------------------------------
@@ -471,6 +482,7 @@ const HITBOX = {
        nine seconds whether to be standing there. Worth more than any
        other weak point in the game because it costs more to take. */
     ventral: { mult: 5.0, open: 0.5 },
+    surface: { mult: 0.72, meleeMult: 1.0, reach: 28 },
   },
 
   /* ------------------------------------------------------------------
@@ -498,6 +510,7 @@ const HITBOX = {
        which the encounter sets for exactly the stunned and recovering
        phases. */
     groundedMeleeMult: 2.8,
+    surface: { mult: 0.68, meleeMult: 0.78, reach: 10 },
   },
 
   /* The Apostate is the player's own silhouette made hostile. Its capsule is
@@ -507,6 +520,9 @@ const HITBOX = {
   apostate: {
     r: 0.72, y0: 0.02, y1: 2.08, head: 1.75, headR: 0.34, headZ: 0.08,
     muzzle: 1.32, muzzleZ: 0.72,
+    /* The corruption limbs and reliquary weapon are visible armour.
+       They reduce a hit, but no longer erase it. */
+    surface: { mult: 0.62, meleeMult: 0.72, reach: 5 },
   },
 };
 
@@ -645,6 +661,8 @@ export function buildCombat(ctx) {
       source: detail.source || "unknown",
       head: !!detail.head,
       weak: !!detail.weak,
+      strong: !!detail.strong,
+      surface: !!detail.surface,
       /* A flyer's heat sac is a resource target rather than a generic
          weak point. Keep that distinction all the way to the encounter's
          damage modifier so aerial armour can spare the counterplay the
@@ -706,6 +724,111 @@ export function buildCombat(ctx) {
   const _head = new THREE.Vector3();
   const _weak = new THREE.Vector3();
   const _muzzle = new THREE.Vector3();
+  const _surfaceRay = new THREE.Raycaster();
+  const _surfaceOrigin = new THREE.Vector3();
+  const _surfaceDirection = new THREE.Vector3();
+  const _surfaceBox = new THREE.Box3();
+  const _surfacePoint = new THREE.Vector3();
+  const _surfaceProbe = new THREE.Vector3();
+
+  /** The rendered objects which are allowed to pay damage into this
+   *  enemy. Procedural encounters publish a narrow list so their pit
+   *  rubble, floor stains and projectiles cannot become boss armour;
+   *  ordinary GLB bosses use their enemy root. */
+  function surfaceRoots(inst) {
+    if (!HITBOX[inst?.key]?.surface) return [];
+    const published = Array.isArray(inst.damageRoots)
+      ? inst.damageRoots.filter(Boolean) : [];
+    return published.length ? published : (inst.root ? [inst.root] : []);
+  }
+
+  function visibleSurface(root, object) {
+    if (!object || (!object.isMesh && !object.isSkinnedMesh)) return false;
+    if (object.material?.visible === false || object.userData?.sfDamageIgnore) return false;
+    for (let node = object; node; node = node.parent) {
+      if (!node.visible) return false;
+      if (node === root) break;
+    }
+    return true;
+  }
+
+  /** Exact rendered-triangle fallback for boss surfaces. Analytic weak
+   *  points and live limb capsules remain the first-class hit table;
+   *  this closes only the visible gaps those authored volumes leave. */
+  function surfaceRayHit(inst, ox, oy, oz, dx, dy, dz, maxT) {
+    const roots = surfaceRoots(inst);
+    if (!roots.length || !(maxT > 0)) return null;
+    _surfaceOrigin.set(ox, oy, oz);
+    _surfaceDirection.set(dx, dy, dz).normalize();
+    _surfaceRay.set(_surfaceOrigin, _surfaceDirection);
+    _surfaceRay.near = 0;
+    _surfaceRay.far = maxT;
+    let best = null;
+    for (const root of roots) {
+      root.updateWorldMatrix(true, true);
+      const hits = _surfaceRay.intersectObject(root, true);
+      for (const hit of hits) {
+        if (!visibleSurface(root, hit.object)) continue;
+        if (!best || hit.distance < best.t) {
+          best = {
+            inst,
+            t: hit.distance,
+            x: hit.point.x,
+            y: hit.point.y,
+            z: hit.point.z,
+            head: false,
+            weak: false,
+            surface: true,
+            strong: true,
+            /* The procedural Abbess publishes head/thorax and sac as
+               separate roots. A triangle on the former is her authored
+               armour region even if it lies just outside the capsule. */
+            thorax: inst.key === "abbess" && root.name === "sf-abbess-head",
+          };
+        }
+        break;
+      }
+    }
+    return best;
+  }
+
+  /** Nearest point on the rendered boss envelope for a melee sweep.
+   *  This runs only on a swing and only after a cheap boss-range gate,
+   *  so precise skinned bounds do not become a per-frame cost. */
+  function nearestSurfacePoint(inst, x, y, z, out) {
+    const roots = surfaceRoots(inst);
+    if (!roots.length) return null;
+    let best = null;
+    _surfaceProbe.set(x, y, z);
+    for (const root of roots) {
+      root.updateWorldMatrix(true, true);
+      /* Conservative object bounds are deliberate here. Exact skinned
+         bounds walk every deformed vertex; the Apostate and its weapon
+         exceed a million triangles, turning one melee press into a long
+         main-thread stall. The authored roots already carry generous
+         animation bounds, and melee needs a reachable envelope rather
+         than triangle-perfect ranged impact. */
+      _surfaceBox.makeEmpty().setFromObject(root, false);
+      if (_surfaceBox.isEmpty()) continue;
+      _surfaceBox.clampPoint(_surfaceProbe, _surfacePoint);
+      const dx = _surfacePoint.x - x;
+      const dz = _surfacePoint.z - z;
+      const horizontal = Math.hypot(dx, dz);
+      const vertical = Math.abs(_surfacePoint.y - y);
+      if (!best || horizontal < best.horizontal
+        || (Math.abs(horizontal - best.horizontal) < 1e-4 && vertical < best.vertical)) {
+        best = {
+          horizontal,
+          vertical,
+          x: _surfacePoint.x,
+          y: _surfacePoint.y,
+          z: _surfacePoint.z,
+        };
+      }
+    }
+    if (best) out.set(best.x, best.y, best.z);
+    return best;
+  }
 
   /** Ray-vs-sphere against the head volume. */
   function headHit(inst, box, ox, oy, oz, dx, dy, dz) {
@@ -1540,105 +1663,92 @@ export function buildCombat(ctx) {
    * correct and would also mean five tests per enemy per shot; a
    * capsule is what the silhouette actually looks like.
    */
+  function analyticEnemyHit(inst, box, ox, oy, oz, dx, dy, dz, maxT) {
+    let hit = null;
+    if (box.segments) {
+      const part = bodyHit(inst, box, ox, oy, oz, dx, dy, dz, maxT);
+      if (part) hit = { ...part, inst, head: false };
+    } else if (box.sac) {
+      const part = queenHit(inst, box, ox, oy, oz, dx, dy, dz, maxT);
+      if (part) hit = { ...part, inst, head: false };
+    } else if (box.sacs) {
+      const part = flyerHit(inst, box, ox, oy, oz, dx, dy, dz, maxT);
+      if (part) hit = { ...part, inst, head: false };
+    } else if (box.legs) {
+      const part = legAndBodyHit(inst, box, ox, oy, oz, dx, dy, dz, maxT);
+      if (part) hit = { ...part, inst, head: false, joint: !!part.joint };
+    } else {
+      const cx = inst.x - ox;
+      const cy = inst.y + (box.y0 + box.y1) * 0.5 - oy;
+      const cz = inst.z - oz;
+      const t = cx * dx + cy * dy + cz * dz;
+      if (t >= 0 && t <= maxT) {
+        const px = ox + dx * t;
+        const py = oy + dy * t;
+        const pz = oz + dz * t;
+        const onBody = Math.hypot(px - inst.x, pz - inst.z) <= box.r
+          && py >= inst.y + box.y0 && py <= inst.y + box.y1;
+        const wt = weakHit(inst, box, ox, oy, oz, dx, dy, dz);
+        const hitsWeak = wt >= 0 && wt <= maxT && (!onBody || wt < t);
+        if (onBody || hitsWeak) {
+          const useT = hitsWeak ? wt : t;
+          hit = {
+            inst,
+            t: useT,
+            weak: hitsWeak,
+            head: !hitsWeak && headHit(inst, box, ox, oy, oz, dx, dy, dz),
+          };
+        }
+      }
+    }
+    if (!hit) return null;
+    hit.x = ox + dx * hit.t;
+    hit.y = oy + dy * hit.t;
+    hit.z = oz + dz * hit.t;
+    return hit;
+  }
+
+  function resolvedEnemyHit(inst, box, ox, oy, oz, dx, dy, dz, maxT) {
+    const analytic = analyticEnemyHit(inst, box, ox, oy, oz, dx, dy, dz, maxT);
+    const surface = surfaceRayHit(inst, ox, oy, oz, dx, dy, dz, maxT);
+    if (!surface) return analytic;
+    if (!analytic) return surface;
+
+    /* Analytic volumes own authored zones. Their `t` is sometimes the
+       centre-plane rather than shell entry, so a rendered triangle is
+       expected to be a body radius nearer. Only a surface materially
+       farther forward than that is a peripheral wing/limb/plate hit. */
+    const authored = analytic.weak || analytic.head || analytic.thorax
+      || analytic.joint || analytic.sacIndex >= 0;
+    const bodyTolerance = Math.max(0.55, Number(box.r) + 0.45);
+    /* A weak sphere describes the whole glowing organ, whose rendered
+       outer shell can sit several metres before its analytic centre on
+       the long Winnower gut. Keep that authored organ classification;
+       smaller sacs/joints/head spheres get the tighter tolerance so a
+       wing in front of them still resolves as wing armour. */
+    const authoredTolerance = analytic.weak
+      ? Math.max(bodyTolerance, 4.5)
+      : Math.max(bodyTolerance,
+        Number(box.sacs?.r || box.joints?.r || box.headR || 0) + 0.8);
+    /* Weak organs, heads and the Abbess's thorax are semantic regions
+       of the visible shell, not small props behind it. If their volume
+       accepts the ray, keep that zone even when a long snout/gaster
+       puts the triangle several metres before the centre-plane. */
+    if (analytic.weak || analytic.head || analytic.thorax) return analytic;
+    if (authored && analytic.t <= surface.t + authoredTolerance) return analytic;
+    return surface.t + bodyTolerance < analytic.t ? surface : analytic;
+  }
+
   function raycastEnemies(ox, oy, oz, dx, dy, dz, maxDist) {
     let best = null;
     let bestT = maxDist;
     for (const inst of enemies.live) {
       if (untouchable(inst)) continue;
       const box = HITBOX[inst.key] || HITBOX.thresher;
-
-      /* A chained body takes the other path entirely: there is no
-         centre to project and no head sphere to modify, only vertebrae
-         and a mouth that is sometimes open. */
-      if (box.segments) {
-        const seg = bodyHit(inst, box, ox, oy, oz, dx, dy, dz, bestT);
-        if (!seg) continue;
-        best = {
-          inst, t: seg.t, weak: seg.weak, head: false,
-          x: ox + dx * seg.t, y: oy + dy * seg.t, z: oz + dz * seg.t,
-        };
-        bestT = seg.t;
-        continue;
-      }
-
-      // A queen: an armoured thorax and a live egg sac behind it that
-      // is only soft while she is holding it up - see queenHit.
-      if (box.sac) {
-        const qh = queenHit(inst, box, ox, oy, oz, dx, dy, dz, bestT);
-        if (!qh) continue;
-        best = {
-          inst, t: qh.t, weak: qh.weak, head: false, thorax: qh.thorax,
-          x: ox + dx * qh.t, y: oy + dy * qh.t, z: oz + dz * qh.t,
-        };
-        bestT = qh.t;
-        continue;
-      }
-
-      // A flyer: body capsule plus live sacs, and a gut that only
-      // exists once it is down - see flyerHit.
-      if (box.sacs) {
-        const fh = flyerHit(inst, box, ox, oy, oz, dx, dy, dz, bestT);
-        if (!fh) continue;
-        best = {
-          inst, t: fh.t, weak: fh.weak, head: false, sacIndex: fh.sacIndex,
-          x: ox + dx * fh.t, y: oy + dy * fh.t, z: oz + dz * fh.t,
-        };
-        bestT = fh.t;
-        continue;
-      }
-
-      // A leg walker: eight independent targets and, once collapsed,
-      // a ninth. No capsule, no head - see legAndBodyHit.
-      if (box.legs) {
-        const lb = legAndBodyHit(inst, box, ox, oy, oz, dx, dy, dz, bestT);
-        if (!lb) continue;
-        best = {
-          inst, t: lb.t, weak: lb.weak, head: false, legIndex: lb.legIndex,
-          joint: !!lb.joint,
-          x: ox + dx * lb.t, y: oy + dy * lb.t, z: oz + dz * lb.t,
-        };
-        bestT = lb.t;
-        continue;
-      }
-
-      // Project the enemy's centre onto the ray.
-      const cx = inst.x - ox;
-      const cy = inst.y + (box.y0 + box.y1) * 0.5 - oy;
-      const cz = inst.z - oz;
-      const t = cx * dx + cy * dy + cz * dz;
-      if (t < 0 || t > bestT) continue;
-
-      const px = ox + dx * t;
-      const py = oy + dy * t;
-      const pz = oz + dz * t;
-      // Horizontal miss distance against the body cylinder...
-      const hd = Math.hypot(px - inst.x, pz - inst.z);
-      const lo = inst.y + box.y0;
-      const hi = inst.y + box.y1;
-      const onBody = hd <= box.r && py >= lo && py <= hi;
-
-      /* ...and the weak point, which is a SEPARATE primitive rather
-         than a modifier, and is therefore tested even when the body
-         capsule missed. `continue`-ing on a capsule miss first would
-         make the Matriarch's gaster - 3.3m behind its capsule and
-         outside it - impossible to hit. */
-      const wt = weakHit(inst, box, ox, oy, oz, dx, dy, dz);
-      const hitsWeak = wt >= 0 && wt <= bestT && (!onBody || wt < t);
-      if (!onBody && !hitsWeak) continue;
-
-      const useT = hitsWeak ? wt : t;
-      if (useT > bestT) continue;
-
-      // Head or body is only a damage multiplier. The head is a
-      // SPHERE placed in the creature's own frame - forward of the
-      // body axis by `headZ`, rotated by its yaw - so it lands on the
-      // face of an animal that carries its head out in front.
-      best = {
-        inst, t: useT, weak: hitsWeak,
-        head: !hitsWeak && headHit(inst, box, ox, oy, oz, dx, dy, dz),
-        x: ox + dx * useT, y: oy + dy * useT, z: oz + dz * useT,
-      };
-      bestT = useT;
+      const hit = resolvedEnemyHit(inst, box, ox, oy, oz, dx, dy, dz, bestT);
+      if (!hit || hit.t > bestT) continue;
+      best = hit;
+      bestT = hit.t;
     }
     return best;
   }
@@ -1646,44 +1756,10 @@ export function buildCombat(ctx) {
   function raycastEnemiesAll(ox, oy, oz, dx, dy, dz, maxDist = Infinity) {
     const hits = [];
     for (const inst of enemies.live) {
-      if (inst.state === "death" || inst.emerging?.active
-        || inst.encounterHidden || inst.encounterLocked) {
-        continue;
-      }
+      if (untouchable(inst)) continue;
       const box = HITBOX[inst.key] || HITBOX.thresher;
-      const legHit = inst.legs && box.legSegments
-        ? legAndBodyHit(inst, box, ox, oy, oz, dx, dy, dz, maxDist)
-        : null;
-      if (legHit && legHit.t <= maxDist) {
-        hits.push(legHit);
-        continue;
-      }
-
-      const cx = inst.x - ox;
-      const cy = inst.y + (box.y0 + box.y1) * 0.5 - oy;
-      const cz = inst.z - oz;
-      const t = cx * dx + cy * dy + cz * dz;
-      if (t < 0 || t > maxDist) continue;
-
-      const px = ox + dx * t;
-      const py = oy + dy * t;
-      const pz = oz + dz * t;
-      const hd = Math.hypot(px - inst.x, pz - inst.z);
-      const lo = inst.y + box.y0;
-      const hi = inst.y + box.y1;
-      const onBody = hd <= box.r && py >= lo && py <= hi;
-      const wt = weakHit(inst, box, ox, oy, oz, dx, dy, dz);
-      const hitsWeak = wt >= 0 && wt <= maxDist && (!onBody || wt < t);
-      if (!onBody && !hitsWeak) continue;
-
-      const useT = hitsWeak ? wt : t;
-      if (useT > maxDist) continue;
-
-      hits.push({
-        inst, t: useT, weak: hitsWeak,
-        head: !hitsWeak && headHit(inst, box, ox, oy, oz, dx, dy, dz),
-        x: ox + dx * useT, y: oy + dy * useT, z: oz + dz * useT,
-      });
+      const hit = resolvedEnemyHit(inst, box, ox, oy, oz, dx, dy, dz, maxDist);
+      if (hit && hit.t <= maxDist) hits.push(hit);
     }
     hits.sort((a, b) => a.t - b.t);
     return hits;
@@ -1743,7 +1819,9 @@ export function buildCombat(ctx) {
       const thoraxMult = hit.thorax ? (box.thoraxMult || 1) : 1;
       const sacMult = hit.sacIndex >= 0 ? (box.sacs?.mult || 1) : 1;
       const jointMult = hit.legIndex >= 0 && hit.joint ? (box.joints?.mult || 1) : 1;
-      const dmg = damage * (hit.head ? 2.6 : 1) * weakMult * sacMult * thoraxMult * jointMult;
+      const surfaceMult = hit.surface && !hit.thorax ? (box.surface?.mult || 1) : 1;
+      const dmg = damage * (hit.head ? 2.6 : 1) * weakMult * sacMult
+        * thoraxMult * jointMult * surfaceMult;
 
       if (hit.sacIndex >= 0 && box.sacs) {
         drainLift(hit.inst, box.sacs.lift || 1, hit.sacIndex,
@@ -1757,6 +1835,8 @@ export function buildCombat(ctx) {
           source: "furnace-lance",
           head: hit.head,
           weak: !!hit.weak,
+          strong: !!hit.strong,
+          surface: !!hit.surface,
           sac: hit.sacIndex >= 0,
           x: hit.x,
           y: hit.y,
@@ -1780,6 +1860,8 @@ export function buildCombat(ctx) {
         source: "furnace-lance",
         head: hit.head,
         weak: !!hit.weak,
+        strong: !!hit.strong,
+        surface: !!hit.surface,
         joint: !!hit.joint,
         damage: dmg,
         actual: dealt,
@@ -1910,7 +1992,9 @@ export function buildCombat(ctx) {
          target, and worth what the HITBOX entry says a joint is worth.
          Only a leg hit can carry it (see legAndBodyHit). */
       const jointMult = hit.legIndex >= 0 && hit.joint ? (box.joints?.mult || 1) : 1;
-      const dmg = damage * (hit.head ? 2.6 : 1) * weakMult * sacMult * thoraxMult * jointMult;
+      const surfaceMult = hit.surface && !hit.thorax ? (box.surface?.mult || 1) : 1;
+      const dmg = damage * (hit.head ? 2.6 : 1) * weakMult * sacMult
+        * thoraxMult * jointMult * surfaceMult;
       /* A leg hit never reaches `applyDamage` at all - it has its own
          pool, and `legIndex >= 0` is how every damage path in this
          file already tells "one of the eight" from "the body once it
@@ -1932,6 +2016,8 @@ export function buildCombat(ctx) {
           source: "shot",
           head: hit.head,
           weak: !!hit.weak,
+          strong: !!hit.strong,
+          surface: !!hit.surface,
           sac: hit.sacIndex >= 0,
           x: hit.x,
           y: hit.y,
@@ -1950,6 +2036,8 @@ export function buildCombat(ctx) {
         source: "shot",
         head: hit.head,
         weak: !!hit.weak,
+        strong: !!hit.strong,
+        surface: !!hit.surface,
         joint: !!hit.joint,
         legIndex: hit.legIndex >= 0 ? hit.legIndex : undefined,
         damage: dmg,
@@ -2015,6 +2103,8 @@ export function buildCombat(ctx) {
       source: detail.source || "unknown",
       head: !!detail.head,
       weak: !!detail.weak,
+      strong: !!detail.strong,
+      surface: !!detail.surface,
       sac: !!detail.sac,
       killed,
       x: Number.isFinite(detail.x) ? detail.x : inst.x,
@@ -2127,12 +2217,33 @@ export function buildCombat(ctx) {
       if ((inst.spec?.flies || inst.spec?.perches) && !inst.grounded) continue;
       const legTarget = box.legs
         ? nearestLegPoint(inst, box, ps.x, ps.z, ps.y, _bodyNear) : null;
-      const near = legTarget ? legTarget.dist : nearestBodyPoint(inst, ps.x, ps.z, _bodyNear);
+      let near = legTarget ? legTarget.dist : nearestBodyPoint(inst, ps.x, ps.z, _bodyNear);
+      let targetRadius = !box.legs ? box.r * (box.segments ? bodyHitScale(inst) : 1)
+        : legTarget.radius;
+      let surfaceTarget = null;
+      let surfaceChosen = false;
+      /* A cheap centre gate keeps precise skinned bounds off bosses on
+         the other side of the map. Leg walkers already publish every
+         live limb to `nearestLegPoint`; their authored limb pools stay
+         authoritative instead of being bypassed through the mesh. */
+      if (!box.legs && box.surface
+        && Math.hypot(inst.x - ps.x, inst.z - ps.z) <= reach + box.surface.reach) {
+        surfaceTarget = nearestSurfacePoint(inst, ps.x, eyeY, ps.z, _surfacePoint);
+        const analyticSurface = near - targetRadius;
+        const meleeTop = ps.y + Math.max(4.4, reach * 1.05);
+        const verticallyReachable = surfaceTarget
+          && surfaceTarget.y >= ps.y - 0.8 && surfaceTarget.y <= meleeTop;
+        if (verticallyReachable && surfaceTarget.horizontal + 0.08 < analyticSurface) {
+          near = surfaceTarget.horizontal;
+          targetRadius = 0;
+          _bodyNear.set(surfaceTarget.x, surfaceTarget.y, surfaceTarget.z);
+          surfaceChosen = true;
+        }
+      }
       const dx = _bodyNear.x - ps.x;
       const dz = _bodyNear.z - ps.z;
       const dist = Math.max(near, 1e-4);
-      const targetRadius = !box.legs ? box.r * (box.segments ? bodyHitScale(inst) : 1)
-        : legTarget.radius;
+      const clearance = Math.max(0, near - targetRadius);
       if (box.legs && legTarget.legIndex < 0 && !inst.collapsed) continue;
       if (dist > reach + targetRadius) continue;
       /* TOUCHING RANGE IS ITS OWN CASE. A collapsed boss's body is a
@@ -2142,7 +2253,13 @@ export function buildCombat(ctx) {
          itself blocked. Inside 1.2m none of those questions mean
          anything: you are against the target, the swing lands. */
       const inv = 1 / Math.max(1e-4, dist);
-      if (dist > 1.2) {
+      /* Contact is distance to the target SURFACE, not its centreline.
+         The old centre-distance test treated a player pressed against
+         a Matriarch-sized capsule as still several metres away, then
+         rejected the swing on the arena collision between that centre
+         and the player. Large boss bodies and thick limbs now get the
+         same honest touching-range rule as small enemies. */
+      if (clearance > 1.2) {
         if (isPierce) {
           const sy = Math.sin(ps.yaw);
           const cy = Math.cos(ps.yaw);
@@ -2164,14 +2281,16 @@ export function buildCombat(ctx) {
       const strikeDamage = inst.key === MELEE_CONFIG.lightEnemy
         ? Math.max(dmg, inst.health)
         : dmg;
-      const hitY = box.legs ? _bodyNear.y : inst.y + box.y1 * 0.55;
+      const hitY = (box.legs || surfaceChosen) ? _bodyNear.y : inst.y + box.y1 * 0.55;
       /* WHERE THE BLOW LANDED. For everything else the animal's own
          centre is a fine place to spark from; a leg walker's legs are
          twelve metres from its centre and a spark there put every
          connected swing's feedback in the middle of the air. */
-      const hitX = box.legs ? _bodyNear.x : inst.x;
-      const hitZ = box.legs ? _bodyNear.z : inst.z;
+      const hitX = (box.legs || surfaceChosen) ? _bodyNear.x : inst.x;
+      const hitZ = (box.legs || surfaceChosen) ? _bodyNear.z : inst.z;
       const jointHit = !!(box.legs && legTarget.legIndex >= 0 && legTarget.joint);
+      const surfaceDowned = surfaceChosen && inst.grounded && box.groundedMeleeMult
+        && (inst.spec?.flies || inst.spec?.perches);
       let dealt;
       if (box.legs && legTarget.legIndex >= 0) {
         // The joint bonus is the same number a shot earns there.
@@ -2186,6 +2305,22 @@ export function buildCombat(ctx) {
         dealt = applyDamage(inst, strikeDamage * (box.collapsedMeleeMult || 1), {
           source: "melee", weak: true, x: inst.x, y: hitY, z: inst.z,
           originX: ps.x, originZ: ps.z,
+        });
+      } else if (surfaceChosen) {
+        /* Peripheral geometry is armour, not immunity. A downed flyer
+           or Stylite still pays its earned close-range window on top of
+           that armour value, so the old weak phase remains meaningful. */
+        dealt = applyDamage(inst, strikeDamage * (box.surface?.meleeMult || 1)
+          * (surfaceDowned ? box.groundedMeleeMult : 1), {
+          source: "melee",
+          weak: !!surfaceDowned,
+          strong: !surfaceDowned,
+          surface: true,
+          x: hitX,
+          y: hitY,
+          z: hitZ,
+          originX: ps.x,
+          originZ: ps.z,
         });
       } else {
         /* A creature the player has knocked out of the sky is worth
@@ -2239,7 +2374,9 @@ export function buildCombat(ctx) {
         key: identity.enemyKey,
         source: "melee",
         head: false,
-        weak: box.legs && legTarget.legIndex < 0,
+        weak: (box.legs && legTarget.legIndex < 0) || !!surfaceDowned,
+        strong: surfaceChosen && !surfaceDowned,
+        surface: surfaceChosen,
         joint: jointHit,
         legIndex: box.legs ? legTarget.legIndex : undefined,
         damage: dealt,

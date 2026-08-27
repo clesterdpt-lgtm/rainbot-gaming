@@ -203,7 +203,10 @@ export function buildHud(ctx, host) {
   const damageNumbers = [];
   const damageWorld = new ctx.THREE.Vector3();
   let damageSequence = 0;
-  function pushDamageNumber(event, { weak = !!event.weak } = {}) {
+  function pushDamageNumber(event, {
+    weak = !!event.weak,
+    strong = !!event.strong,
+  } = {}) {
     if (!event || !Number.isFinite(event.damage)) return;
     while (damageNumbers.length >= 32) {
       damageNumbers.shift().node.remove();
@@ -212,9 +215,10 @@ export function buildHud(ctx, host) {
     node.className = "sf-damage-number";
     if (event.head) node.classList.add("is-head");
     if (weak) node.classList.add("is-weak");
+    if (strong && !weak) node.classList.add("is-strong");
     if (event.killed) node.classList.add("is-kill");
     if (event.source === "boost") node.classList.add("is-boost");
-    node.textContent = `${weak ? "✦" : ""}${Math.max(1, Math.round(event.damage))}`;
+    node.textContent = `${weak ? "✦" : strong ? "▾" : ""}${Math.max(1, Math.round(event.damage))}`;
     damageLayerEl.appendChild(node);
     damageSequence += 1;
     damageNumbers.push({

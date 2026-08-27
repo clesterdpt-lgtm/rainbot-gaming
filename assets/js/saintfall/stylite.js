@@ -3155,6 +3155,10 @@ export function buildStylite(ctx) {
     if (!inst) return null;
     inst.y = state.pos.y;
     inst.grounded = false;
+    /* The generic enemy root is an empty lifecycle anchor for this
+       procedural boss. Publish the visible animal so shots and swings
+       can fall back to its real rendered surface. */
+    inst.damageRoots = [body];
     poseBody(0);
     setEncounterGate(true, true);
     return inst;

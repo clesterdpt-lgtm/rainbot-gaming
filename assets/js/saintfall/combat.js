@@ -142,21 +142,13 @@ export const ENEMY_MELEE_CONFIG = Object.freeze({
    capsule, not when the muzzle flashes. */
 export const GLEANER_PROJECTILE_CONFIG = Object.freeze({
   speed: 105,
-  directAimChance: 0.42,
-  horizontalSpread: 0.14,
-  verticalSpread: 0.09,
+  directAimChance: 0.65,
+  horizontalSpread: 0.08,
+  verticalSpread: 0.05,
   playerRadius: 0.52,
   playerCapsuleBottom: 0.28,
   playerCapsuleTop: 1.58,
   maxRange: 60,
-  /* The bolt's travel time is a real dodge at forty metres and nothing at
-     two: 20ms of flight, and its angular spread is 0.14m against a 0.52m
-     capsule. So a Gleaner used to be MORE dangerous the closer a lance got
-     to it - an anti-melee turret by accident. Inside `fallbackRange` it now
-     stops firing and scuttles back to reload, at its charge speed; the
-     trooper at 8.6 m/s always catches it, and two sweeps end it. Closing on
-     the ranged caste is the reward, not the punishment. A Gleaner that
-     cannot back away (cornered) fires anyway. */
   fallbackRange: 10,
   fallbackReload: 0.7,
 });
@@ -2194,7 +2186,7 @@ export function buildCombat(ctx) {
     const w = ctx.weapons && ctx.weapons.current;
     if (!w || !w.spec.melee) return 0;
     const isPierce = Math.abs(sweepId) === 6 || comboStep === 6;
-    const reach = w.spec.reach * lunge * MELEE_CONFIG.reachMultiplier;
+    const reach = w.spec.reach * lunge * MELEE_CONFIG.reachMultiplier * (isPierce ? 1.15 : 1);
     const dmg = (w.spec.damage || 70) * mult;
     const eyeY = ps.y + 1.4;
     let hits = 0;
@@ -2237,9 +2229,9 @@ export function buildCombat(ctx) {
         && Math.hypot(inst.x - ps.x, inst.z - ps.z) <= reach + box.surface.reach) {
         surfaceTarget = nearestSurfacePoint(inst, ps.x, eyeY, ps.z, _surfacePoint);
         const analyticSurface = near - targetRadius;
-        const meleeTop = ps.y + Math.max(4.4, reach * 1.05);
+        const meleeTop = ps.y + Math.max(isPierce ? 5.5 : 4.4, reach * 1.05);
         const verticallyReachable = surfaceTarget
-          && surfaceTarget.y >= ps.y - 0.8 && surfaceTarget.y <= meleeTop;
+          && surfaceTarget.y >= ps.y - (isPierce ? 1.6 : 0.8) && surfaceTarget.y <= meleeTop;
         if (verticallyReachable && surfaceTarget.horizontal + 0.08 < analyticSurface) {
           near = surfaceTarget.horizontal;
           targetRadius = 0;
@@ -2272,7 +2264,7 @@ export function buildCombat(ctx) {
           const cy = Math.cos(ps.yaw);
           const fwd = dx * sy + dz * cy;
           const lat = Math.abs(-dx * cy + dz * sy);
-          if (fwd < -0.6 || fwd > reach + targetRadius || lat > 2.6 + targetRadius) continue;
+          if (fwd < -1.2 || fwd > reach + targetRadius || lat > 3.8 + targetRadius) continue;
         } else {
           let rel = Math.atan2(dx, dz) - ps.yaw;
           while (rel > Math.PI) rel -= TAU;
@@ -3347,7 +3339,7 @@ export function buildCombat(ctx) {
     const oz = _muzzle.z;
     const target = options.target || ps;
     let tx = (Number.isFinite(target.x) ? target.x : ps.x) - ox;
-    let ty = (Number.isFinite(target.y) ? target.y : ps.y + 1.62) - oy;
+    let ty = (Number.isFinite(target.y) ? target.y : ps.y + 1.05) - oy;
     let tz = (Number.isFinite(target.z) ? target.z : ps.z) - oz;
     const targetDistance = Math.hypot(tx, ty, tz) || 1;
     tx /= targetDistance;
@@ -3603,8 +3595,13 @@ export function buildCombat(ctx) {
       reason = dealt > 0 ? "hit" : "blocked";
     }
     const landed = dealt > 0;
-    if (landed) strikeTotals.landed += 1;
-    else if (reason === "blocked") strikeTotals.blocked += 1;
+    if (landed) {
+      strikeTotals.landed += 1;
+      if (inst.key === "harrow") {
+        ctx.player?.applyStun?.(0.28);
+        ctx.player?.applySlow?.(0.55, 1.4);
+      }
+    } else if (reason === "blocked") strikeTotals.blocked += 1;
     else strikeTotals.whiffed += 1;
     /* A strike that lands nothing costs a beat: the dodge - or the
        guard - buys the trooper the recovery, which is the opening. */

@@ -1094,7 +1094,7 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render, setQualit
       </footer>
       <div class="sf-doctrine-talent__actions">
         <button type="button" data-doctrine-action="inspect" data-talent-action="inspect" data-talent-id="${escapeHtml(definition.id)}" aria-label="${inspected ? "Back to rites" : `Details for ${escapeHtml(definition.name || "Unnamed Rite")}`}" aria-expanded="${inspected ? "true" : "false"}" aria-controls="${detailId}">${inspected ? "BACK TO RITES" : "DETAILS"}</button>
-        ${rank > 0 ? `<button type="button" data-doctrine-action="refund" data-talent-action="refund" data-talent-id="${escapeHtml(definition.id)}"${disabledAttributes(!eligibility.canRefund, eligibility.refundReason)}>REFUND</button>` : ""}
+        <button type="button" data-doctrine-action="refund" data-talent-action="refund" data-talent-id="${escapeHtml(definition.id)}"${disabledAttributes(!eligibility.canRefund, eligibility.refundReason)}>REFUND</button>
         <button type="button" data-doctrine-action="spend" data-talent-action="spend" data-talent-id="${escapeHtml(definition.id)}"${disabledAttributes(!eligibility.canSpend, eligibility.reason)}>${spendLabel}</button>
       </div>
       <small class="sf-doctrine-talent__reason" data-talent-reason>${escapeHtml(reason)}</small>
@@ -1144,8 +1144,7 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render, setQualit
     }).join("") : `<li data-state="${rank > 0 ? "owned" : "next"}"><b>01</b><span><small>RITE EFFECT</small><strong>${escapeHtml(definition.description || definition.summary || "Rite effect awaiting record.")}</strong></span></li>`;
     const spendLabel = !eligibility.implemented ? "FORTHCOMING"
       : rank >= maxRank ? "MAX RANK" : `INSCRIBE RANK ${rankNumeral(rank + 1)}`;
-    const actionButtons = `${rank > 0
-      ? `<button type="button" data-doctrine-action="refund" data-talent-action="refund" data-talent-id="${escapeHtml(definition.id)}"${disabledAttributes(!eligibility.canRefund, eligibility.refundReason)}>REFUND RANK</button>` : ""}
+    const actionButtons = `<button type="button" data-doctrine-action="refund" data-talent-action="refund" data-talent-id="${escapeHtml(definition.id)}"${disabledAttributes(!eligibility.canRefund, eligibility.refundReason)}>REFUND RANK</button>
       <button type="button" data-doctrine-action="spend" data-talent-action="spend" data-talent-id="${escapeHtml(definition.id)}"${disabledAttributes(!eligibility.canSpend, eligibility.reason)}>${spendLabel}</button>`;
     const iconSrc = talentIconUrl(definition.id);
 
@@ -2361,7 +2360,11 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render, setQualit
         ? "[data-doctrine-preview]"
         : `[data-doctrine-talent][data-talent-id="${CSS.escape(talentId)}"]`
       : "";
-    const nextTalentAction = talentId
+    const spendFocusTarget = talentId
+      ? `${talentFocusSurface} [data-talent-action="spend"]:not(:disabled), `
+        + `${talentFocusSurface} [data-talent-action="refund"]:not(:disabled)`
+      : "";
+    const refundFocusTarget = talentId
       ? `${talentFocusSurface} [data-talent-action="refund"]:not(:disabled), `
         + `${talentFocusSurface} [data-talent-action="spend"]:not(:disabled)`
       : "";
@@ -2387,11 +2390,11 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render, setQualit
     }
     if (action === "spend" && talentId) {
       return callDoctrine("spend", [talentId], "Rite inscribed.",
-        nextTalentAction, talentFocusSurface);
+        spendFocusTarget, talentFocusSurface);
     }
     if (action === "refund" && talentId) {
       return callDoctrine("refund", [talentId], "Rite refunded.",
-        nextTalentAction, talentFocusSurface);
+        refundFocusTarget, talentFocusSurface);
     }
     if (action === "vow") {
       const capstoneId = button.dataset.capstoneId;

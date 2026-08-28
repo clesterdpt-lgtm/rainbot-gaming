@@ -3520,8 +3520,8 @@ export async function createPlayer(ctx, canvas) {
     const rank = ctx.progression?.rank?.("procession_executioners_measure") || 1;
     const ratio = clamp(chargeRatio ?? 1.0, 0.15, 1.0);
     const baseDamage = rank >= 2 ? 4.5 : 3.0;
-    const maxLunge = rank >= 2 ? 9.0 : 7.0;
-    const minLunge = 1.6;
+    const maxLunge = rank >= 2 ? 9.5 : 7.5;
+    const minLunge = 2.0;
     const maxSpeed = rank >= 2 ? 58.0 : 48.0;
     const minSpeed = 18.0;
 
@@ -4820,9 +4820,10 @@ export async function createPlayer(ctx, canvas) {
            until normal locomotion resumes.
            A steep downhill skid uses the same visual truth: the boots
            move WITH the body instead of taking full walking strides. */
+        const isPierceThrust = action.name === "meleePierce";
         const gaitTravel = !state.grounded
           ? 0
-          : boostMode ? 0
+          : (boostMode || isPierceThrust) ? 0
             : travelled * lerp(1, 0.04, state.downhillPose);
         state.stride += gaitTravel;
         state.gait += gaitTravel / Math.max(0.55, readGaitSpec().strideLen);
@@ -5866,6 +5867,66 @@ export async function createPlayer(ctx, canvas) {
     }
   }
 
+  /** Executioner's Thrust: jetpack-propelled ground charge.
+   *  Both sabatons stay planted in an aerodynamic, tandem ski-glide
+   *  stance with the lead foot lunging forward and the trail leg braced
+   *  behind, riding smoothly with the translating body. */
+  function solvePierceLegs(dt) {
+    const facing = Number.isFinite(state.aimViewYaw)
+      ? state.aimViewYaw
+      : (Number.isFinite(action.aimYaw)
+        ? action.aimYaw
+        : (Number.isFinite(state.travelYaw) ? state.travelYaw : state.yaw));
+    const dx = Math.sin(facing);
+    const dz = Math.cos(facing);
+    const rightX = dz;
+    const rightZ = -dx;
+    const slope = (
+      groundY(state.x + dx * 0.20, state.z + dz * 0.20)
+      - groundY(state.x - dx * 0.20, state.z - dz * 0.20)
+    ) / 0.40;
+    const groundDev = clamp(Math.atan(slope) * 0.68, -0.40, 0.45);
+    figure.root.updateMatrixWorld(true);
+
+    for (let i = 0; i < 2; i += 1) {
+      const leg = legs[i];
+      const lead = leg.side === LEAD_SIDE;
+      // Tandem planted stance: lead leg forward, trail leg braced back
+      const fore = lead ? 0.38 : -0.32;
+      const lateral = leg.side * (HIP_HALF + 0.065);
+      const x = state.x + dx * fore + rightX * lateral;
+      const z = state.z + dz * fore + rightZ * lateral;
+      const gy = groundY(x, z);
+      leg.foot.set(x, gy + figure.limb.ankle, z);
+      leg.plant.copy(leg.foot);
+      leg.swinging = false;
+      leg.planted = false;
+      const tilt = legGroundTilt(i, x, z, facing);
+      leg.footDev = damp(leg.footDev, groundDev, 20, dt);
+      leg.footFollow = damp(leg.footFollow, 0, 20, dt);
+      leg.footRoll = damp(leg.footRoll, tilt.roll, 16, dt);
+
+      if (figure.legBindQuaternions && figure.kneeBindQuaternions) {
+        figure.legPivots[i].quaternion.copy(figure.legBindQuaternions[i]);
+        figure.kneePivots[i].quaternion.copy(figure.kneeBindQuaternions[i]);
+        figure.legPivots[i].updateWorldMatrix(true, true);
+      }
+      kneePole.set(
+        dx + rightX * leg.side * 0.16,
+        -0.28,
+        dz + rightZ * leg.side * 0.16
+      ).normalize();
+      clampReach(i, leg.foot);
+      leg.plant.copy(leg.foot);
+      const lengths = figure.legLengths ? figure.legLengths[i] : figure.limb;
+      solveTwoJoint(
+        figure.legPivots[i], figure.kneePivots[i],
+        leg.foot, kneePole, lengths.thigh, lengths.shin, LEG_AXIS
+      );
+      orientFoot(i, facing, leg.footDev, leg.footFollow, leg.footRoll);
+    }
+  }
+
   function solveLegs(dt) {
     /* Every unsupported body borrows the pack's airborne legs. A vault,
        a ledge fall and the Penitent's Fall must not advance a grounded
@@ -5873,6 +5934,10 @@ export async function createPlayer(ctx, canvas) {
     const jetPose = airbornePose();
     if (jetPose > 0.001) {
       solveJetLegs(dt, jetPose);
+      return;
+    }
+    if (state.grounded && action.name === "meleePierce") {
+      solvePierceLegs(dt);
       return;
     }
     const boostPose = clamp01(ctx.boost?.state?.pose || 0);

@@ -517,13 +517,14 @@ export function buildJetpack(ctx, player, options = {}) {
   }
 
   function updateVisual(dt) {
-    /* A ground boost is propulsion from this same reliquary pack. Keep
-       flight state authoritative for physics, while the presentation
-       reads the auxiliary boost and drives the identical wings, central
+    /* A ground boost or Executioner's Thrust is propulsion from this same reliquary pack.
+       Keep flight state authoritative for physics, while the presentation
+       reads the auxiliary boost/thrust and drives the identical wings, central
        ribbon and exhaust pool. */
-    const boostThrust = !!ctx.boost?.state?.active && !!player.state.grounded;
+    const isMeleePierce = !!player.action && player.action.name === "meleePierce";
+    const boostThrust = (!!ctx.boost?.state?.active && !!player.state.grounded) || isMeleePierce;
     boostVisualThrottle = damp(boostVisualThrottle, boostThrust ? 1 : 0,
-      boostThrust ? 15 : 8, dt);
+      boostThrust ? 18 : 8, dt);
     const throttle = Math.max(state.throttle, boostVisualThrottle);
     const powered = state.active || boostThrust;
     const deployed = state.inFlight || boostThrust;

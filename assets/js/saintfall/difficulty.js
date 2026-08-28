@@ -49,7 +49,7 @@ export const DIFFICULTY = Object.freeze({
     bossHealth: 0.85,    // everything with its own module (where it uses inst.health)
     roster: 0.8,         // breach roster counts
     gleanerDelta: -1,    // per roster that already fields Gleaners
-    gleanerDirectAim: 0.32,
+    gleanerDirectAim: 0.50,
     breachPace: 1.25,    // multiplies the breach timers (larger = slower)
     thresherSpeed: 0.9,  // charge speed and the pounce that rides on it
     pounce: 1.0,         // committed-lunge fraction of charge speed, relative
@@ -75,7 +75,7 @@ export const DIFFICULTY = Object.freeze({
     bossHealth: 1.0,
     roster: 1.0,
     gleanerDelta: 0,
-    gleanerDirectAim: 0.42,
+    gleanerDirectAim: 0.65,
     breachPace: 1.0,
     thresherSpeed: 1.0,
     pounce: 1.0,
@@ -100,7 +100,7 @@ export const DIFFICULTY = Object.freeze({
     roster: 1.7,
     gleanerDelta: 0,
     gleanerRoster: 1.0,
-    gleanerDirectAim: 0.50,
+    gleanerDirectAim: 0.80,
     gleanerBurst: 3,
     breachPace: 0.55,
     thresherSpeed: 1.35,

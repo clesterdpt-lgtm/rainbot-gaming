@@ -636,6 +636,19 @@ const DEATH_REST_PERCENTILE = 0.04;
    rather than fallen into it. */
 const DEATH_BED_IN = 0.09;
 
+/* Grounded bodies get one shared positional solve after every controller has
+   moved for the frame. Four passes are enough to open a coincident horde
+   without turning the ordinary update into a physics simulation; the small
+   slop prevents two bodies at rest from trading sub-pixel corrections. */
+const CROWD_SOLVER = Object.freeze({
+  iterations: 4,
+  slop: 0.008,
+  epsilonSq: 1e-8,
+  minCellSize: 16,
+  keyOffset: 32768,
+  keyStride: 65536,
+});
+
 export async function buildEnemies(ctx, onProgress) {
   const { THREE, scene, atmos, terrain } = ctx;
   const groundY = (x, z) => ctx.collide
@@ -1929,6 +1942,131 @@ export async function buildEnemies(ctx, onProgress) {
     return moved;
   }
 
+  /**
+   * Keep grounded enemies out of one another after every movement owner has
+   * taken its turn. Collision radii are already the bestiary's authoritative
+   * body footprint, so this solver shares that contract instead of inventing
+   * a second set of per-species sizes.
+   *
+   * Pair corrections are weighted by inverse footprint area: a Thresher gives
+   * ground to a Matriarch, while equal castes split the correction. Procedural
+   * self-driven bosses are fixed encounter anchors; if one is involved, the
+   * mobile body takes the whole correction. Every accepted step still passes
+   * through the world collision service, so making room cannot push a creature
+   * through masonry or terrain.
+   */
+  const crowdBodies = [];
+  const crowdRadii = [];
+  const crowdInverseMasses = [];
+  const crowdGrid = new Map();
+  const crowdCellKey = (x, z) => (x + CROWD_SOLVER.keyOffset) * CROWD_SOLVER.keyStride
+    + z + CROWD_SOLVER.keyOffset;
+
+  function moveCrowdBody(index, x, z) {
+    const inst = crowdBodies[index];
+    const out = ctx.collide?.slide
+      ? ctx.collide.slide(inst.x, inst.z, x, z, null, crowdRadii[index])
+      : [x, z];
+    inst.x = out[0];
+    inst.z = out[1];
+  }
+
+  function resolveCrowding() {
+    crowdBodies.length = 0;
+    crowdRadii.length = 0;
+    crowdInverseMasses.length = 0;
+    let maxRadius = 0;
+    for (const inst of live) {
+      if (inst.state === "death" || inst.emerging?.active
+        || inst.encounterHidden || inst.encounterLocked
+        || inst.body || inst.grounded === false) continue;
+      const radius = Math.max(0, Number(inst.spec.collisionRadius) || 0);
+      if (radius <= 0) continue;
+      crowdBodies.push(inst);
+      crowdRadii.push(radius);
+      crowdInverseMasses.push(inst.spec.selfDriven ? 0 : 1 / (radius * radius));
+      maxRadius = Math.max(maxRadius, radius);
+    }
+    if (crowdBodies.length < 2) return 0;
+
+    /* A cell is at least twice the largest participating radius, so any
+       overlapping pair must live in the same cell or one of its eight
+       neighbours. The shipped field currently holds hundreds of enemies;
+       this broad phase keeps a sparse garrison linear instead of asking every
+       body about every other body on every frame. */
+    const cellSize = Math.max(CROWD_SOLVER.minCellSize, maxRadius * 2);
+
+    let corrections = 0;
+    for (let pass = 0; pass < CROWD_SOLVER.iterations; pass += 1) {
+      crowdGrid.clear();
+      let passCorrections = 0;
+      for (let j = 0; j < crowdBodies.length; j += 1) {
+        const b = crowdBodies[j];
+        const cellX = Math.floor(b.x / cellSize);
+        const cellZ = Math.floor(b.z / cellSize);
+        for (let oz = -1; oz <= 1; oz += 1) {
+          for (let ox = -1; ox <= 1; ox += 1) {
+            const bucket = crowdGrid.get(crowdCellKey(cellX + ox, cellZ + oz));
+            if (!bucket) continue;
+            for (const i of bucket) {
+              const a = crowdBodies[i];
+              const minDistance = crowdRadii[i] + crowdRadii[j] - CROWD_SOLVER.slop;
+              const dx = b.x - a.x;
+              const dz = b.z - a.z;
+              const distanceSq = dx * dx + dz * dz;
+              if (distanceSq >= minDistance * minDistance) continue;
+
+              let ux;
+              let uz;
+              let distance;
+              if (distanceSq > CROWD_SOLVER.epsilonSq) {
+                distance = Math.sqrt(distanceSq);
+                ux = dx / distance;
+                uz = dz / distance;
+              } else {
+                /* Coincident spawns have no geometric normal. Derive a stable,
+                   pair-specific bearing so a whole wave at one marker fans out
+                   instead of every pair choosing the same axis. */
+                const seed = (((i + 1) * 73856093) ^ ((j + 1) * 19349663)) >>> 0;
+                const angle = (seed / 4294967296) * TAU;
+                ux = Math.sin(angle);
+                uz = Math.cos(angle);
+                distance = 0;
+              }
+
+              let weightA = crowdInverseMasses[i];
+              let weightB = crowdInverseMasses[j];
+              const weight = weightA + weightB;
+              /* Two encounter anchors should never share a site in authored
+                 play. Preserve both if malformed QA data puts them together. */
+              if (weight <= 0) continue;
+              weightA /= weight;
+              weightB /= weight;
+              const overlap = minDistance - distance;
+
+              if (weightA > 0) {
+                moveCrowdBody(i, a.x - ux * overlap * weightA,
+                  a.z - uz * overlap * weightA);
+              }
+              if (weightB > 0) {
+                moveCrowdBody(j, b.x + ux * overlap * weightB,
+                  b.z + uz * overlap * weightB);
+              }
+              passCorrections += 1;
+            }
+          }
+        }
+        const key = crowdCellKey(Math.floor(b.x / cellSize), Math.floor(b.z / cellSize));
+        const bucket = crowdGrid.get(key);
+        if (bucket) bucket.push(j);
+        else crowdGrid.set(key, [j]);
+      }
+      corrections += passCorrections;
+      if (passCorrections === 0) break;
+    }
+    return corrections;
+  }
+
   function update(dt, camera) {
     if (camera) camera.getWorldPosition(_eye);
     for (let i = live.length - 1; i >= 0; i -= 1) {
@@ -2423,6 +2561,7 @@ export async function buildEnemies(ctx, onProgress) {
     replay,
     rescaleForDifficulty,
     update,
+    resolveCrowding,
     /* The body chain's public surface, for the encounter module that
        drives it. `seedBody` lays a worm out straight, `poseBody`
        resolves this frame's trail into joint targets, and `trailAt`

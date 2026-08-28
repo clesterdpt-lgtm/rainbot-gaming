@@ -1186,6 +1186,11 @@ export async function start({ boot, build } = {}) {
     guardReadability.update(d);
     breaches.update(d);
     mission.update(d);
+    /* Every movement owner has now taken its turn: ordinary pursuit in
+       combat, encounter-owned bosses above, and event spawns in mission.
+       Resolve their shared body space once, here, so no controller can undo
+       another controller's separation later in the same frame. */
+    enemies.resolveCrowding?.();
     progression.update?.(d);
     audio.update(d, player, render.camera);
     if (colliderView) {

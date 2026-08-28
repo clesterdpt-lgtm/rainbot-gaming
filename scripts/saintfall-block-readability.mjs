@@ -119,16 +119,16 @@ try {
     window.__SF.freezeGuardCue(true);
     return { early, ready };
   });
-  check("the white melee omen tightens into the final timing window",
+  check("the red melee omen tightens into the final timing window",
     frontal.early.hud.state === "windup" && frontal.early.hud.text === ""
       && frontal.ready.hud.state === "ready" && frontal.ready.threat.ready
       && frontal.ready.threat.remaining <= 0.25,
     frontal, "windup -> ready at <= 0.25 seconds");
-  check("the cue is compact, monochrome and carries no persistent Aegis key legend",
+  check("the cue is compact, red and carries no persistent Aegis key legend",
     frontal.ready.hud.text === "" && frontal.ready.rect.width <= 50
       && frontal.ready.rect.height <= 32 && !frontal.ready.shieldPresent
-      && frontal.ready.strokeColours.every((colour) => /^rgba?\(255, 255, 255/.test(colour)),
-    frontal.ready, { text: "", maxSize: "50x32", shieldPresent: false, strokes: "white" });
+      && frontal.ready.strokeColours.every((colour) => /^rgba?\(255, 1(?:12|13), 9[56]/.test(colour)),
+    frontal.ready, { text: "", maxSize: "50x32", shieldPresent: false, strokes: "red" });
   await page.screenshot({ path: path.join(out, "desktop-melee-omen.png") });
   await page.evaluate(() => {
     window.__SF.freezeGuardCue(false);

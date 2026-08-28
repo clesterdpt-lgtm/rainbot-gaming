@@ -21,9 +21,9 @@ const furnace = allTalents.find((t) => t.id === "censer_furnace_reprieve");
 assert(!!measure, "procession_executioners_measure found in TALENTS");
 assert(measure.name === "Executioner's Thrust", `Name is 'Executioner's Thrust' (got '${measure.name}')`);
 assert(measure.summary.includes("piercing thrust"), `Summary describes piercing thrust (got '${measure.summary}')`);
-assert(measure.ranks[0].description.includes("15 charge"), "Rank 1 description mentions charge consumption");
-assert(measure.ranks[0].description.includes("240%"), "Rank 1 description mentions 240% damage");
-assert(measure.ranks[1].description.includes("340%"), "Rank 2 description mentions 340% damage");
+assert(measure.ranks[0].description.includes("15 to 50 charge"), "Rank 1 description mentions 15 to 50 charge consumption");
+assert(measure.ranks[0].description.includes("300%"), "Rank 1 description mentions up to 300% damage");
+assert(measure.ranks[1].description.includes("450%"), "Rank 2 description mentions 450% damage");
 assert(measure.ranks[1].description.includes("exposes heavy enemies"), "Rank 2 description mentions exposing heavy enemies");
 assert(!!furnace, "censer_furnace_reprieve found in TALENTS");
 assert(progConfig.FURNACE_LANCE_RULES.ranks[1].chargeSeconds === 1.2,

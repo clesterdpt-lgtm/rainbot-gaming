@@ -3505,8 +3505,9 @@ export async function createPlayer(ctx, canvas) {
   }
 
   /** Jetpack-powered piercing thrust: straight-line rocket dash that penetrates all enemies.
-   *  The longer the melee key was held, the higher the chargeRatio (0.35 to 1.0), which scales
-   *  dash speed, travel distance (lunge), and damage proportionally. */
+   *  The longer the melee key was held (up to 3.0s), the higher the chargeRatio (0.15 to 1.0),
+   *  which scales dash speed (18 to 48-58 m/s), travel distance/duration (lunge 1.6 to 7.0-9.0),
+   *  and damage proportionally. */
   function meleePierce(capturedAimYaw = null, chargeRatio = 1.0) {
     const w = ctx.weapons && ctx.weapons.current;
     if (!w || !w.spec.melee) return false;
@@ -3517,15 +3518,33 @@ export async function createPlayer(ctx, canvas) {
     action.comboAt = state.clock;
     action.queuedAimYaw = null;
     const rank = ctx.progression?.rank?.("procession_executioners_measure") || 1;
-    const ratio = clamp(chargeRatio ?? 1.0, 0.35, 1.0);
-    const baseDamage = rank >= 2 ? 3.4 : 2.4;
-    const baseLunge = rank >= 2 ? 4.2 : 3.2;
-    const baseSpeed = rank >= 2 ? 38.0 : 32.0;
+    const ratio = clamp(chargeRatio ?? 1.0, 0.15, 1.0);
+    const baseDamage = rank >= 2 ? 4.5 : 3.0;
+    const maxLunge = rank >= 2 ? 9.0 : 7.0;
+    const minLunge = 1.6;
+    const maxSpeed = rank >= 2 ? 58.0 : 48.0;
+    const minSpeed = 18.0;
 
-    action.pierceSpeed = lerp(18.0, baseSpeed, ratio);
+    action.pierceSpeed = lerp(minSpeed, maxSpeed, ratio);
     const spec = ACTIONS.meleePierce;
-    spec.damage = baseDamage * lerp(0.65, 1.0, ratio);
-    spec.lunge = baseLunge * lerp(0.45, 1.0, ratio);
+    spec.damage = baseDamage * lerp(0.5, 1.0, ratio);
+    spec.lunge = lerp(minLunge, maxLunge, ratio);
+    spec.dur = lerp(0.55, 1.25, ratio);
+    spec.hit = [0.04, lerp(0.35, 1.05, ratio)];
+    spec.drive = {
+      start: 0.02,
+      ramp: 0.06,
+      end: lerp(0.22, 0.85, ratio),
+      fade: lerp(0.18, 0.32, ratio),
+    };
+    const dur = spec.dur;
+    spec.keys = [
+      [0.00, 0.0, 0.0, 0.0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, "load"],
+      [dur * 0.12, 0.10, -0.04, 0.26, -0.04, 0.02, 0.0, 0.60, -0.32, 0.08, -0.14, 0.38, 0.14, 0.35, 0.30, "strike"],
+      [dur * 0.55, 0.14, -0.03, 0.30, -0.02, 0.01, 0.0, 0.66, -0.36, 0.06, -0.16, 0.42, 0.15, 0.40, 0.36, "strike"],
+      [dur * 0.82, 0.05, -0.01, 0.12, -0.03, 0.0, 0.0, 0.28, -0.14, 0.04, -0.07, 0.20, 0.09, 0.18, 0.14, "settle"],
+      [dur, 0.0, 0.0, 0.0, 0, 0, 0, "settle"],
+    ];
     return beginAction("meleePierce", aimYaw);
   }
 

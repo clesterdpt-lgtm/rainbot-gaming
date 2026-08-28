@@ -3540,125 +3540,68 @@ body[data-sf-hud-scale="large"] .sf-stage.sf-touch-enabled .sf-hud__reticle {
   display: none;
 }
 
-/* The Aegis is a combat verb, not a menu fact. Keep its compact live state
-   beside the shared Reliquary charge so the player can see READY/TIMED/LOW
-   without opening anything. */
-#sf-hud .sf-hud__shield {
-  display: flex;
-  min-height: 1.15rem;
-  margin-top: .3rem;
-  padding-top: .25rem;
-  border-top: 1px solid rgba(216, 164, 65, .26);
-}
-
 #sf-hud .sf-guard-cue {
-  --sf-guard-bearing: 0rad;
-  --sf-guard-scale: 1.22;
+  --sf-guard-scale: 1.08;
+  --sf-guard-spread: 10px;
   position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 9.5rem;
-  height: 9.5rem;
-  margin: -4.75rem 0 0 -4.75rem;
-  color: #d79a3d;
+  left: 0;
+  top: 0;
+  width: 42px;
+  height: 24px;
+  color: rgba(255, 255, 255, .72);
   pointer-events: none;
-  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, .86));
+  opacity: .62;
+  transform: translate(-50%, -120%) scale(var(--sf-guard-scale));
+  transform-origin: 50% 100%;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, .92));
+  transition: opacity .08s linear, filter .08s linear, transform .06s linear;
+  will-change: left, top, transform, opacity;
   z-index: 8;
 }
 
 #sf-hud .sf-guard-cue[hidden] { display: none; }
 
-#sf-hud .sf-guard-cue__frame {
+#sf-hud .sf-guard-cue > i {
   position: absolute;
-  inset: .55rem;
-  transform: scale(var(--sf-guard-scale));
-  transition: transform .06s linear;
-}
-
-#sf-hud .sf-guard-cue__frame b {
-  position: absolute;
-  width: 1.15rem;
-  height: 1.15rem;
-  border-color: currentColor;
-  border-style: solid;
-  filter: drop-shadow(0 0 4px currentColor);
-}
-
-#sf-hud .sf-guard-cue__frame b:nth-child(1) { left: 0; top: 0; border-width: 2px 0 0 2px; }
-#sf-hud .sf-guard-cue__frame b:nth-child(2) { right: 0; top: 0; border-width: 2px 2px 0 0; }
-#sf-hud .sf-guard-cue__frame b:nth-child(3) { right: 0; bottom: 0; border-width: 0 2px 2px 0; }
-#sf-hud .sf-guard-cue__frame b:nth-child(4) { left: 0; bottom: 0; border-width: 0 0 2px 2px; }
-
-#sf-hud .sf-guard-cue__bearing {
-  position: absolute;
-  inset: -.35rem;
-  transform: rotate(var(--sf-guard-bearing));
-}
-
-#sf-hud .sf-guard-cue__bearing::before {
-  content: "";
-  position: absolute;
-  left: calc(50% - .32rem);
-  top: 0;
-  width: 0;
-  height: 0;
-  border-left: .32rem solid transparent;
-  border-right: .32rem solid transparent;
-  border-bottom: .62rem solid currentColor;
-  filter: drop-shadow(0 0 4px currentColor);
-}
-
-#sf-hud .sf-guard-cue > span {
-  position: absolute;
+  bottom: 2px;
   left: 50%;
-  top: calc(50% - .75rem);
-  display: grid;
-  min-width: 7.5rem;
-  transform: translate(-50%, -50%);
-  text-align: center;
-  text-shadow: 0 2px 4px #000, 0 0 7px #000;
+  width: 2px;
+  height: 9px;
+  background: currentColor;
+  transform-origin: 50% 100%;
 }
 
-#sf-hud .sf-guard-cue small {
-  color: rgba(244, 224, 183, .76);
-  font: 600 8px/1.2 "Share Tech Mono", ui-monospace, monospace;
-  letter-spacing: .18em;
+#sf-hud .sf-guard-cue > i:nth-child(1) {
+  left: calc(50% - var(--sf-guard-spread));
+  height: 7px;
+  transform: translateX(-50%) rotate(-34deg);
 }
-
-#sf-hud .sf-guard-cue strong {
-  color: currentColor;
-  font: 700 14px/1.2 "Share Tech Mono", ui-monospace, monospace;
-  letter-spacing: .2em;
+#sf-hud .sf-guard-cue > i:nth-child(2) {
+  height: 11px;
+  transform: translateX(-50%);
+  clip-path: polygon(50% 0, 100% 100%, 0 100%);
+}
+#sf-hud .sf-guard-cue > i:nth-child(3) {
+  left: calc(50% + var(--sf-guard-spread));
+  height: 7px;
+  transform: translateX(-50%) rotate(34deg);
 }
 
 #sf-hud .sf-guard-cue[data-state="ready"] {
-  color: #ffe5a0;
-  animation: sf-guard-ready .25s steps(2, end) infinite;
-}
-
-#sf-hud .sf-guard-cue[data-guard="unblockable"],
-#sf-hud .sf-guard-cue[data-state="rejected"] { color: #ff564c; }
-#sf-hud .sf-guard-cue[data-state="perfect"] { color: #fff4cf; }
-#sf-hud .sf-guard-cue[data-state="blocked"] { color: #e9b95b; }
-
-@keyframes sf-guard-ready {
-  50% { filter: drop-shadow(0 0 8px currentColor) brightness(1.18); }
+  color: rgba(255, 255, 255, .96);
+  opacity: .92;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, .95)) drop-shadow(0 0 3px rgba(255, 255, 255, .38));
 }
 
 @media (max-width: 720px), (hover: none) and (pointer: coarse) {
   #sf-hud .sf-guard-cue {
-    width: 8rem;
-    height: 8rem;
-    margin: -4rem 0 0 -4rem;
+    width: 38px;
+    height: 22px;
   }
-  #sf-hud .sf-guard-cue strong { font-size: 12px; }
-  #sf-hud .sf-hud__shield { min-height: 1rem; font-size: 9px; }
-  #sf-hud .sf-hud__shield strong { font-size: 9px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  #sf-hud .sf-guard-cue { animation: none; }
-  #sf-hud .sf-guard-cue__frame { transition: none; }
+  #sf-hud .sf-guard-cue { transition: none; }
 }
 
 #sf-hud .sf-hud__vitalrow {

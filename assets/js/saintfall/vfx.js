@@ -5412,7 +5412,7 @@ export function buildVfx(ctx, world) {
     const mirror = step < 0 ? -1 : 1;
     const isPierce = Math.abs(step) === 6;
     const S = MELEE_SWEEPS[Math.abs(step)] || MELEE_SWEEPS[slam ? 3 : 1];
-    const sweepReach = isPierce && reach > 0 ? Math.max(3.2, Math.min(8.5, reach * 0.45)) : S.reach;
+    const sweepReach = isPierce && reach > 0 ? Math.max(3.5, Math.min(24.0, reach * 0.55)) : S.reach;
     /* Per-step, because the three sweeps present differently: the
        rising diagonal is drawn in a rolled plane and is seen close to
        edge-on from behind the shoulder, so at a shared level it read

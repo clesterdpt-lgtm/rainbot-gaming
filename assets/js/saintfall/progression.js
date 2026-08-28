@@ -128,8 +128,8 @@ const MVP_COPY = Object.freeze({
   procession_executioners_measure: {
     summary: "Augment melee: hold to charge a jet-propelled piercing thrust.",
     ranks: [
-      "Holding melee charges Reliquary energy to unleash a high-speed jetpack thrust for 240% piercing damage.",
-      "Increases pierce speed/range, boosts damage to 340%, and the wake exposes heavy enemies for 5 seconds.",
+      "Hold melee (0.5s - 3.0s) to charge Reliquary energy (15-50 charge), unleashing a high-speed jetpack thrust for up to 300% piercing damage.",
+      "Increases max pierce range/speed, boosts full-charge damage to 450%, and the wake exposes heavy enemies for 5 seconds.",
     ],
   },
   procession_processional_mercy: {

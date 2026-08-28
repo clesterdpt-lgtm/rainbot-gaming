@@ -17,6 +17,9 @@ export const GUARD_CUE_CONFIG = Object.freeze({
   minImpactSpacing: 0.15,
   maxTellExtension: 0.45,
   resultLinger: 0.32,
+  /* The omen floats just above the authored contact point. It remains a
+     world read attached to the attacker, never a reticle-sized HUD card. */
+  meleeCueLift: 0.68,
 });
 
 export function guardTypeOf(value, fallback = GUARD_TYPES.FRONTAL) {

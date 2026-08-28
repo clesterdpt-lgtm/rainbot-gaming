@@ -2,18 +2,12 @@
    SAINTFALL - guard readability coordinator
 
    Combat domains already own their attacks. This module owns the one
-   presentation question shared by all of them: what is about to land,
-   from where, and should the player guard or dodge?
+   presentation question shared by all of them: which committed melee
+   contact is about to land, and which attacker owns it?
    ============================================================ */
 
 import { makeBus } from "saintfall/core.js";
 import { GUARD_CUE_CONFIG, GUARD_TYPES, guardTypeOf } from "saintfall/guard-rules.js";
-
-const DEFAULT_LABELS = Object.freeze({
-  [GUARD_TYPES.FRONTAL]: "GUARD",
-  [GUARD_TYPES.PERFECT_ONLY]: "PERFECT",
-  [GUARD_TYPES.UNBLOCKABLE]: "DODGE",
-});
 
 export function buildGuardReadability(ctx) {
   const bus = makeBus();
@@ -29,6 +23,7 @@ export function buildGuardReadability(ctx) {
       id: threat.id,
       source: threat.source,
       label: threat.label,
+      kind: threat.kind,
       guardType: threat.guardType,
       x: threat.x,
       y: threat.y,
@@ -42,16 +37,28 @@ export function buildGuardReadability(ctx) {
   }
 
   function telegraph(detail = {}) {
+    const guardType = guardTypeOf(detail.guardType);
+    /* This is an Aegis read, not a universal attack alarm. Projectiles are
+       already visible in flight and area/grab attacks own their world tells;
+       adding the same HUD mark to either only teaches the wrong response. */
+    if (guardType === GUARD_TYPES.UNBLOCKABLE || detail.kind === "ranged") return null;
     const duration = Math.max(0.05, Number(detail.impactIn) || 0.45);
     const id = String(detail.id || `${detail.source || "attack"}:${++serial}`);
+    const x = Number.isFinite(detail.originX) ? detail.originX : Number(detail.x) || 0;
+    const z = Number.isFinite(detail.originZ) ? detail.originZ : Number(detail.z) || 0;
+    const groundY = ctx.terrain?.heightAt?.(x, z) ?? 0;
+    const y = Number.isFinite(detail.originY) ? detail.originY
+      : Number.isFinite(detail.y) ? detail.y
+        : groundY + Math.max(0, Number(detail.anchorHeight) || 2.4);
     const threat = {
       id,
       source: detail.source || "attack",
-      label: detail.label || DEFAULT_LABELS[guardTypeOf(detail.guardType)],
-      guardType: guardTypeOf(detail.guardType),
-      x: Number.isFinite(detail.originX) ? detail.originX : Number(detail.x) || 0,
-      y: Number.isFinite(detail.originY) ? detail.originY : Number(detail.y) || 0,
-      z: Number.isFinite(detail.originZ) ? detail.originZ : Number(detail.z) || 0,
+      label: "MELEE",
+      kind: "melee",
+      guardType,
+      x,
+      y,
+      z,
       duration,
       impactAt: clock + duration,
       readySent: false,
@@ -85,47 +92,27 @@ export function buildGuardReadability(ctx) {
     impactIn: e.windup,
   }));
   on(ctx.combat, "enemyStrikeResolved", (e = {}) => resolve(`enemy:${e.enemyId}`, e));
-  on(ctx.combat, "enemyProjectileLaunched", (e = {}) => telegraph({
-    id: `projectile:${e.id}`,
-    source: `enemy-${e.enemyKey || "projectile"}`,
-    label: "GUARD",
-    guardType: GUARD_TYPES.FRONTAL,
-    originX: e.x, originY: e.y, originZ: e.z,
-    impactIn: Math.max(0.05, (Number(e.targetDistance) || 0) / Math.max(1, Number(e.speed) || 1)),
-  }));
-  on(ctx.combat, "enemyProjectileResolved", (e = {}) => resolve(`projectile:${e.id}`, e));
 
-  /* Boss modules publish this same compact metadata on their existing tells.
-     Auto-expiry is intentional: their resolution events differ by phase, but
-     the indicator must never outlive the advertised contact beat. */
+  /* Only committed, Aegis-readable body contacts join the shared omen. Boss
+     projectiles, grabs and area attacks stay legible through their authored
+     motion and VFX. Auto-expiry prevents a cancelled swing leaving a mark. */
   const bossTells = [
-    [ctx.matriarch, "comboTell", "matriarch-combo"],
-    [ctx.matriarch, "lanceTell", "matriarch-lance"],
-    [ctx.matriarch, "cullTell", "matriarch-cull"],
-    [ctx.matriarch, "grabTell", "matriarch-grab"],
-    [ctx.matriarch, "tremorTell", "matriarch-tremor"],
-    [ctx.matriarch, "rouse", "matriarch-rouse"],
-    [ctx.winnower, "sweepTelegraph", "winnower-sweep"],
-    [ctx.winnower, "bombardTelegraph", "winnower-bombard"],
-    [ctx.distaff, "biteTelegraph", "distaff-bite"],
-    [ctx.distaff, "slamTelegraph", "distaff-slam"],
-    [ctx.distaff, "webCastTelegraph", "distaff-web"],
-    [ctx.abbess, "biteTelegraph", "abbess-bite"],
-    [ctx.abbess, "slamTelegraph", "abbess-slam"],
-    [ctx.garner, "lash", "garner-lash"],
-    [ctx.garner, "inhaleTelegraph", "garner-inhale"],
-    [ctx.stylite, "stoopTelegraph", "stylite-stoop"],
-    [ctx.coulter, "bite", "coulter-bite"],
-    [ctx.apostate, "meleeTelegraph", "apostate-melee"],
-    [ctx.apostate, "boost", "apostate-boost"],
-    [ctx.apostate, "slamTelegraph", "apostate-slam"],
-    [ctx.undercroft, "wind", "undercroft-lasher"],
+    [ctx.matriarch, "comboTell", "matriarch-combo", 5.2],
+    [ctx.matriarch, "lanceTell", "matriarch-lance", 5.2],
+    [ctx.matriarch, "cullTell", "matriarch-cull", 5.2],
+    [ctx.winnower, "sweepTelegraph", "winnower-sweep", 6.4],
+    [ctx.distaff, "biteTelegraph", "distaff-bite", 5.4],
+    [ctx.abbess, "biteTelegraph", "abbess-bite", 5.6],
+    [ctx.coulter, "bite", "coulter-bite", 0],
+    [ctx.apostate, "meleeTelegraph", "apostate-melee", 2.6],
+    [ctx.apostate, "boost", "apostate-boost", 2.6],
+    [ctx.undercroft, "wind", "undercroft-lasher", 0],
   ];
-  for (const [domain, event, source] of bossTells) {
+  for (const [domain, event, source, anchorHeight] of bossTells) {
     on(domain, event, (e = {}) => telegraph({
       ...e,
-      id: `${source}:${source === "garner-lash" ? (e.index ?? "arm")
-        : source === "coulter-bite" ? (e.id ?? "active") : "active"}`,
+      anchorHeight,
+      id: `${source}:${source === "coulter-bite" ? (e.id ?? "active") : "active"}`,
       source,
     }));
   }

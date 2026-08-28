@@ -857,11 +857,14 @@ export async function start({ boot, build } = {}) {
       weapons.setMode("melee");
       meleeBorrowed = true;
     }
-    const cost = 15;
-    if (!jetpack.spend(cost, true, true)) {
+    const ratio = Math.max(0.15, Math.min(1.0, chargeRatio ?? 1.0));
+    const targetCost = Math.round(15 + ratio * 35);
+    const available = jetpack.state.fuel || 0;
+    if (available < 15 - 1e-4) {
       return meleeStrike(aimYaw);
     }
-    const ratio = Math.max(0.35, Math.min(1.0, chargeRatio ?? 1.0));
+    const cost = Math.min(available, targetCost);
+    jetpack.spend(cost, true, true);
     if (!player.meleePierce(aimYaw, ratio) && wasRanged && !player.action) {
       weapons.setMode("ranged");
       meleeBorrowed = false;
@@ -1046,8 +1049,8 @@ export async function start({ boot, build } = {}) {
     const meleeBlocked = encounterHold || stunned || combat.player.dead || airborne()
       || boost.state.active || shield.state.active || slam.state.active;
 
-    const MELEE_HOLD_GATE = 0.22;
-    const MELEE_CHARGE_MAX = measureRankVal >= 2 ? 0.72 : 0.85;
+    const MELEE_HOLD_GATE = 0.50;
+    const MELEE_CHARGE_MAX = 3.00;
 
     if (meleeCharging && canChargePierce && player.input.state.meleeHeld) {
       meleeHoldTime = Math.min(MELEE_CHARGE_MAX, meleeHoldTime + d);
@@ -1067,7 +1070,7 @@ export async function start({ boot, build } = {}) {
       if (!meleeBlocked) {
         if (meleeHoldTime >= MELEE_HOLD_GATE && canChargePierce) {
           const progress = Math.min(1.0, (meleeHoldTime - MELEE_HOLD_GATE) / (MELEE_CHARGE_MAX - MELEE_HOLD_GATE));
-          const chargeRatio = Math.max(0.35, progress);
+          const chargeRatio = Math.max(0.15, progress);
           queueMelee("pierce", meleeAimYaw ?? player.state.aimViewYaw, chargeRatio);
         } else {
           queueMelee("strike", meleeAimYaw ?? player.state.aimViewYaw);

@@ -424,11 +424,11 @@ export const DOCTRINE_ORDERS = deepFreeze([
         ranks: [
           {
             rank: 1,
-            description: "Holding the melee key charges Reliquary energy; releasing (or reaching full charge) triggers a high-speed jetpack thrust that consumes 15 charge, piercing all enemies in your path for 240% damage and staggering them.",
+            description: "Hold the melee key (0.5s - 3.0s) to charge Reliquary energy (consuming 15 to 50 charge); releasing triggers a high-speed jetpack thrust that scales in distance, speed, and damage (up to 300%), piercing all enemies in your path and staggering them.",
           },
           {
             rank: 2,
-            description: "Increases pierce distance and speed (+35%), boosts damage to 340%, and the jet wake unleashes an exposing shockwave that exposes heavy enemies hit for 5 seconds.",
+            description: "Increases max pierce distance and speed, boosts full-charge damage to 450%, and the jet wake unleashes an exposing shockwave that exposes heavy enemies hit for 5 seconds.",
           },
         ],
       },

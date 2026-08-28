@@ -2,8 +2,8 @@
 /* Focused end-to-end proof for Saintfall's guard readability contract.
 
    It checks the shared timing data, directional and unblockable outcomes,
-   simultaneous ordinary-enemy spacing, desktop/touch presentation, and
-   captures the two decisive visual states.
+   simultaneous ordinary-enemy spacing, the quiet melee-only omen, and
+   captures its desktop and portrait presentation.
 */
 
 import { spawn } from "node:child_process";
@@ -84,7 +84,20 @@ try {
     shared, { shieldWindow: 0.25, cueWindow: 0.25, minImpactSpacing: 0.15 });
 
   const frontal = await page.evaluate(() => {
-    window.__SF.previewGuardCue({ impactIn: 1.1, guardType: "frontal" });
+    window.__SF.clearEnemies();
+    window.__SF.invulnerable(true);
+    const ps = window.__SF.playerState();
+    const distance = 7;
+    const lateral = 3.2;
+    const enemy = window.__SF.enemies.spawn("thresher",
+      ps.x + Math.sin(ps.yaw) * distance + Math.cos(ps.yaw) * lateral,
+      ps.z + Math.cos(ps.yaw) * distance - Math.sin(ps.yaw) * lateral,
+      { eventId: "qa-melee-omen" });
+    window.__SF.guardReadability.telegraph({
+      id: "guard-training", source: "training", training: true,
+      impactIn: 1.1, guardType: "frontal",
+      originX: enemy.x, originY: enemy.y + 2.1, originZ: enemy.z,
+    });
     window.__SF.renderStill();
     const early = {
       threat: window.__SF.guardThreatState().primary,
@@ -92,24 +105,35 @@ try {
     };
     window.__SF.advanceTime(0.87, 1 / 120);
     window.__SF.renderStill();
+    const cue = document.getElementById("sf-guard-cue");
+    const rect = cue.getBoundingClientRect();
     const ready = {
       threat: window.__SF.guardThreatState().primary,
       hud: window.__SF.guardCueState(),
-      colour: getComputedStyle(document.getElementById("sf-guard-cue")).color,
-      shieldDisplay: getComputedStyle(document.getElementById("sf-shield")).display,
+      colour: getComputedStyle(cue).color,
+      strokeColours: [...cue.querySelectorAll("i")]
+        .map((node) => getComputedStyle(node).backgroundColor),
+      rect: { width: rect.width, height: rect.height },
+      shieldPresent: !!document.getElementById("sf-shield"),
     };
     window.__SF.freezeGuardCue(true);
     return { early, ready };
   });
-  check("amber wind-up contracts into the final gold GUARD window",
-    frontal.early.hud.state === "windup" && frontal.early.hud.label === "GUARD"
+  check("the white melee omen tightens into the final timing window",
+    frontal.early.hud.state === "windup" && frontal.early.hud.text === ""
       && frontal.ready.hud.state === "ready" && frontal.ready.threat.ready
       && frontal.ready.threat.remaining <= 0.25,
     frontal, "windup -> ready at <= 0.25 seconds");
-  check("compact Aegis readiness is visible during play",
-    frontal.ready.shieldDisplay !== "none", frontal.ready.shieldDisplay, "not none");
-  await page.screenshot({ path: path.join(out, "desktop-guard-ready.png") });
-  await page.evaluate(() => window.__SF.freezeGuardCue(false));
+  check("the cue is compact, monochrome and carries no persistent Aegis key legend",
+    frontal.ready.hud.text === "" && frontal.ready.rect.width <= 50
+      && frontal.ready.rect.height <= 32 && !frontal.ready.shieldPresent
+      && frontal.ready.strokeColours.every((colour) => /^rgba?\(255, 255, 255/.test(colour)),
+    frontal.ready, { text: "", maxSize: "50x32", shieldPresent: false, strokes: "white" });
+  await page.screenshot({ path: path.join(out, "desktop-melee-omen.png") });
+  await page.evaluate(() => {
+    window.__SF.freezeGuardCue(false);
+    window.__SF.invulnerable(false);
+  });
 
   const outcomes = await page.evaluate(() => {
     window.__SF.resolveGuardCue("guard-training");
@@ -199,12 +223,30 @@ try {
     clear();
     return { combo, grab, bite, slam };
   });
-  check("boss tells declare guardable bites/swings and dodge-only grabs/slams",
+  check("boss melee shows the omen while grabs and slams trust their world tells",
     bossCues.combo?.guardType === "frontal" && bossCues.combo.remaining >= 0.54
-      && bossCues.grab?.guardType === "unblockable"
       && bossCues.bite?.guardType === "frontal"
-      && bossCues.slam?.guardType === "unblockable",
-    bossCues, { combo: "frontal", grab: "unblockable", bite: "frontal", slam: "unblockable" });
+      && bossCues.grab === null && bossCues.slam === null,
+    bossCues, { combo: "frontal", grab: null, bite: "frontal", slam: null });
+
+  const ranged = await page.evaluate(() => {
+    for (const threat of window.__SF.guardThreatState().active) {
+      window.__SF.resolveGuardCue(threat.id, { reason: "qa-reset" });
+    }
+    window.__SF.combat.bus.emit("enemyProjectileLaunched", {
+      id: "qa-projectile", enemyKey: "gleaner", x: 0, y: 2, z: 8,
+      targetDistance: 8, speed: 24,
+    });
+    const direct = window.__SF.guardReadability.telegraph({
+      id: "qa-ranged-direct", kind: "ranged", guardType: "frontal",
+      x: 0, y: 2, z: 8, impactIn: 0.4,
+    });
+    window.__SF.renderStill();
+    return { direct, threats: window.__SF.guardThreatState().active };
+  });
+  check("visible projectiles do not add a second HUD warning",
+    ranged.direct === null && ranged.threats.length === 0,
+    ranged, { direct: null, threats: [] });
 
   const spacing = await page.evaluate(() => {
     window.__SF.clearEnemies();
@@ -244,14 +286,14 @@ try {
     touchAegis, { enabled: true, timed: "timed", held: "active" });
 
   await page.setViewportSize({ width: 390, height: 844 });
-  const dodge = await page.evaluate(() => {
+  const portrait = await page.evaluate(() => {
     window.__SF.abbess.resetToSeat();
     window.__SF.advanceTime(6, 1 / 60);
     window.__SF.clearEnemies();
     for (const threat of window.__SF.guardThreatState().active) {
       window.__SF.resolveGuardCue(threat.id, { reason: "qa-reset" });
     }
-    window.__SF.previewGuardCue({ impactIn: 0.22, guardType: "unblockable" });
+    window.__SF.previewGuardCue({ impactIn: 0.22, guardType: "frontal" });
     window.__SF.renderStill();
     window.__SF.freezeGuardCue(true);
     const cue = document.getElementById("sf-guard-cue");
@@ -260,16 +302,18 @@ try {
     return {
       hud: window.__SF.guardCueState(),
       colour: getComputedStyle(cue).color,
+      text: cue.textContent.trim(),
       contained: rect.left >= stage.left && rect.top >= stage.top
         && rect.right <= stage.right && rect.bottom <= stage.bottom,
       overflow: Math.max(0, document.documentElement.scrollWidth - innerWidth),
     };
   });
-  check("portrait crimson state says DODGE and stays inside the play space",
-    dodge.hud.guardType === "unblockable" && dodge.hud.label === "DODGE"
-      && dodge.contained && dodge.overflow <= 1,
-    dodge, { guardType: "unblockable", label: "DODGE", contained: true, overflow: 0 });
-  await page.screenshot({ path: path.join(out, "portrait-unblockable-dodge.png") });
+  check("the portrait melee omen stays small, text-free and inside the play space",
+    portrait.hud.guardType === "frontal" && portrait.text === ""
+      && portrait.hud.width <= 46 && portrait.hud.height <= 30
+      && portrait.contained && portrait.overflow <= 1,
+    portrait, { guardType: "frontal", text: "", contained: true, overflow: 0 });
+  await page.screenshot({ path: path.join(out, "portrait-melee-omen.png") });
   await page.evaluate(() => window.__SF.freezeGuardCue(false));
 
   check("browser and same-origin diagnostics remain clean",

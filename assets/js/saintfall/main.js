@@ -735,7 +735,7 @@ export async function start({ boot, build } = {}) {
       direction: shotDir.toArray(),
     };
     player.punch(1);
-    audio.shot(shotOrigin.x, shotOrigin.z, { gain: 0.78 });
+    audio.shot(shotOrigin.x, shotOrigin.z, { player: true, gain: 0.42 });
     shotPort = null;
   }
 

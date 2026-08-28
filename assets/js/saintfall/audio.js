@@ -39,6 +39,27 @@ const DROP_ASSETS = Object.freeze({
   metalImpact: "sci-fi/metal-impact.ogg",
   doorOpen: "sci-fi/door-open.ogg",
 });
+const SAINTFALL_ASSET_ROOT = new URL("../../Sounds/saintfall/", import.meta.url);
+const SAINTFALL_ASSETS = Object.freeze({
+  insectProximity: "insects-nearby.wav",
+  lightgunMain: "lightgun-main.wav",
+});
+
+/* The nearby cue is deliberately keyed to the authoritative melee reaches,
+   not to the much larger aggro/hearing radii. Gleaner is omitted because it
+   is a ranged caste; its incoming-fire sound remains the procedural shot. */
+const INSECT_MELEE_RANGES = Object.freeze({
+  thresher: 2.6,
+  harrow: 4.4,
+  precentor: 6.2,
+  matriarch: 7.4,
+  coulter: 20,
+  garner: 24,
+  stylite: 10,
+  abbess: 28,
+});
+const INSECT_PROXIMITY_GAIN = 0.12;
+const PLAYER_LIGHTGUN_GAIN = 0.42;
 
 /* The gunshot clipper's transfer curve. A compile-time constant -
    building 1024 tanh samples per DISCHARGE allocated ~36KB/s of
@@ -186,6 +207,19 @@ export function buildAudio(ctx) {
     },
   };
 
+  const saintfallAssets = {
+    buffers: new Map(),
+    loads: new Map(),
+    loadErrors: new Map(),
+  };
+  const insectProximity = {
+    source: null,
+    gain: null,
+    pan: null,
+    target: null,
+    stopping: false,
+  };
+
   /* A hard voice cap. A garrison of thirty units firing bursts can
      ask for more simultaneous voices than the context can mix, and
      the failure mode is not "quieter" - it is crackling and dropped
@@ -248,6 +282,178 @@ export function buildAudio(ctx) {
       pan.connect(g.__bus);
     }
     return { node: g, atten };
+  }
+
+  async function loadSaintfallBuffer(id) {
+    if (!SAINTFALL_ASSETS[id] || state.offline
+      || typeof window.fetch !== "function") return null;
+    if (saintfallAssets.buffers.has(id)) return saintfallAssets.buffers.get(id);
+    if (saintfallAssets.loadErrors.has(id)) return null;
+    if (saintfallAssets.loads.has(id)) return saintfallAssets.loads.get(id);
+
+    const promise = window.fetch(new URL(SAINTFALL_ASSETS[id], SAINTFALL_ASSET_ROOT).href, {
+      cache: "force-cache",
+    }).then((response) => {
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      return response.arrayBuffer();
+    }).then((data) => ac.decodeAudioData(data)).then((buffer) => {
+      saintfallAssets.buffers.set(id, buffer);
+      return buffer;
+    }).catch((error) => {
+      saintfallAssets.loadErrors.set(id, (error && error.message) || String(error));
+      return null;
+    }).finally(() => {
+      saintfallAssets.loads.delete(id);
+    });
+    saintfallAssets.loads.set(id, promise);
+    return promise;
+  }
+
+  function preloadSaintfallBuffers() {
+    return Promise.all(Object.keys(SAINTFALL_ASSETS).map((id) => loadSaintfallBuffer(id)));
+  }
+
+  /** Play a decoded local clip through the same positional bus as the
+   *  procedural voices. The clip is a one-shot, so it still obeys the hard
+   *  voice cap and the game's master/SFX volume controls. */
+  function playSaintfallBuffer(id, x, z, opts = {}) {
+    const buffer = saintfallAssets.buffers.get(id);
+    if (!buffer) {
+      void loadSaintfallBuffer(id);
+      return false;
+    }
+    const duration = Math.max(0.05, Number(buffer.duration) || 0.05);
+    const g = voice(opts.bus || "world", duration);
+    if (!g) return false;
+    const p = place(g, x ?? state.listenerX, z ?? state.listenerZ,
+      opts.refDist ?? 22, opts.maxDist ?? 420);
+    if (!p) return false;
+    const t = now();
+    const amp = Math.max(0, Number(opts.gain) || 0) * p.atten;
+    const out = ac.createGain();
+    const fadeIn = Math.max(0.001, Number(opts.fadeIn) || 0.004);
+    out.gain.setValueAtTime(0.0001, t);
+    out.gain.linearRampToValueAtTime(Math.max(0.0001, amp), t + fadeIn);
+    out.gain.exponentialRampToValueAtTime(0.0001, t + duration);
+    const source = ac.createBufferSource();
+    source.buffer = buffer;
+    source.connect(out);
+    out.connect(p.node);
+    source.start(t);
+    source.stop(t + duration + 0.02);
+    return true;
+  }
+
+  function findNearbyInsect(player) {
+    const ps = player?.state;
+    const live = ctx.enemies?.live;
+    if (!ps || player.dead || ps.dead || !Array.isArray(live)) return null;
+    let nearest = null;
+    let nearestDistance = Infinity;
+    for (const inst of live) {
+      if (!inst || inst.state === "death" || inst.health <= 0
+        || inst.encounterHidden || inst.body?.hidden) continue;
+      if (inst.spec?.faction !== "bloom") continue;
+      const reach = INSECT_MELEE_RANGES[inst.key];
+      if (!Number.isFinite(reach)) continue;
+      /* Ordinary walkers publish the exact vertical-aware melee gate after
+         combat.update. A boss without that shared flag uses its authored
+         horizontal reach above, which keeps the cue local without coupling
+         audio to every encounter's private state machine. */
+      if (typeof inst.inReach === "boolean" && !inst.inReach) continue;
+      const distance = Math.hypot(inst.x - ps.x, inst.z - ps.z);
+      if (distance <= reach && distance < nearestDistance) {
+        nearest = { inst, distance };
+        nearestDistance = distance;
+      }
+    }
+    return nearest;
+  }
+
+  function updateInsectProximityPosition(x, z) {
+    if (!insectProximity.pan) return;
+    const rel = Math.atan2(x - state.listenerX, z - state.listenerZ) - state.listenerYaw;
+    const pan = Math.max(-0.92, Math.min(0.92, Math.sin(rel)));
+    if (typeof insectProximity.pan.pan.setTargetAtTime === "function") {
+      insectProximity.pan.pan.setTargetAtTime(pan, now(), 0.06);
+    } else {
+      insectProximity.pan.pan.value = pan;
+    }
+  }
+
+  function clearInsectProximity(source) {
+    if (insectProximity.source !== source) return;
+    try { source.disconnect(); } catch (_) { /* already disconnected */ }
+    try { insectProximity.gain?.disconnect(); } catch (_) { /* no-op */ }
+    try { insectProximity.pan?.disconnect(); } catch (_) { /* no-op */ }
+    insectProximity.source = null;
+    insectProximity.gain = null;
+    insectProximity.pan = null;
+    insectProximity.target = null;
+    insectProximity.stopping = false;
+  }
+
+  function stopInsectProximity() {
+    const loop = insectProximity;
+    if (!loop.source || loop.stopping) return;
+    loop.stopping = true;
+    loop.target = null;
+    const t = now();
+    loop.gain.gain.cancelScheduledValues(t);
+    loop.gain.gain.setValueAtTime(Math.max(0.0001, loop.gain.gain.value), t);
+    loop.gain.gain.linearRampToValueAtTime(0.0001, t + 0.18);
+    try { loop.source.stop(t + 0.20); } catch (_) { /* already stopped */ }
+  }
+
+  function updateInsectProximity(player) {
+    const target = findNearbyInsect(player);
+    if (!target || !state.enabled || state.paused
+      || (!state.started && !state.offline)) {
+      stopInsectProximity();
+      return;
+    }
+    const buffer = saintfallAssets.buffers.get("insectProximity");
+    if (!buffer) {
+      void loadSaintfallBuffer("insectProximity");
+      stopInsectProximity();
+      return;
+    }
+
+    const loop = insectProximity;
+    const t = now();
+    if (!loop.source) {
+      const source = ac.createBufferSource();
+      source.buffer = buffer;
+      source.loop = true;
+      source.loopStart = 0;
+      source.loopEnd = Math.max(0.05, buffer.duration);
+      const gain = ac.createGain();
+      gain.gain.setValueAtTime(0.0001, t);
+      gain.gain.linearRampToValueAtTime(INSECT_PROXIMITY_GAIN, t + 0.22);
+      let pan = null;
+      source.connect(gain);
+      if (ac.createStereoPanner) {
+        pan = ac.createStereoPanner();
+        gain.connect(pan);
+        pan.connect(buses.world);
+      } else {
+        gain.connect(buses.world);
+      }
+      loop.source = source;
+      loop.gain = gain;
+      loop.pan = pan;
+      loop.target = target.inst;
+      loop.stopping = false;
+      source.onended = () => clearInsectProximity(source);
+      source.start(t);
+    } else if (loop.stopping) {
+      loop.stopping = false;
+      loop.gain.gain.cancelScheduledValues(t);
+      loop.gain.gain.setValueAtTime(Math.max(0.0001, loop.gain.gain.value), t);
+      loop.gain.gain.linearRampToValueAtTime(INSECT_PROXIMITY_GAIN, t + 0.12);
+    }
+    loop.target = target.inst;
+    updateInsectProximityPosition(target.inst.x, target.inst.z);
   }
 
   function noiseSource(playbackRate = 1) {
@@ -609,7 +815,7 @@ export function buildAudio(ctx) {
    * at 0.08 against an impact at 0.26 - a gunshot quieter than the
    * bullet landing.
    */
-  function shot(x, z, opts = {}) {
+  function proceduralShot(x, z, opts = {}) {
     const t = now();
     const dur = 0.26;
     const g = voice("weapon", dur);
@@ -748,6 +954,30 @@ export function buildAudio(ctx) {
       tail.connect(tf); tf.connect(tg); tg.connect(out);
       tail.start(t); tail.stop(t + dur);
     }
+  }
+
+  function playerShot(x, z, opts = {}) {
+    const gain = Number.isFinite(Number(opts.gain)) ? Number(opts.gain) : PLAYER_LIGHTGUN_GAIN;
+    if (saintfallAssets.buffers.has("lightgunMain")) {
+      return playSaintfallBuffer("lightgunMain", x, z, {
+        bus: "weapon",
+        gain,
+        refDist: 30,
+        maxDist: 520,
+        fadeIn: 0.002,
+      });
+    }
+    /* Keep the first shot responsive if the browser has not finished
+       decoding the local clip yet. The preload normally wins this race;
+       the procedural fallback is also what keeps OfflineAudioContext QA
+       deterministic without a network fetch. */
+    void loadSaintfallBuffer("lightgunMain");
+    proceduralShot(x, z, { ...opts, gain });
+    return false;
+  }
+
+  function shot(x, z, opts = {}) {
+    return opts.player ? playerShot(x, z, opts) : proceduralShot(x, z, opts);
   }
 
   let furnaceChargeVoice = null;
@@ -1912,6 +2142,7 @@ export function buildAudio(ctx) {
     if (paused === state.paused) return Promise.resolve(true);
     state.paused = paused;
     if (paused) {
+      stopInsectProximity();
       if (music.bgAudio && !music.bgAudio.paused) music.bgAudio.pause();
       if (music.bossAudio && !music.bossAudio.paused) music.bossAudio.pause();
     } else if (state.enabled && music.started) {
@@ -2260,6 +2491,7 @@ export function buildAudio(ctx) {
   let doctrineStop = null;
   function attach() {
     const { combat, mission, breaches } = ctx;
+    void preloadSaintfallBuffers();
     if (!doctrineAttached) {
       doctrineAttached = true;
       doctrineStop = ctx.progression?.bus?.on?.("doctrine", doctrineCue) || null;
@@ -2629,8 +2861,12 @@ export function buildAudio(ctx) {
         }
       }
     }
+    updateInsectProximity(player);
     const jetThrottle = clamp01(ctx.jetpack?.state?.throttle || 0);
-    const boostThrottle = ctx.boost?.state?.active ? (ctx.boost?.state?.holding ? 0.88 : 1.0) : 0;
+    const isMeleePierce = !!ctx.player?.action && ctx.player.action.name === "meleePierce";
+    const boostThrottle = ctx.boost?.state?.active
+      ? (ctx.boost?.state?.holding ? 0.88 : 1.0)
+      : (isMeleePierce ? 1.0 : 0);
     const throttle = clamp01(Math.max(jetThrottle, boostThrottle));
     if (state.started && (throttle > 0.001 || jetLoop)) {
       startJetLoop();
@@ -2867,6 +3103,7 @@ export function buildAudio(ctx) {
     },
     setEnabled(v) {
       state.enabled = !!v;
+      if (!state.enabled) stopInsectProximity();
       master.gain.setTargetAtTime(v ? 1.35 : 0, now(), 0.05);
       if (!v) {
         if (music.bgAudio && !music.bgAudio.paused) music.bgAudio.pause();
@@ -2895,6 +3132,16 @@ export function buildAudio(ctx) {
           master: Number(state.masterVolume.toFixed(3)),
           music: Number(state.musicVolume.toFixed(3)),
           sfx: Number(state.sfxVolume.toFixed(3)),
+        },
+        localAssets: {
+          loaded: Array.from(saintfallAssets.buffers.keys()),
+          loadErrors: Array.from(saintfallAssets.loadErrors,
+            ([id, message]) => `${id}: ${message}`),
+          insectProximity: {
+            active: !!insectProximity.source && !insectProximity.stopping,
+            targetId: insectProximity.target?.id || null,
+            gain: INSECT_PROXIMITY_GAIN,
+          },
         },
         music: {
           started: music.started,
@@ -2945,6 +3192,11 @@ function makeSilentApi() {
         ambience: false,
         jetLoop: false,
         volumes: { master: 1, music: 0.8, sfx: 1 },
+        localAssets: {
+          loaded: [],
+          loadErrors: [],
+          insectProximity: { active: false, targetId: null, gain: INSECT_PROXIMITY_GAIN },
+        },
         music: {
           started: false,
           bossActive: false,

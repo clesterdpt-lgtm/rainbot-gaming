@@ -45,21 +45,20 @@ const SAINTFALL_ASSETS = Object.freeze({
   lightgunMain: "lightgun-main.wav",
 });
 
-/* The nearby cue is deliberately keyed to the authoritative melee reaches,
-   not to the much larger aggro/hearing radii. Gleaner is omitted because it
-   is a ranged caste; its incoming-fire sound remains the procedural shot. */
-const INSECT_MELEE_RANGES = Object.freeze({
-  thresher: 2.6,
-  harrow: 4.4,
-  precentor: 6.2,
-  matriarch: 7.4,
-  coulter: 20,
-  garner: 24,
-  stylite: 10,
-  abbess: 28,
+/* The nearby cue is keyed to immersive proximity ranges around Bloom hostiles.
+   Gleaner is omitted because it is a ranged caste with distinct sniper cues. */
+const INSECT_PROXIMITY_RANGES = Object.freeze({
+  thresher: 14,
+  harrow: 18,
+  precentor: 22,
+  matriarch: 26,
+  coulter: 28,
+  garner: 28,
+  stylite: 24,
+  abbess: 36,
 });
-const INSECT_PROXIMITY_GAIN = 0.12;
-const PLAYER_LIGHTGUN_GAIN = 0.42;
+const INSECT_PROXIMITY_GAIN = 0.28;
+const PLAYER_LIGHTGUN_GAIN = 0.65;
 
 /* The gunshot clipper's transfer curve. A compile-time constant -
    building 1024 tanh samples per DISCHARGE allocated ~36KB/s of
@@ -326,15 +325,17 @@ export function buildAudio(ctx) {
     const g = voice(opts.bus || "world", duration);
     if (!g) return false;
     const p = place(g, x ?? state.listenerX, z ?? state.listenerZ,
-      opts.refDist ?? 22, opts.maxDist ?? 420);
+      opts.refDist ?? 22, opts.maxDist ?? 520);
     if (!p) return false;
     const t = now();
     const amp = Math.max(0, Number(opts.gain) || 0) * p.atten;
     const out = ac.createGain();
-    const fadeIn = Math.max(0.001, Number(opts.fadeIn) || 0.004);
+    const fadeIn = Math.max(0.001, Number(opts.fadeIn) || 0.002);
     out.gain.setValueAtTime(0.0001, t);
     out.gain.linearRampToValueAtTime(Math.max(0.0001, amp), t + fadeIn);
-    out.gain.exponentialRampToValueAtTime(0.0001, t + duration);
+    const fadeStart = Math.max(t + fadeIn + 0.01, t + duration - 0.06);
+    out.gain.setValueAtTime(Math.max(0.0001, amp), fadeStart);
+    out.gain.linearRampToValueAtTime(0.0001, t + duration);
     const source = ac.createBufferSource();
     source.buffer = buffer;
     source.connect(out);
@@ -354,16 +355,10 @@ export function buildAudio(ctx) {
       if (!inst || inst.state === "death" || inst.health <= 0
         || inst.encounterHidden || inst.body?.hidden) continue;
       if (inst.spec?.faction !== "bloom") continue;
-      const reach = INSECT_MELEE_RANGES[inst.key];
-      if (!Number.isFinite(reach)) continue;
-      /* Ordinary walkers publish the exact vertical-aware melee gate after
-         combat.update. A boss without that shared flag uses its authored
-         horizontal reach above, which keeps the cue local without coupling
-         audio to every encounter's private state machine. */
-      if (typeof inst.inReach === "boolean" && !inst.inReach) continue;
+      const reach = INSECT_PROXIMITY_RANGES[inst.key] || 14;
       const distance = Math.hypot(inst.x - ps.x, inst.z - ps.z);
       if (distance <= reach && distance < nearestDistance) {
-        nearest = { inst, distance };
+        nearest = { inst, distance, reach };
         nearestDistance = distance;
       }
     }
@@ -421,6 +416,9 @@ export function buildAudio(ctx) {
 
     const loop = insectProximity;
     const t = now();
+    const distRatio = clamp01(1 - (target.distance / Math.max(1, target.reach)));
+    const targetGain = Math.max(0.04, distRatio * INSECT_PROXIMITY_GAIN);
+
     if (!loop.source) {
       const source = ac.createBufferSource();
       source.buffer = buffer;
@@ -429,7 +427,7 @@ export function buildAudio(ctx) {
       source.loopEnd = Math.max(0.05, buffer.duration);
       const gain = ac.createGain();
       gain.gain.setValueAtTime(0.0001, t);
-      gain.gain.linearRampToValueAtTime(INSECT_PROXIMITY_GAIN, t + 0.22);
+      gain.gain.linearRampToValueAtTime(targetGain, t + 0.22);
       let pan = null;
       source.connect(gain);
       if (ac.createStereoPanner) {
@@ -450,7 +448,9 @@ export function buildAudio(ctx) {
       loop.stopping = false;
       loop.gain.gain.cancelScheduledValues(t);
       loop.gain.gain.setValueAtTime(Math.max(0.0001, loop.gain.gain.value), t);
-      loop.gain.gain.linearRampToValueAtTime(INSECT_PROXIMITY_GAIN, t + 0.12);
+      loop.gain.gain.linearRampToValueAtTime(targetGain, t + 0.12);
+    } else {
+      loop.gain.gain.setTargetAtTime(targetGain, t, 0.08);
     }
     loop.target = target.inst;
     updateInsectProximityPosition(target.inst.x, target.inst.z);

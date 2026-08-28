@@ -4631,6 +4631,7 @@ export function installQa(ctx, api) {
     get weapons() { return api.weapons; },
     get jetpack() { return api.jetpack; },
     get boost() { return api.boost; },
+    get audio() { return api.audio; },
     get progression() { return api.progression || ctx.progression; },
     get slam() { return api.slam; },
     get shield() { return api.shield; },

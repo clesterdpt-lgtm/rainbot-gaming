@@ -7,7 +7,7 @@
 (() => {
   "use strict";
 
-  const BUILD = "20260827-vesper-perf-2";
+  const BUILD = "20260828-balance-sfx-2";
   const THREE_VERSION = "0.180.0";
   const CDN_BASES = [
     `https://cdn.jsdelivr.net/npm/three@${THREE_VERSION}/`,

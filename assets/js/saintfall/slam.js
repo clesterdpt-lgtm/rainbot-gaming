@@ -132,6 +132,7 @@ export function buildSlam(ctx, player) {
       return false;
     }
 
+    player.cancelTransientActions?.();
     state.active = true;
     state.justEnded = false;
     state.phase = "hang";
@@ -218,7 +219,7 @@ export function buildSlam(ctx, player) {
       /* A plunge that never finds ground - walked off the map edge,
          or a collision case nobody thought of - must not lock the
          player into a permanent dive. */
-      if (state.elapsed > config.charge + 4.0) abort("no-ground");
+      if (state.elapsed > config.charge + 1.25) abort("no-ground");
     }
     return state;
   }

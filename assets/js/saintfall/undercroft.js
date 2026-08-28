@@ -2286,8 +2286,14 @@ export function buildUndercroft(ctx) {
         playerLocal(_tmp);
         limb.mark.set(_tmp.x, chamberFloorAt(ctx.player.state.x, ctx.player.state.z)
           - floorY + 0.5, _tmp.z);
-        bus.emit("wind", { index: limb.index, x: limb.mark.x + C.x,
-          z: limb.mark.z + C.z });
+        bus.emit("wind", {
+          index: limb.index,
+          x: limb.mark.x + C.x, z: limb.mark.z + C.z,
+          originX: limb.rootX + C.x, originY: limb.rootY + floorY,
+          originZ: limb.rootZ + C.z,
+          impactIn: LIMB_TIMES.wind + LIMB_TIMES.strike * 0.55,
+          guardType: "frontal",
+        });
       }
       return;
     }
@@ -2345,6 +2351,8 @@ export function buildUndercroft(ctx) {
           ctx.combat?.hurtPlayer?.(C.lasherDamage, {
             source: "undercroft-lasher",
             x: limb.tip.x + C.x, y: limb.tip.y + floorY, z: limb.tip.z + C.z,
+            originX: limb.tip.x + C.x, originY: limb.tip.y + floorY,
+            originZ: limb.tip.z + C.z, guardType: "frontal",
             enemy: "undercroft", enemyKey: "undercroft",
           });
           /* Rooted, not stunned. The hands stay live so the answer to

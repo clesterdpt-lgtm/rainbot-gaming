@@ -2011,7 +2011,7 @@ function makeInput(canvas, captureMeleeAim = null) {
     /* MELEE IS AN ACTION, NOT A MODE.
        One key, one swing: main.js takes the rite over for the length
        of the animation and hands it back. */
-    if (keybindMatches("melee", k) || k === "KeyQ" || k === "KeyF") {
+    if (keybindMatches("melee", k)) {
       /* Bind the swing to the reticle that existed at keydown. The
          event is drained after player.update(), so sampling there
          would let mouse-look during the same frame silently redirect
@@ -2067,13 +2067,16 @@ function makeInput(canvas, captureMeleeAim = null) {
   window.addEventListener("mousedown", (e) => {
     if (!state.locked || e.defaultPrevented) return;
     if (e.button === 0) { mouse.firing = true; state.firing = true; }
-    if (e.button === 1) { mouse.furnace = true; state.furnaceHeld = true; }
+    if (e.button === 1) { e.preventDefault(); mouse.furnace = true; state.furnaceHeld = true; }
     if (e.button === 2) { mouse.ads = true; state.ads = true; }
   });
   window.addEventListener("mouseup", (e) => {
     if (e.button === 0) { mouse.firing = false; state.firing = touch.firing; }
-    if (e.button === 1) { mouse.furnace = false; state.furnaceHeld = touch.furnace; }
+    if (e.button === 1) { e.preventDefault(); mouse.furnace = false; state.furnaceHeld = touch.furnace; }
     if (e.button === 2) { mouse.ads = false; state.ads = touch.ads; }
+  });
+  window.addEventListener("auxclick", (e) => {
+    if (state.locked && e.button === 1) e.preventDefault();
   });
   window.addEventListener("contextmenu", (e) => {
     if (state.locked) e.preventDefault();
@@ -2104,7 +2107,7 @@ function makeInput(canvas, captureMeleeAim = null) {
           - (keybindDown(keys, "moveForward") ? 1 : 0);
       }
       const boostHeld = keybindDown(keys, "boost");
-      const meleeHeld = keybindDown(keys, "melee") || keys.has("KeyQ") || keys.has("KeyF");
+      const meleeHeld = keybindDown(keys, "melee");
       const furnaceHeld = keybindDown(keys, "furnace") || mouse.furnace;
       state.sprint = touch.sprint;
       state.boostHeld = boostHeld || touch.boostHeld;
@@ -3156,18 +3159,18 @@ export async function createPlayer(ctx, canvas) {
        Coils low and drives forward in an explosive vector burst that cuts
        cleanly through multiple ranks of enemies. */
     meleePierce: {
-      dur: 0.68, hit: [0.06, 0.40], damage: 2.4, arc: 0.85, lunge: 2.8,
+      dur: 0.74, hit: [0.06, 0.44], damage: 2.4, arc: 0.85, lunge: 2.8,
       sweep: 6,
-      drive: { start: 0.02, ramp: 0.06, end: 0.32, fade: 0.20 },
+      drive: { start: 0.02, ramp: 0.06, end: 0.36, fade: 0.22 },
       keys: [
         [0.00, 0.0, 0.0, 0.0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, "load"],
         // Coil forward into a streamlined spear thrust, lance dead ahead
         [0.12, 0.10, -0.04, 0.26, -0.04, 0.02, 0.0, 0.60, -0.32, 0.08, -0.14, 0.38, 0.14, 0.35, 0.30, "strike"],
         // Piercing penetration at full rocket speed
-        [0.34, 0.14, -0.03, 0.30, -0.02, 0.01, 0.0, 0.66, -0.36, 0.06, -0.16, 0.42, 0.15, 0.40, 0.36, "strike"],
+        [0.36, 0.14, -0.03, 0.30, -0.02, 0.01, 0.0, 0.66, -0.36, 0.06, -0.16, 0.42, 0.15, 0.40, 0.36, "strike"],
         // Settle & recover
-        [0.54, 0.05, -0.01, 0.12, -0.03, 0.0, 0.0, 0.28, -0.14, 0.04, -0.07, 0.20, 0.09, 0.18, 0.14, "settle"],
-        [0.68, 0.0, 0.0, 0.0, 0, 0, 0, "settle"],
+        [0.56, 0.05, -0.01, 0.12, -0.03, 0.0, 0.0, 0.28, -0.14, 0.04, -0.07, 0.20, 0.09, 0.18, 0.14, "settle"],
+        [0.74, 0.0, 0.0, 0.0, 0, 0, 0, "settle"],
       ],
     },
     /* ------------------------------------------------------------
@@ -3501,8 +3504,10 @@ export async function createPlayer(ctx, canvas) {
     return beginAction(`melee${action.combo}`, aimYaw);
   }
 
-  /** Jetpack-powered piercing thrust: straight-line rocket dash that penetrates all enemies. */
-  function meleePierce(capturedAimYaw = null) {
+  /** Jetpack-powered piercing thrust: straight-line rocket dash that penetrates all enemies.
+   *  The longer the melee key was held, the higher the chargeRatio (0.35 to 1.0), which scales
+   *  dash speed, travel distance (lunge), and damage proportionally. */
+  function meleePierce(capturedAimYaw = null, chargeRatio = 1.0) {
     const w = ctx.weapons && ctx.weapons.current;
     if (!w || !w.spec.melee) return false;
     const aimYaw = Number.isFinite(capturedAimYaw)
@@ -3512,9 +3517,15 @@ export async function createPlayer(ctx, canvas) {
     action.comboAt = state.clock;
     action.queuedAimYaw = null;
     const rank = ctx.progression?.rank?.("procession_executioners_measure") || 1;
+    const ratio = clamp(chargeRatio ?? 1.0, 0.35, 1.0);
+    const baseDamage = rank >= 2 ? 3.4 : 2.4;
+    const baseLunge = rank >= 2 ? 4.2 : 3.2;
+    const baseSpeed = rank >= 2 ? 38.0 : 32.0;
+
+    action.pierceSpeed = lerp(18.0, baseSpeed, ratio);
     const spec = ACTIONS.meleePierce;
-    spec.damage = rank >= 2 ? 3.4 : 2.4;
-    spec.lunge = rank >= 2 ? 3.6 : 2.8;
+    spec.damage = baseDamage * lerp(0.65, 1.0, ratio);
+    spec.lunge = baseLunge * lerp(0.45, 1.0, ratio);
     return beginAction("meleePierce", aimYaw);
   }
 
@@ -4444,7 +4455,9 @@ export async function createPlayer(ctx, canvas) {
         : GROUND_DECEL_RESPONSE;
       state.speed = damp(state.speed, wanted, speedResponse, dt);
       if (lungeDrive > 0) {
-        const driveMax = action.name === "meleePierce" ? MELEE_PIERCE_SPEED : MELEE_LUNGE_SPEED;
+        const driveMax = action.name === "meleePierce"
+          ? (action.pierceSpeed || MELEE_PIERCE_SPEED)
+          : MELEE_LUNGE_SPEED;
         state.speed = Math.max(state.speed,
           driveMax * lungeDrive * state.slowFactor);
       }
@@ -5043,39 +5056,65 @@ export async function createPlayer(ctx, canvas) {
       }
 
       let support = groundY(state.x, state.z);
+      const slamContact = slamMode && (verticalHit || state.y <= support + 0.10 || terrainLandingContact);
       /* A flight slam may reach terrain on the same sweep that its
          horizontal capsule brushes a Scar shard or vein. Handing that
          overlapping column to the grounded controller completes the
          slam inside static geometry: the attack fires, but every later
          movement frame is blocked. Reconcile only committed slam
          landings, and keep the correction local to the contact point. */
-      if (slamMode && state.vy <= 0
-        && (terrainLandingContact || state.y <= support + 0.10)
-        && ctx.collide?.findOpen) {
-        const radius = ctx.collide.radius;
-        const staticBlocked = ctx.collide.blocked(state.x, state.z, support, radius)
-          || ctx.collide.flightBlocked?.(state.x, state.z, support,
-            radius, 2.35, true);
-        if (staticBlocked) {
+      if (slamContact && ctx.collide) {
+        const radius = ctx.collide.radius || 0.45;
+        if (terrainLandingContact || state.y <= support + 0.10) {
+          const staticBlocked = ctx.collide.blocked(state.x, state.z, support, radius)
+            || ctx.collide.flightBlocked?.(state.x, state.z, support,
+              radius, 2.35, true);
+          if (staticBlocked) {
+            state.slamLandingCorrections += 1;
+            const safe = ctx.collide.findOpen?.(state.x, state.z, support,
+              96, 8, radius, groundY, (tx, tz) => {
+                const ty = groundY(tx, tz);
+                return !ctx.collide.flightBlocked?.(tx, tz, ty, radius, 2.35, true);
+              });
+            if (safe) {
+              state.x = safe[0];
+              state.z = safe[1];
+              support = groundY(state.x, state.z);
+              state.y = support;
+              terrainLandingContact = true;
+            } else {
+              unstuck("slam-landing");
+              support = groundY(state.x, state.z);
+              terrainLandingContact = true;
+            }
+          }
+        } else if (verticalHit) {
+          // Elevated mesh contact (roof, bridge, arch, rock ledge) during a flight slam plunge
           state.slamLandingCorrections += 1;
-          const safe = ctx.collide.findOpen(state.x, state.z, support,
-            96, 8, radius, groundY, (tx, tz) => {
-              const ty = groundY(tx, tz);
-              return !ctx.collide.flightBlocked?.(tx, tz, ty, radius, 2.35, true);
-            });
-          if (safe) {
-            state.x = safe[0];
-            state.z = safe[1];
+          const safeLanding = ctx.collide.findFlightLanding?.(state.x, state.z, state.y, 8);
+          if (safeLanding) {
+            state.x = safeLanding[0];
+            state.z = safeLanding[1];
             support = groundY(state.x, state.z);
             state.y = support;
             terrainLandingContact = true;
           } else {
-            /* A malformed authored pocket should not hold the player
-               forever. The ordinary bounded recovery is the final
-               fallback and still lets this committed slam resolve. */
-            unstuck("slam-landing");
-            support = groundY(state.x, state.z);
-            terrainLandingContact = true;
+            const safeOpen = ctx.collide.findOpen?.(state.x, state.z, support,
+              96, 8, radius, groundY, (tx, tz) => {
+                const ty = groundY(tx, tz);
+                return !ctx.collide.flightBlocked?.(tx, tz, ty, radius, 2.35, true);
+              });
+            if (safeOpen) {
+              state.x = safeOpen[0];
+              state.z = safeOpen[1];
+              support = groundY(state.x, state.z);
+              state.y = support;
+              terrainLandingContact = true;
+            } else {
+              unstuck("slam-landing-elevated");
+              support = groundY(state.x, state.z);
+              terrainLandingContact = true;
+            }
           }
         }
       }
@@ -5083,7 +5122,7 @@ export async function createPlayer(ctx, canvas) {
          even on a steep but legal slope. The center fallback preserves
          the old flat-ground behavior when a collision implementation
          does not expose footprint metadata. */
-      if (state.vy <= 0 && (terrainLandingContact || state.y <= support + 0.10)) {
+      if (slamContact || (state.vy <= 0 && (terrainLandingContact || state.y <= support + 0.10))) {
         /* sweepFlightCapsule zeroes vertical velocity on contact, so
            use the pre-contact descent captured above for landing
            animation/audio intensity. */
@@ -5114,8 +5153,17 @@ export async function createPlayer(ctx, canvas) {
          the jump happened to leave behind makes the same input take a
          different amount of time depending on how it was entered,
          which is the one thing a telegraphed attack must not do. */
-      if (slamMode) state.vy = slamState.verticalSpeed;
-      else if (boostMode) {
+      if (slamMode) {
+        state.vy = slamState.verticalSpeed;
+        state.y += state.vy * dt;
+        if (state.y <= gy) {
+          state.y = gy;
+          state.vy = 0;
+          state.grounded = true;
+          for (const leg of legs) leg.planted = false;
+          ctx.slam.impact();
+        }
+      } else if (boostMode) {
         // Skimming / airborne glide: smooth gravity while thrusters maintain forward propulsion over terrain
         state.vy = Math.max(-12, state.vy - 14.0 * dt);
         state.y += state.vy * dt;
@@ -5133,7 +5181,6 @@ export async function createPlayer(ctx, canvas) {
           state.vy = 0;
           state.grounded = true;
           for (const leg of legs) leg.planted = false;
-          if (slamMode) ctx.slam.impact();
         }
       }
     } else {

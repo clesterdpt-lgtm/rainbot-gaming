@@ -128,6 +128,9 @@ export const APOSTATE_CONFIG = Object.freeze({
   ]),
 
   boostCadence: 8.5,
+  /* A committed brace before the mirrored Reliquary crosses the nave. The
+     former zero-frame launch was impossible to time at close range. */
+  boostWindup: 0.38,
   boostSeconds: 0.58,
   boostSpeed: 19,
   boostDamage: 32,
@@ -172,7 +175,7 @@ const SPEC = Object.freeze({
 const ACTION_DURATIONS = Object.freeze({
   ranged: 1.18,
   shield: APOSTATE_CONFIG.shieldSeconds,
-  boost: APOSTATE_CONFIG.boostSeconds,
+  boost: APOSTATE_CONFIG.boostWindup + APOSTATE_CONFIG.boostSeconds,
   summon: APOSTATE_CONFIG.summonWindup + 0.92,
   vent: APOSTATE_CONFIG.ventSeconds,
   jet: APOSTATE_CONFIG.jetRiseSeconds + APOSTATE_CONFIG.jetHoverSeconds
@@ -1852,17 +1855,28 @@ export async function buildApostate(ctx) {
       aegis.group.visible = true;
       bus.emit("shield", { x: inst.x, z: inst.z, active: true });
     } else if (name === "boost") {
-      bus.emit("boost", { x: inst.x, z: inst.z });
+      bus.emit("boost", {
+        x: inst.x, z: inst.z,
+        impactIn: C.boostWindup, guardType: "frontal",
+      });
     } else if (name === "jet") {
       inst.grounded = false;
       corruption.jetGlow.visible = true;
       bus.emit("jet", { x: inst.x, z: inst.z });
+      bus.emit("slamTelegraph", {
+        x: inst.x, z: inst.z,
+        impactIn: C.jetRiseSeconds + C.jetHoverSeconds + C.jetPlungeSeconds,
+        guardType: "unblockable",
+      });
     } else if (name === "summon") {
       bus.emit("call", { x: inst.x, z: inst.z });
     } else if (name === "vent") {
       bus.emit("vent", { x: inst.x, z: inst.z });
     } else if (name.startsWith("melee")) {
-      bus.emit("meleeTelegraph", { x: inst.x, z: inst.z, step: state.meleeStep + 1 });
+      bus.emit("meleeTelegraph", {
+        x: inst.x, z: inst.z, step: state.meleeStep + 1,
+        impactIn: C.melee[state.meleeStep].hit, guardType: "frontal",
+      });
     } else if (name === "ranged") {
       bus.emit("rangedTelegraph", { x: inst.x, z: inst.z });
     }
@@ -2060,7 +2074,7 @@ export async function buildApostate(ctx) {
     return dot >= Math.cos(arc * 0.5) && lineToPlayer();
   }
 
-  function hurtPlayer(amount, source, origin = null) {
+  function hurtPlayer(amount, source, origin = null, guardType = "frontal") {
     const ox = Number.isFinite(origin?.x) ? origin.x : inst.x;
     const oy = Number.isFinite(origin?.y) ? origin.y : inst.y + 1.1;
     const oz = Number.isFinite(origin?.z) ? origin.z : inst.z;
@@ -2072,6 +2086,10 @@ export async function buildApostate(ctx) {
       enemy: inst.key,
       enemyId: inst.id,
       enemyKey: inst.key,
+      originX: ox,
+      originY: oy,
+      originZ: oz,
+      guardType,
     }) || 0;
   }
 
@@ -2182,6 +2200,10 @@ export async function buildApostate(ctx) {
   function updateBoost(dt) {
     const ps = ctx.player.state;
     inst.yaw = state.actionYaw;
+    if (state.actionElapsed < C.boostWindup) {
+      inst.speed = 0;
+      return;
+    }
     const startX = inst.x;
     const startZ = inst.z;
     const moved = move(Math.sin(inst.yaw), Math.cos(inst.yaw), C.boostSpeed, dt);
@@ -2214,7 +2236,8 @@ export async function buildApostate(ctx) {
       ctx.player?.doctrineKick?.(0.34, 0.4);
       bus.emit("boostHit", { x: contactX, z: contactZ, damage });
     }
-    if (state.actionElapsed >= C.boostSeconds || moved < C.boostSpeed * dt * 0.12) {
+    if (state.actionElapsed >= C.boostWindup + C.boostSeconds
+      || moved < C.boostSpeed * dt * 0.12) {
       state.boostTimer = C.boostCadence;
       finishAction("boost");
     }
@@ -2260,7 +2283,8 @@ export async function buildApostate(ctx) {
           ps.x, groundAt(ps.x, ps.z) + 0.32, ps.z);
         const damage = nearGround && distance <= C.slamRadius && impactClear
           ? hurtPlayer(C.slamDamage * (1 - 0.45 * distance / C.slamRadius),
-            "apostate-slam", { x: inst.x, y: impactY + 0.32, z: inst.z }) : 0;
+            "apostate-slam", { x: inst.x, y: impactY + 0.32, z: inst.z },
+            "unblockable") : 0;
         ctx.vfx?.blast?.(inst.x, impactY + 0.15, inst.z, C.slamRadius);
         /* THE encounter's heaviest footfall, and the one place the
            shake budget is spent. Scaled by range so a slam across the

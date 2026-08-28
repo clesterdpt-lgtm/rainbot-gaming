@@ -17,6 +17,9 @@
 import { clamp, clamp01, damp, makeBus } from "saintfall/core.js";
 import { DIFFICULTY, DEFAULT_DIFFICULTY } from "saintfall/difficulty.js";
 import { FURNACE_LANCE_RULES } from "saintfall/progression-config.js";
+import {
+  GUARD_CUE_CONFIG, GUARD_TYPES, normalizeGuardDetail,
+} from "saintfall/guard-rules.js";
 
 const TAU = Math.PI * 2;
 
@@ -611,6 +614,10 @@ export function buildCombat(ctx) {
   };
   /* Recent enemy strike tells, for the attack-slot cap. */
   const strikeStarts = [];
+  /* Reserved contact beats keep two ordinary melee tells from resolving as
+     one unreadable damage packet. Only the later strike moves, and never by
+     more than the shared readability budget. */
+  const impactReservations = [];
   const strikeTotals = { tells: 0, landed: 0, whiffed: 0, blocked: 0, interrupted: 0, held: 0 };
   /* The live difficulty tier's numbers, read at the point of use so a
      change in either menu takes effect on the next frame. Falls back to
@@ -2689,6 +2696,8 @@ export function buildCombat(ctx) {
       });
       return 0;
     }
+    detail = normalizeGuardDetail(detail, ctx.player?.state);
+    const shieldWasActive = !!ctx.shield?.state?.active;
     if (ctx.shield?.tryBlock?.(amount, detail)) {
       const block = ctx.shield.lastBlock?.() || {};
       bus.emit("shieldBlock", {
@@ -2699,11 +2708,29 @@ export function buildCombat(ctx) {
         x: detail.x,
         y: detail.y,
         z: detail.z,
+        originX: detail.originX,
+        originY: detail.originY,
+        originZ: detail.originZ,
+        guardType: detail.guardType,
         hp: player.hp,
         perfect: !!block.perfect,
         timing: block.timing || null,
       });
       return 0;
+    }
+    if (shieldWasActive) {
+      const attempt = ctx.shield.lastAttempt?.() || {};
+      bus.emit("shieldRejected", {
+        amount,
+        source: detail.source || "attack",
+        enemyId: detail.enemyId || "",
+        enemyKey: detail.enemyKey || detail.enemy || "",
+        originX: detail.originX,
+        originY: detail.originY,
+        originZ: detail.originZ,
+        guardType: detail.guardType,
+        reason: attempt.reason || "rejected",
+      });
     }
     player.hp = Math.max(0, player.hp - amount);
     player.lastHitAt = clock;
@@ -3440,6 +3467,25 @@ export function buildCombat(ctx) {
     return inst.key === "thresher" ? base * (tier().thresherSpeed || 1) : base;
   }
 
+  function reserveImpact(baseWindup) {
+    const baseAt = clock + baseWindup;
+    while (impactReservations.length
+      && impactReservations[0] < clock - GUARD_CUE_CONFIG.minImpactSpacing) {
+      impactReservations.shift();
+    }
+    let impactAt = baseAt;
+    for (const reserved of impactReservations) {
+      if (impactAt >= reserved - 1e-5
+        && impactAt - reserved < GUARD_CUE_CONFIG.minImpactSpacing) {
+        impactAt = reserved + GUARD_CUE_CONFIG.minImpactSpacing;
+      }
+    }
+    impactAt = Math.min(impactAt, baseAt + GUARD_CUE_CONFIG.maxTellExtension);
+    impactReservations.push(impactAt);
+    impactReservations.sort((a, b) => a - b);
+    return impactAt - clock;
+  }
+
   function beginStrike(inst, spec) {
     const cfg = ENEMY_MELEE_CONFIG;
     if (!cfg.slotExempt.includes(inst.key)) {
@@ -3456,7 +3502,8 @@ export function buildCombat(ctx) {
       }
       strikeStarts.push(clock);
     }
-    const windup = strikeValue(inst, cfg.windup);
+    const baseWindup = strikeValue(inst, cfg.windup);
+    const windup = reserveImpact(baseWindup);
     const box = HITBOX[inst.key] || HITBOX.thresher;
     /* Cadence is measured tell to tell, so the timer restarts here and
        keeps counting through the wind-up. */
@@ -3478,6 +3525,11 @@ export function buildCombat(ctx) {
       x: inst.x,
       y: inst.y + box.head,
       z: inst.z,
+      originX: inst.x,
+      originY: inst.y + box.head,
+      originZ: inst.z,
+      guardType: GUARD_TYPES.FRONTAL,
+      baseWindup,
       windup,
     });
     return true;
@@ -3539,6 +3591,10 @@ export function buildCombat(ctx) {
         x: inst.x,
         y: inst.y + box.head,
         z: inst.z,
+        originX: inst.x,
+        originY: inst.y + box.head,
+        originZ: inst.z,
+        guardType: GUARD_TYPES.FRONTAL,
         enemy: inst.key,
         enemyId: inst.id,
         enemyKey: inst.key,
@@ -3599,6 +3655,8 @@ export function buildCombat(ctx) {
         firstContactFraction: ENEMY_MELEE_CONFIG.firstContactFraction,
         hitGrace: ENEMY_MELEE_CONFIG.hitGrace,
         facingDot: ENEMY_MELEE_CONFIG.facingDot,
+        minImpactSpacing: GUARD_CUE_CONFIG.minImpactSpacing,
+        maxTellExtension: GUARD_CUE_CONFIG.maxTellExtension,
       },
       ...strikeTotals,
       recentTells: strikeStarts.length,
@@ -3710,6 +3768,7 @@ export function buildCombat(ctx) {
     player.regenAt = clock - 1;
     player.lastMeleeHitAt = -99;
     strikeStarts.length = 0;
+    impactReservations.length = 0;
     for (const inst of enemies.live) {
       inst.suspicion = 0;
       inst.alerted = false;
@@ -3787,6 +3846,7 @@ export function buildCombat(ctx) {
     player.regenAt = regenLockRemaining > 0 ? clock + regenLockRemaining : clock - 1;
     player.lastMeleeHitAt = -99;
     strikeStarts.length = 0;
+    impactReservations.length = 0;
     return true;
   }
 

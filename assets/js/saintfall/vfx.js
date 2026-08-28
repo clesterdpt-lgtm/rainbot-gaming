@@ -5412,12 +5412,13 @@ export function buildVfx(ctx, world) {
     const mirror = step < 0 ? -1 : 1;
     const isPierce = Math.abs(step) === 6;
     const S = MELEE_SWEEPS[Math.abs(step)] || MELEE_SWEEPS[slam ? 3 : 1];
+    const sweepReach = isPierce && reach > 0 ? Math.max(3.2, Math.min(8.5, reach * 0.45)) : S.reach;
     /* Per-step, because the three sweeps present differently: the
        rising diagonal is drawn in a rolled plane and is seen close to
        edge-on from behind the shoulder, so at a shared level it read
        as a thread while the flat opener read as a blade. */
     const gain = (S.gain ?? 1) * (hits ? 1.25 : 0.92);
-    slashFx(x, y + S.height, z, yaw, S.reach, S.arc * mirror, S.life,
+    slashFx(x, y + S.height, z, yaw, sweepReach, S.arc * mirror, S.life,
       "#ffb63a", "#fff0c8", gain, S.lift, S.tilt, S.inner,
       S.centre * mirror, S.roll * mirror);
 
@@ -5428,7 +5429,8 @@ export function buildVfx(ctx, world) {
       impacts.emitDirected(x + bx * 0.4, y + 1.2, z + bz * 0.4, 16, bx, 0.2, bz, 9.5, 0.65, 2.0, 1.2, IK_GLINT);
       sparks.burst(x + bx * 0.4, y + 1.2, z + bz * 0.4, 12, bx, 0.2, bz, 8.0, 0.4, 2.0, 0.25, 0.016);
       // Supersonic shock ring
-      const ringSlot = ringFx(x + Math.sin(yaw) * 1.5, y + 1.2, z + Math.cos(yaw) * 1.5, 0.3, 1.6, 0.38,
+      const ringDist = sweepReach * 0.35;
+      const ringSlot = ringFx(x + Math.sin(yaw) * ringDist, y + 1.2, z + Math.cos(yaw) * ringDist, 0.3, 1.6, 0.38,
         "#ffd269", 0.9, "#ffffff", 1.0);
       ringSlot.wall = 0.2;
     }
@@ -5438,8 +5440,8 @@ export function buildVfx(ctx, world) {
        derived from the gameplay cone, which pointed them into open
        sand on every swing that finished across the body. */
     const endYaw = yaw + (S.centre + S.arc * 0.5) * mirror;
-    const tx = x + Math.sin(endYaw) * S.reach * 0.92;
-    const tz = z + Math.cos(endYaw) * S.reach * 0.92;
+    const tx = x + Math.sin(endYaw) * sweepReach * 0.92;
+    const tz = z + Math.cos(endYaw) * sweepReach * 0.92;
     const ty = y + S.height + (slam ? -0.35 : 0.18);
     sparks.burst(tx, ty, tz, hits ? 10 : 5, Math.cos(endYaw), slam ? -0.5 : 0.3,
       -Math.sin(endYaw), hits ? 7 : 4.5, 0.55, 2.0, 0.32, 0.014);

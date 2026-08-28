@@ -314,6 +314,19 @@ function installSoftShadows() {
 
 const SOFT_SHADOWS = installSoftShadows();
 
+/* QA-only. See the A/B block at the top of atoll-art.js for why
+   these switches exist at all. Read once at module load rather
+   than per call because setQuality runs on every tier change and
+   parsing a query string in it would be the only allocation in
+   an otherwise hot path. */
+const AB_HARD_SHADOWS = (() => {
+  try {
+    const p = new URLSearchParams(window.location.search);
+    if (!p.has("qa")) return false;
+    return String(p.get("ab") || "").split(",").includes("hard");
+  } catch { return false; }
+})();
+
 /* The LABELS are tropical and the ROW NAMES are not. `goldenhour`,
    `dusk` and `night` set goldenFactor/duskFactor/nightFactor inside
    makeAtmosphere, and modules outside art.js read them to ask what
@@ -719,6 +732,23 @@ export async function start({ boot, build } = {}) {
   const world = await buildAtollWorld(ctx, (v, label) => progress(0.56 + v * 0.26, label || "Dressing the ring"));
   ctx.world = world;
 
+  /* THE SEA IS TOLD WHERE THE SHIP IS, and this one line is the
+     whole of it. The water is built before the wreck, so the
+     contact field's capsule array is empty at construction and
+     the block in the water shader is one compare until here; the
+     world solves the capsules off the wreck's own oriented boxes
+     (see THE HULL'S CONTACT CAPSULES) and this hands them over.
+
+     ROUND 12 SHIPPED EVERYTHING BUT THIS CALL. The uniforms, the
+     shader block and the solver were all written and none of them
+     ever ran, because nothing set the count - the field measured
+     as absent because it WAS absent. `armed` is kept and reported
+     in the QA stats for that reason: a contact field that silently
+     arms zero capsules must not look like a working one. */
+  const armedHull = world.hullContacts && water.setHullContacts
+    ? water.setHullContacts(world.hullContacts) : 0;
+  ctx.hullContactsArmed = armedHull;
+
   /* Published under the key collide.js reads BY NAME. Live and
      empty is deliberate: the flooded hold inside the Spine will
      want it, and a LATE assignment is silent rather than fatal,
@@ -809,7 +839,15 @@ export async function start({ boot, build } = {}) {
        the PCSS patch at radius 1, which is the stock hard kernel
        under a new name. */
     if (SOFT_SHADOWS && sky.sun && sky.sun.shadow) {
-      sky.sun.shadow.radius = SHADOW_RADIUS[t] ?? SHADOW_RADIUS.high;
+      /* `?qa=1&ab=hard` pins the cap at 1, which the patched
+         chunk's first branch reads as "run three's stock nine-tap
+         kernel verbatim" - the exact pre-round-10 behaviour, with
+         the same program set and the same draw list, so an A/B on
+         this flag measures the penumbra and nothing else. See the
+         A/B block at the top of atoll-art.js. */
+      sky.sun.shadow.radius = AB_HARD_SHADOWS
+        ? 1
+        : (SHADOW_RADIUS[t] ?? SHADOW_RADIUS.high);
     }
     /* setQuality writes uAo.x - the occlusion STRENGTH, which
        belongs to the hardware tier - and leaves the grade's own ao

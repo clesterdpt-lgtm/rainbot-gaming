@@ -441,7 +441,10 @@ export function buildMatriarch(ctx) {
     // Time-scaled so the clip's own contact frame lands on the tell.
     enemies.replay?.(inst, "strike", 0.06, C.comboContact, C.comboWindup);
     ctx.audio?.hiss?.(inst.x, inst.z);
-    bus.emit("comboTell", { x: inst.x, z: inst.z, steps: brain.steps });
+    bus.emit("comboTell", {
+      x: inst.x, z: inst.z, steps: brain.steps,
+      impactIn: C.comboWindup, guardType: "frontal",
+    });
   }
 
   function beginLance(inst, brain) {
@@ -476,7 +479,9 @@ export function buildMatriarch(ctx) {
     enemies.play?.(inst, "alert", 0.08);
     ctx.vfx?.slamCharge?.(inst.x, groundAt(inst.x, inst.z) + 0.4, inst.z, 3.4);
     ctx.audio?.slamCharge?.(inst.x, inst.z);
-    bus.emit("lanceTell", { x: inst.x, z: inst.z });
+    bus.emit("lanceTell", {
+      x: inst.x, z: inst.z, impactIn: brain.pending, guardType: "frontal",
+    });
   }
 
   function beginGrab(inst, brain) {
@@ -498,7 +503,9 @@ export function buildMatriarch(ctx) {
     ctx.vfx?.slamCharge?.(inst.x + Math.sin(inst.yaw) * 3.2,
       groundAt(inst.x, inst.z) + 0.5, inst.z + Math.cos(inst.yaw) * 3.2, 3.8);
     ctx.audio?.slamCharge?.(inst.x, inst.z);
-    bus.emit("grabTell", { x: inst.x, z: inst.z });
+    bus.emit("grabTell", {
+      x: inst.x, z: inst.z, impactIn: C.grabWindup, guardType: "unblockable",
+    });
   }
 
   function beginCull(inst, brain) {
@@ -520,7 +527,9 @@ export function buildMatriarch(ctx) {
     brain.spin = (rel >= 0 ? -1 : 1) * C.cullSpin;
     enemies.play?.(inst, "strike", 0.10);
     ctx.audio?.hiss?.(inst.x, inst.z);
-    bus.emit("cullTell", { x: inst.x, z: inst.z });
+    bus.emit("cullTell", {
+      x: inst.x, z: inst.z, impactIn: brain.pending, guardType: "frontal",
+    });
   }
 
   function beginTremor(inst, brain) {
@@ -544,7 +553,7 @@ export function buildMatriarch(ctx) {
     ctx.vfx?.matriarchTremorTell?.(inst.x, y, inst.z, C.tremorRadius,
       brain.roused);
     bus.emit("tremorTell", { x: inst.x, z: inst.z, waves: brain.steps,
-      roused: brain.roused });
+      roused: brain.roused, impactIn: C.tremorWindup, guardType: "unblockable" });
   }
 
   function beginRouse(inst, brain) {
@@ -554,7 +563,9 @@ export function buildMatriarch(ctx) {
     brain.pending = C.rouseSeconds * 0.42;
     inst.actionLocked = true;
     enemies.play?.(inst, "alert", 0.12);
-    bus.emit("rouse", { x: inst.x, z: inst.z });
+    bus.emit("rouse", {
+      x: inst.x, z: inst.z, impactIn: brain.pending, guardType: "unblockable",
+    });
   }
 
   /* ============================================================
@@ -624,6 +635,8 @@ export function buildMatriarch(ctx) {
       enemyId: inst.id,
       enemyKey: inst.key,
       x: ps.x, y: ps.y + 1.0, z: ps.z,
+      originX: inst.x, originY: inst.y + C.strikeCentre, originZ: inst.z,
+      guardType: "frontal",
     });
     brain.landed += 1;
     brain.lastMiss = null;
@@ -723,6 +736,7 @@ export function buildMatriarch(ctx) {
     ctx.combat?.hurtPlayer?.(C.grabDamage * SURVIVAL_CONFIG.enemyDamageMultiplier, {
       source: "matriarch-grab-slam", enemyId: inst.id, enemyKey: inst.key,
       x: ps.x, y: ps.y + 1, z: ps.z,
+      guardType: "unblockable",
     });
     ctx.player?.applyStun?.(C.grabSlamStun);
     ctx.player?.punch?.(2.0);
@@ -775,6 +789,10 @@ export function buildMatriarch(ctx) {
       brain.pending = brain.step < brain.steps ? C.comboGap : -1;
       if (brain.pending > 0) {
         enemies.replay?.(inst, "strike", 0.05, C.comboContact, C.comboGap);
+        bus.emit("comboTell", {
+          x: inst.x, z: inst.z, steps: brain.steps, step: brain.step + 1,
+          impactIn: C.comboGap, guardType: "frontal",
+        });
       }
       return;
     }
@@ -827,6 +845,7 @@ export function buildMatriarch(ctx) {
         ctx.combat.hurtPlayer(C.rouseDamage * SURVIVAL_CONFIG.enemyDamageMultiplier, {
           source: "matriarch-rouse", enemyId: inst.id, enemyKey: inst.key,
           x: ps.x, y: ps.y + 1.0, z: ps.z,
+          guardType: "unblockable",
         });
       }
       brain.pending = -1;
@@ -865,6 +884,7 @@ export function buildMatriarch(ctx) {
               * SURVIVAL_CONFIG.enemyDamageMultiplier, {
               source: "matriarch-tremor", enemyId: inst.id, enemyKey: inst.key,
               x: ps.x, y: ps.y + 1.0, z: ps.z,
+              guardType: "unblockable",
             });
             ctx.player?.applySlow?.(C.tremorSlowFactor, C.tremorSlowSeconds);
             ctx.player?.punch?.(1.25);

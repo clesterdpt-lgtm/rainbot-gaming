@@ -1244,6 +1244,30 @@ export function buildAudio(ctx) {
     gulp.start(t); gulp.stop(t + 0.28);
   }
 
+  /** Shared two-beat guard language. The first spatial note announces the
+   *  committed source; the final note marks the 250ms timing window. */
+  function guardBeat(x, z, guardType = "frontal", ready = false) {
+    const t = now();
+    const dur = ready ? 0.16 : 0.23;
+    const g = voice("world", dur + 0.04);
+    if (!g) return;
+    const p = place(g, x, z, 34, 520);
+    if (!p) return;
+    const dodge = guardType === "unblockable";
+    const osc = ac.createOscillator();
+    osc.type = dodge ? "sawtooth" : ready ? "square" : "triangle";
+    const start = dodge ? (ready ? 165 : 240) : (ready ? 1180 : 560);
+    const end = dodge ? (ready ? 110 : 155) : (ready ? 820 : 390);
+    osc.frequency.setValueAtTime(start, t);
+    osc.frequency.exponentialRampToValueAtTime(end, t + dur);
+    const og = ac.createGain();
+    og.gain.setValueAtTime(0.0001, t);
+    og.gain.exponentialRampToValueAtTime((ready ? 0.38 : 0.24) * p.atten, t + 0.012);
+    og.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    osc.connect(og); og.connect(p.node);
+    osc.start(t); osc.stop(t + dur + 0.02);
+  }
+
   /* ============================================================
      VENTING
 
@@ -2259,11 +2283,6 @@ export function buildAudio(ctx) {
          once is a wall of noise with no information in it. */
       combat.bus.on("kill", (e) => death(e.x, e.z, e.key === "harrow"));
       combat.bus.on("wallHit", (e) => impact(e.x, e.z, "wall"));
-      /* The tell is audible. A melee caste now winds up before it bites,
-         and the same hiss the Apostate rears with says so from wherever
-         the creature is - which is most of what makes a bite from behind
-         a read rather than a surprise. */
-      combat.bus.on("enemyStrikeTelegraph", (e) => hiss(e.x, e.z));
       combat.bus.on("enemyFire", (e) => {
         // A garrison that shoots in silence is worse than one that
         // does no damage: the player has no idea they are under fire
@@ -2277,6 +2296,14 @@ export function buildAudio(ctx) {
         chord([220, 165, 110], 1.2, 0.2);
       });
       combat.bus.on("respawn", () => chord([330, 440, 550], 0.4, 0.14));
+    }
+    if (ctx.guardReadability?.bus) {
+      ctx.guardReadability.bus.on("threatTelegraph", (e) => {
+        guardBeat(e.x, e.z, e.guardType, false);
+      });
+      ctx.guardReadability.bus.on("threatReady", (e) => {
+        guardBeat(e.x, e.z, e.guardType, true);
+      });
     }
     if (mission) {
       mission.bus.on("stratagem", () => blip(880, 0.09, 0.2));

@@ -2579,7 +2579,10 @@ export function buildWinnower(ctx) {
        is what makes that windup readable as "something is coming" from
        thirty metres up, where the swing itself is four pixels. */
     state.swell = 1;
-    bus.emit("bombardTelegraph", { x: inst.x, y: inst.y, z: inst.z });
+    bus.emit("bombardTelegraph", {
+      x: inst.x, y: inst.y, z: inst.z,
+      impactIn: C.bombardContact, guardType: "unblockable",
+    });
   }
 
   function beginSweep() {
@@ -2593,7 +2596,9 @@ export function buildWinnower(ctx) {
     state.sweepTimer = C.sweepCadence;
     // The same held breath, at melee range and half the size.
     state.swell = 0.7;
-    bus.emit("sweepTelegraph", { x: inst.x, z: inst.z });
+    bus.emit("sweepTelegraph", {
+      x: inst.x, z: inst.z, impactIn: C.sweepContact, guardType: "frontal",
+    });
   }
 
   function currentBombardCount() {
@@ -2832,6 +2837,7 @@ export function buildWinnower(ctx) {
     }
     ctx.combat.hurtPlayer(C.sweepDamage, {
       source: "winnower-sweep", x: ps.x, y: ps.y + 1.0, z: ps.z,
+      originX: inst.x, originY: inst.y, originZ: inst.z, guardType: "frontal",
     });
     ctx.player.punch?.(1.4);
     bus.emit("sweep", { x: inst.x, z: inst.z });

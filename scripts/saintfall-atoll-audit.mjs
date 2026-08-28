@@ -534,7 +534,9 @@ async function main() {
       return {
         pass: f.floating === 0,
         detail: `${f.floating} floating of ${f.copies} copies in ${f.meshes} meshes`
-          + ` (${f.afloat} afloat over water, ${f.notLandform} not bedded on the landform,`
+          + ` (${f.afloat} afloat over water, ${f.supported ?? 0} standing on other geometry`
+          + (f.supportedWorst ? ` (worst ${f.supportedWorst.name} +${f.supportedWorst.gap.toFixed(2)}m on ${f.supportedWorst.by})` : "")
+          + `, ${f.notLandform} not bedded on the landform,`
           + ` ${f.paired} canopies judged by their trunk)`
           + (f.rows.length
             ? ` - worst ${f.rows[0].name}`

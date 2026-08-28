@@ -124,6 +124,18 @@ import {
   ATOLL_WIND,
 } from "saintfall/atoll-art.js";
 
+/* QA-ONLY. `?qa=1&ab=nomud` shuts the mangrove mud gate, which was
+   NaN-dead until round 10 fixed it - so the flag reproduces every
+   frame captured before that fix. See the A/B block at the top of
+   atoll-art.js for the whole contract. */
+const AB_NOMUD = (() => {
+  try {
+    const p = new URLSearchParams(window.location.search);
+    if (!p.has("qa")) return false;
+    return String(p.get("ab") || "").split(",").includes("nomud");
+  } catch { return false; }
+})();
+
 /* ============================================================
    SCAFFOLD
 
@@ -2541,7 +2553,10 @@ export function makeAtollField(seed = 0x0a70113a) {
       const v = dx * rx + dz * rz;
       const d = Math.hypot(u / Math.max(s.padA, 1), v / Math.max(s.padC, 1));
       const k = 1 - sstep(0.55, 1.35, d);
-      if (k > 0.001 && y < TIDE.splashTop && slopeDeg < 12) {
+      /* `?qa=1&ab=nomud` shuts this gate again - it was NaN-dead
+         until round 10, so shutting it reproduces every frame
+         captured before then. See atoll-art.js for the contract. */
+      if (!AB_NOMUD && k > 0.001 && y < TIDE.splashTop && slopeDeg < 12) {
         out.mud = clamp01(k * (1 - sstep(TIDE.crustTop, TIDE.splashTop, y)));
       }
     }

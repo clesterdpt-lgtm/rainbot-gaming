@@ -1467,6 +1467,17 @@ export function installQa(ctx, api) {
 
     shotSolution() { return api.shotSolution?.() || null; },
     reticleState() { return api.hud?.reticleState?.() || null; },
+    guardCueState() { return api.hud?.guardCueState?.() || null; },
+    guardThreatState() { return api.guardReadability?.status?.() || null; },
+    previewGuardCue(options = {}) {
+      return api.guardReadability?.preview?.(options) || null;
+    },
+    resolveGuardCue(id = "guard-training", result = {}) {
+      return api.guardReadability?.resolve?.(id, result) || false;
+    },
+    freezeGuardCue(value = true) {
+      return api.guardReadability?.setFrozen?.(value) || false;
+    },
 
     /** Live enemy positions. `spawnEnemy` returns a snapshot, and a
      *  creature that charges has left it by the time a probe aims. */
@@ -4623,6 +4634,7 @@ export function installQa(ctx, api) {
     get progression() { return api.progression || ctx.progression; },
     get slam() { return api.slam; },
     get shield() { return api.shield; },
+    get guardReadability() { return api.guardReadability; },
     get touch() { return api.touch; },
     get atmos() { return ctx.atmos; },
     get combat() { return api.combat; },
@@ -4634,6 +4646,8 @@ export function installQa(ctx, api) {
     get distaff() { return api.distaff; },
     get garner() { return api.garner; },
     get winnower() { return api.winnower; },
+    get matriarch() { return api.matriarch; },
+    get coulter() { return api.coulter; },
     get apostate() { return api.apostate; },
     get collide() { return api.collide; },
     get gameUi() { return api.gameUi || ctx.gameUi || null; },

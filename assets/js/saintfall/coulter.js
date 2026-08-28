@@ -1750,7 +1750,10 @@ export function buildCoulter(ctx) {
     b.actionKind = "bite";
     b.pending = C.biteContact;
     b.fireTimer = C.biteCadence;
-    bus.emit("bite", { x: b.head.x, y: b.head.y, z: b.head.z, id: inst.id });
+    bus.emit("bite", {
+      x: b.head.x, y: b.head.y, z: b.head.z, id: inst.id,
+      impactIn: C.biteContact, guardType: "frontal",
+    });
   }
 
   function beginSpew(inst, target) {
@@ -1806,6 +1809,8 @@ export function buildCoulter(ctx) {
       * (Number.isFinite(inst.damageScale) ? inst.damageScale : 1), {
       source: "coulter-bite",
       x: b.head.x, y: b.head.y, z: b.head.z, enemy: inst.key,
+      originX: b.head.x, originY: b.head.y, originZ: b.head.z,
+      guardType: "frontal",
     });
     ctx.player.punch?.(1.35);
   }

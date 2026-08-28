@@ -249,7 +249,11 @@ const FOAM_DROWNED = hexToRgb("#6f7d78");    // rubble wash under the surface
 
 const SPLASH_LICHEN = hexToRgb("#2a2620");   // the DARKEST band on the ship
 const SALT_BLOOM = hexToRgb(K.saltBloom);
-const DEAD_BARNACLE = hexToRgb("#c9c2b0");   // bleached, 40% of the live relief
+/* Forty years of empty shell bases in a tropical splash zone, not
+   fresh bleached shell. #c9c2b0 was the old value and it made this
+   band the brightest thing on the lower hull - see THE DEAD BAND
+   for the measurement and for what three blind judges called it. */
+const DEAD_BARNACLE = hexToRgb("#9d9484");   // stranded, weathered, stained
 const FRESH_STAIN = hexToRgb("#2f2620");     // post-crash organic staining
 const OLD_RUST = hexToRgb("#7a3d1e");        // pre-crash iron-red under failing paint
 
@@ -1280,9 +1284,76 @@ export function makeAtollKit(THREE, opts = {}) {
               * Math.pow(blotch(lx * 1.6, ly * 1.6, lz * 1.6), 2) * 0.55;
             if (b > 0.01) c = mixRgb(c, SALT_BLOOM, b);
           }
-          /* --- THE DEAD BAND. The Spine settled twice. --------- */
+          /* --- THE DEAD BAND. The Spine settled twice.
+
+             AND IT WAS THE WHITE SKIRT. Three round-11 judges, in
+             three different pairs, described the same thing at the
+             waterline: "a straight cut with A WHITE SKIRT instead
+             of draft, wake or wet line", "the lower hull renders
+             semi-transparent", "no draft, no displacement, no
+             wake and no wet band". Round 12 went looking for the
+             scour collar, on the assumption that a collar reading
+             wrong was the skirt. It is not the collar. It is this
+             line.
+
+             MEASURED, on the Spine's beam at 96 m and at the bow
+             at 78 m (saintfall-hull-waterline.mjs, display sRGB,
+             the hull's own value in three screen bands above its
+             waterline):
+
+               camera   0-0.6 m   0.7-2.0 m   2.1-4.7 m
+               band       39.4       63.0        52.6
+               bow        75.2       82.8        42.6
+
+             The 0.7-2.0 m band is [sub + dead, crustTop + dead] to
+             the centimetre, and on both cameras it is the
+             BRIGHTEST thing on the lower hull - twenty-four levels
+             above the plate under it and forty above the plate
+             over it. The bands either side of it are SPLASH_LICHEN
+             at 0.80, the darkest colour on the ship, so what the
+             frame actually contains is a bleached ribbon sandwiched
+             between two near-black ones, one metre tall, running
+             four hundred metres, with a hard edge top and bottom.
+             That is a skirt, and at 400 m - where its lower edge is
+             sub-pixel from the water - it is a skirt AT the
+             waterline, which is why it also reads as the hull
+             being cut off rather than entering.
+
+             THREE CHANGES AND THE DEVICE SURVIVES ALL THREE. The
+             band is a real thing and is worth keeping: a wreck
+             that settled leaves its old barnacle line stranded.
+
+             ONE, THE COLOUR. #c9c2b0 is fresh bleached shell.
+             These are forty years of empty shell bases in a
+             tropical splash zone; they are stained and weathered,
+             not new. #9d9484 keeps it the lightest thing in the
+             splash zone and takes thirty-five levels off it.
+
+             TWO, IT IS PATCHY. A constant 0.62 is a painted
+             stripe. Most of a stranded band has spalled off with
+             the paint under it, so the weight rides `blotch` and
+             runs 0.26 to 0.66 - which is the same reason the boot
+             top is blotched and the live band is not.
+
+             THREE, THE LOWER EDGE IS SOFT AND THE UPPER IS HARD.
+             The device is a STRAND LINE: its top is where the sea
+             stopped reaching, which is a real line, and its bottom
+             is just where the colony thinned out, which is not.
+             Two hard edges is what made it read as a moulding.
+             0.34 m of fade is a third of the band.
+
+             WHAT THE WRONG VALUES LOOK LIKE. Taking the colour to
+             the plate's own value (tried) deletes the band and the
+             Spine loses the one thing that says it settled twice -
+             the wreck reads as having been dropped where it lies.
+             Keeping the hard lower edge and only darkening leaves
+             a grey skirt, which is the same note one value down.
+             ---------------------------------------------------- */
           if (dead > 0 && wy > HULL_BANDS.sub + dead && wy < HULL_BANDS.crustTop + dead) {
-            c = mixRgb(c, DEAD_BARNACLE, 0.62);
+            const fade = sstep(HULL_BANDS.sub + dead,
+              HULL_BANDS.sub + dead + 0.34, wy);
+            c = mixRgb(c, DEAD_BARNACLE,
+              (0.26 + 0.40 * blotch(lx * 1.7, ly * 0.9, lz * 1.7)) * fade);
           }
           /* --- THE LIVE BAND, and its lower edge is a HARD STEP.
              No smoothstep at all: barnacles cannot survive below

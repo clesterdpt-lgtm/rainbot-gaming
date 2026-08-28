@@ -2457,7 +2457,12 @@ export function buildStylite(ctx) {
     state.arcHeight = Math.max(16, state.from.distanceTo(state.to) * 0.34);
     state.stoopTimer = C.stoopCadence;
     ctx.player?.doctrineKick?.(0.4, 0.3);
-    bus.emit("stoopTelegraph", { x: state.to.x, y: state.to.y, z: state.to.z });
+    bus.emit("stoopTelegraph", {
+      x: state.to.x, y: state.to.y, z: state.to.z,
+      originX: state.from.x, originY: state.from.y, originZ: state.from.z,
+      impactIn: C.coilSeconds + C.flightSeconds * 0.8,
+      guardType: "unblockable",
+    });
   }
 
   /** Landing, from a leap or a stoop. */
@@ -2476,6 +2481,7 @@ export function buildStylite(ctx) {
           ctx.combat.hurtPlayer(C.stoopDamage * falloff
             * SURVIVAL_CONFIG.enemyDamageMultiplier, {
             source: "stylite-stoop", x: ps.x, y: ps.y + 1.0, z: ps.z,
+            guardType: "unblockable",
           });
           ctx.player?.applySlow?.(C.stoopSlowFactor, C.stoopSlowSeconds);
         }
@@ -2597,6 +2603,7 @@ export function buildStylite(ctx) {
         ctx.combat.hurtPlayer(C.crashDamage * (1 - d / C.crashRadius)
           * SURVIVAL_CONFIG.enemyDamageMultiplier, {
           source: "stylite-crash", x: ps.x, y: ps.y + 1.0, z: ps.z,
+          guardType: "unblockable",
         });
       }
     }

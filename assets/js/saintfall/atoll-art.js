@@ -90,6 +90,87 @@ import {
 } from "saintfall/art.js";
 
 /* ============================================================
+   THE A/B SWITCHES, AND WHY THEY ARE IN THE SHIPPED FILE
+
+   Round 11 lost 5.7 points of mean sd against round 9 and the
+   post-mortem blamed the two global grade terms. Both were
+   reverted and the level stayed flat: the revert bought 0.5 of
+   the 5.7. The diagnosis was wrong because it was REASONED and
+   not MEASURED, and it could not be measured because every one
+   of round 10's five changes needed a source edit, a reload and
+   an edit back to switch off - so nobody ever ran one alone.
+
+   `?qa=1&ab=nofill` and its siblings turn a single term off at
+   load. Comma-separate to combine. The gate is `qa` so nothing
+   here can fire in a shipped session; the shots harness passes
+   `qa=1` already and its `--time` argument lands in the query
+   string intact, so a flag rides in as
+   `--time "trade&ab=nofill"`.
+
+   Flags read here:
+     norim       CREST_RIM gain to zero - the crest rim, round 12
+     nocanopy    CANOPY_TRANSMIT to all ones - the canopy filter on
+                 TERRAIN_FILL's shadow-gated share, round 12
+     nofill      LEAF_FILL and BARK_FILL gains to zero - the
+                 foliage's share of FILL_FRAG, wired in round 10
+     noterrfill  TERRAIN_FILL's gain to zero
+   plus the numeric sweeps abNum() below reads (lg, lb, bg, bb,
+   bcs, bcr)
+   and in atoll-main.js:
+     hard        sun.shadow.radius to 1, which the PCSS patch
+                 reads as "run the stock nine-tap kernel"
+   and in atoll-water.js:
+     nosea       the sea surface hidden
+     nomud       the mangrove mud gate forced shut
+
+   A flag ZEROES A GAIN rather than skipping the shader block, so
+   the program set, the uniform layout and the draw list are all
+   identical between the two sides of a pair. A switch that
+   changes the number of programs is measuring the recompile as
+   well as the term.
+   ============================================================ */
+const AB = (() => {
+  try {
+    const p = new URLSearchParams(window.location.search);
+    if (!p.has("qa")) return new Set();
+    return new Set(String(p.get("ab") || "").split(",").filter(Boolean));
+  } catch { return new Set(); }
+})();
+
+/** Copy of a uFill vector with its GAIN (slot 0) forced to zero
+ *  when `flag` is set. Returns the original array otherwise, so
+ *  the shipped path allocates nothing new. */
+function abFill(vec, flag) {
+  return AB.has(flag) ? [0, vec[1], vec[2], vec[3]] : vec;
+}
+
+/** A finite number off the query string under `?qa=1`, else the
+ *  shipped value.
+ *
+ *  This is the half of the instrument that found round 11's actual
+ *  cause. An on/off flag says WHICH term is wrong; it cannot say
+ *  which of that term's four numbers is wrong, and the answer here
+ *  turned out to be a single bias that had been copied off a
+ *  vertical hull plate onto a horizontal leaf. Sweeping it took one
+ *  command per value instead of an edit, a reload and an edit back.
+ *
+ *  Keys, all QA-gated and all inert unless passed:
+ *    lg  lb  LEAF_FILL gain / away bias
+ *    bg  bb  BARK_FILL gain / away bias
+ *    bcs bcr BARK_CAP strength / reference albedo
+ *  The shots harness has no flag of its own for these; they ride in
+ *  through --time "trade&lb=3.4", which lands in the query string
+ *  intact - the same route the sun sweep uses. */
+function abNum(key, fallback) {
+  try {
+    const p = new URLSearchParams(window.location.search);
+    if (!p.has("qa") || !p.has(key)) return fallback;
+    const v = Number(p.get(key));
+    return Number.isFinite(v) ? v : fallback;
+  } catch { return fallback; }
+}
+
+/* ============================================================
    PALETTE
 
    Hue values in the comments are HSL degrees on the sRGB hex, so
@@ -1374,7 +1455,7 @@ export const ATOLL_GRADES = {
        by the fill below, where it belongs: an operator on display
        luma cannot tell a shaded hillside from deep water, and a
        LIGHT can. */
-    contrastFloor: 0.60,
+    contrastFloor: 0.35,
     /* THE FILL WAS UNDER-SET BY 2.3x AND THE COMMENT THAT SET IT
        DIVIDED TWO NUMBERS THAT ARE NOT COMPARABLE.
 
@@ -1420,7 +1501,7 @@ export const ATOLL_GRADES = {
        hour anyway, and NOT the water, whose sky term was calibrated
        separately and is the one material on this level that three
        blind rounds have praised rather than named. */
-    skyFillGain: 1.50,
+    skyFillGain: 1.00,
     ao: [0.70, 0.42],
   },
 
@@ -2932,6 +3013,46 @@ ${GREL_PARS}`)
        Their masks barely overlap; "barely" is not a reason to
        leave a feedback path in a shader. */
     if (spec.rock) frag = injectRock(THREE, shader, frag, spec.rock);
+    /* THE SKY FILL, LAST, and anchored on a different chunk from
+       either of the two above. It is not a relief term - it does
+       not touch `normal` - it adds light after the lighting has
+       run, which is why it goes in at `opaque_fragment` and why it
+       must go in AFTER the rock: it reads the normal the rock
+       block wrote, and reading it before would hand the azimuth
+       lobe a 4 m grid normal and throw away the strata the whole
+       term exists to show. patchMaterial has already appended
+       ATMOS_FRAG after that same include and left the include
+       itself in place, so this lands between the two - lit, then
+       filled, then fogged, which is the order those three are. */
+    if (spec.fill) {
+      shader.uniforms.uFill = { value: new THREE.Vector4(...spec.fill) };
+      shader.uniforms.uFillDown = { value: new THREE.Vector3(...UPWELLING_LINEAR) };
+      shader.uniforms.uCanopy = { value: new THREE.Vector3(...CANOPY_TRANSMIT) };
+      /* uFillWarm is NOT set: the terrain block has no glare lobe,
+         and a uniform declared by FILL_PARS but never written is a
+         zero vector, not an error. It stays declared because the
+         two blocks share one PARS string on purpose - the moment
+         they stop sharing it, the hull and the ground start
+         disagreeing about what the sky is. */
+      frag = frag
+        .replace("#include <common>", `#include <common>\n${FILL_PARS}`)
+        .replace("#include <opaque_fragment>",
+          `${TERRAIN_FILL_FRAG}\n#include <opaque_fragment>`);
+    }
+    /* THE CREST RIM, after the fill and at the same anchor, for the
+       same reason: it reads the normal the rock block wrote. It is
+       a SEPARATE block behind a separate flag rather than four more
+       lines inside the fill, because the two answer two different
+       halves of the same task - a flank past the terminator and a
+       floor under a canopy - and a bisect that cannot switch them
+       independently cannot tell which one moved a frame. */
+    if (spec.crestRim) {
+      shader.uniforms.uCrestRim = { value: new THREE.Vector4(...spec.crestRim) };
+      frag = frag
+        .replace("#include <common>", `#include <common>\n${CREST_RIM_PARS}`)
+        .replace("#include <opaque_fragment>",
+          `${CREST_RIM_FRAG}\n#include <opaque_fragment>`);
+    }
     shader.fragmentShader = frag;
   };
 }
@@ -3409,6 +3530,16 @@ const FILL_PARS = /* glsl */`
 uniform vec4 uFill;
 uniform vec3 uFillDown;
 uniform vec3 uFillWarm;
+/* THE CANOPY FILTER'S TRANSMISSION, read only by the terrain block
+   and left at the zero vector on the hull, which never reaches the
+   line that uses it. It is a uniform rather than a literal for one
+   reason: an A/B pair has to compile the SAME shader text on both
+   sides or it is measuring a recompile as well as a term - see the
+   AB header. */
+uniform vec3 uCanopy;
+/* [strength, reference albedo]. (0, 0) is off and is exactly off -
+   see THE ALBEDO CAP below the fill's material specs. */
+uniform vec2 uFillCap;
 /* AZ_FLOOR - what a plate facing directly away from the sun still
    gets, as a fraction of what a plate at the terminator gets.
    0.34. At 0.0 the anti-sun quarter of the ship went back to being
@@ -3417,6 +3548,15 @@ uniform vec3 uFillWarm;
    well not be there. It is a ratio of two halves of a real sky and
    a third is about what a clear tropical sky actually does. */
 const float SF_AZ_FLOOR = 0.34;
+/* THE DRAFT'S HANDLE ON THE GLARE, and it lives here rather than
+   in DRAFT_PARS because the fittings take FILL_FRAG through
+   fillExtend and never see the draft at all. Declared 1.0 so a
+   shader that has no draft block is unchanged to the bit; the
+   draft block, which runs earlier, writes it. A global with a
+   constant initialiser is legal in GLSL ES and this one is the
+   only channel between two chunks that are inserted at different
+   include points. */
+float sfDraftF = 1.0;
 `;
 
 const FILL_FRAG = /* glsl */`
@@ -3503,7 +3643,12 @@ const FILL_FRAG = /* glsl */`
      a vertical plane divides the hemisphere in two. */
   float glareH = exp(-max(vSFWorld.y, 0.0) / max(uFill.w, 0.5));
   float glareN = clamp(0.5 - wn.y * 0.5, 0.0, 1.0);
-  vec3 glare = uFillWarm * (uFill.z * glareH * glareN * sfDay);
+  /* sfDraftF is 1 on everything dry and on every material without
+     a draft block; see THE DRAFT. Without it the lobe below is at
+     its maximum exactly where the hull is wet, which is what put
+     the ship's brightest shade-side value on the waterline and
+     then kept it there for four blind rounds. */
+  vec3 glare = uFillWarm * (uFill.z * glareH * glareN * sfDay * sfDraftF);
 
   /* (1 - metalness), AND IT IS A CORRECTION RATHER THAN A TASTE.
 
@@ -3521,8 +3666,366 @@ const FILL_FRAG = /* glsl */`
      dielectric plate at 0.25 and on a polished fitting at 0.55. */
   float sfFillDiff = 1.0 - metalnessFactor;
 
+  /* THE ALBEDO CAP. Turns a bounded irradiance into a bounded LIFT
+     on the materials that ask for it; see the note below the
+     material specs for the thirty-eight-to-one that made it
+     necessary. clamp(..., 0.0, 1.0) is what stops it becoming a
+     second flattener: it may only ever take the fill DOWN on a
+     surface paler than the reference. At uFillCap = (0, 0) the
+     mix returns exactly 1.0 and the term is arithmetically absent,
+     which is how the hull and the fittings keep the values they
+     were measured at. */
+  float sfAlbL = dot(diffuseColor.rgb * sfFillDiff, vec3(0.2126, 0.7152, 0.0722));
+  float sfCap = mix(1.0, clamp(uFillCap.y / max(sfAlbL, 1e-3), 0.0, 1.0), uFillCap.x);
+
   outgoingLight += diffuseColor.rgb * sfFillDiff
-    * (hemi * az + glare) * (uFill.x * away);
+    * (hemi * az + glare) * (uFill.x * away * sfCap);
+}
+`;
+
+/* ============================================================
+   THE SAME LOBES, GATED ON THE SUN THE PIXEL ACTUALLY GOT
+
+   FILL_FRAG above retires itself on `ndl`, which is the right
+   reading for a hull: a plate is either turned to the sun or it is
+   not, and a two-hundred-metre wreck standing in open water is not
+   in anybody's shadow. Terrain is the opposite case in both
+   halves. Half its complaint is a flank past the terminator, which
+   ndl does find, and the other half is FLAT GROUND UNDER A CANOPY,
+   which ndl cannot find at all: the Prow's near field faces the
+   sun squarely and is dark because a mangrove is standing in front
+   of it. A term gated on ndl alone is absent from exactly the
+   frame it was added for.
+
+   So the gate is `reflectedLight.directDiffuse`, divided by the
+   surface's own diffuse albedo to take the albedo back out of it -
+   see the TERRAIN_FILL header for why that reading is both the
+   correct one and the free one. The rest of the block is
+   FILL_FRAG's, lobe for lobe, and the two must stay that way: a
+   shaded hillside and a shaded hull plate are lit by the same sky
+   and any disagreement between them is a seam at the waterline.
+
+   uFill = [gain, key knee, sea-glare gain, sea-glare fade m]
+   ============================================================ */
+const TERRAIN_FILL_FRAG = /* glsl */`
+/* WHAT A CAST SHADOW COSTS THE SKY, as a fraction of the dome.
+
+   The two dark masses this term was written for are dark for two
+   different reasons and they must not be paid the same amount.
+
+   The Weeping flank is past the TERMINATOR. Nothing stands between
+   it and the sky; it sees the whole dome and it is entitled to all
+   of it. The Prow's near ground is FLAT and faces the sun, and it
+   is dark because forty metres of mangrove is standing in front of
+   the sun - which means that same mangrove is also standing across
+   most of its sky. Handing it the unoccluded dome is not a fill,
+   it is a fault: at the full gain the first capture came back with
+   the shaded foreground reading 101 against a lit beach at 100,
+   a pale grey-blue sheet that was the brightest thing in frame and
+   pulled the eye straight out of the picture.
+
+   0.35, which is a canopy closing about two thirds of the sky
+   above a jungle floor. It is not measured off this level's
+   geometry - there is no per-pixel sky-visibility term to measure
+   it against, which is exactly why it is a constant here - so it
+   is set to the value that puts the Prow's shaded ground UNDER
+   the sunlit sand it runs up to, which is the ordering the frame
+   has to have and the one thing about it that is not a guess. */
+const float SF_SHADOW_SHARE = 0.35;
+{
+  vec3 wn = normalize(inverseTransformDirection(normal, viewMatrix));
+  float sfFillDiff = 1.0 - metalnessFactor;
+  vec3 sfAlbedo = diffuseColor.rgb * sfFillDiff;
+  vec3 sfSun = normalize(uSunDir);
+  float ndl = dot(wn, sfSun);
+
+  /* TWO GATES, AND THE LARGER WINS.
+
+     ORIENTATION, uFill.y, is FILL_FRAG's own gate and its bias is
+     BARK_FILL's 3.4 for BARK_FILL's reason: a flat surface under a
+     20-degree sun has ndl 0.342, so 3.4 puts flat sunlit ground at
+     exactly zero and starts paying at about three degrees of
+     anti-sun tilt. The beach is off the term by construction.
+
+     SHADOW is what orientation cannot see. reflectedLight.
+     directDiffuse is ndl * lightColour * albedo / PI, so dividing
+     the surface's own diffuse albedo back out leaves
+     ndl * shadow * lightLuma / PI - 0.46 on flat ground in full
+     sun at the trade hour, 0 under a canopy. It is the shadow map
+     read for free, out of a value the lighting loop has already
+     computed; the alternative was a second getShadow(), which on
+     this material is a second PCSS kernel over half the frame.
+     The epsilon is not decoration: mangrove mud and jungle floor
+     are the two lowest albedos on the level and a divide by a
+     near-zero luma is a white pixel, not a bright one.
+
+     The knee at uFill.w is 0.18, which is 39 per cent of that
+     0.46. It was tried at 0.46 itself and that is the wrong place
+     for it - it leaves lit sand on the shoulder of the smoothstep,
+     where a term that is meant to be absent is still worth a few
+     per cent, and a few per cent over 60 per cent of a frame is a
+     grade change rather than a relight. */
+  float sfKeyLum = dot(reflectedLight.directDiffuse, vec3(0.2126, 0.7152, 0.0722))
+                 / max(dot(sfAlbedo, vec3(0.2126, 0.7152, 0.0722)), 1e-4);
+  float orient = 1.0 - clamp(ndl * uFill.y, 0.0, 1.0);
+  float shaded = 1.0 - smoothstep(0.0, uFill.w, sfKeyLum);
+  float away = max(orient, shaded * SF_SHADOW_SHARE);
+
+  /* WHICH OF THE TWO GATES IS ACTUALLY PAYING, because the light
+     they are paying with is not the same light and the frame says
+     so. A flank past the terminator is under OPEN SKY. A jungle
+     floor in a canopy's shadow is under LEAVES, and light that has
+     been through a leaf is not sky-coloured any more - it is the
+     green a canopy looks from underneath.
+
+     The Prow's floor was measured at hue 223 with the fill in,
+     which is the SEA's own band on this level (lagoonShallow sits
+     at 170-195 and the deep water either side of it), and the
+     round 11 frame reads exactly that way: two thirds of the
+     picture is a blue-grey mottled sheet that a viewer takes for
+     water until a mangrove root crosses it. It is not too dark any
+     more. It is the wrong colour, and it is the wrong colour
+     because it is being lit with unfiltered sky.
+
+     This is which-gate-won as a smooth number rather than a
+     branch. It is zero on the Weeping flank (orient is 1 there,
+     the shadow share can never exceed 0.35) and one on the Prow's
+     floor (orient is 0, because that ground faces the sun). */
+  float under = smoothstep(-0.02, 0.06, shaded * SF_SHADOW_SHARE - orient);
+
+  if (away > 0.002) {
+    vec3 sky = sfSky(vec3(wn.x, wn.y * 0.35 + 0.05, wn.z));
+    /* PULLED FURTHER TOWARD ITS OWN LUMINANCE THAN THE HULL'S 0.72,
+       and the reason is what the mass is seen AGAINST. A hull is
+       photographed against water and jungle; the Weeping flank
+       fills two thirds of its frame with nothing but sky behind
+       it, so at 0.72 the relit mass came back rgb 34/62/83, a
+       blue-minus-red of +49 against a sky at +147 - the same hue,
+       two levels apart, which is the rubric's hue-collision tell
+       and reads as ice rather than as wet basalt. */
+    sky = mix(vec3(dot(sky, vec3(0.2126, 0.7152, 0.0722))), sky, 0.50);
+    float sfDay = smoothstep(-0.09, 0.02, sfSun.y);
+    vec3 hemi = mix(uFillDown * sfDay, sky, clamp(wn.y * 0.5 + 0.5, 0.0, 1.0));
+    /* THE CANOPY FILTER, on the shadow-gated share only.
+
+       IT IS LUMA-NEUTRAL BY CONSTRUCTION - 0.2126 x 0.72 +
+       0.7152 x 1.12 + 0.0722 x 0.62 = 0.999 - and that is not a
+       nicety, it is what keeps this from re-opening the question
+       SF_SHADOW_SHARE settled. The share is how MUCH sky a
+       shadowed floor gets and it was measured against the sunlit
+       sand beside it; this changes only what COLOUR that light is,
+       so the ordering the share was set to produce survives it
+       exactly. A filter that darkened as well would be two
+       decisions wearing one number, and the next round would have
+       to unpick them.
+
+       The numbers are a leaf's transmission rather than its
+       reflection - green up, red and blue down, and red further
+       down than blue because chlorophyll's two absorption peaks
+       are in the red and the violet with the green between them.
+
+       MEASURED, on the Prow's near-ground crop and on the same
+       run's water: the floor read OKLab hue 225 against the
+       lagoon's 242 and the shaded strand's 253 - three surfaces
+       inside 28 degrees of each other, which is why a viewer takes
+       the jungle floor for water until a mangrove root crosses it.
+       With the filter the floor reads 210 at the same luma, 60.5
+       against 60.5. It is not a large move and it is not meant to
+       be: the alternative that WOULD have been large is turning
+       the share up, and that is the move that cost round 11 every
+       frame in the set. Hue is the one axis on this pixel that is
+       free. */
+    hemi *= mix(vec3(1.0), uCanopy, under);
+    /* THE AZIMUTH LOBE IS WHAT MAKES THIS ADD CONTRAST RATHER THAN
+       LEVEL, and it is FILL_FRAG's unchanged. It is evaluated on
+       the normal the ROCK BLOCK has already creased - see the
+       ordering note in groundReliefExtend - so a bed edge and the
+       shade under it take different fractions of the same sky.
+       That is the surface information three rounds of judges have
+       said this mass has none of. A flat multiply on the same
+       pixels raises the mean and moves no detail. */
+    float azw = clamp(ndl + 1.0, 0.0, 1.0);
+    float az = mix(SF_AZ_FLOOR, 1.0, azw * azw);
+    /* NO SEA-GLARE LOBE HERE, and it is left out rather than set to
+       zero. The glare is gated by 0.5 - wn.y * 0.5, which is zero
+       on any up-facing surface, so on terrain it can only reach sea
+       cliffs and slip faces - and it is a warm CONSTANT derived
+       from the trade sun, the one part of FILL_FRAG that does not
+       evaluate its own hour. Its slot in the uniform carries the
+       shadow share instead. */
+    outgoingLight += sfAlbedo * hemi * (az * uFill.x * away);
+  }
+}
+`;
+
+/* ============================================================
+   THE CREST RIM - the one thing a judge asked for by name
+
+   "Put a warm rim on the crest against the sky so the silhouette
+   TURNS rather than dies." That sentence is the whole
+   specification and it is worth reading twice, because it names
+   the failure as well as the fix: the Weeping mass does not read
+   as too dark, it reads as an OUTLINE. Its own crest is the
+   darkest part of it - measured on the r12 frame, the flank crop
+   is luma 28.6 and the twenty pixels under the skyline are 11 -
+   so the mass gets darker exactly where a real landform gets
+   brighter, and a silhouette with no turn in it is a cut-out.
+
+   WHY IT COULD NOT BE THE RIM WE ALREADY HAD. patchMaterial gives
+   every material a fresnel rim - sky-coloured, 0.155 x the
+   material's `rim` scalar, power 2.55 - and on terrain it is not
+   a silhouette term at all. `fres` is 1 - dot(N, V), and a FLAT
+   GROUND PLANE seen from a 2.9 m eye is at grazing incidence for
+   most of the frame: the Prow's whole near field already runs at
+   fres above 0.9. Turning that rim up lights the ground, not the
+   crest, and it lights it SKY BLUE - which is a large part of why
+   the Prow's shaded floor reads as water (measured hue 223, the
+   sea's own band). The existing rim is left exactly as it is.
+
+   THREE GATES, AND EVERY ONE OF THEM IS A PROPERTY OF THE PIXEL.
+   This is the distinction round 11 was lost on: a global lift
+   cannot tell a crest from a beach, and all three of these can.
+
+     1. PAST THE TERMINATOR. dot(N, sun) below zero. The Weeping
+        flank is at -0.2 to -0.6 over most of its area; the Prow's
+        near ground is +0.34 and is therefore OFF THE TERM
+        ENTIRELY, which is correct - flat ground in a canopy's
+        shadow has no silhouette to turn and is the other half of
+        this task, answered by TERRAIN_FILL.
+     2. THE SUN IS BEHIND THE MASS. dot(viewRay, sun) positive.
+        Measured per camera at the trade hour: weeping +0.588,
+        prow +0.504, arrival +0.178, bone-reef -0.387, nave
+        -0.475, crest -0.853. The four frames that already read
+        well are looking AWAY from the sun and take nothing at
+        all. This gate is not a convenience, it is the physics: a
+        rim is light arriving from beyond the object, and there is
+        none to have when the sun is behind the camera.
+     3. THE SURFACE IS TURNING AWAY FROM THE EYE. pow(fres, 4.2).
+        4.2 and not 2.55 because this term has to be an EDGE
+        rather than a wash: at the power the stock rim uses, a
+        45-degree slope still collects a third of it and the mass
+        comes back uniformly lifted, which is round 10's mistake
+        with a nicer gate on it. At 4.2, fres 0.7 is worth 0.24
+        and fres 0.95 is worth 0.80.
+
+   WARM, AND THAT IS THE HALF OF THE ASK THE VALUE DOES NOT COVER.
+   `uSunHalo` is the hour's own sun-adjacent sky - #fff6e4 at
+   trade, #ffd9a8 at vespers - so the rim tracks the cycle for
+   free and never has to be re-authored per hour. The flank
+   measures hue 249.7 against a sky at 251.2: the same hue, two
+   levels apart, which is the rubric's hue-collision tell and is
+   the reason the mass reads as a hole rather than as rock. A warm
+   edge is the only thing in the frame that puts the landform on
+   the other side of the wheel from the sky it is seen against.
+
+   IT IS EVALUATED ON THE ROCK BLOCK'S NORMAL, like the fill, so
+   the bed edges and terrace lips take the rim and the shade under
+   them does not. That is what makes it read as strata catching
+   light rather than as an outline drawn round the mass.
+
+   uCrestRim = [gain, fresnel power, terminator softness, -]
+   ============================================================ */
+const CREST_RIM_PARS = /* glsl */`
+uniform vec4 uCrestRim;
+`;
+
+const CREST_RIM_FRAG = /* glsl */`
+{
+  /* THE GATE READS THE LANDFORM'S NORMAL, NOT THE ROCK BLOCK'S,
+     and that is the difference between a terminator and a rash.
+
+     'normal' at this point has been creased by GREL_FRAG and by
+     the rock block - beds, joints, grit, sub-metre relief. Every
+     one of those crossings takes dot(N, sun) through zero
+     somewhere, so a band keyed on it fires in patches over the
+     WHOLE flank: the second capture came back with the mass
+     covered in bright blobs that read as snow, on a surface whose
+     landform normal is nowhere near the terminator. A terminator
+     is a property of the hill; the grain is a property of the
+     rock. 'vNormal' is the interpolated vertex normal, which is
+     the hill.
+
+     The rock normal is still what the FILL reads, and that is not
+     an inconsistency: the fill is an irradiance and a creased
+     facet really does collect a different amount of sky. The gate
+     is a question about where the sun's edge falls on the
+     landform, and the grain has no opinion about that. */
+  vec3 sfCrN = normalize(inverseTransformDirection(normalize(vNormal), viewMatrix));
+  vec3 sfCrS = normalize(uSunDir);
+  vec3 sfCrRay = normalize(vSFWorld - cameraPosition);
+
+  /* GATE 1 - A BAND AT THE TERMINATOR, NOT A HALF-SPACE, and this
+     is the correction the first capture forced.
+
+     The first cut of this term was "everything past the
+     terminator, weighted by fresnel", on the reasoning that
+     fresnel would pick the crest out of the flank. IT DOES NOT,
+     and the geometry says why: the camera stands at the FOOT of
+     this mass - eye 3.2 m, the crest 74 m up and 100 to 180 m
+     away - so the WHOLE flank is at grazing incidence and fres
+     runs above 0.8 over all of it. The capture came back with the
+     entire mass washed pale silver and its strata drawn as bright
+     bands: a mass-wide lift with a nicer gate on it, which is
+     round 10's mistake wearing this round's clothes. Frame sd went
+     51.75 -> 48.29 and mean luma 82.98 -> 87.90 - the two numbers
+     that say "flatter and brighter" together.
+
+     What actually distinguishes the crest here is that THE CREST
+     IS THE TERMINATOR. The sun is at azimuth 105 and this is the
+     Cauldron's north-west flank, so the skyline the judges are
+     looking at is within a few degrees of dot(N, sun) = 0: the far
+     side of that line is the sunlit tan ridge already visible at
+     the left of the frame. A band that hugs the dark side of the
+     terminator and fades out within uCrestRim.z of it therefore
+     lands on the skyline by construction, on this mass and on any
+     other, without knowing anything about the camera.
+
+     It is also the physical shape. Light does not stop at the
+     terminator: the sun subtends half a degree, the atmosphere
+     scatters forward, and a metre-scale surface has metre-scale
+     roughness the shading normal has already averaged away. All
+     three put a few degrees of wrap on the dark side and none of
+     them puts any on the lit side, which is what this asymmetric
+     ramp is. */
+  float sfCrNdl = dot(sfCrN, sfCrS);
+  float sfCrPast = smoothstep(-uCrestRim.z, -0.02, sfCrNdl)
+                 * (1.0 - smoothstep(-0.02, 0.05, sfCrNdl));
+
+  /* GATE 2 - the sun is beyond the surface. 0.55 is the upper knee
+     because that is where the two frames this was written for sit
+     (0.588 and 0.504) and every frame that already reads well is
+     negative; a knee above 0.6 would retire the term on the Prow
+     and one below 0.35 would start paying the Landing. */
+  float sfCrBack = smoothstep(0.02, 0.55, dot(sfCrRay, sfCrS));
+
+  /* GATE 3 - grazing. DEMOTED from the term's main gate to a
+     weight after the capture above: on this camera it separates
+     nothing, but it still keeps the band off a bed edge that
+     happens to face the eye squarely, and it costs one dot. */
+  float sfCrFres = 1.0 - clamp(dot(normal, normalize(vViewPosition)), 0.0, 1.0);
+  float sfCrEdge = pow(sfCrFres, uCrestRim.y);
+
+  /* NOT MULTIPLIED BY THE ALBEDO. A rim is light grazing a surface
+     at a hundred-times-forward angle; at that geometry a rough
+     dielectric returns nearly all of it regardless of what colour
+     it is underneath, which is why a rim reads as the LIGHT and
+     not as the object. Multiplying by albedo here would hand the
+     term back to the same dark rock that is the problem. */
+  /* WARMER THAN THE HALO ITSELF, and the multiplier is a slant
+     path rather than a preference. uSunHalo is the sun-ADJACENT
+     sky averaged over the halo, which at trade is #fff6e4 and
+     lands as a white highlight - the first band capture read as a
+     smear of cloud lying on the ridge rather than as sunlight on
+     it. The beam that actually grazes a crest at a 20-degree sun
+     has come through about three air masses, and three air masses
+     take roughly a fifth out of the blue and a tenth out of the
+     green relative to the red. That is this vector, and it is what
+     makes the term answer the half of the ask that value cannot:
+     the mass and the sky it is seen against measure hue 249 and
+     251, and only a warm edge puts anything in the frame on the
+     other side of the wheel. */
+  outgoingLight += uSunHalo * vec3(1.0, 0.86, 0.62)
+                 * (uCrestRim.x * sfCrPast * sfCrBack * sfCrEdge);
 }
 `;
 
@@ -3580,8 +4083,9 @@ const SEA_GLARE_LINEAR = mixRgb(
 /**
  * The plating extension. One function rather than three, because
  * `patchMaterial` takes ONE `extend` per material and the hull
- * needs the wet band, the plate grid and the marine fill at once.
- * `spec.wet` is optional; `spec.plate` and `spec.fill` are not.
+ * needs the draft, the plate grid and the marine fill at once.
+ * `spec.plate` and `spec.fill` are both required; the draft is
+ * unconditional - see THE DRAFT for why it stopped being a key.
  */
 /* ============================================================
    THE RIB BANDLIMIT - round 9's ship-blocker.
@@ -3739,13 +4243,19 @@ function ribExtend(THREE, spec) {
 
 function hullExtend(THREE, spec) {
   return (shader) => {
-    if (spec.wet) {
-      shader.uniforms.uWet = { value: new THREE.Vector4(...spec.wet) };
-      shader.fragmentShader = shader.fragmentShader
-        .replace("#include <common>", `#include <common>\n${WET_PARS}`)
-        .replace("#include <roughnessmap_fragment>",
-          `#include <roughnessmap_fragment>${WET_FRAG}`);
-    }
+    /* THE DRAFT IS NOT OPTIONAL AND NOT PER-SPEC. It used to be a
+       `wet` key that two of the four plated materials carried, so
+       hullScoured and rust - and rust is most of what the
+       waterline is actually made of - met the sea with no wetting
+       term at all. Every material that plates this ship gets the
+       same draft, for the same reason they share one plate grid
+       and one fill: a rusted strake and the scoured strake above
+       it cannot disagree about where the water is. */
+    shader.uniforms.uDraft = { value: new THREE.Vector4(...HULL_DRAFT) };
+    shader.fragmentShader = shader.fragmentShader
+      .replace("#include <common>", `#include <common>\n${DRAFT_PARS}`)
+      .replace("#include <roughnessmap_fragment>",
+        `#include <roughnessmap_fragment>${DRAFT_FRAG}`);
     shader.uniforms.uPlateA = { value: new THREE.Vector4(...spec.plate.a) };
     shader.uniforms.uPlateB = { value: new THREE.Vector4(...spec.plate.b) };
     shader.uniforms.uPlateC = { value: new THREE.Vector4(...spec.plate.c) };
@@ -3754,6 +4264,12 @@ function hullExtend(THREE, spec) {
     shader.uniforms.uFill = { value: new THREE.Vector4(...spec.fill) };
     shader.uniforms.uFillDown = { value: new THREE.Vector3(...UPWELLING_LINEAR) };
     shader.uniforms.uFillWarm = { value: new THREE.Vector3(...SEA_GLARE_LINEAR) };
+    /* Absent unless the spec asks for it. A uniform DECLARED in the
+       chunk and never written is undefined rather than zero, so this
+       is set on all three extenders rather than on the two that use
+       it - the hull's (0, 0) is what makes the cap arithmetically
+       absent there rather than merely small. */
+    shader.uniforms.uFillCap = { value: new THREE.Vector2(...(spec.cap || [0, 0])) };
     /* THE ATTRIBUTE, and the varying that carries it. A mesh whose
        geometry has no `aPlate` reads (0,0) here rather than
        failing, which puts it inside plate cell zero - flat, and
@@ -3792,6 +4308,12 @@ function fillExtend(THREE, spec) {
     shader.uniforms.uFill = { value: new THREE.Vector4(...spec.fill) };
     shader.uniforms.uFillDown = { value: new THREE.Vector3(...UPWELLING_LINEAR) };
     shader.uniforms.uFillWarm = { value: new THREE.Vector3(...SEA_GLARE_LINEAR) };
+    /* Absent unless the spec asks for it. A uniform DECLARED in the
+       chunk and never written is undefined rather than zero, so this
+       is set on all three extenders rather than on the two that use
+       it - the hull's (0, 0) is what makes the cap arithmetically
+       absent there rather than merely small. */
+    shader.uniforms.uFillCap = { value: new THREE.Vector2(...(spec.cap || [0, 0])) };
     shader.fragmentShader = shader.fragmentShader
       .replace("#include <common>", `#include <common>\n${FILL_PARS}`)
       .replace("#include <opaque_fragment>", `${FILL_FRAG}\n#include <opaque_fragment>`);
@@ -3862,6 +4384,12 @@ function leafExtend(THREE, spec) {
       shader.uniforms.uFill = { value: new THREE.Vector4(...spec.fill) };
       shader.uniforms.uFillDown = { value: new THREE.Vector3(...UPWELLING_LINEAR) };
       shader.uniforms.uFillWarm = { value: new THREE.Vector3(...SEA_GLARE_LINEAR) };
+      /* Absent unless the spec asks for it. A uniform DECLARED in
+         the chunk and never written is undefined rather than zero,
+         so this is set on all three extenders rather than on the
+         ones that use it - the hull's (0, 0) is what makes the cap
+         arithmetically absent there rather than merely small. */
+      shader.uniforms.uFillCap = { value: new THREE.Vector2(...(spec.cap || [0, 0])) };
       pars = `${LEAF_PARS}\n${FILL_PARS}`;
       frag = `${LEAF_FRAG}\n${FILL_FRAG}`;
     }
@@ -3938,7 +4466,66 @@ function leafExtend(THREE, spec) {
    plate: it has no grazing-angle Fresnel and it does not mirror
    the glitter path, it only sees the light.
    ------------------------------------------------------------ */
-const LEAF_FILL = [2.35, 1.6, 0.62, 26.0];
+
+/* ------------------------------------------------------------
+   THE AWAY BIAS IS 3.4 AND IT WAS 1.6, WHICH IS A HULL'S NUMBER ON
+   A LEAF, AND IT IS HALF OF WHY ROUND 10's FOLIAGE FILL FLATTENED
+   THE LEVEL.
+
+   `away` = 1 - clamp(ndl * bias) retires the fill as a surface
+   turns toward the sun. 1.6 came off the hull, where a plate is
+   near-VERTICAL and ndl at the trade hour reaches 0.94, so the term
+   is gone on anything the sun is actually hitting.
+
+   A CANOPY LEAF IS NOT A PLATE, IT IS A SHOULDER. The trade sun
+   stands at 20 degrees (uSunDir.y = 0.342), so a leaf presenting a
+   horizontal face - which is most of a crown, because that is what
+   a crown is FOR - has ndl 0.342 and no more, whatever the weather:
+
+     bias 1.6   0.342 * 1.6 = 0.547   away = 0.453
+     bias 2.6   0.342 * 2.6 = 0.889   away = 0.111
+     bias 3.4   0.342 * 3.4 = 1.163   away = 0.000
+
+   AT 1.6 A FULLY SUNLIT CROWN KEPT 45 PER CENT OF THE SKY FILL ON
+   TOP OF ITS KEY. Nothing on a 20-degree-sun level is ever "facing
+   the sun" by a vertical plate's standard, so the term never
+   retired anywhere and the whole canopy - lit shoulders and shaded
+   flanks alike - went up together. That is the definition of the
+   failure round 11 recorded: it lifted the mass instead of the
+   shade.
+
+   THIS IS BARK_FILL'S OWN FINDING AND IT WAS NEVER CARRIED ACROSS.
+   The note below this one works the identical arithmetic on a
+   driftwood log ("its top facet has ndl = 0.25 against a 20-degree
+   sun, so at bias 1.6 it kept 60 per cent of the fill on a facet
+   that is already taking the key"), concludes THE BIAS IS THE LEVER
+   AND THE GAIN IS NOT, and moves bark to 3.4. The leaf was left on
+   the hull's number in the same commit.
+
+   MEASURED, roost camera, ultra, trade. The near canopy crop and
+   the frame that contains it:
+
+     bias   canopy crop luma   its sd   FRAME sd
+      1.6        40.6           27.0     50.70
+      3.4        34.4           25.4     52.57
+
+   The mass goes back down six levels toward the dark it is supposed
+   to be - the jungle is what the lagoon, the wet sand and the Bone
+   Reef are READ AGAINST, which is the sentence THE FOLIAGE FILL
+   opens with - and the frame gains 1.9 points of sd for it. The
+   crop's own sd falls by 1.6 and that is the trade, stated plainly:
+   the fill was adding some spread INSIDE the canopy in proportion
+   to leaf albedo, and it was buying that spread by moving the whole
+   canopy toward the frame's mean. The frame is the thing being
+   judged.
+
+   THE GAIN STAYS AT 2.35. Dropping the gain instead is the move
+   BARK_FILL's table already measured and rejected: it takes the
+   shaded flank down with the lit shoulder, and the shaded flank is
+   the surface the term exists for. Raising the bias retires the
+   fill only where the key already is.
+   ------------------------------------------------------------ */
+const LEAF_FILL = abFill([abNum("lg", 2.35), abNum("lb", 3.4), 0.62, 26.0], "nofill");
 
 /* BARK'S AWAY BIAS IS 2.6 AND THE HULL'S IS 1.6, AND THAT IS THE
    DIFFERENCE BETWEEN A PLATE AND A LOG.
@@ -3979,7 +4566,207 @@ const LEAF_FILL = [2.35, 1.6, 0.62, 26.0];
    beach. Sitting it just UNDER the sand's own shade value is what
    makes it read as a piece of wood again. If the terrain ever grows
    the same term, re-measure this pair against it. */
-const BARK_FILL = [2.20, 3.4, 0.62, 26.0];
+const BARK_FILL = abFill([abNum("bg", 2.20), abNum("bb", 3.4), 0.62, 26.0], "nofill");
+
+/* ------------------------------------------------------------
+   THE ALBEDO CAP, AND IT IS WHY ROUND 10's FOLIAGE FILL COST THE
+   LEVEL CONTRAST
+
+   Round 11 lost 5.7 points of mean sd against round 9 and the
+   post-mortem blamed two global grade terms. Both were reverted and
+   the level stayed flat - the revert bought 0.5 of the 5.7. Round
+   10's five changes were then switched off ONE AT A TIME through
+   the A/B block at the top of this file. sd delta from turning each
+   one OFF, ultra, trade:
+
+     switch off ...        nave  arrival  roost  bone-reef  crest
+     the foliage fill      +4.0    +4.5    +3.8     +0.4     +0.3
+     PCSS (radius 1)       -0.1    +0.7    -0.3     -0.2     -0.8
+     the shoaling floor    +0.1    +0.0    +0.0     -1.2     -0.0
+     the mangrove mud      -4.4    +0.0    -0.1     -0.6     +0.0
+
+   THE PENUMBRA, THE SHOALING FLOOR AND THE MUD ALL PAY CONTRAST IN
+   - removing any of them makes the level flatter, not sharper. Only
+   the foliage fill takes contrast out, and it takes it out of
+   exactly the three frames that carry foliage.
+
+   AND THE CAUSE IS ONE NUMBER. The fill is an IRRADIANCE and it
+   multiplies the surface's own albedo, which the FITTING_FILL note
+   above states as a rule: a gain is only transferable between
+   surfaces of similar reflectance. BARK_RAMP's own linear luminance
+   runs 0.0098 at the dark trunk to 0.3776 at the sun-bleached
+   driftwood - THIRTY-EIGHT TO ONE, ON ONE MATERIAL, UNDER ONE GAIN.
+
+   MEASURED on the arrival camera - the 11 m driftwood log's crop,
+   the sunlit sand it lies on, and the palm trunk beside it. These
+   are CROPS and the note above quotes single FACETS, which is why
+   the two tables do not share a number: a crop is the object as the
+   eye actually meets it, several facets and a little of the sand
+   between them, and it is the reading that answers "does this thing
+   sit above or below its ground".
+
+                      fill off   fill on   fill + cap
+       the log          60.1      100.8       76.6
+       its own sd       38.4       26.0       31.1
+       sunlit sand      81.8       81.9       80.2
+       palm trunk       25.5       38.0       36.9
+
+   Without the cap the log renders NINETEEN LEVELS BRIGHTER THAN THE
+   SUNLIT SAND IT IS LYING ON and its crop loses twelve points of sd
+   doing it. BARK_FILL's own note ends by saying the value it was
+   signed off at put the log at 66 against shaded sand at 89, and
+   that "sitting it just UNDER the sand's own shade value is what
+   makes it read as a piece of wood again". It never did. The
+   kerbstone that note says it removed was still the first thing the
+   eye lands on in the level's opening shot.
+
+   THE CAP KEEPS WHAT THE TERM WAS FOR AND THAT IS THE WHOLE TEST.
+   The trunk - the surface the fill was added for - moves 38.0 to
+   36.9, which is nothing; the log comes back under the sand; the
+   log's crop gives back 5.2 of the 12.4 points of sd the fill had
+   cost it. A bounded LIFT rather than a bounded irradiance.
+
+   IT IS CLAMPED AT ONE and that is the important half. The cap may
+   only ever take the fill DOWN on a surface paler than the
+   reference, never up on a darker one. The version that boosts the
+   dark end is arithmetically tidier and it is a second flattener
+   wearing the first one's clothes - it equalises the whole material
+   to one lift, which is the shape of mistake this world has now
+   paid for twice.
+
+   THE REFERENCE IS 0.11 AND IT IS NOT CHOSEN. It is the bottom of
+   this file's own figure for mean canopy albedo (THE FOLIAGE FILL:
+   "linear Y 0.11-0.15 by the colour ration at the top of
+   atoll-flora"). Everything at or below the canopy's own
+   reflectance is untouched by construction; everything paler pays
+   in proportion to how much paler it is. Which is also why the
+   STRENGTH is 1.0 rather than a taste: at 1.0 the term is exactly
+   "no surface may take more absolute lift than a canopy leaf
+   would", and any value under it is that sentence with a fudge on
+   the end.
+
+   ZERO EVERYWHERE ELSE, and that is deliberate. The hull and the
+   fittings pass [0, 0], mix() returns exactly 1.0, and the ship is
+   unchanged to the bit - its four plated materials sit inside a 3:1
+   albedo range rather than 38:1, so the argument above does not
+   apply to them.
+   ------------------------------------------------------------ */
+const BARK_CAP = [abNum("bcs", 1.0), abNum("bcr", 0.11)];
+
+/* ============================================================
+   THE TERRAIN FILL, AND IT IS THE ONE SURFACE THE SKY LOBE HAD
+   NEVER BEEN WIRED TO
+
+   The hull got FILL_FRAG in round 8, the foliage in round 10, and
+   BARK_FILL's own note above ends with the sentence that set this
+   round's work: "The sand is terrain and terrain has no fill of
+   its own ... If the terrain ever grows the same term, re-measure
+   this pair against it." Terrain is 50-70 per cent of every frame
+   in this level. It was the largest unlit surface in the game.
+
+   WHAT IT IS FOR. Two frames have carried the same complaint for
+   three blind rounds - "a shapeless dark hill whose only surface
+   information is height-field contour banding", "two-thirds of the
+   frame is a dead black hole with green specks in it" - and both
+   masses are terrain and neither of them receives any sun:
+
+     weeping  the Cauldron's north-west flank. The camera stands
+              below the falls at (-602, 222) looking up a slope
+              whose face is turned away from a key at azimuth 105.
+              Measured on the mass crop: mean luma 22.2, sd 14.0,
+              rgb 11/24/36, against a sky in the same frame at
+              107.8. Round 10 killed the key on this crop and the
+              crop did not change.
+     prow     the near ground under the mangrove. That one is FLAT
+              and faces the sun; it is dark because it is in the
+              canopy's CAST SHADOW. Measured: mean 41.7, sd 21.0.
+
+   Those are two different causes with one answer - the light that
+   is actually falling on both of them is the sky, and the sky was
+   not being delivered.
+
+   WHY THIS IS NOT ROUND 10'S MISTAKE REPEATED, and the distinction
+   is the whole of this round. `skyFillGain` is a scalar on an
+   almost isotropic dome: the probe measured its irradiance at
+   0.373 straight up, 0.345 on a vertical flank and 0.367 at a 30
+   degree tilt - 8 per cent across the entire range - so it CANNOT
+   AIM. It buys the shaded flank and the lit beach together, which
+   is why raising it cost all fifteen frames contrast. This term is
+   gated on how much key the pixel actually got, so on a lit
+   surface it is not a small contribution, it is EXACTLY ZERO. It
+   cannot flatten a frame that does not need it, in the same way a
+   rim cannot: the gate is a property of the pixel, not of a curve
+   over the whole picture.
+
+   HOW THE GATE READS THE SUN, and it is free. `reflectedLight.
+   directDiffuse` is in scope at `opaque_fragment` and is
+   ndl * lightColour * diffuseColour / PI - which is to say it
+   already carries the cosine AND the shadow map, both of which
+   this term needs and neither of which a normal on its own can
+   give. Dividing by the surface's own diffuse albedo leaves
+   ndl * shadow * lightLuma / PI, a number that is 0.46 on flat
+   sunlit ground at the trade hour and 0 in shadow. The alternative
+   was a second getShadow() call, which is a second PCSS kernel on
+   the largest surface in the frame - the free reading is also the
+   cheap one.
+
+   TWO GATES AND NOT ONE, because the two masses are dark for two
+   different reasons - see the gate note in the shader. The flank
+   is past the terminator and sees the whole sky, so it takes the
+   full lobe; the Prow's ground is in a canopy's shadow and that
+   canopy is across its sky as well, so it takes SF_SHADOW_SHARE
+   of it. One gate paying both alike is what the first capture did
+   and it put a pale sheet in the Prow's foreground.
+
+   IT IS SHAPED, WHICH IS WHY IT ADDS CONTRAST RATHER THAN LEVEL.
+   FILL_FRAG's azimuth lobe runs the fill from SF_AZ_FLOOR at the
+   anti-sun point to full at the terminator, and it is evaluated
+   against the PER-PIXEL normal - which on this material has
+   already been written by the rock block's beds, joints and grit.
+   So the weeping flank's terraces and strata come back as three
+   times the fill at their upper edges as in their shade, which is
+   the "surface information" the judges said the mass had none of.
+   A flat multiply on the same pixels raises the mean and moves no
+   detail; this raises the mean AND the sd.
+
+   uFill = [gain, orientation bias, shadow share, key knee]. The
+   layout differs from LEAF_FILL's and BARK_FILL's in its last two
+   slots only, because the terrain block has no sea-glare lobe to
+   spend them on - see the note where the lobe would have gone.
+   ============================================================ */
+const TERRAIN_FILL = abFill([1.00, 3.4, 0.35, 0.18], "noterrfill");
+
+/* THE CANOPY FILTER'S TRANSMISSION VECTOR. See the note at the line
+   that uses it for the luma-neutrality argument and the measured
+   hues. All ones under the flag, which is a filter that filters
+   nothing - the same shape of switch as abFill's zeroed gain. */
+const CANOPY_TRANSMIT = AB.has("nocanopy") ? [1.0, 1.0, 1.0] : [0.72, 1.12, 0.62];
+
+/* THE CREST RIM'S NUMBERS. See the CREST RIM header for the three
+   gates and for why none of them can reach a frame that does not
+   need one. Gain, fresnel power, terminator softness, unused.
+
+   THE BAND WIDTH IS 0.15, about nine degrees of wrap past the
+   terminator, and it is the number the first capture was lost on.
+   The first cut had no band at all - it took the whole dark side
+   at fresnel weight - and washed the entire mass (see GATE 1). At
+   0.30 the mid-flank, which sits at dot(N, sun) around -0.2, is
+   still collecting thirty per cent of the term and the wash is
+   half back. At 0.15 the mid-flank is at zero and only the shell
+   within nine degrees of the skyline pays.
+
+   THE GAIN IS 0.55, higher than the washed cut's 0.40 because the
+   band is now a tenth of the area it was. The term adds a flat
+   radiance rather than a fraction of anything, so there is no
+   argument from ratios available and it was swept on the crest
+   crop against the sky crop in the same frame; the table is in the
+   round 12 log entry.
+
+   THE FRESNEL POWER IS 2.0 rather than the first cut's 4.2. It is
+   a weight now and not a gate, and a high power on a weight only
+   makes the term flicker across the bed edges the rock block
+   creases. */
+const CREST_RIM = abFill([0.70, 2.0, 0.07, 0], "norim");
 
 /* ------------------------------------------------------------
    WETNESS
@@ -4003,6 +4790,106 @@ const WET_FRAG = /* glsl */`
   float w = 1.0 - smoothstep(uWet.x, uWet.x + uWet.y, vSFWorld.y);
   diffuseColor.rgb *= mix(1.0, uWet.z, w);
   roughnessFactor = mix(roughnessFactor, roughnessFactor * uWet.w, w);
+}
+`;
+
+/* ============================================================
+   THE DRAFT - the ship's own answer to four blind rounds of
+   "it floats", and it is a LOCAL term on four materials.
+
+   Every round since round 8 has been told the same thing by
+   different judges in different words: "the hull meets a flat sea
+   with no draft, no displacement and no wet band", "floats a
+   hundred-metre hull on water", "the lower hull renders
+   semi-transparent - you can see the water through it at the
+   bow".
+
+   THE THIRD ONE IS NOT TRUE AND THE METER SAYS SO. Re-run at the
+   bow, which round 10 never framed, the coverage test measures
+   0.024 % of the hull mask see-through - silhouette antialiasing
+   and nothing else (saintfall-hull-waterline.mjs). The hull is
+   opaque.
+
+   WHAT THE JUDGE ACTUALLY SAW IS THE SIGN OF THIS GRADIENT.
+   Measured on the same run, the hull's own display luminance in
+   the ten pixels above the waterline against thirty-to-seventy
+   pixels above it:
+
+     bow   +49.1     spine  +16.6     hold  +10.1     prow  +4.0
+
+   The hull is BRIGHTEST where it enters the water, on every
+   camera. That is the sea-glare lobe doing exactly what it was
+   written to do in round 8 - its own comment says it "puts the
+   ship's brightest shade-side value ON THE WATERLINE" - with
+   nothing on the other side of the ledger. A pale, bright,
+   low-contrast band of plate against a pale, bright sea does not
+   read as a hull entering water. It reads as a hull you can see
+   through, which is the sentence four judges wrote.
+
+   So the level had a wet band worth 0.66 of albedo, applied as a
+   STEP at 1.9 m and then constant all the way down, on two of the
+   four plated materials - hullScoured and rust had none at all,
+   and rust is the material the waterline is largely made of. This
+   replaces it on all four with a graded one that keeps going:
+
+     uDraft = [top m, wetted albedo, glare floor, extinction /m]
+
+     TOP 3.5 M is not a taste. It is TIDE.splashTop (2.30) plus
+     HULL_BANDS.splashFade (1.20), which is the first height at
+     which the vertex colour has stopped carrying the tide, and it
+     is the same 3.5 the plate grid already uses for its dry
+     height. One derivation, three consumers.
+
+     WETTED ALBEDO 0.42 at and below the tide plane. The old step
+     was 0.66; the difference is that 0.66 was a number chosen to
+     be visible from 400 m and this one is chosen against the
+     glare it now has to beat. At 0.66 the draft sign on the bow
+     camera stayed positive - the hull still got brighter as it
+     went down - which is the whole defect surviving the fix.
+
+     GLARE FLOOR 0.40, and this is the term that actually turns
+     the gradient over. The sea glare is added to outgoingLight,
+     so multiplying the albedo does not touch it; a wet plate is a
+     MIRROR and its diffuse response to the lagoon collapses,
+     which is both physically right and the only lever that
+     reaches the additive term. It is a floor and not a zero on
+     purpose: the shade-side flank's foot is the one warm note the
+     ship has, round 8 measured it, and deleting it would trade
+     this defect for that one.
+
+     EXTINCTION 0.55/m under the water. Beer-Lambert on the plate
+     itself, so a hull that is visible through the surface goes on
+     losing light with depth instead of stopping dead at y = 0 the
+     way a step does.
+
+   NOT A GLOBAL. It is installed by hullExtend and therefore
+   reaches hull, hullRib, hullScoured and rust - the ship's skin,
+   and nothing else on the level. The terrain, the water, the
+   flora and the fittings do not see it.
+   ============================================================ */
+const HULL_DRAFT = [3.5, 0.42, 0.40, 0.55];
+
+const DRAFT_PARS = /* glsl */`
+uniform vec4 uDraft;
+`;
+
+const DRAFT_FRAG = /* glsl */`
+{
+  /* 0 above the dry height, 1 at and below the tide plane. */
+  float sfWet = 1.0 - smoothstep(0.0, uDraft.x, vSFWorld.y);
+  /* And under the surface it keeps going. SEA_Y is the datum and
+     is zero by definition, so world y is depth directly. */
+  float sfSub = exp(-uDraft.w * max(-vSFWorld.y, 0.0));
+  diffuseColor.rgb *= mix(1.0, uDraft.y * sfSub, sfWet);
+  /* Wet plate is glossier, but only to 0.55 of its dry roughness.
+     The first pass used 0.42, the number the old wet band
+     carried, and on rust - roughness 0.99, metalness 0 - that put
+     a sky-blue sheen along the whole waterline that read as a
+     second white skirt under the first one. */
+  roughnessFactor = mix(roughnessFactor, roughnessFactor * 0.55, sfWet);
+  /* Read by FILL_FRAG, which runs later and is where the sea
+     glare is added. */
+  sfDraftF = mix(1.0, uDraft.z, sfWet);
 }
 `;
 
@@ -4250,7 +5137,9 @@ export function makeAtollMaterials(THREE, atmos) {
         e: [0.90, 0.20, 0.055, 0.26],
         f: [0.15, 0.17, 0.13, 0.16],
       },
-    }), "sandGroundRock");
+      fill: TERRAIN_FILL,
+      crestRim: CREST_RIM,
+    }), "sandGroundRockFillRim");
 
   /* Wet sand. The intertidal band, and the material that has to
      make the tide legible. Ripple heading is SHORE-PARALLEL and is
@@ -4386,7 +5275,7 @@ export function makeAtollMaterials(THREE, atmos) {
      crown. Opaque, faceted, and it is the thing that stops a
      procedural palm reading as a beach umbrella. */
   add("frondDry", { roughness: 0.96, rim: 0.85 },
-    fillExtend(THREE, { fill: BARK_FILL }), "barkFill");
+    fillExtend(THREE, { fill: BARK_FILL, cap: BARK_CAP }), "barkFill");
 
   /* Bark, trunk, prop root and buttress - AND the driftwood at the
      strand line, which is what a blind judge called "an unexplained
@@ -4396,7 +5285,7 @@ export function makeAtollMaterials(THREE, atmos) {
      sun, so before the fill it returned sRGB (34,45,44) against its
      own albedo of (166,155,137) and read as a hole in the beach. */
   add("bark", { roughness: 0.97, rim: 0.85 },
-    fillExtend(THREE, { fill: BARK_FILL }), "barkFill");
+    fillExtend(THREE, { fill: BARK_FILL, cap: BARK_CAP }), "barkFill");
 
   /* Everything below the tide line on a root or a piling. */
   add("crust", {
@@ -4481,11 +5370,11 @@ export function makeAtollMaterials(THREE, atmos) {
   add("hull", {
     roughness: 0.55, metalness: 0.25, rim: 1.2, glitter: 0.03,
   }, hullExtend(THREE, {
-    wet: [1.9, 1.6, 0.66, 0.42], plate: PLATE, fill: HULL_FILL,
+    plate: PLATE, fill: HULL_FILL,
   }), "hullPlate");
 
   /* THE FRAMES. Identical to `hull` in every appearance term - the
-     same roughness, metalness, rim, glitter, plate grid, wet band
+     same roughness, metalness, rim, glitter, plate grid, draft
      and fill - so a rib and the plate it stands on cannot part
      company tonally. The only difference is the bandlimit in its
      vertex shader; see the RIB BANDLIMIT header.
@@ -4498,7 +5387,7 @@ export function makeAtollMaterials(THREE, atmos) {
   add("hullRib", {
     roughness: 0.55, metalness: 0.25, rim: 1.2, glitter: 0.03,
   }, ribExtend(THREE, {
-    wet: [1.9, 1.6, 0.66, 0.42], plate: PLATE, fill: HULL_FILL,
+    plate: PLATE, fill: HULL_FILL,
   }), "hullRibPlate");
 
   /* Scoured plate - the windward faces, kept polished by forty

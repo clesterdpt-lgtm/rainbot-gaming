@@ -1473,3 +1473,430 @@ clearance, six floating props) and none of them is a material.
   level's hero space.
 - **The Prow is invisible from its own beauty camera**, buried behind the
   canopy. That is a camera decision, not a surface one.
+
+---
+
+## Rounds 9, 10 and 11 — up to 5/45, then **back down to 2/45.**
+
+### Round 9 — 5 / 45, and the first disagreement
+
+Three judges, three **different** answer strings (3/15, 2/15, 0/15), where rounds
+5 and 7 had produced identical ones. `rim` and `drive` won a majority. That
+disagreement is worth as much as the score: a unanimous panel is a clear loss, a
+split one is a level that has started to compete.
+
+### Round 10 — four root causes, every one of which overturned the brief I gave it
+
+1. **The hull is not see-through.** I handed the agent that diagnosis and it was
+   wrong. It built a coverage meter — render the frame, render it again with the
+   wreck hidden, render a third with the wreck flat magenta as an exact mask,
+   then count mask pixels where the first two agree — and measured
+   **0.09 % see-through on `spine`, 0.15 % on `hold`**, all of it silhouette
+   antialiasing. The shell covers *more* than the ribs, not less.
+   **It is occlusion.** A 0.55 m proud frame on a 4.0 m pitch hides the plate
+   entirely once the view ray drops below `atan(0.55/4) = 7.8°` off the shell —
+   and the Spine's own camera looks nearly down the hull. Past that you are
+   looking at a wall of edge-on unlit frame sides: *a picket fence, which the eye
+   reads as transparency.* Fixed by retracting the ribs in the vertex stage as
+   the grazing angle closes. Gradient RMS across the flank down 25–41 %.
+2. **The sand seam is not in `surfaceAt`. It is the sea.** Vertex colour is
+   constant straight across it. Hiding `atoll-sea` removes it entirely. Measured
+   at the Nave: **a 2.0 m wave standing in 0.39 m of water, H/d = 5.1.**
+3. **The level had been running a fill less than half the size its own file
+   believed, for four rounds.** `envIntensity`'s comment computed the fill:key
+   ratio as `0.52 / 5.35 ≈ 10 %`. Wrong twice: the key's luminance is
+   `sunIntensity × luma(sunColor) = 4.23`, and `envIntensity` scales a dome whose
+   cosine-weighted irradiance on a shaded vertical flank measures **0.345**. True
+   ratio **4.2 %**, against the 12–18 % a judge had asked for by name.
+   And the black mass on `weeping` receives **zero sun** — killing the key
+   changed it by nothing — while `antiphon-cycle-fill`'s intensity is **0** at
+   trade. *The mass is handed to the grade fully modelled, with terraces, strata,
+   a ridge and individual palm trunks, and the grade deletes it.*
+4. **No penumbra existed at any tier.** `PCFSoftShadowMap` and **three r180's
+   PCF_SOFT branch never reads `shadowRadius`** — only the PCF branch multiplies
+   its offsets by it. The kernel was a fixed one-texel tent: 0.083 m at ultra,
+   identical at a palm's trunk and 20 m from it. Replaced with a real PCSS.
+5. **`FILL_FRAG` was wired to the hull materials and to nothing else.** `leaf`,
+   `leafMangrove`, `frondDry` and `bark` had **no fill term at all**. One
+   omission explaining *five* separate judge complaints: "canopies merge into one
+   unlit mass", "black-disc canopies", "mangroves as unshaded black cutouts",
+   "the palms are two-tone cutouts", and the "unexplained shadow slab" — which
+   turned out to be an 11 m driftwood log with an albedo of sRGB (166,155,137)
+   rendering at sRGB (34,45,44).
+
+**And one of mine.** The elliptical-pad rewrite renamed `padR` to `padA`/`padC`
+and the mangrove's mud gate still read `padR`. `undefined * 0.55` is NaN,
+`sstep(NaN, NaN, d)` is NaN, and `NaN > 0.001` is **false** — so the block never
+fired once and **the Drowned Nave has never had any mud.** It failed in the worst
+possible way: no error, no NaN reaching a uniform, no gate tripped; the residual
+`sand` simply absorbed the weight, and a blind judge found it from the outside.
+
+### Round 11 — 2 / 45. **A regression, and it is measurable.**
+
+Two judges returned identical strings and the third differed on one pair — back
+to the near-unanimity that rounds 5 and 7 produced, from round 9's three-way
+split. And the closing verdict returned to round 5's, almost word for word:
+
+> "Give the island level a committed directional key with hue-separated shade …
+> because right now its vegetation, terrain, water and cloud kit are all lit from
+> nowhere and **all sit inside the same third of the value range**."
+
+The numbers say the same thing, and they are damning:
+
+| | round 9 | round 11 | |
+|---|---|---|---|
+| mean sd across 15 frames | 49.1 | **43.4** | **−11.6 %** |
+| mean luma | 105.7 | 108.1 | +2.3 % |
+| between-frame luma range | **109** | **65** | the set collapsed toward one value |
+| frames that lost contrast | — | **15 of 15** | every single one |
+
+`nave` lost 20 points of sd, `bone-reef` 15, `arrival` 8.5.
+
+**Round 10 raised the floor and flattened the level.** Every one of its fixes was
+individually correct and well measured — and together they were a global answer
+to a local problem.
+
+> **THE LESSON, and it is the most expensive one of the session: a global term
+> cannot do a local job.** Two frames had a mass crushed to black. The response
+> was more global ambient (`skyFillGain 1.5`) and a higher global black floor
+> (`contrastFloor 0.35 → 0.60`). Both lifted the two offending masses — and also
+> lifted the thirteen frames that were already correct, costing every one of them
+> contrast. A mass that goes black because it receives **zero sun** needs a *rim*,
+> a *bounce*, or terrain that catches light — something that acts where the
+> problem is. It does not need the whole level lit more.
+
+This is the same shape as round 6's recorded wrong turn ("a luma-keyed term left
+standing after the luma moved"), arriving from the opposite direction.
+
+
+---
+
+## Round 12 - the flatten hunt. **Four of round 10's five changes were innocent.**
+
+Reverting `contrastFloor` (0.60 -> 0.35) and `skyFillGain` (1.50 -> 1.00) bought
+**0.5 of the 5.7 points of mean sd** round 11 had lost. So the flattening was
+somewhere else in round 10 and still in the level, and the only way to find it
+was to switch one thing off at a time.
+
+### The instrument first, because nobody had one
+
+Round 10's five changes each needed a source edit, a reload and an edit back to
+switch off, so **not one of them had ever been run alone.** `?qa=1&ab=<flag>`
+now turns a single term off at load (`nofill`, `noterrfill` in atoll-art.js,
+`hard` in atoll-main.js, `notrough` in atoll-water.js, `nomud` in
+atoll-terrain.js). Every flag **zeroes a gain rather than skipping a block**, so
+the program set, the uniform layout and the draw list are identical on both
+sides of a pair - a switch that changes the number of programs measures the
+recompile as well as the term. The control run with no flag set reproduced the
+baseline **to 0.00 on every frame**, which is what makes the rest of the table
+worth reading.
+
+### The table, ultra, trade. sd delta from turning each change OFF
+
+| switch off ... | nave | arrival | roost | bone-reef | crest | mean |
+|---|---|---|---|---|---|---|
+| **the foliage fill** | **+4.0** | **+4.5** | **+3.8** | +0.4 | +0.3 | **+2.6** |
+| PCSS (radius 1) | −0.1 | +0.7 | −0.3 | −0.2 | −0.8 | −0.1 |
+| the shoaling floor | +0.1 | +0.0 | +0.0 | −1.2 | −0.0 | −0.2 |
+| the mangrove mud | **−4.4** | +0.0 | −0.1 | −0.6 | +0.0 | −1.0 |
+| the terrain fill | −0.0 | +1.4 | +0.0 | −2.6 | +0.1 | −0.2 |
+
+**THE PENUMBRA, THE SHOALING FLOOR AND THE MUD ALL PAY CONTRAST IN.** Removing
+any of them makes the level flatter, not sharper - the mud alone is worth 4.4
+points of sd at the Drowned Nave, because a mangrove flat with mud bands in it
+has structure and a mangrove flat without them is one pale sheet. The three
+things that looked most like "softer, smoother, more filled-in" were all
+earning their place.
+
+Only the foliage fill takes contrast out, and it takes it out of exactly the
+three frames that carry foliage.
+
+### Two warnings about the harness, both found by accident
+
+- **`weeping` moved by −3.4 in three unrelated flags at once.** It is not any of
+  them: a concurrent session edited `atoll-art.js` mid-chain and every run after
+  that edit carries it. A one-line timestamp check (`stat` the sources against
+  the capture times) is now part of reading any A/B table on this repo. The
+  isolation work moved into a frozen `rsync` copy of the tree after that.
+- **`crest` carries about three points of placement noise.** It is
+  search-placed: the same code measured 32.23, 35.49 and 35.47 across three
+  runs. Round 11's "crest lost 7.5" is at least half camera. Do not put weight
+  on that frame.
+
+### And nave's twenty points are mostly a bug being removed
+
+`nave` lost 19.4 sd from round 9 and the switches account for less than four of
+it. Round 9's frame had a **hard geometric white-against-dark seam across the
+whole flat** - the 2.0 m wave standing in 0.39 m of water, the frame's single
+largest source of between-group variance, and round 9's most-named defect. Round
+10 removed it correctly. **A defect can carry sd**, and a scoreboard that cannot
+tell a white blowout from a white subject will score its removal as a loss. The
+Nave needs contrast put back into it deliberately; it does not need the seam
+back.
+
+
+### The fix, and it is two numbers on two materials
+
+Both of them are the same mistake in two places: **a constant measured on the
+hull, applied to a surface that is not shaped like a hull.**
+
+**1. `LEAF_FILL`'s away bias, 1.6 -> 3.4.** `away = 1 - clamp(ndl * bias)` is
+what retires the fill as a surface turns into the sun, and 1.6 was set on a
+near-VERTICAL hull plate whose ndl reaches 0.94 at the trade hour. The trade sun
+stands at 20 degrees, so a canopy leaf presenting a horizontal shoulder - which
+is most of a crown, because that is what a crown is FOR - has **ndl 0.342 and no
+more**:
+
+| bias | ndl * bias | `away` |
+|---|---|---|
+| 1.6 | 0.547 | **0.453** |
+| 2.6 | 0.889 | 0.111 |
+| 3.4 | 1.163 | 0.000 |
+
+**A fully sunlit crown was keeping 45 per cent of the sky fill on top of its
+key.** Nothing on a 20-degree-sun level is "facing the sun" by a vertical
+plate's standard, so the term never retired anywhere and the whole canopy - lit
+shoulders and shaded flanks together - went up as one. That is round 11's
+recorded failure exactly: it lifted the mass instead of the shade.
+
+**And BARK_FILL's own note had already found this**, on a driftwood log, in the
+same commit - "its top facet has ndl = 0.25 against a 20-degree sun, so at bias
+1.6 it kept 60 per cent of the fill on a facet that is already taking the key" -
+concluded **THE BIAS IS THE LEVER AND THE GAIN IS NOT**, moved bark to 3.4 and
+left the leaf on the hull's number.
+
+Measured at the roost camera, the near canopy crop and the frame around it:
+
+| bias | canopy crop luma | its sd | FRAME sd |
+|---|---|---|---|
+| 1.6 | 40.6 | 27.0 | 50.70 |
+| **3.4** | **34.4** | 25.4 | **52.57** |
+
+The mass drops six levels back toward the dark it is meant to be and the frame
+gains 1.9 sd. **The crop's own sd falls 1.6 and that is the trade**: the fill
+was buying a little spread inside the canopy, in proportion to leaf albedo, by
+moving the whole canopy toward the frame's mean.
+
+**2. `BARK_CAP` - the fill becomes a bounded LIFT, not a bounded irradiance.**
+The fill is an irradiance and multiplies the surface's own albedo, so a gain is
+only transferable between surfaces of similar reflectance. **BARK_RAMP's linear
+luminance runs 0.0098 at the dark trunk to 0.3776 at the sun-bleached driftwood
+- thirty-eight to one, on one material, under one gain.**
+
+Measured on the `arrival` camera - the 11 m driftwood log's crop, the sunlit
+sand it lies on, and the palm trunk beside it:
+
+| | fill off | fill on | fill + cap |
+|---|---|---|---|
+| the log | 60.1 | **100.8** | **76.6** |
+| its own sd | 38.4 | 26.0 | 31.1 |
+| sunlit sand | 81.8 | 81.9 | 80.2 |
+| palm trunk | 25.5 | 38.0 | **36.9** |
+
+Without the cap **the log renders nineteen levels brighter than the sunlit sand
+it is lying on** and its crop loses twelve points of sd doing it. BARK_FILL's
+note ends by saying the value it shipped put the log at 66 against shaded sand
+at 89, and that "sitting it just UNDER the sand's own shade value is what makes
+it read as a piece of wood again". It never did. **The kerbstone that note says
+it removed was still the first thing the eye lands on in the level's opening
+shot** - and it is the same object a round 9 judge called "an unexplained shadow
+slab".
+
+`uFillCap = [strength, reference albedo]` scales the fill by
+`reference / ownAlbedo`, **clamped at one**, so it may only ever take the term
+DOWN on a surface paler than the reference and never up on a darker one. The
+version that boosts the dark end is arithmetically tidier and is a second
+flattener wearing the first one's clothes. The reference **0.11** is not chosen:
+it is the bottom of the file's own figure for mean canopy albedo. The hull and
+the fittings pass `[0, 0]`, `mix()` returns exactly 1.0, and **the ship is
+unchanged to the bit** - its plated materials sit inside a 3:1 albedo range, not
+38:1.
+
+The test the fix had to pass was not "does sd go up". It was **does the trunk
+keep what round 10 bought it**: 38.0 -> 36.9, which is nothing, while the log
+comes back under the sand.
+
+### Fifteen frames, snapshot tree, ultra, trade
+
+| pose | before | after | delta |
+|---|---|---|---|
+| `arrival` | 42.3 | 43.6 | +1.2 |
+| `atoll` | 44.9 | 44.9 | -0.0 |
+| `lagoon` | 41.2 | 40.9 | -0.2 |
+| `spine` | 38.2 | 38.1 | -0.1 |
+| `hold` | 45.6 | 45.6 | +0.0 |
+| `prow` | 41.7 | 41.9 | +0.2 |
+| `drive` | 44.8 | 45.2 | +0.4 |
+| `bone-reef` | 37.0 | 37.3 | +0.3 |
+| `nave` | 38.0 | 39.4 | +1.4 |
+| `weeping` | 48.2 | 48.4 | +0.2 |
+| `rim` | 64.3 | 64.3 | +0.0 |
+| `cauldron` | 25.1 | 25.6 | +0.6 |
+| `roost` | 50.8 | 52.7 | +1.9 |
+| `crest` | 35.0 | 38.0 | +3.0 |
+| `strand` | 59.1 | 60.0 | +0.9 |
+| **mean** | **43.75** | **44.40** | **+0.65** |
+
+Thirteen of fifteen at or above baseline; the two that are not (`lagoon` -0.2,
+`spine` -0.1) are the two frames with no foliage and no driftwood in them, and
+both are inside a rounding of nil. **`crest`'s +3.0 should not be counted** - it
+is search-placed and measured 32.2, 35.5, 35.5 and 35.0 across four runs of
+identical code. Without it the mean gain is +0.48, which is the number to hold
+the change to.
+
+And the ceiling this buys is not the point. **Round 9's 49.09 is not the target
+it looked like**: `nave` and `bone-reef` carried a third of their sd in a
+straight white seam that was the level's most-named defect, and round 10 was
+right to delete it. The honest scoreboard from here is what a frame's contrast
+is MADE of, not how much of it there is.
+
+### And the instrument is now in the file
+
+`?qa=1&ab=nofill,noterrfill,norim,hard,notrough,nomud` for the on/off switches
+and `?qa=1&lb=3.4&bcs=1.0` for the numeric sweeps, all QA-gated, all inert
+unless passed, each one **zeroing a gain rather than skipping a block** so the
+program set and the draw list are identical on both sides of a pair. Round 10
+made five changes and not one of them was ever run alone; that is the whole
+reason round 11 cost a round to diagnose.
+
+---
+
+## Round 12 - the hull's waterline
+
+Four consecutive blind rounds named the ship's relationship with the water and
+they named four separate things. All four were investigated with a purpose-built
+instrument, `scripts/saintfall-hull-waterline.mjs`, which renders each pose three
+times - composited, wreck hidden, wreck as a magenta silhouette - and reads the
+see-through fraction, the hull's own value ladder above the waterline, the
+water's value near and far from the hull, and the seam's top end against the
+frame's. Two of the four complaints turned out to be the same defect and one was
+false.
+
+### 1. "Semi-transparent at the bow" - FALSE, and the perceptual cause found
+
+Round 10 measured 0.09-0.15 % see-through on `spine` and `hold` and called it
+antialiasing. Re-run at the bow, which round 10 never framed:
+
+| camera | hull mask | see-through |
+| --- | --- | --- |
+| `bow` (78 m off the beam) | 35.2 % of frame | **0.024 %** |
+| `spine` | 7.4 % | 0.069 % |
+| `hold` | 36.8 % | 0.025 % |
+| `band` (96 m abeam) | 57.5 % | **0.000 %** |
+
+The hull is opaque. What the judge saw is the SIGN of the value ladder: measured
+at the bow, the plate 0.7-2.0 m above the waterline read 82.8 and the plate
+2.1-4.7 m above it read 42.6. The hull was brightest where it entered the water.
+
+### 2. "A white skirt" - it was not the scour collar, it was the dead band
+
+Round 12's first move was to read what round 10's scour collar did before adding
+another. It is not the collar. `atoll-structures.js` mixes `DEAD_BARNACLE`
+(`#c9c2b0`, bleached shell) at a flat 0.62 across `[sub + dead, crustTop + dead]`
+- a 1.23 m ribbon at 0.72-1.95 m above the tide plane, running the full 400 m,
+with a hard edge top and bottom. The bands either side of it are `SPLASH_LICHEN`
+at 0.80, the darkest colour on the ship. The frame therefore contained a bleached
+stripe sandwiched between two near-black ones, and at 400 m its lower edge is
+sub-pixel from the water.
+
+Measured on the hull's own value, display sRGB, in three screen bands above the
+waterline:
+
+| camera | 0-0.6 m | 0.7-2.0 m | 2.1-4.7 m |
+| --- | --- | --- | --- |
+| `band` | 39.4 | **63.0** | 52.6 |
+| `bow` | 75.2 | **82.8** | 42.6 |
+
+Fixed by weathering the colour to `#9d9484`, riding the weight on `blotch`
+(0.26-0.66 instead of a flat 0.62) and fading the band's LOWER edge over 0.34 m
+while keeping the upper one hard - it is a strand line, so its top is a real
+boundary and its bottom is not. After: `band` reads 46.2 / 31.5 across the same
+bands, and the stripe is gone from the frame.
+
+### 3. "No draft, no wake, no contact darkening" - the contact field was dead code
+
+The shader block, the uniforms and the world-side solver all existed on disk.
+Nothing ever set `uHullA.w`, so the loop broke on the first compare and a hundred
+and forty lines of contact field rendered nothing and measured nothing. A
+capability that is never switched on is indistinguishable from one that was never
+written.
+
+Armed by `water.setHullContacts(world.hullContacts)` in `atoll-main`, solved in
+`atoll-world` from the wreck's own oriented boxes and wetted vertices. **One
+capsule per piece was not enough**: one width per piece is necessarily its
+widest - 40 m on a Spine whose maximum beam is 72 - so at the bow the capsule
+stood thirty metres out in open water, the shade band was offset from the plate
+it belonged to, and the standing wash, which is measured from the capsule
+surface, drew a ring thirty metres off the ship with nothing at the waterline.
+Nine capsules now, up to four runs per piece, each run's half-width measured off
+the wetted vertices in it. Prow: 29.3 / 26.3 / 13.6 m - the bow tapering to a
+point.
+
+Water luminance near the hull minus far from it, display sRGB:
+
+| camera | before | one capsule per piece | tapered chain |
+| --- | --- | --- | --- |
+| `spine` | **+15.2** | -15.1 | -5.6 |
+| `bow` | -1.8 | -2.3 | **-31.1** |
+| `band` | +2.2 | -88.9 | -62.9 |
+
+Positive means the water was BRIGHTER at the ship than away from it.
+
+### 4. Floating props: 6 -> 3, and three of the six were the gate
+
+`floatingProps` measures every copy against the landform, which is right for a
+crate on a beach and wrong for anything standing on another prop. It now casts
+rays from twelve probe points on a failing copy - the four lowest sampled
+vertices plus eight spread through the footprint - downward and sideways 0.8 m,
+against `world.meshes` only (the landform is not in that list, so a hit is by
+definition something the level built). The four-lowest points alone do not work
+and the boardwalk is why: a deck on piles has its lowest vertex BETWEEN two
+piles.
+
+- `road-surface-atoll-ground-hull-boardwalk` +0.93 m - on its piles. Supported.
+- `atoll-ground-hullScoured-pod-hatch` +1.36 m - on the drag furrow's berm. Supported.
+- `road-surface-atoll-ground-hull-nave-ledge` +4.36 m - **a real defect**. The
+  ledge is offset from its rib in WORLD x and z after the rib has been turned
+  through `a0 + 1.1`, so it overlapped the rib's box by 0.78 m at one corner and
+  cantilevered 4.3 m over open mud. Given two shores, built in the ledge's own
+  frame and merged into it so the prop reaches the ground and needs no support
+  test at all.
+
+Three remain, all flora, all small: `flora-ipomoea-leaf-l1-l1` +0.45 m,
+`flora-pandanus-wood-l1-l1` +0.41 m, `flora-snag-wood-l0-l0` +0.16 m. Nothing is
+under or beside them, so they are genuine; the cause is in the scatter's own
+height source and is not diagnosed.
+
+### What it cost, measured the only way that works now
+
+Another session was editing `atoll-art.js`, `atoll-water.js` and
+`atoll-terrain.js` while this one ran, so a capture taken now against a capture
+taken twenty minutes ago measures their work as well as this. Everything above is
+therefore attributed by an **in-session A/B**: one boot, every pose captured
+twice, `uHullA.w` toggled between 0 and 9 and nothing else changed.
+
+    MEAN over fifteen frames    42.11 off -> 42.06 on     -0.05   (four capsules)
+    MEAN over fifteen frames    43.24 off -> 43.23 on     -0.01   (nine capsules)
+
+Largest single move: `bone-reef` +0.26, `hold` +0.17, `crest` -0.35.
+
+**`crest`'s -0.35 was the harness.** Rendered first in its own boot with four
+warm-up frames it reads 40.281 off and 40.273 on, and two consecutive renders of
+the SAME state read 40.273 and 40.125 - that camera drifts 0.15 of sd while its
+LOD settles, and the fifteen-pose sequence walks it in cold. Two changes were
+made chasing it before that was measured, and both were wrong: dropping the wash
+cap from 0.55 to 0.36 moved the number by nothing at all, and scaling the
+reflection moved it by 0.08. The wash cap is back at 0.55. The reflection stays
+scaled, on the argument that a contact which BRIGHTENS the water is wrong
+whatever the frame says - and that is recorded in the file as an argument, not
+as a measurement.
+
+### Still open
+
+The debris field's torn plates - the "two identical brown quads" - are `hull` and
+`rust` material and take the draft, but a plate standing on a bar at 150 m gets
+no contact from the sea because the capsule chain covers the three wreck pieces
+and not four hundred and sixty fragments. Raycast-confirmed as
+`atoll-ground-hull-debris-heavy` at (117, 6.5, 275) and (-20, 1.8, 254). The
+bedding gate cannot see them either: they are two MERGED meshes, one copy each,
+and the gate takes the minimum gap over the whole copy.

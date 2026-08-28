@@ -53,7 +53,7 @@ import {
 } from "saintfall/atoll-art.js";
 import {
   makeAtollKit, antiphonSpine, antiphonProw, reliquaryHold,
-  SHIP, FLIGHT_BEARING,
+  SHIP, FLIGHT_BEARING, HULL_BANDS,
 } from "saintfall/atoll-structures.js";
 import {
   makeFloraKit, makeCanopyField, SPECIES,
@@ -2159,10 +2159,56 @@ export async function buildAtollWorld(ctx, onProgress) {
       addProp("hull", g, {
         tag: "nave-rib", collisionSolid: true, mode: "hull", tide: true,
       });
-      const ledge = kit.slab(4.2, 0.3, 3.0, 0.06);
+      /* THE LEDGE AND ITS TWO SHORES.
+
+         The bedding gate had this at +4.36 m, the worst floating
+         prop on the level, and it was right. The ledge is offset
+         from the rib in WORLD x and z after the rib has been
+         turned through a0 + 1.1, so where it lands relative to the
+         arch is whatever the rotation happens to leave: measured,
+         it overlaps the rib's box by 0.78 m at one corner and
+         cantilevers 4.3 m out over open mud. A 4.2 m platform five
+         metres up with nothing under it and one corner touching is
+         a floating platform, in the frame as well as in the gate.
+
+         Two shores, and they are built in the LEDGE'S OWN FRAME
+         rather than in world axes, which is the mistake that put
+         the ledge where it is: the local offsets are turned by the
+         same a0 + 1.1 the slab is, so a change to the rib's
+         heading moves the legs with the deck instead of leaving
+         them behind. Each stands on the ground under its own foot -
+         the Nave's floor is not level and one length for both
+         would leave the downhill leg hanging, which is this defect
+         again one scale down.
+
+         MERGED INTO THE LEDGE and not added as their own prop.
+         The gate measures the lowest vertex of a copy against the
+         landform, so a deck whose legs are part of it beds at its
+         feet and needs no support test at all. Two props that
+         happen to touch need a raycast to be understood; one prop
+         that reaches the ground is simply bedded. */
+      const ledgeY = b.y + 5.0;
+      const ledgeParts = [kit.slab(4.2, 0.3, 3.0, 0.06)];
+      {
+        const ca = Math.cos(a0 + 1.1);
+        const sa = Math.sin(a0 + 1.1);
+        for (const lz of [-1.05, 1.05]) {
+          /* THREE's rotateY: x' = x cos + z sin, z' = -x sin + z cos.
+             Local x = +1.55 is the outboard half of the deck, which
+             is the half that has nothing under it. */
+          const px = rx + 3.4 + (1.55 * ca + lz * sa);
+          const pz = rz + 1.6 + (-1.55 * sa + lz * ca);
+          const gy = H(px, pz);
+          const post = kit.slab(0.26, Math.max(0.6, ledgeY - gy + 0.12), 0.26, 0.03);
+          post.rotateY(a0 + 1.1);
+          post.translate(px, gy - 0.12, pz);
+          ledgeParts.push(post);
+        }
+      }
+      const ledge = mergeGeometries(THREE, [ledgeParts[0]]);
       ledge.rotateY(a0 + 1.1);
-      ledge.translate(rx + 3.4, b.y + 5.0, rz + 1.6);
-      addProp("hull", ledge, {
+      ledge.translate(rx + 3.4, ledgeY, rz + 1.6);
+      addProp("hull", mergeGeometries(THREE, [ledge, ledgeParts[1], ledgeParts[2]]), {
         tag: "nave-ledge", road: true, collisionSolid: false, mode: "deck", tide: false,
       });
       arenaWalks.push({
@@ -4088,10 +4134,206 @@ export async function buildAtollWorld(ctx, onProgress) {
     return best;
   }
 
+  /* ============================================================
+     THE HULL'S CONTACT CAPSULES - where the sea is told the ship
+     is standing in it.
+
+     Four blind rounds have said the same sentence about the
+     biggest object on the level: "floats a hundred-metre hull on
+     water that produces no reflection, no wake and no contact
+     darkening", "a straight cut with a white skirt instead of
+     draft, wake or wet line". atoll-water owns the answer (see
+     THE HULL CONTACT FIELD there); this is the half that says
+     WHERE, and it is solved from the built geometry rather than
+     authored, so a re-sited wreck cannot leave a shade band on
+     empty water.
+
+     A CHAIN OF CAPSULES PER PIECE. Each is a run of the piece's
+     wetted extent reduced to a segment along the ship's own axis
+     plus a half-width, which is the right primitive for a hull: a
+     400 m ship is a line with a beam, not a disc, and a disc big
+     enough to cover it darkens a square kilometre of lagoon.
+
+     ONE CAPSULE PER PIECE WAS NOT ENOUGH AND THE WASH IS HOW IT
+     SHOWED. The first version gave each piece a single half-width,
+     which is necessarily its WIDEST wetted place - 40 m on the
+     Spine, whose maximum beam is 72. A hull tapers to a point at
+     both ends, so at the bow the capsule stood thirty metres out
+     in open water on both sides: the shade band was offset from
+     the plate it was meant to be under, and the standing wash -
+     which is measured from the capsule's SURFACE - was drawn as a
+     ring thirty metres off the ship with nothing at the waterline
+     at all. The wash was in the shader, armed, and drawing in the
+     wrong place, which looks exactly like a wash that is not
+     there.
+
+     So each piece is cut into runs of about SEG_LEN and every run
+     gets its own half-width, measured off the WETTED VERTICES in
+     that run rather than off a bounding box. A box cannot taper;
+     that is the whole reason the first version could not.
+
+     TOO NARROW IS A SAFE FAILURE AND TOO WIDE IS NOT. A capsule
+     inside the hull puts its band under plate the camera cannot
+     see through, and the field simply hugs the keel line. A
+     capsule outside the hull puts a dark bruise on open water. So
+     the width is the run's own maximum and the run count is
+     capped, not padded.
+
+     THE BOX HAS TO BE THE ORIENTED ONE. The first version took
+     each mesh's WORLD axis-aligned bounding box and projected its
+     four XZ corners onto the ship's axis. On compass 336 an
+     oriented 400 x 72 m box has a world AABB about 200 m across,
+     so the Spine's half-width solved to 99 m instead of 36 and
+     the contact field reached 114 m into open lagoon on both
+     sides - a second, darker sea, which is the exact failure
+     atoll-water's HULL_REACH note records at 34 m. Transforming
+     the LOCAL box's eight corners through matrixWorld gives the
+     oriented box's real corners and the half-width comes back at
+     the beam.
+
+     THE WETTED GATE. A mesh counts only if its box straddles the
+     tide: it must reach below the splash top and not begin above
+     it. Without the gate the Drive's containment ring - a 96 m
+     circle whose crown is ninety metres up and whose plane's
+     normal is compass 288 - drags the capsule's half-width to 45 m
+     of open pass.
+     ============================================================ */
+  const hullContacts = (() => {
+    const h = FLIGHT_BEARING * DEG;
+    const ax = -Math.sin(h);
+    const az = Math.cos(h);
+    /* The wetted band. Below HULL_BANDS.splashTop is the plate the
+       sea actually touches - the same height the draft shader and
+       the plate grid use, so the ship's idea of its own waterline
+       and the sea's cannot drift. 16 m under is the deepest the
+       lagoon gets under any of the three pieces. */
+    const wetTop = HULL_BANDS.splashTop;
+    const wetBot = SEA_Y - 16.0;
+    /* About 110 m of hull per capsule. The Spine is 516 m of
+       wetted run and four capsules resolve its taper to inside a
+       few metres, which is under the field's own 15 m reach and
+       therefore invisible as a step. Eight would resolve it
+       better and cost eight more loop iterations in a fragment
+       shader that runs on every water pixel on the level. */
+    const SEG_LEN = 110;
+    const SEG_MAX = 4;
+    /* Every fourth vertex of a wetted mesh, and no mesh
+       contributes more than this many samples. The widest place
+       on a run is a broad feature - a chine, a sponson, a rib
+       flange - and it is not resolved any better by reading
+       every vertex of a 200 000-vertex merged shell. */
+    const WIDTH_SAMPLES = 4000;
+    const v = new THREE.Vector3();
+    const out = [];
+    const pieces = [
+      ["antiphon-spine", spine.group],
+      ["antiphon-prow", prow.group],
+      ["antiphon-drive", drive.group],
+    ];
+    for (const [id, g] of pieces) {
+      if (!g) continue;
+      g.updateWorldMatrix(true, true);
+      let s0 = Infinity; let s1 = -Infinity;
+      let t0 = Infinity; let t1 = -Infinity;
+      let lo = Infinity;
+      let any = false;
+      const wetted = [];
+      g.traverse((o) => {
+        if (!o.isMesh || !o.geometry) return;
+        const gb = o.geometry.boundingBox
+          || (o.geometry.computeBoundingBox(), o.geometry.boundingBox);
+        if (!gb) return;
+        /* Eight corners through the world matrix: the oriented box,
+           not its world-aligned shadow. See THE BOX HAS TO BE THE
+           ORIENTED ONE. */
+        const cs = [];
+        let cyLo = Infinity; let cyHi = -Infinity;
+        for (let c = 0; c < 8; c += 1) {
+          v.set((c & 1) ? gb.max.x : gb.min.x,
+            (c & 2) ? gb.max.y : gb.min.y,
+            (c & 4) ? gb.max.z : gb.min.z).applyMatrix4(o.matrixWorld);
+          cs.push(v.x, v.z);
+          if (v.y < cyLo) cyLo = v.y;
+          if (v.y > cyHi) cyHi = v.y;
+        }
+        if (cyLo > wetTop || cyHi < wetBot) return;
+        any = true;
+        wetted.push(o);
+        if (cyLo < lo) lo = cyLo;
+        for (let c = 0; c < 16; c += 2) {
+          const s = cs[c] * ax + cs[c + 1] * az;
+          const t = -cs[c] * az + cs[c + 1] * ax;
+          if (s < s0) s0 = s;
+          if (s > s1) s1 = s;
+          if (t < t0) t0 = t;
+          if (t > t1) t1 = t;
+        }
+      });
+      if (!any) continue;
+      const tc = (t0 + t1) * 0.5;
+      const span = s1 - s0;
+      const segs = Math.max(1, Math.min(SEG_MAX, Math.ceil(span / SEG_LEN)));
+      /* The width profile, one bucket per run, measured off the
+         wetted vertices. Capped at the ship's own half-beam plus
+         one frame: a bin that reaches past that is dressing - a
+         boom, a fallen mast - and widening a run for it puts the
+         band on water the hull is nowhere near. */
+      const cap = SHIP.beam * 0.5 + SHIP.frame;
+      const halfOf = new Float64Array(segs);
+      for (const o of wetted) {
+        const pos = o.geometry.attributes && o.geometry.attributes.position;
+        if (!pos || !pos.count) continue;
+        const stride = Math.max(4, Math.ceil(pos.count / WIDTH_SAMPLES));
+        const e = o.matrixWorld.elements;
+        for (let i = 0; i < pos.count; i += stride) {
+          const lx = pos.getX(i); const ly = pos.getY(i); const lz = pos.getZ(i);
+          const wy = e[1] * lx + e[5] * ly + e[9] * lz + e[13];
+          if (wy > wetTop || wy < wetBot) continue;
+          const wx = e[0] * lx + e[4] * ly + e[8] * lz + e[12];
+          const wz = e[2] * lx + e[6] * ly + e[10] * lz + e[14];
+          const s = wx * ax + wz * az;
+          const t = Math.abs(-wx * az + wz * ax - tc);
+          const k = Math.max(0, Math.min(segs - 1,
+            Math.floor((s - s0) / Math.max(span, 1e-3) * segs)));
+          if (t > halfOf[k]) halfOf[k] = Math.min(t, cap);
+        }
+      }
+      for (let k = 0; k < segs; k += 1) {
+        /* An empty bucket means the stride missed a short run
+           entirely; borrow its neighbour rather than emitting a
+           zero-width capsule, which would be a line of shade on
+           open water. */
+        if (halfOf[k] > 0.5) continue;
+        halfOf[k] = k > 0 ? halfOf[k - 1] : (halfOf[Math.min(segs - 1, 1)] || cap * 0.5);
+      }
+      for (let k = 0; k < segs; k += 1) {
+        const a = s0 + span * (k / segs);
+        const b = s0 + span * ((k + 1) / segs);
+        const half = halfOf[k];
+        /* The ends are pulled in by the half-width, because the
+           capsule's own round cap puts them back: without this a
+           run that already covers its share grows another half-beam
+           of shade off each end and the chain overlaps itself into
+           a wider hull than the ship has. */
+        const trim = Math.min(half, (b - a) * 0.5 - 0.5);
+        out.push({
+          id: segs > 1 ? `${id}-${k}` : id,
+          x0: ax * (a + trim) - az * tc, z0: az * (a + trim) + ax * tc,
+          x1: ax * (b - trim) - az * tc, z1: az * (b - trim) + ax * tc,
+          halfWidth: half,
+          draft: Math.max(0, SEA_Y - lo),
+          beam: half * 2,
+        });
+      }
+    }
+    return out;
+  })();
+
   progress(1, "Ready");
 
   return {
     group: root,
+    hullContacts,
     meshes,
     lights: lightObjects,
     emitters,

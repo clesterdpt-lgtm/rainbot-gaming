@@ -2882,7 +2882,10 @@ export function buildGarner(ctx) {
   function beginLash(arm) {
     arm.phase = "lash";
     arm.timer = C.lashSeconds;
-    bus.emit("lash", { x: arm.anchor.x, z: arm.anchor.z, index: arm.index });
+    bus.emit("lash", {
+      x: arm.anchor.x, z: arm.anchor.z, index: arm.index,
+      impactIn: C.lashSeconds, guardType: "unblockable",
+    });
   }
 
   /** The contact frame. Everything the player can do about a lash
@@ -2938,6 +2941,7 @@ export function buildGarner(ctx) {
     state.seizeTick = 0;
     ctx.combat.hurtPlayer(C.seizeDamage * SURVIVAL_CONFIG.enemyDamageMultiplier, {
       source: "garner-seize", x: ps.x, y: ps.y + 1.0, z: ps.z,
+      guardType: "unblockable",
     });
     ctx.player?.punch?.(1.6);
     ctx.player?.doctrineKick?.(1.0, 0.8);
@@ -3177,7 +3181,10 @@ export function buildGarner(ctx) {
   function beginInhale() {
     state.inhaleWind = C.inhaleWindup;
     state.inhaleTimer = C.inhaleCadence;
-    bus.emit("inhaleTelegraph", { x: C.pitX, z: C.pitZ });
+    bus.emit("inhaleTelegraph", {
+      x: C.pitX, z: C.pitZ,
+      impactIn: C.inhaleWindup, guardType: "unblockable",
+    });
   }
 
   function updateInhale(dt) {
@@ -3270,6 +3277,7 @@ export function buildGarner(ctx) {
     state.devourGap = C.devourLockout;
     ctx.combat.hurtPlayer(C.devourDamage * SURVIVAL_CONFIG.enemyDamageMultiplier, {
       source: "garner-devour", x: ps.x, y: ps.y + 1.0, z: ps.z,
+      guardType: "unblockable",
     });
     // And thrown clear, past the lip, so the player lands somewhere
     // they can fight from rather than back in the mouth.

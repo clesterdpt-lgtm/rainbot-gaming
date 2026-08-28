@@ -77,6 +77,12 @@ export function buildHud(ctx, host) {
       <small id="sf-breach-kicker"></small><strong id="sf-breach-title"></strong>
     </div>
     <div class="sf-hud__reticle" id="sf-reticle"><i></i><i></i><i></i><i></i></div>
+    <div class="sf-guard-cue" id="sf-guard-cue" hidden data-state="idle"
+      data-guard="frontal" role="status" aria-live="polite" aria-atomic="true">
+      <i class="sf-guard-cue__bearing" aria-hidden="true"></i>
+      <div class="sf-guard-cue__frame" aria-hidden="true"><b></b><b></b><b></b><b></b></div>
+      <span><small id="sf-guard-kicker">INCOMING</small><strong id="sf-guard-label">GUARD</strong></span>
+    </div>
     <div class="sf-hud__hurt" id="sf-hurt"></div>
     <div class="sf-hud__toxin" id="sf-toxin" data-state="clear"></div>
     <div class="sf-hud__silk" id="sf-silk" data-state="clear"></div>
@@ -193,9 +199,36 @@ export function buildHud(ctx, host) {
   const silkEl = el.querySelector("#sf-silk");
   const stunEl = el.querySelector("#sf-stun");
   const reticleEl = el.querySelector("#sf-reticle");
+  const guardCueEl = el.querySelector("#sf-guard-cue");
+  const guardKickerEl = el.querySelector("#sf-guard-kicker");
+  const guardLabelEl = el.querySelector("#sf-guard-label");
   const damageLayerEl = el.querySelector("#sf-damage-numbers");
   let reticleGapPx = 30;
   let reticleConeRad = 0;
+  let guardResultFor = 0;
+  let guardResult = null;
+
+  ctx.combat?.bus?.on?.("shieldBlock", (event = {}) => {
+    guardResultFor = 0.42;
+    guardResult = {
+      state: event.perfect ? "perfect" : "blocked",
+      label: event.perfect ? "PERFECT" : "BLOCKED",
+      kicker: event.perfect ? "TIMED AEGIS" : "AEGIS",
+    };
+  });
+  ctx.combat?.bus?.on?.("shieldRejected", (event = {}) => {
+    guardResultFor = 0.48;
+    const labels = {
+      unblockable: "DODGE",
+      angle: "TURN TO THREAT",
+      "perfect-timing": "TOO EARLY",
+    };
+    guardResult = {
+      state: "rejected",
+      label: labels[event.reason] || "GUARD FAILED",
+      kicker: event.reason === "unblockable" ? "UNBLOCKABLE" : "AEGIS REJECTED",
+    };
+  });
 
   /* Damage numbers subscribe to the health mutation itself, not to
      weapon hit effects. If a number appears, `combat.applyDamage`
@@ -1411,6 +1444,7 @@ export function buildHud(ctx, host) {
     el,
     update(dt, player, camera) {
       refreshTier();
+      guardResultFor = Math.max(0, guardResultFor - dt);
       const p = player.position;
       const d = districtAt(p.x, p.z);
       const key = d ? d.key : null;
@@ -1547,7 +1581,8 @@ export function buildHud(ctx, host) {
         shieldEl.dataset.state = shield.active ? "active"
           : lowCharge ? "low" : locked ? "locked" : "ready";
         shieldValueEl.textContent = shield.active
-          ? (shield.impact > 0.18 ? "ABSORB" : "BLOCKING")
+          ? (shield.impact > 0.18 ? (shield.lastPerfect ? "PERFECT" : "ABSORB")
+            : shield.activeFor <= shield.perfectWindow ? "TIMED" : "BLOCKING")
           : release ? "RELEASE X" : lowCharge ? "LOW CHARGE" : locked ? "LOCKED" : "READY";
         if (shield.active && jet) {
           const value = Math.round(clamp01(jet.fuel / jet.maxFuel) * 100);
@@ -1555,6 +1590,44 @@ export function buildHud(ctx, host) {
           jetEl.dataset.state = "shield";
           jetEl.setAttribute("aria-valuetext", `${value} percent, Aegis blocking`);
         }
+      }
+
+      /* The same central language is used for every committed contact.
+         Amber contracts through the wind-up, the last 250ms turns gold,
+         and crimson always means the plate is the wrong answer. */
+      const guard = ctx.guardReadability?.status?.();
+      const threat = guard?.primary || null;
+      if (threat) {
+        const ps = player.state;
+        guardCueEl.hidden = false;
+        guardCueEl.dataset.state = threat.ready ? "ready" : "windup";
+        guardCueEl.dataset.guard = threat.guardType;
+        const dx = threat.x - ps.x;
+        const dz = threat.z - ps.z;
+        const viewYaw = Number.isFinite(ps.aimViewYaw) ? ps.aimViewYaw : ps.yaw;
+        const bearing = Math.atan2(dx, dz);
+        const relative = Math.atan2(Math.sin(bearing - viewYaw), Math.cos(bearing - viewYaw));
+        guardCueEl.style.setProperty("--sf-guard-bearing", `${relative}rad`);
+        guardCueEl.style.setProperty("--sf-guard-progress", String(threat.progress));
+        guardCueEl.style.setProperty("--sf-guard-scale",
+          String(1.22 - Math.max(0, Math.min(1, threat.progress)) * 0.22));
+        guardKickerEl.textContent = threat.training
+          ? "TRAINING BEAT" : threat.ready ? "CONTACT WINDOW" : "INCOMING";
+        guardLabelEl.textContent = threat.guardType === "unblockable"
+          ? "DODGE" : threat.guardType === "perfect-only" ? "PERFECT" : "GUARD";
+        guardCueEl.setAttribute("aria-label",
+          `${guardKickerEl.textContent}: ${guardLabelEl.textContent}`);
+      } else if (guardResultFor > 0 && guardResult) {
+        guardCueEl.hidden = false;
+        guardCueEl.dataset.state = guardResult.state;
+        guardCueEl.dataset.guard = guardResult.state === "rejected" ? "unblockable" : "frontal";
+        guardCueEl.style.setProperty("--sf-guard-bearing", "0rad");
+        guardCueEl.style.setProperty("--sf-guard-progress", "1");
+        guardKickerEl.textContent = guardResult.kicker;
+        guardLabelEl.textContent = guardResult.label;
+      } else {
+        guardCueEl.hidden = true;
+        guardCueEl.dataset.state = "idle";
       }
 
       /* --- combat --- */
@@ -1748,6 +1821,15 @@ export function buildHud(ctx, host) {
         aiming: reticleEl.dataset.aiming === "1",
         furnaceCharging: reticleEl.dataset.charging === "1",
         furnaceReady: reticleEl.dataset.chargeReady === "1",
+      };
+    },
+    guardCueState() {
+      return {
+        hidden: guardCueEl.hidden,
+        state: guardCueEl.dataset.state,
+        guardType: guardCueEl.dataset.guard,
+        kicker: guardKickerEl.textContent,
+        label: guardLabelEl.textContent,
       };
     },
     minimapState() {

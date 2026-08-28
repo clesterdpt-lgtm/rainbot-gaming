@@ -77,7 +77,19 @@ const PAGE = (() => {
   return name.endsWith(".html") ? name : `${name}.html`;
 })();
 const PAGE_URL = `${BASE_URL}${PAGE}`;
-const GAME_URL = `${PAGE_URL}?qa=1&quality=${QUALITY}&time=${TIME}`;
+/* THE A/B FLAG LIST, passed straight through to the page's own
+   `ab` parameter. atoll-art.js reads it (see the AB header there)
+   and zeroes ONE term's gain per name, leaving the program set,
+   the uniform layout and the draw list identical between the two
+   sides of a pair - so a pair measures the term and not a
+   recompile. Without this the only way to capture a control set
+   was to edit the source between runs, which is how a round loses
+   a measurement to a mid-run edit by another session.
+     --ab norim            one term off
+     --ab norim,noterrfill several */
+const AB = String(args.ab || "");
+const GAME_URL = `${PAGE_URL}?qa=1&quality=${QUALITY}&time=${TIME}`
+  + (AB ? `&ab=${encodeURIComponent(AB)}` : "");
 
 /* ------------------------- static server ------------------------- */
 

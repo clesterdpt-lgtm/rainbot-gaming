@@ -132,6 +132,24 @@ const BEDDED_SKIP_RE = /^antiphon-|^road-surface-antiphon-|(^|-)(prow|hold|drive
 /* A plant's canopy, judged through its trunk. See floatingProps. */
 const BEDDED_CANOPY_RE = /^flora-.*-leaf-/;
 
+/* How far under a failing copy the gate looks for something that
+   is holding it up. See THE SUPPORT TEST in floatingProps.
+
+   0.6 m of slack past the measured gap. The gap is taken at the
+   copy's LOWEST sampled vertex and the ray is cast from that
+   vertex, so a support the copy is actually resting on returns a
+   distance of nearly zero; the slack is there for a copy sampled
+   at a stride that missed its true low point by a vertex or two.
+   At 3 m the ray starts finding the ground itself through the
+   thing it is standing on. */
+const BEDDED_SUPPORT_SLACK = 0.6;
+
+/* How far sideways a prop may reach for the thing it is attached
+   to. 0.8 m is a bolted joint on this level's scale - a hinge, a
+   bracket, a rib flange. At 3 m two unrelated props standing a
+   pace apart start excusing each other. */
+const BEDDED_TOUCH_M = 0.8;
+
 export function installAtollQa(ctx, api, hook) {
   const target = hook || (typeof window !== "undefined" ? window.__SF : null);
   if (!target) return null;
@@ -1378,6 +1396,13 @@ export function installAtollQa(ctx, api, hook) {
       let notLandform = 0;
       let paired = 0;
       let copies = 0;
+      /* Copies that failed the landform test and were found to be
+         standing on something the level built. See THE SUPPORT
+         TEST. Counted and reported rather than silently dropped -
+         a number that climbs is a level growing furniture on
+         furniture, which is worth seeing. */
+      let supported = 0;
+      let supportedWorst = null;
 
       /* Per-copy vertex budget. 20000 instances at the merged
          meshes' stride would be nine million heightAt calls and a
@@ -1391,10 +1416,106 @@ export function installAtollQa(ctx, api, hook) {
       const mInst = THREE ? new THREE.Matrix4() : null;
       const mWorld = THREE ? new THREE.Matrix4() : null;
 
+      /* ------------------------------------------------------------
+         THE SUPPORT TEST, and it is the difference between a gate
+         that finds faults and one that manufactures them.
+
+         The gate measures every copy against the LANDFORM, which
+         is right for a crate on a beach and wrong for anything
+         standing on another prop. Before this it reported six
+         floating and three of them were correct by construction:
+
+           road-surface-atoll-ground-hull-nave-ledge  +4.36 m
+             a 4.2 m platform bolted to a 15 m ship's frame that
+             is itself standing in the Drowned Nave. The rib is
+             the reference, not the mud.
+           road-surface-atoll-ground-hull-boardwalk   +0.93 m
+             a boardwalk. It is built ON PILES, in the same block
+             of this file, and the piles are a separate prop.
+           atoll-ground-hullScoured-pod-hatch         +1.36 m
+             the escape pod's hatch panel, swung open on its
+             hinge. It is attached to the pod.
+
+         THE ALTERNATIVE WAS A LONGER SKIP LIST and it is the
+         wrong instrument. Every name added to BEDDED_SKIP_RE is a
+         thing the gate can never fail again, including when
+         somebody later moves it; a skip list grows and a gate
+         that skips enough finds nothing. Asking "is there
+         geometry underneath it" is the question the eye asks and
+         it keeps working when the prop moves.
+
+         WHY world.meshes AND NOT THE SCENE. The landform is not
+         in this list - it is the terrain's own meshes - so a hit
+         here is by definition something the level BUILT, and the
+         test does not have to separate a support from the ground
+         by distance. The slack cap is still applied so a prop
+         hanging four metres over another prop is not excused.
+
+         The ray starts a centimetre under the failing vertex so a
+         copy resting exactly on its support does not miss it to
+         floating point, and self-hits are dropped: a merged
+         boardwalk deck is one mesh and its far end is under its
+         near end. --------------------------------------------- */
+      const rc = THREE ? new THREE.Raycaster() : null;
+      const rcOrigin = THREE ? new THREE.Vector3() : null;
+      /* DOWN FIRST, THEN SIDEWAYS. A prop can be held up two ways
+         and the gate has to know both. A crate stands on a berm -
+         the support is under it. A ledge is BOLTED TO a rib and a
+         hatch is hinged to a pod - the support is beside them, and
+         a purely downward test forbids every cantilever on the
+         level. The sideways reach is 0.8 m, which is "bolted to"
+         and not "near": the Drowned Nave's ledge overlaps its rib
+         by 0.78 m and a 4.3 m cantilever off it has nothing under
+         its outer end, correctly. */
+      const rcDirs = THREE ? [
+        new THREE.Vector3(0, -1, 0),
+        new THREE.Vector3(1, 0, 0), new THREE.Vector3(-1, 0, 0),
+        new THREE.Vector3(0, 0, 1), new THREE.Vector3(0, 0, -1),
+      ] : [];
+      const supportUnder = (mesh, lows) => {
+        if (!rc || !lows || !lows.length) return null;
+        const targets = [];
+        for (const m of world.meshes) {
+          if (m === mesh || !m.visible) continue;
+          if (BULK_MESH_RE.test(m.name || "")) continue;
+          targets.push(m);
+        }
+        for (const lo of lows) {
+          for (let d = 0; d < rcDirs.length; d += 1) {
+            rc.near = 0;
+            rc.far = d === 0
+              ? lo.gap + BEDDED_SUPPORT_SLACK : BEDDED_TOUCH_M;
+            if (!(rc.far > 0)) continue;
+            rcOrigin.set(lo.x, lo.y - 0.01, lo.z);
+            rc.set(rcOrigin, rcDirs[d]);
+            const hits = rc.intersectObjects(targets, false);
+            if (hits.length) {
+              return { by: hits[0].object.name, at: hits[0].distance, side: d > 0 };
+            }
+          }
+        }
+        return null;
+      };
+
       /** The lowest point of one copy, and the gap under it. */
       const measure = (pos, e, vstride) => {
         let minGap = Infinity;
         let atX = 0; let atZ = 0; let atY = 0; let n = 0;
+        /* THE PROBE POINTS FOR THE SUPPORT TEST, and they are the
+           four lowest sampled vertices PLUS eight spread evenly
+           through the sample order.
+
+           The lowest four alone do not work and the boardwalk is
+           why: a deck on piles is supported, and its lowest vertex
+           is the one BETWEEN two piles, and on a merged deck the
+           four lowest are all in the same dip. A ray from each of
+           them misses every pile and the gate calls a boardwalk
+           floating. The evenly spread eight walk the whole
+           footprint and find the pile, the hinge or the rib. */
+        const lows = [];
+        const spread = [];
+        const spreadEvery = Math.max(1, Math.floor(pos.count / vstride / 8));
+        let sampleI = 0;
         for (let i = 0; i < pos.count; i += vstride) {
           const vx = pos.getX(i);
           const vy = pos.getY(i);
@@ -1407,9 +1528,19 @@ export function installAtollQa(ctx, api, hook) {
           const wz = e[2] * vx + e[6] * vy + e[10] * vz + e[14];
           const gap = wy - f.heightAt(wx, wz);
           if (gap < minGap) { minGap = gap; atX = wx; atZ = wz; atY = wy; }
+          if (lows.length < 4 || gap < lows[lows.length - 1].gap) {
+            lows.push({ gap, x: wx, y: wy, z: wz });
+            lows.sort((a, b) => a.gap - b.gap);
+            if (lows.length > 4) lows.length = 4;
+          }
+          if (sampleI % spreadEvery === 0 && spread.length < 8) {
+            spread.push({ gap, x: wx, y: wy, z: wz });
+          }
+          sampleI += 1;
           n += 1;
         }
-        return n && Number.isFinite(minGap) ? { minGap, atX, atZ, atY, n } : null;
+        return n && Number.isFinite(minGap)
+          ? { minGap, atX, atZ, atY, n, lows: lows.concat(spread) } : null;
       };
 
       /* The trunk that belongs to a canopy, by name. The bins are
@@ -1469,6 +1600,20 @@ export function installAtollQa(ctx, api, hook) {
             continue;
           }
           if (r.minGap > gapM && (!worst || r.minGap > worst.minGap)) {
+            /* THE SUPPORT TEST, per failing copy and not per mesh:
+               one supported copy must not excuse the mesh, and one
+               unsupported copy must still be found behind it. It
+               only runs on copies that have already failed the
+               landform test, so it costs one ray per fault rather
+               than one per prop. */
+            const sup = supportUnder(mesh, r.lows);
+            if (sup) {
+              supported += 1;
+              if (!supportedWorst || r.minGap > supportedWorst.gap) {
+                supportedWorst = { name, gap: r.minGap, by: sup.by };
+              }
+              continue;
+            }
             worst = r;
             worstK = k;
           }
@@ -1487,6 +1632,8 @@ export function installAtollQa(ctx, api, hook) {
         gapM,
         floating: rows.length,
         afloat,
+        supported,
+        supportedWorst,
         notLandform,
         paired,
         copies,

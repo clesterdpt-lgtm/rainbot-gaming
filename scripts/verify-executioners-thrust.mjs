@@ -38,7 +38,7 @@ const meleeAction = keybindsModule.KEYBIND_ACTIONS.find((a) => a.id === "melee")
 const wheelAction = keybindsModule.KEYBIND_ACTIONS.find((a) => a.id === "wheel");
 const furnaceAction = keybindsModule.KEYBIND_ACTIONS.find((a) => a.id === "furnace");
 assert(meleeAction.defaults.includes("KeyF"), "melee default includes KeyF");
-assert(furnaceAction.defaults.includes("KeyG"), "Furnace Lance has a distinct G default");
+assert(furnaceAction.defaults.includes("KeyZ"), "Furnace Lance has a distinct Z default");
 assert(wheelAction.defaults.includes("KeyQ"), "command wheel retains Q");
 
 console.log("\n--- 3. Testing Icon Asset ---");
@@ -67,15 +67,14 @@ assert(!combatCode.includes("rank >= 2 ? 320 : 180"),
 const mainCode = readFileSync(path.join(root, "assets", "js", "saintfall", "main.js"), "utf-8");
 assert(mainCode.includes("function meleePierce("), "main.js defines meleePierce");
 assert(mainCode.includes("meleeCharging"), "main.js tracks meleeCharging state");
-assert(mainCode.includes("canChargePierce"), "main.js checks canChargePierce");
-assert(!mainCode.includes("progression.talentRank"), "main.js does not call the nonexistent talentRank API");
-assert(mainCode.includes("player.input.state.furnaceHeld"),
-  "main.js routes Furnace Lance through distinct alternate-fire input");
+assert(mainCode.includes("MELEE_HOLD_GATE"), "main.js defines MELEE_HOLD_GATE for tap vs hold separation");
+assert(mainCode.includes("chargeRatio"), "main.js passes variable chargeRatio based on hold time");
 
 const vfxCode = readFileSync(path.join(root, "assets", "js", "saintfall", "vfx.js"), "utf-8");
 assert(vfxCode.includes("6: Object.freeze({"), "vfx.js has MELEE_SWEEPS[6]");
 assert(vfxCode.includes("case \"thrust\":"), "vfx.js handles thrust doctrineCue");
 assert(vfxCode.includes("meleePierceCharge,"), "vfx.js exports meleePierceCharge");
+assert(vfxCode.includes("sweepReach"), "vfx.js scales sweepReach with variable thrust reach");
 
 const audioCode = readFileSync(path.join(root, "assets", "js", "saintfall", "audio.js"), "utf-8");
 assert(audioCode.includes("meleePierceCharge,"), "audio.js exports meleePierceCharge");

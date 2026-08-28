@@ -147,13 +147,13 @@ try {
 
   const shotsBeforeEarly = await page.evaluate(() => window.__SF.combat.player.shots);
   const fuelBeforeEarly = await page.evaluate(() => window.__SF.jetpack.state.fuel);
-  await page.keyboard.down("KeyG");
+  await page.keyboard.down("KeyZ");
   const earlyCharge = await page.evaluate(() => {
     const T = window.__SF;
     T.advanceTime(0.42, 1 / 120);
     return { charge: T.weapons.furnaceChargeState(), reticle: T.reticleState() };
   });
-  await page.keyboard.up("KeyG");
+  await page.keyboard.up("KeyZ");
   await invoke(page, "renderOnce", 1 / 60);
   const earlyAfter = await page.evaluate(() => ({
     shots: window.__SF.combat.player.shots,
@@ -162,13 +162,13 @@ try {
   }));
   check("releasing Furnace Lance early cancels without firing or spending charge",
     earlyCharge.charge.progress > 0.3 && earlyCharge.charge.progress < 0.6
-      && earlyAfter.shots === shotsBeforeEarly && earlyAfter.fuel === fuelBeforeEarly
-      && !earlyAfter.charge.charging,
+    && earlyAfter.shots === shotsBeforeEarly && earlyAfter.fuel === fuelBeforeEarly
+    && !earlyAfter.charge.charging,
     { earlyCharge, earlyAfter });
 
   const shotsBeforeFull = earlyAfter.shots;
   const fuelBeforeFull = earlyAfter.fuel;
-  await page.keyboard.down("KeyG");
+  await page.keyboard.down("KeyZ");
   const fullCharge = await page.evaluate(() => {
     const T = window.__SF;
     T.advanceTime(1.12, 1 / 120);
@@ -181,9 +181,9 @@ try {
   });
   check("a full Furnace Lance charge waits for release",
     fullCharge.charge.ready && fullCharge.shots === shotsBeforeFull
-      && fullCharge.fuel === fuelBeforeFull && fullCharge.reticle.furnaceReady,
+    && fullCharge.fuel === fuelBeforeFull && fullCharge.reticle.furnaceReady,
     fullCharge);
-  await page.keyboard.up("KeyG");
+  await page.keyboard.up("KeyZ");
   await invoke(page, "renderOnce", 1 / 60);
   const fullAfter = await page.evaluate(() => ({
     shots: window.__SF.combat.player.shots,

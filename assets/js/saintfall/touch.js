@@ -134,13 +134,21 @@ export function buildTouchControls(ctx, player, host, stage) {
     if (event.cancelable) event.preventDefault();
   };
 
-  function pulse(ms = 7) {
+  function pulse(pattern = 7) {
     try {
-      if (navigator.vibrate) navigator.vibrate(ms);
+      if (enabled && navigator.vibrate) navigator.vibrate(pattern);
     } catch (_) {
       // Vibration is optional and may be blocked outside a user gesture.
     }
   }
+
+  ctx.guardReadability?.bus?.on?.("threatReady", (event = {}) => {
+    pulse(event.guardType === "unblockable" ? [10, 34, 14] : 10);
+  });
+  ctx.combat?.bus?.on?.("shieldBlock", (event = {}) => {
+    pulse(event.perfect ? [8, 24, 16] : 12);
+  });
+  ctx.combat?.bus?.on?.("shieldRejected", () => pulse([14, 30, 14]));
 
   function setHeld(button, action, held) {
     input.setTouchHold(HOLD_ACTIONS[action], held);
@@ -366,8 +374,9 @@ export function buildTouchControls(ctx, player, host, stage) {
     setButtonState("jet", ctx.jetpack?.state?.active
       ? "active"
       : ctx.jetpack?.state?.inFlight ? "glide" : fuel <= 0 ? "low" : "ready");
-    setButtonState("shield", ctx.shield?.state?.active
-      ? "active"
+    const shield = ctx.shield?.status?.();
+    setButtonState("shield", shield?.active
+      ? (shield.activeFor <= shield.perfectWindow ? "timed" : "active")
       : fuel <= 0 ? "low" : "ready");
     setButtonState("fire", ctx.weapons?.carry?.overheated ? "low" : "ready");
     const furnaceRank = ctx.progression?.rank?.("censer_furnace_reprieve") || 0;

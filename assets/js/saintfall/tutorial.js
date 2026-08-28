@@ -45,9 +45,9 @@ const DESKTOP_STEPS = Object.freeze([
     id: "combat",
     kicker: "WEAPON LITURGY",
     title: "Ready the Vesper lance",
-    copy: "Fire and aim with the mouse. {{melee}} swings the polearm, {{block}} raises the Aegis, and {{vent}} vents weapon heat.",
+    copy: "Fire and aim with the mouse. Amber brackets mean incoming; raise {{block}} on the final gold beat. Crimson attacks must be dodged. {{melee}} strikes and {{vent}} vents heat.",
     controls: ["LMB", "RMB", "{{melee}}", "{{block}}", "{{vent}}"],
-    hint: "Cycle every combat control",
+    hint: "Follow the training beat, then cycle every combat control",
     checks: [["fire", "FIRE"], ["aim", "AIM"], ["melee", "MELEE"], ["aegis", "AEGIS"], ["vent", "VENT"]],
   },
   {
@@ -84,9 +84,9 @@ const TOUCH_STEPS = Object.freeze([
     id: "combat",
     kicker: "WEAPON LITURGY",
     title: "Ready the Vesper lance",
-    copy: "Use the labeled combat controls to fire, aim, strike, raise the Aegis, and vent weapon heat.",
+    copy: "Amber brackets mean incoming; raise Aegis on the final gold beat. Crimson attacks must be dodged. Then try each labeled combat control.",
     controls: ["FIRE", "AIM", "MELEE", "AEGIS", "VENT"],
-    hint: "Cycle every combat control",
+    hint: "Follow the training beat, then cycle every combat control",
     checks: [["fire", "FIRE"], ["aim", "AIM"], ["melee", "MELEE"], ["aegis", "AEGIS"], ["vent", "VENT"]],
   },
   {
@@ -175,6 +175,7 @@ export function buildTutorial(ctx, options = {}) {
     observed: {},
     stepStartedAt: 0,
     completedAt: 0,
+    guardPreviewAt: 0,
     origin: { x: 0, z: 0, yaw: 0, pitch: 0 },
     lookTravel: 0,
     lastYaw: 0,
@@ -239,6 +240,7 @@ export function buildTutorial(ctx, options = {}) {
     state.mode = "running";
     state.observed = {};
     state.stepStartedAt = performance.now();
+    state.guardPreviewAt = state.stepIndex === 2 ? performance.now() : 0;
     resetOrigin();
     renderStep();
     return true;
@@ -401,6 +403,12 @@ export function buildTutorial(ctx, options = {}) {
       if (ctx.boost?.state?.active || ctx.player.input.state.boostHeld) mark("glide");
       if (ctx.jetpack?.state?.active || ctx.jetpack?.state?.inFlight) mark("jet");
     } else if (current?.id === "combat") {
+      const now = performance.now();
+      const activeGuard = ctx.guardReadability?.status?.()?.primary;
+      if (!state.observed.aegis && !activeGuard && now >= state.guardPreviewAt) {
+        ctx.guardReadability?.preview?.({ impactIn: 1.1, guardType: "frontal" });
+        state.guardPreviewAt = now + 1900;
+      }
       if (ctx.player.input.state.firing) mark("fire");
       if (ctx.player.input.state.ads) mark("aim");
       if (ctx.player.input.state.block) mark("aegis");

@@ -8,6 +8,9 @@
 
 import { clamp01, damp } from "saintfall/core.js";
 import { keybindDown } from "saintfall/keybinds.js";
+import {
+  GUARD_CUE_CONFIG, GUARD_TYPES, normalizeGuardDetail,
+} from "saintfall/guard-rules.js";
 
 export const SHIELD_CONFIG = Object.freeze({
   /* A full Reliquary now sustains an ordinary plate for 8.33 seconds.
@@ -18,7 +21,7 @@ export const SHIELD_CONFIG = Object.freeze({
   frontDot: 0.42,
   distance: 0.94,
   centreY: 1.08,
-  perfectWindow: 0.25,
+  perfectWindow: GUARD_CUE_CONFIG.perfectWindow,
   domeRadius: 2.62,
 });
 
@@ -513,20 +516,52 @@ export function buildShield(ctx, player) {
    * be explicit: falls, scripted hazards and other source-less damage
    * do not become accidentally blockable just because X is held.
    */
-  function blocksFrom(sourceX, sourceZ) {
-    if (!state.active || !Number.isFinite(sourceX) || !Number.isFinite(sourceZ)) return false;
+  function blockVerdict(sourceX, sourceZ, guardType = GUARD_TYPES.FRONTAL) {
+    if (!state.active) return { ok: false, reason: "inactive" };
+    if (guardType === GUARD_TYPES.UNBLOCKABLE) return { ok: false, reason: "unblockable" };
+    if (!Number.isFinite(sourceX) || !Number.isFinite(sourceZ)) {
+      return { ok: false, reason: "no-origin" };
+    }
     const ps = player.state;
     const dx = sourceX - ps.x;
     const dz = sourceZ - ps.z;
     const distance = Math.hypot(dx, dz);
-    if (distance < 1e-5) return false;
-    if (state.omniDirectional) return true;
+    if (distance < 1e-5) return { ok: false, reason: "no-direction" };
+    const elapsed = Math.max(0, state.activeFor);
+    if (guardType === GUARD_TYPES.PERFECT_ONLY && elapsed > config.perfectWindow) {
+      return { ok: false, reason: "perfect-timing" };
+    }
+    if (state.omniDirectional) return { ok: true, reason: "omnidirectional" };
     const dot = (dx * Math.sin(ps.yaw) + dz * Math.cos(ps.yaw)) / distance;
-    return dot >= config.frontDot;
+    return dot >= config.frontDot
+      ? { ok: true, reason: "frontal", dot }
+      : { ok: false, reason: "angle", dot };
+  }
+
+  function blocksFrom(sourceX, sourceZ, guardType = GUARD_TYPES.FRONTAL) {
+    return blockVerdict(sourceX, sourceZ, guardType).ok;
   }
 
   function tryBlock(amount, detail = {}) {
-    if (!(amount > 0) || !blocksFrom(detail.x, detail.z)) return false;
+    if (!(amount > 0)) return false;
+    const normalized = normalizeGuardDetail(detail, player.state);
+    const verdict = blockVerdict(normalized.originX, normalized.originZ,
+      normalized.guardType);
+    state.lastAttempt = {
+      ok: verdict.ok,
+      reason: verdict.reason,
+      guardType: normalized.guardType,
+      source: normalized.source || "attack",
+      originX: normalized.originX,
+      originY: normalized.originY,
+      originZ: normalized.originZ,
+      activeFor: state.activeFor,
+      attemptIndex: (state.lastAttempt?.attemptIndex || 0) + 1,
+    };
+    if (!verdict.ok) {
+      state.lastReason = verdict.reason;
+      return false;
+    }
     const elapsedSeconds = Math.max(0, state.activeFor);
     const perfect = elapsedSeconds <= config.perfectWindow;
     const timing = {
@@ -550,11 +585,12 @@ export function buildShield(ctx, player) {
        there rather than at the boss, so a blow from the left is seen
        to land on the left. */
     {
-      const dx = detail.x - ps.x;
-      const dz = detail.z - ps.z;
+      const dx = normalized.originX - ps.x;
+      const dz = normalized.originZ - ps.z;
       const L = Math.hypot(dx, dz) || 1;
       const lx = (dx / L) * Math.cos(ps.yaw) - (dz / L) * Math.sin(ps.yaw);
-      const sy = Number.isFinite(detail.y) ? detail.y : ps.y + config.centreY;
+      const sy = Number.isFinite(normalized.originY)
+        ? normalized.originY : ps.y + config.centreY;
       state.hitX = Math.max(-0.75, Math.min(0.75, lx * 0.9));
       state.hitY = Math.max(-0.85, Math.min(0.85, sy - (ps.y + config.centreY)));
       state.hitDirX = dx / L;
@@ -572,18 +608,22 @@ export function buildShield(ctx, player) {
       ctx.vfx?.spark?.(fx, ps.y + config.centreY, fz, 1.18 + clamp01(amount / 70) * 0.54);
     }
     const payload = {
-      source: detail.source || "attack",
-      enemyId: typeof detail.enemyId === "string" ? detail.enemyId : "",
-      enemyKey: detail.enemyKey || detail.enemy || "",
+      source: normalized.source || "attack",
+      enemyId: typeof normalized.enemyId === "string" ? normalized.enemyId : "",
+      enemyKey: normalized.enemyKey || normalized.enemy || "",
       amount,
       absorbed: amount,
       perfect,
       timing,
       chargeSpent: state.lastDrain,
       blockIndex: state.blocks,
-      x: detail.x,
-      y: detail.y,
-      z: detail.z,
+      x: normalized.x,
+      y: normalized.y,
+      z: normalized.z,
+      originX: normalized.originX,
+      originY: normalized.originY,
+      originZ: normalized.originZ,
+      guardType: normalized.guardType,
       playerX: ps.x,
       playerY: ps.y,
       playerZ: ps.z,
@@ -700,6 +740,7 @@ export function buildShield(ctx, player) {
       lastPerfect: !!state.lastBlock?.perfect,
       lastTimingMs: Number((state.lastBlock?.timing?.elapsedMs || 0).toFixed(2)),
       lastReason: state.lastReason,
+      lastAttempt: state.lastAttempt ? { ...state.lastAttempt } : null,
       drainRate: config.drainRate,
       baseMoveSpeed: config.moveSpeed,
       frontDot: config.frontDot,
@@ -714,8 +755,10 @@ export function buildShield(ctx, player) {
     visual,
     beginFrame,
     blocksFrom,
+    blockVerdict,
     tryBlock,
     lastBlock: () => state.lastBlock,
+    lastAttempt: () => state.lastAttempt,
     lastRelease: () => state.lastRelease,
     updateVisual,
     reset,

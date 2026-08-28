@@ -40,6 +40,7 @@ import { buildWinnower } from "saintfall/winnower.js";
 import { buildDistrictBosses } from "saintfall/district-bosses.js";
 import { buildApostate } from "saintfall/apostate.js";
 import { buildUndercroft } from "saintfall/undercroft.js";
+import { buildGuardReadability } from "saintfall/guard-readability.js";
 import { buildProgression } from "saintfall/progression.js";
 import { FURNACE_LANCE_RULES } from "saintfall/progression-config.js";
 import { buildAudio } from "saintfall/audio.js";
@@ -293,6 +294,12 @@ export async function start({ boot, build } = {}) {
   const undercroft = buildUndercroft(ctx);
   ctx.undercroft = undercroft;
 
+  /* One presentation layer observes every hostile domain after all of them
+     exist. It does not own attacks or damage; it translates their committed
+     contact beats into a consistent guard/dodge signal. */
+  const guardReadability = buildGuardReadability(ctx);
+  ctx.guardReadability = guardReadability;
+
   if (apostateTestStart) {
     const armed = mission.snapshot();
     armed.phase = "cathedralBoss";
@@ -541,6 +548,7 @@ export async function start({ boot, build } = {}) {
     matriarch,
     apostate,
     undercroft,
+    guardReadability,
     progression,
     audio,
     intro,
@@ -838,7 +846,7 @@ export async function start({ boot, build } = {}) {
     return true;
   }
 
-  function meleePierce(aimYaw = null) {
+  function meleePierce(aimYaw = null, chargeRatio = 1.0) {
     if (combat.player.dead) return false;
     if (jetpack.state.inFlight) return false;
     if (shield.state.active) return false;
@@ -853,7 +861,8 @@ export async function start({ boot, build } = {}) {
     if (!jetpack.spend(cost, true, true)) {
       return meleeStrike(aimYaw);
     }
-    if (!player.meleePierce(aimYaw) && wasRanged && !player.action) {
+    const ratio = Math.max(0.35, Math.min(1.0, chargeRatio ?? 1.0));
+    if (!player.meleePierce(aimYaw, ratio) && wasRanged && !player.action) {
       weapons.setMode("ranged");
       meleeBorrowed = false;
       return false;
@@ -865,10 +874,10 @@ export async function start({ boot, build } = {}) {
   /* A press must survive the ordinary low-ready/sheathed carry. Previously
      the input was consumed while the lance was still on the trooper's back;
      by the time the draw finished there was no action left to perform. */
-  function queueMelee(kind, aimYaw = null) {
+  function queueMelee(kind, aimYaw = null, chargeRatio = 1.0) {
     calmFor = 0;
     weapons.setStow(false);
-    meleePending = { kind, aimYaw };
+    meleePending = { kind, aimYaw, chargeRatio };
   }
 
   function resolveQueuedMelee(canChargePierce, blocked) {
@@ -881,7 +890,7 @@ export async function start({ boot, build } = {}) {
     const pending = meleePending;
     meleePending = null;
     if (pending.kind === "pierce" && canChargePierce) {
-      return meleePierce(pending.aimYaw);
+      return meleePierce(pending.aimYaw, pending.chargeRatio ?? 1.0);
     }
     return meleeStrike(pending.aimYaw);
   }
@@ -1037,23 +1046,32 @@ export async function start({ boot, build } = {}) {
     const meleeBlocked = encounterHold || stunned || combat.player.dead || airborne()
       || boost.state.active || shield.state.active || slam.state.active;
 
+    const MELEE_HOLD_GATE = 0.22;
+    const MELEE_CHARGE_MAX = measureRankVal >= 2 ? 0.72 : 0.85;
+
     if (meleeCharging && canChargePierce && player.input.state.meleeHeld) {
-      const chargeMax = measureRankVal >= 2 ? 0.24 : 0.32;
-      meleeHoldTime = Math.min(chargeMax, meleeHoldTime + d);
-      const progress = Math.min(1.0, meleeHoldTime / chargeMax);
-      audio.meleePierceCharge?.(progress);
-      vfx.meleePierceCharge?.(player.state.x, player.state.y, player.state.z, progress, measureRankVal);
-      if (meleeHoldTime >= chargeMax && weapons.stowPhase <= 0.08) {
-        meleePierce(meleeAimYaw ?? player.state.aimViewYaw);
-        audio.meleePierceCharge?.(0);
-        meleeHoldTime = 0;
-        meleeCharging = false;
+      meleeHoldTime = Math.min(MELEE_CHARGE_MAX, meleeHoldTime + d);
+      if (meleeHoldTime >= MELEE_HOLD_GATE) {
+        const progress = Math.min(1.0, (meleeHoldTime - MELEE_HOLD_GATE) / (MELEE_CHARGE_MAX - MELEE_HOLD_GATE));
+        audio.meleePierceCharge?.(progress);
+        vfx.meleePierceCharge?.(player.state.x, player.state.y, player.state.z, progress, measureRankVal);
+        if (meleeHoldTime >= MELEE_CHARGE_MAX && weapons.stowPhase <= 0.08) {
+          meleePierce(meleeAimYaw ?? player.state.aimViewYaw, 1.0);
+          audio.meleePierceCharge?.(0);
+          meleeHoldTime = 0;
+          meleeCharging = false;
+        }
       }
     } else if (meleeCharging) {
       audio.meleePierceCharge?.(0);
       if (!meleeBlocked) {
-        queueMelee(meleeHoldTime >= 0.16 && canChargePierce ? "pierce" : "strike",
-          meleeAimYaw ?? player.state.aimViewYaw);
+        if (meleeHoldTime >= MELEE_HOLD_GATE && canChargePierce) {
+          const progress = Math.min(1.0, (meleeHoldTime - MELEE_HOLD_GATE) / (MELEE_CHARGE_MAX - MELEE_HOLD_GATE));
+          const chargeRatio = Math.max(0.35, progress);
+          queueMelee("pierce", meleeAimYaw ?? player.state.aimViewYaw, chargeRatio);
+        } else {
+          queueMelee("strike", meleeAimYaw ?? player.state.aimViewYaw);
+        }
       }
       meleeCharging = false;
       meleeHoldTime = 0;
@@ -1162,6 +1180,7 @@ export async function start({ boot, build } = {}) {
        otherwise put the body back on a nave floor that is currently
        being taken away. */
     undercroft.update(d);
+    guardReadability.update(d);
     breaches.update(d);
     mission.update(d);
     progression.update?.(d);

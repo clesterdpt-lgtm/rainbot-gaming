@@ -3309,7 +3309,11 @@ export function buildAbbess(ctx) {
     state.slamTime = 0;
     state.slamTimer = C.slamCadence;
     ctx.player?.doctrineKick?.(0.45, 0.35);
-    bus.emit("slamTelegraph", { x: C.lairX, z: C.lairZ });
+    bus.emit("slamTelegraph", {
+      x: C.lairX, z: C.lairZ,
+      impactIn: C.slamRise + C.slamHold + C.slamFall,
+      guardType: "unblockable",
+    });
   }
 
   /** The impact. Everything inside the ring goes down, INCLUDING her
@@ -3528,7 +3532,10 @@ export function buildAbbess(ctx) {
     const sx = Math.sin(inst.yaw);
     const sz = Math.cos(inst.yaw);
     ctx.vfx?.venomBurst?.(C.lairX + sx * 9.6, floorY + 2.4, C.lairZ + sz * 9.6, 1.5);
-    bus.emit("biteTelegraph", { x: C.lairX, z: C.lairZ });
+    bus.emit("biteTelegraph", {
+      x: C.lairX, z: C.lairZ,
+      impactIn: C.biteWindup + C.biteStrike, guardType: "frontal",
+    });
   }
 
   /** The snap. Re-checked against where the player IS, which is the
@@ -3557,6 +3564,7 @@ export function buildAbbess(ctx) {
     state.bitesLanded += 1;
     ctx.combat.hurtPlayer(C.biteDamage * SURVIVAL_CONFIG.enemyDamageMultiplier, {
       source: "abbess-bite", x: ps.x, y: ps.y + 1.2, z: ps.z,
+      originX: jx, originY: jy, originZ: jz, guardType: "frontal",
     });
     /* AND THROWN OFF HER. Not a stun - the slam owns that verb, and
        two attacks that both end with the player on the floor is one

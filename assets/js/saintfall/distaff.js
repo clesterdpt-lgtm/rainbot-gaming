@@ -2597,7 +2597,10 @@ export function buildDistaff(ctx) {
     state.actionKind = "slam";
     state.pending = C.slamContact;
     state.slamTimer = C.slamCadence;
-    bus.emit("slamTelegraph", { x: state.slamX, z: state.slamZ });
+    bus.emit("slamTelegraph", {
+      x: state.slamX, z: state.slamZ,
+      impactIn: C.slamContact, guardType: "unblockable",
+    });
   }
 
   function beginWebCast() {
@@ -2606,7 +2609,9 @@ export function buildDistaff(ctx) {
     state.actionKind = "webCast";
     state.pending = C.webContact;
     state.webTimer = C.webCadence;
-    bus.emit("webCastTelegraph", { x: inst.x, z: inst.z });
+    bus.emit("webCastTelegraph", {
+      x: inst.x, z: inst.z, impactIn: C.webContact, guardType: "frontal",
+    });
   }
 
   function beginBite() {
@@ -2615,7 +2620,9 @@ export function buildDistaff(ctx) {
     state.action = 1.33;
     state.actionKind = "bite";
     state.pending = C.biteContact;
-    bus.emit("biteTelegraph", { x: inst.x, z: inst.z });
+    bus.emit("biteTelegraph", {
+      x: inst.x, z: inst.z, impactIn: C.biteContact, guardType: "frontal",
+    });
   }
 
   /** Where the mouth is. Falls back to a point ahead of the centre if
@@ -2671,6 +2678,7 @@ export function buildDistaff(ctx) {
     const falloff = 1 - 0.6 * (dist / C.slamRadius);
     ctx.combat.hurtPlayer(C.slamDamage * falloff, {
       source: "distaff-slam", x: ps.x, y: ps.y + 1.0, z: ps.z,
+      guardType: "unblockable",
     });
     ctx.player.punch?.(1.5);
     ctx.player.doctrineKick?.(0.9, 0.85);
@@ -2746,6 +2754,8 @@ export function buildDistaff(ctx) {
     }
     ctx.combat.hurtPlayer(C.biteDamage, {
       source: "distaff-bite", x: ps.x, y: ps.y + 1.0, z: ps.z,
+      originX: inst.x, originY: inst.y + 1.0, originZ: inst.z,
+      guardType: "frontal",
     });
     ctx.player.punch?.(1.4);
     poiseKick(0.9);

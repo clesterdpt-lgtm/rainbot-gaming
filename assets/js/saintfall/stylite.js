@@ -248,7 +248,7 @@ export const STYLITE_CONFIG = Object.freeze({
      on landing - an animal that drops ninety metres and stands up
      unharmed teaches the player that the mechanic is a formality. */
   fallSeconds: 1.15,
-  fallSelfDamage: 420,
+  fallSelfDamage: 180,
   /* Metres past the foot of its own needle that a falling Stylite
      lands. Big enough that the animal, its crash crater and the
      player swinging at it are all on open sand. */
@@ -265,8 +265,8 @@ export const STYLITE_CONFIG = Object.freeze({
   crashRadius: 9,
   crashDamage: 26,
   /* THE WINDOW. Everything the player did to earn it is spent here. */
-  stunnedSeconds: 6.5,
-  stunnedMeleeMult: 2.8,
+  stunnedSeconds: 4.5,
+  stunnedMeleeMult: 1.4,
   recoverSeconds: 1.4,
   /* It cannot be brought down twice in a row without going back up:
      the grip is restored in full on landing, and a fresh perch has to

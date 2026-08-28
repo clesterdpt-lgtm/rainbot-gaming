@@ -511,8 +511,8 @@ const HITBOX = {
        distant target; what the window is FOR is closing the distance
        and spending it at arm's length. Applied only while `grounded`,
        which the encounter sets for exactly the stunned and recovering
-       phases. */
-    groundedMeleeMult: 2.8,
+       phases. Tuned so a single knockdown does not delete the boss. */
+    groundedMeleeMult: 1.4,
     surface: { mult: 0.68, meleeMult: 0.78, reach: 10 },
   },
 

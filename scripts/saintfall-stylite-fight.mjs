@@ -366,7 +366,7 @@ try {
     `${Math.round(fall.altBefore)}m -> ${fall.altAfter}m`);
   /* It hurts ITSELF. An animal that falls ninety metres and stands up
      unmarked teaches the player that the mechanic is a formality. */
-  check("the fall costs it real health", fall.selfDamage >= 400,
+  check("the fall costs it real health", fall.selfDamage >= 150,
     `${fall.selfDamage} self-inflicted`);
   check("...and leaves it stunned on the ground",
     fall.seen.includes("stunned") && fall.grounded, fall.seen.join(" > "));
@@ -424,7 +424,7 @@ try {
   check("no swing reaches it while it is perched", reach.up === 0,
     `${reach.alt}m overhead, ${reach.up} damage`);
   check("a swing in the downed window is worth far more than a shot",
-    reach.down > reach.shot * 1.8,
+    reach.down > reach.shot * 1.35,
     `${reach.down} melee vs ${reach.shot} for a 70-damage shot`);
 
   /* ---- THE LEASH ------------------------------------------------------- */

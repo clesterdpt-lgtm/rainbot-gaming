@@ -52,13 +52,34 @@ function makeBatcher(ctx, root) {
   const { THREE, materials } = ctx;
   const bins = new Map();
   return {
-    /** Queue a painted geometry into (district, material). */
+    /** Queue a painted geometry into (district, material).
+     *
+     * `opts.chunk` additionally bins by 256m grid cell, and it exists
+     * because ONE merged mesh is only the right shape for a LOCAL
+     * district. The road, the fosse and the map-wide boulder scatter
+     * each merged into a single mesh whose bounding sphere spanned
+     * the basin - which is inside every camera frustum from every
+     * standpoint AND intersects the sun's ~250m shadow box from
+     * everywhere, so every triangle of all three was vertex-shaded
+     * every frame and re-rasterised on every shadow redraw (measured
+     * together: ~240k of the shadow pass's 612k triangles, from
+     * every point on the map). Cell-binned they cull like terrain
+     * chunks do. Opt-in, so a real district keeps its single-unit
+     * cull and its draw-call count. */
     add(district, matName, geo, opts = {}) {
       if (!geo) return;
-      const key = `${district}|${matName}|${opts.tag || ""}`;
+      let cell = "";
+      if (opts.chunk) {
+        if (!geo.boundingBox) geo.computeBoundingBox();
+        const bb = geo.boundingBox;
+        const cx = clamp(Math.floor(((bb.min.x + bb.max.x) * 0.5 + MAP_HALF) / CHUNK_SIZE), -2, 9);
+        const cz = clamp(Math.floor(((bb.min.z + bb.max.z) * 0.5 + MAP_HALF) / CHUNK_SIZE), -2, 9);
+        cell = `c${cx}z${cz}`;
+      }
+      const key = `${district}|${matName}|${opts.tag || ""}|${cell}`;
       let bin = bins.get(key);
       if (!bin) {
-        bin = { district, matName, geos: [], opts };
+        bin = { district, matName, geos: [], opts, cell };
         bins.set(key, bin);
       }
       bin.geos.push(geo);
@@ -77,9 +98,13 @@ function makeBatcher(ctx, root) {
         const geo = cleanGeometry(THREE, merged);
         if (geo !== merged) merged.dispose?.();
         const mesh = new THREE.Mesh(geo, mat);
-        mesh.name = bin.opts.tag
+        /* The cell suffix goes LAST: collide.js exempts road paving by
+           the name prefix "road-surface-", and the collision audit
+           aggregates by the same base names. */
+        const base = bin.opts.tag
           ? `${bin.district}-${bin.opts.tag}-${bin.matName}`
           : `${bin.district}-${bin.matName}`;
+        mesh.name = bin.cell ? `${base}-${bin.cell}` : base;
         mesh.castShadow = bin.opts.castShadow !== false;
         mesh.receiveShadow = bin.opts.receiveShadow !== false;
         /* See collide.js's own rasterMesh comment: a triangle whose
@@ -103,6 +128,48 @@ function makeBatcher(ctx, root) {
       return out;
     },
   };
+}
+
+/* Partition an ALREADY-PAINTED merged geometry into cell-sized
+   pieces for the batcher's `chunk` path. The split happens after the
+   paint on purpose: paintByHeight normalises its ramp to the
+   geometry's own bounding box, so painting per-piece would move every
+   colour. Triangles are assigned by centroid, attributes are copied
+   verbatim, so the union renders byte-identical to the original -
+   only the cull granularity changes. */
+function splitByCell(THREE, geo, cellSize) {
+  const src = geo.index ? geo.toNonIndexed() : geo;
+  const pos = src.attributes.position;
+  const names = Object.keys(src.attributes);
+  const buckets = new Map();
+  const triCount = pos.count / 3;
+  for (let t = 0; t < triCount; t += 1) {
+    const i = t * 3;
+    const cx = Math.floor(((pos.getX(i) + pos.getX(i + 1) + pos.getX(i + 2)) / 3 + MAP_HALF) / cellSize);
+    const cz = Math.floor(((pos.getZ(i) + pos.getZ(i + 1) + pos.getZ(i + 2)) / 3 + MAP_HALF) / cellSize);
+    const key = `${cx}:${cz}`;
+    let list = buckets.get(key);
+    if (!list) { list = []; buckets.set(key, list); }
+    list.push(t);
+  }
+  const out = [];
+  for (const tris of buckets.values()) {
+    const g = new THREE.BufferGeometry();
+    for (const name of names) {
+      const a = src.attributes[name];
+      const size = a.itemSize;
+      const arr = new a.array.constructor(tris.length * 3 * size);
+      let w = 0;
+      for (const t of tris) {
+        const base = t * 3 * size;
+        for (let k = 0; k < 3 * size; k += 1) arr[w++] = a.array[base + k];
+      }
+      g.setAttribute(name, new THREE.BufferAttribute(arr, size, a.normalized));
+    }
+    out.push(g);
+  }
+  if (src !== geo) src.dispose?.();
+  return out;
 }
 
 /* ============================================================
@@ -135,12 +202,18 @@ export async function buildWorld(ctx, onProgress) {
     const specs = [
       ["fallenSaintHead", "fallen-saint-head-veiled-oracle.glb"],
       ["fallenSaintHand", "fallen-saint-hand-benediction.glb"],
-      ["gildedReachCross", "gilded-reach-choir-wheel.glb"],
+      /* The wheel is placed sixteen-plus times and costs 17,712
+         triangles per copy; the far build (scripts/
+         saintfall-build-far-lod.mjs) is 3,006 triangles inside a
+         measured 0.52%-of-extent error. The head and hand are the
+         map's ONE landmark pair, placed once each - they stay full
+         detail at every distance on purpose. */
+      ["gildedReachCross", "gilded-reach-choir-wheel.glb", "gilded-reach-choir-wheel-far.glb"],
     ];
     try {
       const { GLTFLoader } = await import("three/addons/loaders/GLTFLoader.js");
       const loader = new GLTFLoader();
-      await Promise.all(specs.map(async ([key, file]) => {
+      await Promise.all(specs.map(async ([key, file, farFile]) => {
         const url = new URL(`../../../assets/models/saintfall/meshy/${file}`, import.meta.url);
         if (ctx.build) url.searchParams.set("v", ctx.build);
         try {
@@ -151,6 +224,7 @@ export async function buildWorld(ctx, onProgress) {
           const size = box.getSize(new THREE.Vector3());
           if (!(size.y > 1e-6)) throw new Error("model has no measurable height");
           const seenMaterials = new Set();
+          const materialsByName = new Map();
           source.traverse((node) => {
             if (!node.isMesh) return;
             const list = Array.isArray(node.material) ? node.material : [node.material];
@@ -159,9 +233,46 @@ export async function buildWorld(ctx, onProgress) {
               seenMaterials.add(material);
               material.envMapIntensity = 0.82;
               patchMaterial(material, atmos, { rim: 0.78, glitter: 0 });
+              if (material.name) materialsByName.set(material.name, material);
             }
           });
           landmarkSources[key] = { source, box, size };
+          if (!farFile) return;
+          /* The far variant is a RENDER stand-in only: it never
+             seats, never collides, never registers as an authored
+             mesh. Its meshes are re-pointed at the FULL model's
+             already-patched materials (matched by name), so no
+             second texture set uploads and no new shader program
+             exists - the two levels differ in geometry alone. A
+             far material with no name-match is patched in place as
+             the fallback so it still shades like the world. */
+          try {
+            const farUrl = new URL(`../../../assets/models/saintfall/meshy/${farFile}`, import.meta.url);
+            if (ctx.build) farUrl.searchParams.set("v", ctx.build);
+            const farGltf = await loader.loadAsync(farUrl.href);
+            const farSource = farGltf.scene;
+            farSource.updateMatrixWorld(true);
+            const farSeen = new Set();
+            farSource.traverse((node) => {
+              if (!node.isMesh) return;
+              const list = Array.isArray(node.material) ? node.material : [node.material];
+              const swapped = list.map((material) => {
+                if (!material) return material;
+                const shared = material.name && materialsByName.get(material.name);
+                if (shared) return shared;
+                if (!farSeen.has(material)) {
+                  farSeen.add(material);
+                  material.envMapIntensity = 0.82;
+                  patchMaterial(material, atmos, { rim: 0.78, glitter: 0 });
+                }
+                return material;
+              });
+              node.material = Array.isArray(node.material) ? swapped : swapped[0];
+            });
+            landmarkSources[key].far = farSource;
+          } catch (error) {
+            console.warn(`[saintfall] far variant for "${key}" failed to load; full detail at every distance`, error);
+          }
         } catch (error) {
           console.warn(`[saintfall] landmark "${key}" failed to load; using procedural fallback`, error);
         }
@@ -170,6 +281,18 @@ export async function buildWorld(ctx, onProgress) {
       console.warn("[saintfall] landmark loader unavailable; using procedural fallbacks", error);
     }
   })();
+
+  /* Height multiple at which a landmark swaps to its far variant.
+     At 20 heights, the whole object spans ~3 degrees - about 64 css
+     pixels of a 60-degree, 720-line frame - and the far build's
+     measured error bound (0.52% of extent, saintfall-build-far-lod)
+     projects to under one DEVICE pixel at that range. Sub-pixel by
+     construction is the claim "no visible LOD pop" actually rests
+     on; a fixed metre threshold could not make it for both a 12m
+     avenue wheel and the 44m arena cross. The hysteresis keeps a
+     camera strafing the boundary from flickering levels. */
+  const LANDMARK_FAR_SWAP_HEIGHTS = 20;
+  const LANDMARK_FAR_HYSTERESIS = 0.06;
 
   const addAuthoredLandmark = (asset, opts) => {
     const pivot = new THREE.Group();
@@ -187,7 +310,29 @@ export async function buildWorld(ctx, onProgress) {
       -asset.box.min.y * scale,
       -((asset.box.min.z + asset.box.max.z) * 0.5) * scale
     );
-    fitted.add(visual);
+    if (asset.far) {
+      /* Seating, collision and the authored-mesh registry below all
+         walk `visual` - the FULL level - so the far clone changes
+         nothing but what the rasteriser is handed past the swap
+         distance. three's LOD picks a level against the camera that
+         renders the frame, and the shadow pass then rasterises the
+         SAME level, so a swapped-out wheel also stops feeding its
+         17k triangles to every shadow redraw. */
+      const lod = new THREE.LOD();
+      const far = asset.far.clone(true);
+      far.traverse((node) => {
+        if (!node.isMesh) return;
+        node.name = `${opts.name}-far-mesh`;
+        node.castShadow = true;
+        node.receiveShadow = true;
+        node.userData.district = opts.district;
+      });
+      lod.addLevel(visual, 0);
+      lod.addLevel(far, opts.height * LANDMARK_FAR_SWAP_HEIGHTS, LANDMARK_FAR_HYSTERESIS);
+      fitted.add(lod);
+    } else {
+      fitted.add(visual);
+    }
     pivot.add(fitted);
 
     const meshes = [];
@@ -223,7 +368,13 @@ export async function buildWorld(ctx, onProgress) {
          the sand instead of exposing a flat underside from a low camera. */
       pivot.position.y = 0;
       pivot.updateMatrixWorld(true);
-      const box = new THREE.Box3().setFromObject(pivot);
+      /* From the FULL level, not the pivot: Box3.setFromObject walks
+         invisible children too, so measuring the pivot would fold the
+         far LOD's approximated envelope (up to ~0.5% of extent lower)
+         into the low band and move every seat a few centimetres from
+         where the pre-LOD build put it. The far clone must change
+         nothing but far-field rasterisation. */
+      const box = new THREE.Box3().setFromObject(visual);
       const lowBand = box.min.y + Math.max(0.12, (box.max.y - box.min.y) * 0.18);
       const supports = [];
       const point = new THREE.Vector3();
@@ -456,14 +607,34 @@ export async function buildWorld(ctx, onProgress) {
         }
       }
     }
-    const mesh = new THREE.Mesh(mergeGeometries(THREE, geos), ctx.materials.rock);
-    mesh.name = "rim";
-    mesh.castShadow = false;
-    mesh.receiveShadow = false;
-    mesh.frustumCulled = false;
-    mesh.matrixAutoUpdate = false;
-    mesh.updateMatrix();
-    root.add(mesh);
+    /* Sectored, not one merged ring. The ring surrounds every
+       possible camera, so as a single mesh its 35k triangles were
+       vertex-shaded from every standpoint in the game; a 60-degree
+       fov actually sees three or four sectors of sixteen. A GROUP
+       named "rim" keeps the isolate harness's visibility toggle
+       working on the whole thing. */
+    const SECTORS = 16;
+    const sectorGeos = Array.from({ length: SECTORS }, () => []);
+    for (const g of geos) {
+      g.computeBoundingBox();
+      const bb = g.boundingBox;
+      const a = Math.atan2((bb.min.z + bb.max.z) * 0.5, (bb.min.x + bb.max.x) * 0.5);
+      const s = ((Math.floor((a / TAU) * SECTORS) % SECTORS) + SECTORS) % SECTORS;
+      sectorGeos[s].push(g);
+    }
+    const rimGroup = new THREE.Group();
+    rimGroup.name = "rim";
+    for (let s = 0; s < SECTORS; s += 1) {
+      if (!sectorGeos[s].length) continue;
+      const mesh = new THREE.Mesh(mergeGeometries(THREE, sectorGeos[s]), ctx.materials.rock);
+      mesh.name = `rim-s${s}`;
+      mesh.castShadow = false;
+      mesh.receiveShadow = false;
+      mesh.matrixAutoUpdate = false;
+      mesh.updateMatrix();
+      rimGroup.add(mesh);
+    }
+    root.add(rimGroup);
   }
 
   /* ============================================================
@@ -777,17 +948,17 @@ export async function buildWorld(ctx, onProgress) {
     const DUST = hexToRgb("#c09468");
     for (const { g, t, dust } of stones) {
       flat(g, mixRgb(PAVING.at(t), DUST, dust * 0.75), 0.2);
-      batch.add("road", "stone", g, { tag: "surface" });
+      batch.add("road", "stone", g, { tag: "surface", chunk: true });
     }
     for (const { g, t } of kerbs) {
       flat(g, PAVING.at(0.35 + t * 0.5), 0.1);
-      batch.add("road", "stone", g, { tag: "surface" });
+      batch.add("road", "stone", g, { tag: "surface", chunk: true });
     }
     // The bed is the darkest thing on the road, so the joints between
     // flagstones read as gaps down into it rather than as scratches.
     for (const { g, t } of beds) {
       flat(g, PAVING.at(t), 0.08);
-      batch.add("road", "stone", g, { tag: "surface" });
+      batch.add("road", "stone", g, { tag: "surface", chunk: true });
     }
 
     /* --- the saints of the road --- */
@@ -824,7 +995,7 @@ export async function buildWorld(ctx, onProgress) {
         paintH(g, makeRamp([
           [0, "#4a3830"], [0.35, "#7a6150"], [0.7, "#a98a6c"], [1, "#cfb28c"],
         ]), { normalWeight: 0.46, jitter: 0.13, noise: 0.22 });
-        batch.add("road", "stone", g);
+        batch.add("road", "stone", g, { chunk: true });
       }
     }
 
@@ -837,7 +1008,7 @@ export async function buildWorld(ctx, onProgress) {
       ]);
       place(g, a.x - 13, a.z, { rot: [0, rng() * TAU, 0] });
       paintH(g, makeRamp([[0, "#3e332e"], [1, "#8d7660"]]), { normalWeight: 0.5, jitter: 0.1 });
-      batch.add("road", "stone", g);
+      batch.add("road", "stone", g, { chunk: true });
     }
 
     pois.push({ id: "road", name: "The Pilgrim's Road", x: -14, z: 168 });
@@ -4028,30 +4199,39 @@ export async function buildWorld(ctx, onProgress) {
       const painted = paintH(g, makeRamp([
         [0, "#1c1a1b"], [0.4, "#3a3733"], [0.75, "#66604f"], [1, "#948a6f"],
       ]), { normalWeight: 0.46, jitter: 0.14, noise: 0.26 });
-      batch.add("fosse", "stone", painted);
+      batch.add("fosse", "stone", painted, { chunk: true });
       // A skull over the embrasure. There is always a skull.
       const sk = kit.skull({ size: 0.85 });
       sk.rotateY(-yaw + Math.PI);
       sk.translate(px, g.userData.restY + 3.4, pz);
       paintH(sk, makeRamp([[0, "#6a5a2c"], [1, "#e6c47c"]]), { normalWeight: 0.5 });
-      batch.add("fosse", "gold", sk);
+      batch.add("fosse", "gold", sk, { chunk: true });
     }
 
+    /* These three are merged BEFORE painting (the ramp normalises to
+       the whole run's height range), so the chunking has to split the
+       painted result rather than feed the batcher per piece. */
     if (bagGeos.length) {
       const g = mergeGeometries(THREE, bagGeos);
       paintH(g, makeRamp([[0, "#5a4433"], [0.45, "#8a6c4c"], [1, "#bfa079"]]),
         { normalWeight: 0.5, jitter: 0.2, noise: 0.3 });
-      batch.add("fosse", "cloth", g);
+      for (const piece of splitByCell(THREE, g, CHUNK_SIZE)) {
+        batch.add("fosse", "cloth", piece, { chunk: true });
+      }
     }
     if (woodGeos.length) {
       const g = mergeGeometries(THREE, woodGeos);
       paintH(g, makeRamp([[0, "#3a2b20"], [1, "#7b5d42"]]), { normalWeight: 0.5, jitter: 0.2 });
-      batch.add("fosse", "rust", g);
+      for (const piece of splitByCell(THREE, g, CHUNK_SIZE)) {
+        batch.add("fosse", "rust", piece, { chunk: true });
+      }
     }
     if (ironGeos.length) {
       const g = mergeGeometries(THREE, ironGeos);
       paintH(g, makeRamp([[0, "#22242a"], [1, "#6b7078"]]), { normalWeight: 0.5, jitter: 0.2 });
-      batch.add("fosse", "iron", g);
+      for (const piece of splitByCell(THREE, g, CHUNK_SIZE)) {
+        batch.add("fosse", "iron", piece, { chunk: true });
+      }
     }
 
     pois.push({ id: "fosse", name: "The Fosse", x: 64, z: 428 });
@@ -4748,8 +4928,11 @@ export async function buildWorld(ctx, onProgress) {
 
       placed.push([x, z]);
     }
-    if (geos.length) {
-      batch.add("scatter", "rock", mergeGeometries(THREE, geos), { castShadow: true });
+    /* Per piece, so the batcher can cell-bin them: every block is
+       already painted individually, and one merged map-wide mesh is
+       in every frustum forever (see the batcher's chunk note). */
+    for (const g of geos) {
+      batch.add("scatter", "rock", g, { castShadow: true, chunk: true });
     }
   }
 
@@ -5126,7 +5309,13 @@ export async function buildWorld(ctx, onProgress) {
       perBucket.get(mat).push(g);
     }
     for (const [mat, geos] of perBucket) {
-      batch.add("scatter", mat, mergeGeometries(THREE, geos), { castShadow: true });
+      /* Per piece for the same reason as the yardang talus above:
+         each boulder is painted on its own, and the merged mesh was
+         the single biggest always-in-frustum triangle bill on the
+         map (96k in view AND in the shadow box, from everywhere). */
+      for (const g of geos) {
+        batch.add("scatter", mat, g, { castShadow: true, chunk: true });
+      }
     }
   }
 

@@ -220,14 +220,26 @@ export function buildSky(ctx) {
     fragmentShader: DOME_FRAG,
     side: THREE.BackSide,
     depthWrite: false,
-    depthTest: false,
+    /* TESTED, and drawn LAST among opaques rather than first.
+       The vertex shader pins the dome to gl_Position.z = w - depth
+       exactly 1.0 - and the material's default depthFunc is LEqual,
+       so against a cleared buffer the dome passes and against any
+       written geometry it fails. Drawn at renderOrder -1000 with the
+       test off, this shader (three moons, stars, both suns) ran on
+       EVERY pixel of the frame and the world then overdrew most of
+       it: measured 4.5ms a frame at device ratio 2. Drawn after the
+       opaques with the test on, only real sky pixels pay, and the
+       output is identical because the dome never wrote depth in the
+       first place. It stays out of the sky group because the group's
+       renderOrder (-1000) is a groupOrder that would defeat this. */
+    depthTest: true,
     toneMapped: false,   // the composite pass owns tone mapping
     fog: false,
   });
   const dome = new THREE.Mesh(new THREE.SphereGeometry(1, 48, 32), domeMat);
   dome.frustumCulled = false;
-  dome.renderOrder = -1000;
-  group.add(dome);
+  dome.renderOrder = 1000;
+  scene.add(dome);
 
   /* ------------------------------ sun light ------------------------------ */
 

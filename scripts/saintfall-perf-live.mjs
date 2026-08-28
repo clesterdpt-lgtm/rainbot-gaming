@@ -55,7 +55,13 @@ async function main() {
     browser = await chromium.launch({
       channel: "chromium", headless: false,
       args: ["--enable-gpu", "--ignore-gpu-blocklist", "--mute-audio",
-        "--force-device-scale-factor=2"],
+        "--force-device-scale-factor=2",
+        /* An occluded window has its rAF throttled to nothing on
+           macOS, and the meter then reads 0.0 fps - which says the
+           window was behind something, not that the game stalled. */
+        "--disable-backgrounding-occluded-windows",
+        "--disable-background-timer-throttling",
+        "--disable-renderer-backgrounding"],
     });
     const page = await (await browser.newContext({
       viewport: { width: 1440, height: 810 }, deviceScaleFactor: 2,

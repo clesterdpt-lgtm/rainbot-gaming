@@ -340,7 +340,13 @@ try {
   const sealedIslands = audit.boundary.escapes.filter((r) => r.best < 1.2);
   const escapeFailures = [];
   const knownFailures = audit.knownTraps.filter((r) => r.before && r.after);
-  const roadMesh = audit.stats.perMesh.find((m) => m.name === "road-stone");
+  /* The road furniture is cell-binned now (road-stone-c3z5, ...), so
+     the collider-cell count is the SUM over the family rather than
+     one mesh's. Matching the bare name too keeps this working against
+     a build from before the chunking. */
+  const roadMeshCells = audit.stats.perMesh
+    .filter((m) => m.name === "road-stone" || m.name.startsWith("road-stone-"))
+    .reduce((sum, m) => sum + (m.cells || 0), 0);
 
   const metrics = {
     terrain: {
@@ -356,7 +362,7 @@ try {
       travelRuns: audit.roadTravel.length,
       travelStalls: roadTravelStalls.length,
       travelTraps: roadTravelTraps.length,
-      colliderCells: roadMesh?.cells || 0,
+      colliderCells: roadMeshCells,
     },
     cathedralNave: {
       samples: naveReliefs.length,

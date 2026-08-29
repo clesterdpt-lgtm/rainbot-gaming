@@ -333,6 +333,7 @@ export function buildDistrictBosses(ctx) {
     setGate(record, false, false);
     removeOwnedBrood(record);
     ctx.mission?.completeDistrictBoss?.(record.site.key);
+    ctx.breaches?.notifyBossDefeated?.(record.site.key);
     bus.emit("defeated", publicRecord(record));
   }
 

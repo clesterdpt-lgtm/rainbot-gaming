@@ -1097,6 +1097,7 @@ export function buildMission(ctx) {
       ? `${state.bossesDone}/${bosses.length}` : `${districts.done}/${districts.total}`;
     say(`${boss.boss.toUpperCase()} DEFEATED — ${count}`, 4.2);
     bus.emit("districtBossDone", { key, done: state.bossesDone, total: bosses.length });
+    ctx.breaches?.notifyBossDefeated?.(key);
     if (boss.stage !== "penultimate" && districts.done >= districts.total) {
       state.phase = "saintBoss";
       say("SIX DISTRICTS SECURED — THE COULTER STIRS BENEATH THE FALLEN SAINT", 6);
@@ -1151,6 +1152,7 @@ export function buildMission(ctx) {
     pad.group.visible = false;
     say("THE FALSE SAINT IS BROKEN - OPERATION COMPLETE", 99);
     bus.emit("finalBossDone", { key });
+    ctx.breaches?.notifyBossDefeated?.(key);
     bus.emit("won", { finalBoss: key });
     return true;
   }

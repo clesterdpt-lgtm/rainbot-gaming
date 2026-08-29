@@ -20,6 +20,7 @@ import { FURNACE_LANCE_RULES } from "saintfall/progression-config.js";
 import {
   GUARD_CUE_CONFIG, GUARD_TYPES, normalizeGuardDetail,
 } from "saintfall/guard-rules.js";
+import { DROP_SITE } from "saintfall/terrain.js";
 
 const TAU = Math.PI * 2;
 
@@ -2899,12 +2900,20 @@ export function buildCombat(ctx) {
       return;
     }
 
+    /* Landfall sanctuary: while the player is inside the immediate drop ship
+       perimeter and has not provoked combat, enemies will not passively acquire
+       suspicion. Wandering away from the drop ship engages the perimeter
+       patrols normally. */
+    const inDropSanctuary = (Math.hypot(px - DROP_SITE.podX, pz - DROP_SITE.podZ) < 42
+      || Math.hypot(px - DROP_SITE.x, pz - DROP_SITE.z) < 42)
+      && !inst.alerted && (inst.suspicion || 0) <= 0.01;
+
     /* Hearing can wake a garrison and make it investigate, but only
        an unobstructed 3D ray authorises a ranged attack. Treating the
        hearing radius as sight let ranged units shoot through roofs and
        walls at close range, which was especially obvious in flight. */
-    const hears = !player.dead && dist < spec.hearing;
-    const sees = !player.dead && canSee(inst, px, py, pz);
+    const hears = !player.dead && !inDropSanctuary && dist < spec.hearing;
+    const sees = !player.dead && !inDropSanctuary && canSee(inst, px, py, pz);
     const sensed = hears || sees;
     if (sensed) inst.suspicion = 1;
     else if (inst.alerted && inst.navigation?.path) {

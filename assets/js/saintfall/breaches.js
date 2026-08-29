@@ -27,6 +27,7 @@ export const BREACH_CONFIG = Object.freeze({
   recoverySeconds: 60,
   bossArenaPadding: 18,
   staggerSeconds: 0.14,
+  bossDefeatBufferSeconds: 60,
 });
 
 export const BREACH_WAVES = Object.freeze([
@@ -221,6 +222,61 @@ export function buildBreaches(ctx) {
     }
     return null;
   }
+
+  const defeatedBossKeys = new Set();
+
+  function queryDefeatedBossKeys() {
+    const list = [];
+    for (const site of DISTRICT_BOSS_SITES) {
+      const missionBoss = ctx.mission?.bosses?.find((boss) => boss.key === site.key);
+      const runtime = site.key === "scar" ? ctx.distaff?.status?.()
+        : site.key === "censer" ? ctx.winnower?.status?.()
+          : ctx.districtBosses?.status?.(site.key);
+      if (missionBoss?.done || runtime?.dead || runtime?.defeated || runtime?.phase === "dead") {
+        list.push(site.key);
+      }
+    }
+    const apostateStatus = ctx.apostate?.status?.();
+    if (apostateStatus?.defeated || apostateStatus?.dead || apostateStatus?.phase === "dead") {
+      list.push("apostate");
+    }
+    return list;
+  }
+
+  // Populate initially so already-dead bosses don't re-trigger a buffer on the first tick
+  for (const key of queryDefeatedBossKeys()) defeatedBossKeys.add(key);
+
+  function onBossDefeated(bossKey = null) {
+    if (bossKey && defeatedBossKeys.has(bossKey)) return;
+    if (bossKey) defeatedBossKeys.add(bossKey);
+
+    const buffer = BREACH_CONFIG.bossDefeatBufferSeconds;
+    if (state.phase === "warning" || state.phase === "active") {
+      submergeWave("boss");
+    }
+    state.timer = Math.max(state.timer, buffer);
+    bus.emit("bossDefeatBuffer", { bossKey, timer: state.timer });
+  }
+
+  function syncBossDefeats() {
+    for (const key of queryDefeatedBossKeys()) {
+      if (!defeatedBossKeys.has(key)) {
+        onBossDefeated(key);
+      }
+    }
+  }
+
+  if (ctx.mission?.bus) {
+    ctx.mission.bus.on("districtBossDone", (e) => onBossDefeated(e?.key));
+    ctx.mission.bus.on("finalBossDone", (e) => onBossDefeated(e?.key || "apostate"));
+  }
+  ctx.distaff?.bus?.on("defeated", () => onBossDefeated("scar"));
+  ctx.winnower?.bus?.on("defeated", () => onBossDefeated("censer"));
+  ctx.garner?.bus?.on("defeated", () => onBossDefeated("ossuary"));
+  ctx.abbess?.bus?.on("defeated", () => onBossDefeated("bloom"));
+  ctx.stylite?.bus?.on("defeated", () => onBossDefeated("choir"));
+  ctx.districtBosses?.bus?.on("defeated", (e) => onBossDefeated(e?.key));
+  ctx.apostate?.bus?.on("defeated", () => onBossDefeated("apostate"));
 
   function currentBossArea() {
     const ps = ctx.player.state;
@@ -469,6 +525,7 @@ export function buildBreaches(ctx) {
     const missionPhase = ctx.mission?.state?.phase;
     if (missionPhase === "won" || missionPhase === "lost") return;
 
+    syncBossDefeats();
     refreshCounts();
     if (combat.player.dead) return;
     const bossArea = currentBossArea();
@@ -732,6 +789,8 @@ export function buildBreaches(ctx) {
 
     rng.setState?.(saved.rng);
     state.serial = ++eventSerial;
+    defeatedBossKeys.clear();
+    for (const key of queryDefeatedBossKeys()) defeatedBossKeys.add(key);
     bus.emit("restored", snapshot());
     return snapshot();
   }
@@ -747,6 +806,8 @@ export function buildBreaches(ctx) {
     update,
     objective,
     status: snapshot,
+    onBossDefeated,
+    notifyBossDefeated: onBossDefeated,
     restore,
   };
 }

@@ -21,6 +21,7 @@
 import { TAU, clamp, clamp01, lerp, damp, makeRng } from "saintfall/core.js";
 import { patchMaterial } from "saintfall/art.js";
 import { applySurface } from "saintfall/boss-surface.js";
+import { DROP_SITE } from "saintfall/terrain.js";
 
 /* A fresh Martyr field can legitimately contain more than eight hundred
    durable enemies before a breach begins. Keep one shared ceiling for save
@@ -2275,8 +2276,8 @@ export async function buildEnemies(ctx, onProgress) {
     { key: "gleaner", at: [-66, -382], r: 120, n: 5 },
 
     // --- The Threshold. Drop zone outer perimeter.
-    { key: "thresher", at: [0, 700], r: 160, n: 8 },
-    { key: "gleaner", at: [0, 700], r: 150, n: 3 },
+    { key: "thresher", at: [8, 785], r: 55, n: 8 },
+    { key: "gleaner", at: [8, 710], r: 60, n: 3 },
 
     // --- Wilderness patrols & intermediate transit crossings.
     //     Fills the vast desert dunes, mountain passes, and canyon ravines.
@@ -2320,6 +2321,14 @@ export async function buildEnemies(ctx, onProgress) {
         const d = Math.sqrt(grng()) * g.r;
         let x = g.at[0] + Math.cos(a) * d;
         let z = g.at[1] + Math.sin(a) * d;
+
+        /* Keep procedural garrisons outside the immediate drop ship crater
+           and landing egress so the opening cinematic and initial landfall
+           are clear of immediate aggro. */
+        const dPod = Math.hypot(x - DROP_SITE.podX, z - DROP_SITE.podZ);
+        const dSpawn = Math.hypot(x - DROP_SITE.x, z - DROP_SITE.z);
+        if (dPod < 68 || dSpawn < 68) continue;
+
         /* Nudged out of masonry. A unit spawned inside a wall is
            permanently blocked by its own collision, so it can never
            close on the player - and from the player's side that
@@ -2344,6 +2353,8 @@ export async function buildEnemies(ctx, onProgress) {
             x, z, groundY(x, z), 32, 12, radius, null, hasEgress
           );
           if (!open) continue;
+          if (Math.hypot(open[0] - DROP_SITE.podX, open[1] - DROP_SITE.podZ) < 68
+            || Math.hypot(open[0] - DROP_SITE.x, open[1] - DROP_SITE.z) < 68) continue;
           x = open[0];
           z = open[1];
         }

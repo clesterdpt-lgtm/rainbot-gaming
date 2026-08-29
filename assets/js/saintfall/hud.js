@@ -120,6 +120,14 @@ export function buildHud(ctx, host) {
       </header>
       <div class="sf-hud__strat" id="sf-strat"></div>
     </section>
+    <div class="sf-hud__doctrine-cue" id="sf-doctrine-cue" hidden role="status" aria-live="polite" tabindex="0" title="Open Doctrine (Esc)">
+      <span class="sf-doctrine-cue__icon" aria-hidden="true">✦</span>
+      <span class="sf-doctrine-cue__copy">
+        <strong id="sf-doctrine-pts">1</strong>
+        <span id="sf-doctrine-label">DOCTRINE TALENT POINT AVAILABLE</span>
+      </span>
+      <kbd class="sf-doctrine-cue__key" data-bind-face="menu">${keybindLabel("menu")}</kbd>
+    </div>
     <div class="sf-hud__hint" id="sf-hint">
       <span><kbd data-bind-face="wheel">${keybindLabel("wheel")}</kbd> <b>HOLD FOR COMMAND</b></span>
     </div>
@@ -166,6 +174,22 @@ export function buildHud(ctx, host) {
   const bossBarChipEl = el.querySelector("#sf-bossbar-chip");
   const bossBarFillEl = el.querySelector("#sf-bossbar-fill");
   const hintEl = el.querySelector("#sf-hint");
+  const doctrineCueEl = el.querySelector("#sf-doctrine-cue");
+  const doctrinePtsEl = el.querySelector("#sf-doctrine-pts");
+  const doctrineLabelEl = el.querySelector("#sf-doctrine-label");
+  if (doctrineCueEl) {
+    const onDoctrineCueClick = (evt) => {
+      evt?.preventDefault?.();
+      evt?.stopPropagation?.();
+      (ctx.ui || ctx.gameUi)?.openMenu?.("doctrine", { force: true });
+    };
+    doctrineCueEl.addEventListener("click", onDoctrineCueClick);
+    doctrineCueEl.addEventListener("keydown", (evt) => {
+      if (evt.code === "Enter" || evt.code === "Space") {
+        onDoctrineCueClick(evt);
+      }
+    });
+  }
   const objEl = el.querySelector("#sf-objective");
   const objLabelEl = el.querySelector("#sf-objlabel");
   const objDistanceEl = el.querySelector("#sf-objdistance");
@@ -1761,6 +1785,40 @@ export function buildHud(ctx, host) {
         String(Math.max(0, Math.min(1, furnaceCharge?.progress || 0))));
       reticleEl.style.opacity = combat.player.dead || shield?.active
         || ctx.slam?.state?.active ? "0" : "1";
+
+      const progressionState = ctx.progression?.state?.()
+        ?? ctx.progression?.doctrineSnapshot?.()
+        ?? ctx.progression?.status?.()?.doctrine;
+      const pointsAvailable = Math.max(0, Math.floor(Number(progressionState?.pointsAvailable) || 0));
+      const menuOpen = Boolean(ctx.ui?.menuState?.()?.open || document.body.classList.contains("rb-escape-menu-open"));
+      const isDead = Boolean(combat.player?.dead);
+      const isIntroBlocking = Boolean(ctx.intro?.isBlocking?.());
+
+      if (doctrineCueEl) {
+        const showCue = pointsAvailable > 0 && !menuOpen && !isDead && !isIntroBlocking;
+        doctrineCueEl.hidden = !showCue;
+        if (showCue) {
+          doctrineCueEl.dataset.points = String(pointsAvailable);
+          if (doctrinePtsEl) doctrinePtsEl.textContent = String(pointsAvailable);
+          if (doctrineLabelEl) {
+            doctrineLabelEl.textContent = pointsAvailable === 1
+              ? "DOCTRINE TALENT POINT AVAILABLE"
+              : "DOCTRINE TALENT POINTS AVAILABLE";
+          }
+        }
+      }
+    },
+    doctrineCueState() {
+      if (!doctrineCueEl) return { hidden: true, points: 0, text: "", visible: false };
+      const menuOpen = Boolean((ctx.ui || ctx.gameUi)?.menuState?.()?.open
+        || document.body.classList.contains("rb-escape-menu-open"));
+      const isHidden = doctrineCueEl.hidden || menuOpen;
+      return {
+        hidden: isHidden,
+        visible: !isHidden,
+        points: Number(doctrineCueEl.dataset.points) || 0,
+        text: doctrineCueEl.textContent.replace(/\s+/g, " ").trim(),
+      };
     },
     reticleState() {
       return {

@@ -1560,24 +1560,27 @@ async function desktopPass(browser) {
     `${pauseProbe.before} -> ${pauseProbe.after}`);
   await page.keyboard.press("Escape");
   await page.waitForFunction(() => !window.__SF.menuState()?.open, null, { timeout: 3000 });
+  const closedByEsc = await page.evaluate(() => !window.__SF.menuState()?.open);
+  check("Escape exits the operation menu", closedByEsc);
+
+  // Tab must NOT open the menu
   await page.keyboard.press("Tab");
+  await page.waitForTimeout(100);
+  const notOpenedByTab = await page.evaluate(() => !window.__SF.menuState()?.open);
+  check("Tab does not open the operation menu", notOpenedByTab);
+
+  // Escape opens the menu
+  await page.keyboard.press("Escape");
   await page.waitForFunction(() => window.__SF.menuState()?.open, null, { timeout: 3000 });
-  const tabMenu = await page.evaluate(() => ({
+  const escMenu = await page.evaluate(() => ({
     open: window.__SF.menuState()?.open,
     panel: window.__SF.menuState()?.panel,
     paused: document.body.classList.contains("rb-escape-menu-open"),
     focusInside: !!document.getElementById("sf-menu")?.contains(document.activeElement),
   }));
-  check("Tab opens the native operation menu",
-    tabMenu.open && tabMenu.panel === "operation" && tabMenu.paused && tabMenu.focusInside,
-    JSON.stringify(tabMenu));
-  await page.keyboard.press("Tab");
-  await page.waitForFunction(() => !window.__SF.menuState()?.open, null, { timeout: 3000 });
-  const closedByTab = await page.evaluate(() => !window.__SF.menuState()?.open);
-  check("Tab exits the operation menu", closedByTab);
-
-  await page.keyboard.press("Tab");
-  await page.waitForFunction(() => window.__SF.menuState()?.open, null, { timeout: 3000 });
+  check("Escape opens the native operation menu",
+    escMenu.open && escMenu.panel === "operation" && escMenu.paused && escMenu.focusInside,
+    JSON.stringify(escMenu));
 
   await page.locator('[data-menu-panel="doctrine"]').click();
   await page.waitForFunction(() => window.__SF.menuState()?.panel === "doctrine",

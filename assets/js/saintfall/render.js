@@ -96,7 +96,7 @@ import { buildSkyEnvironment, srgbTransfer as srgb } from "saintfall/art.js";
 
    The ladder below is chosen on the texel first and the range
    second, so every step up is strictly finer AND reaches at least as
-   far: 0.332, 0.205, 0.122, 0.083. Ultra buys 8192, which is where
+   far: 0.332, 0.205, 0.163, 0.083. Ultra buys 8192, which is where
    the +2ms goes; `setQuality` caps it against the driver's real
    maximum texture size, so a machine that cannot hold it falls back
    rather than failing to allocate.
@@ -124,8 +124,13 @@ const QUALITY = Object.freeze({
     contact: 0.55, contactSteps: 8,
   },
   high: {
-    label: "HIGH", deviceCap: 2, pixelRatio: 1.0, msaa: 4,
-    shadow: 4096, shadowEvery: 2, shadowRadius: 250, ao: 0.85, bloom: 0.5,
+    /* HIGH is the default, including on phones. A 2x mobile canvas plus 4x
+       MSAA shades sixteen samples per CSS pixel before post-processing; the
+       measured active-play path was fill-bound there. 1.5x + 2x retains a
+       sharper-than-CSS image while cutting that default sample load by 72%.
+       ULTRA keeps the former ceiling for players who explicitly choose it. */
+    label: "HIGH", deviceCap: 1.5, pixelRatio: 1.0, msaa: 2,
+    shadow: 3072, shadowEvery: 2, shadowRadius: 250, ao: 0.85, bloom: 0.5,
     contact: 0.72, contactSteps: 12,
   },
   ultra: {

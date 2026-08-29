@@ -1023,7 +1023,7 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render, setQualit
   }
 
   function talentIconUrl(talentId) {
-    return `../assets/img/saintfall/talents/${encodeURIComponent(talentId)}.jpg?v=20260816-doctrine-v1`;
+    return `../assets/img/saintfall/talents/${encodeURIComponent(talentId)}.jpg?v=20260829-doctrine-v2`;
   }
 
   /* One capstone verdict feeds both the crown card and the inspector, so the
@@ -1537,12 +1537,6 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render, setQualit
   }
 
   function onFullscreenChange() {
-    if (!document.fullscreenElement) {
-      stage.classList.remove("is-maxed");
-      document.documentElement.classList.remove("sf-maximised");
-      document.body.classList.remove("rb-game-maxed");
-      window.dispatchEvent(new Event("resize"));
-    }
     syncMaximizeButton();
   }
 

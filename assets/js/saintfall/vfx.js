@@ -3262,6 +3262,61 @@ export function buildVfx(ctx, world) {
     ringFx(x, y - 0.4, z, 0.3, heavy ? 3.4 : 2.4, 0.42, "#ffcf6a", 0.7, "#fff4d8", 0.8);
   }
 
+  /** THE VIGIL STEP - a body removed from one place and paid back in
+   *  at another. Three statements, in the order the eye needs them:
+   *  the departure collapses INWARD (a ring falling into the point the
+   *  body left, glints following it), the path is a single line of
+   *  light the eye can follow at full speed, and the arrival opens
+   *  OUTWARD with the seal struck under the boots. Verdigris, not
+   *  gold: this is the scout's own rite and must read against every
+   *  gold muzzle and censer in the same frame. */
+  function blinkFx(fromX, fromY, fromZ, toX, toY, toZ) {
+    const CORE = "#9df3e0";
+    const EDGE = "#eafff7";
+    // Departure: implosion. The ring runs big-to-small.
+    ringFx(fromX, fromY + 1.05, fromZ, 1.9, 0.12, 0.26, CORE, 0.8, EDGE, 0.9);
+    flashes.emit(fromX, fromY + 1.15, fromZ, 1.35, 0.12, 1.0);
+    impacts.emitRing(fromX, fromY + 0.9, fromZ, 14, 1.4, -6.5, 0.4, 0.55, 1.0, 0.34, 0, 0, IK_GLINT);
+    // The path: one bright line, shed as fast glints so it dies quickly.
+    const dx = toX - fromX;
+    const dy = (toY + 1.1) - (fromY + 1.1);
+    const dz = toZ - fromZ;
+    const span = Math.max(1e-4, Math.hypot(dx, dy, dz));
+    impacts.emitTrail(fromX, fromY + 1.1, fromZ, dx / span, dy / span, dz / span,
+      span, 2.2, Math.min(26, Math.max(10, Math.round(span * 2))), 0.7, 1.0, 0.30, IK_GLINT);
+    sparks.burst(fromX + dx * 0.5, fromY + 1.1 + dy * 0.5, fromZ + dz * 0.5,
+      6, dx / span, dy / span, dz / span, 9, 0.15, 1.0, 0.24, 0.016);
+    // Arrival: the body paid back in. Ring outward, seal under it.
+    flashes.emit(toX, toY + 1.15, toZ, 1.7, 0.15, 1.0);
+    ringFx(toX, toY + 1.0, toZ, 0.14, 2.3, 0.34, CORE, 0.9, EDGE, 1.0);
+    sigilFx(toX, toZ, 1.55, 0.85, CORE, EDGE, 2, 0.34, 0.85);
+    impacts.emitRing(toX, toY + 0.35, toZ, 16, 0.4, 5.5, 1.6, 0.6, 1.0, 0.4, 0, 0, IK_GLINT);
+  }
+
+  /** The thrown reliquary's wake: a few embers and glints shed at the
+   *  hammer's live position each call. Called at ~20Hz by the kit
+   *  while the cast is in the air, so each call stays tiny. */
+  function hammerWake(x, y, z, dx = 0, dy = 0, dz = 1) {
+    impacts.emit(x, y, z, 2, 0.14, 0.55, 0.6, 0.30, IK_GLINT);
+    if (Math.random() < 0.45) {
+      impacts.emitDirected(x, y, z, 1, -dx, -dy + 0.25, -dz, 2.4, 0.5, 2.0, 0.28, IK_EMBER);
+    }
+  }
+
+  /** Where the cast lands. `heavy` marks a direct creature hit or a
+   *  grounded flyer - the wall-clang variant stays smaller so a missed
+   *  throw does not read as a kill. */
+  function hammerImpactFx(x, y, z, heavy = false) {
+    flashes.emit(x, y + 0.3, z, heavy ? 2.2 : 1.5, 0.13, 2.0);
+    spark(x, y, z, heavy ? 1.9 : 1.3, !heavy, true);
+    ringFx(x, y + 0.25, z, 0.3, heavy ? 4.2 : 2.6, 0.48, "#ffc453", 0.8, "#fff4d8", 0.9);
+    if (heavy) {
+      sigilFx(x, z, 2.3, 1.1, "#ffbd3e", "#fff1c8", 8, 0.22, 0.9);
+      impacts.emitRing(x, y + 0.3, z, 22, 1.0, 6.5, 1.4, 3.2, 13.0, 1.2, 0.05, 0, IK_SMOKE);
+      sparks.burst(x, y + 0.4, z, 20, 0, 1, 0, 11, 0.8, 2.0, 0.5, 0.024);
+    }
+  }
+
   /** The hang, with the charge building overhead. */
   function slamCharge(x, y, z, charge) {
     const L = impulse.live;
@@ -5830,6 +5885,9 @@ export function buildVfx(ctx, world) {
     meleePierceCharge,
     muzzle,
     boostImpact,
+    blinkFx,
+    hammerWake,
+    hammerImpactFx,
     slamCharge,
     slamTrail,
     slamImpact,

@@ -1611,6 +1611,45 @@ export function buildCombat(ctx) {
     return drained;
   }
 
+  /** KNOCK A FLYER OUT OF THE SKY. The generic anti-air verdict for a
+   *  heavy blow (the Bastion's thrown reliquary is the first caller):
+   *  a creature that declares `flies` and is airborne is forced to the
+   *  ground and stunned there.
+   *
+   *  The Winnower keeps its own physics: its module owns lift, stall
+   *  and the crash cinematics, so for that creature this DELEGATES to
+   *  `forcePhase("stoke")` - the boss's own forced-landing verb, which
+   *  already grounds it, plays the sprawl, and pays the crash-stun -
+   *  and then only tops up the stun. Any future ordinary flyer gets
+   *  the direct treatment: grounded flag, a fall to `groundHeight`,
+   *  and the shared saturating stun. Grounded or non-flying creatures
+   *  return false - the blow was just a blow. */
+  function groundFlyer(inst, opts = {}) {
+    if (!inst || untouchable(inst)) return false;
+    if (!inst.spec?.flies || inst.grounded) return false;
+    const stun = Number.isFinite(opts.stun) ? Math.max(0, opts.stun) : 2.6;
+    if (inst.key === "winnower" && ctx.winnower?.forcePhase) {
+      const phase = ctx.winnower.status?.()?.phase;
+      if (phase === "soar" || phase === "strafe") {
+        ctx.winnower.forcePhase("stoke");
+        if (stun > 0) enemies.stun?.(inst, stun);
+        bus.emit("flyerGrounded", { ...enemyIdentity(inst), forced: "stoke", stun });
+        return true;
+      }
+      return false;
+    }
+    inst.grounded = true;
+    const gy = collide?.groundHeight
+      ? collide.groundHeight(inst.x, inst.z) : inst.y;
+    if (Number.isFinite(gy)) inst.y = gy;
+    inst.pitch = 0;
+    inst.roll = 0;
+    if (stun > 0) enemies.stun?.(inst, stun);
+    vfx?.blast?.(inst.x, (Number.isFinite(gy) ? gy : inst.y) + 0.4, inst.z, 6.5);
+    bus.emit("flyerGrounded", { ...enemyIdentity(inst), forced: "drop", stun });
+    return true;
+  }
+
   /** The nearest point on a creature to a world position, and how far.
    *  A point test against a 25m animal's origin is a test against its
    *  mouth, which would let a stratagem land on its back for nothing. */
@@ -2184,11 +2223,18 @@ export function buildCombat(ctx) {
   function meleeStrike(mult = 1, arc = 2.4, slam = false, lunge = 1, comboStep = 0,
     sweepId = 0) {
     const ps = ctx.player.state;
+    /* Two doors, same as player.meleeSwing: the campaign's weapons
+       module, or - only where no weapons module exists at all - a
+       Kenosis loadout's published `meleeSpec` (melee/reach/damage for
+       the operative's held props). The fallback never engages while
+       `ctx.weapons` is present, so a ranged-mode lance still refuses. */
     const w = ctx.weapons && ctx.weapons.current;
-    if (!w || !w.spec.melee) return 0;
+    const spec = w && w.spec.melee ? w.spec
+      : (!ctx.weapons && ctx.loadout?.meleeSpec?.melee ? ctx.loadout.meleeSpec : null);
+    if (!spec) return 0;
     const isPierce = Math.abs(sweepId) === 6 || comboStep === 6;
-    const reach = w.spec.reach * lunge * MELEE_CONFIG.reachMultiplier * (isPierce ? 1.15 : 1);
-    const dmg = (w.spec.damage || 70) * mult;
+    const reach = spec.reach * lunge * MELEE_CONFIG.reachMultiplier * (isPierce ? 1.15 : 1);
+    const dmg = (spec.damage || 70) * mult;
     const eyeY = ps.y + 1.4;
     let hits = 0;
     let kills = 0;
@@ -3866,6 +3912,7 @@ export function buildCombat(ctx) {
     damageEnemy: applyDamage,
     damageLeg,
     drainLift,
+    groundFlyer,
     meleeStrike,
     /* The clutch, reachable by the encounter that now owns the
        animal's decisions. It stays HERE rather than moving into

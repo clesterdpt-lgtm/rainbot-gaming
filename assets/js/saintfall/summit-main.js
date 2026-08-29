@@ -74,6 +74,18 @@ import { installSummitQa } from "saintfall/summit-qa.js";
 import { chooseSummitCharacter } from "saintfall/summit-characters.js";
 import { buildSummitLoadout } from "saintfall/summit-loadout.js";
 import { buildSummitDischarge } from "saintfall/summit-discharge.js";
+/* The Kenosis kits (m107) made this level a COMBAT level: the
+   campaign's own bestiary, combat rules, audio, boost and slam are
+   built here now - filtered to the three trial castes - plus the
+   two modules that are this level's own: the operative kits and the
+   trials ground that proves them. */
+import { buildEnemies } from "saintfall/enemies.js";
+import { buildCombat } from "saintfall/combat.js";
+import { buildAudio } from "saintfall/audio.js";
+import { buildBoost } from "saintfall/boost.js";
+import { buildSlam } from "saintfall/slam.js";
+import { buildKenosisKit } from "saintfall/summit-kenosis.js";
+import { buildSummitTrials } from "saintfall/summit-trials.js";
 
 /* The LABELS are alpine and the ROW NAMES are not - see
    summit-art.js's header: `goldenhour`/`dusk`/`night` set
@@ -200,6 +212,11 @@ function makeVigilStub() {
     bus: { on: () => () => {}, emit: () => {} },
     snapshot: () => null,
     restore: () => true,
+    /* combat.respawn() reads `ctx.mission.spawn.x/z` UNGUARDED - on
+       the campaign the mission always exists and always has a drop
+       point. With combat built on this level, the stub must carry
+       one too or the first death throws at the revive. */
+    spawn: { x: BASECAMP.x, z: BASECAMP.z },
   };
 }
 
@@ -346,12 +363,50 @@ export async function start({ boot, build } = {}) {
      it optional-chained, so this is the whole wiring: how a shield
      arm braces and how much stroke each hand keeps. */
   ctx.loadout = ctx.playerLoadout;
-  /* A contained equipment proof, not the campaign combat stack:
-     White Vigil primary fire alternates two short-range crescent
-     pulses from blade-side sockets on the separately loaded props.
-     No guardian, damage or progression code is introduced here. */
-  ctx.playerDischarge = buildSummitDischarge(ctx, player, ctx.playerLoadout);
+
+  /* -------------------- the combat stack (m107) --------------------
+     The campaign's own modules, in the campaign's own dependency
+     order: audio first (so every build below may cue it), then the
+     bestiary - FILTERED: `ctx.enemyRoster` keeps the trials to the
+     three ordinary castes so this page does not download seven boss
+     rigs - then combat over it, then the two charge verbs the kits
+     and the page's own "How to play" promise. Everything here reads
+     the wider game optional-chained, which is why the same files run
+     both worlds. */
+  ctx.audio = buildAudio(ctx);
+  progress(0.947, "Waking the trial castes");
+  ctx.enemyRoster = ["thresher", "gleaner", "harrow"];
+  ctx.enemies = await buildEnemies(ctx, (f, label) => {
+    progress(0.947 + clamp01(f) * 0.006, label);
+  });
+  ctx.combat = buildCombat(ctx);
+  ctx.combat.bus.on("playerDied", () => player.die());
+  ctx.boost = buildBoost(ctx, player);
+  ctx.slam = buildSlam(ctx, player);
+
+  /* THE OPERATIVE KIT - the level's doctrine module. Built after the
+     loadout (it wraps the carry hooks and publishes `meleeSpec`) and
+     before the discharge (which takes its weapon numbers from the
+     kit). The Bastion's kit brings its own `ctx.shield`: the tower
+     shield rides the same contract the Aegis does, so the player
+     controller's shield walk and combat's hurtPlayer intercept both
+     engage without either knowing the difference. */
+  ctx.kenosis = buildKenosisKit(ctx, player, ctx.playerLoadout);
+  if (ctx.kenosis?.blockModule) ctx.shield = ctx.kenosis.blockModule;
+  ctx.playerDischarge = buildSummitDischarge(ctx, player, ctx.playerLoadout,
+    ctx.kenosis?.dischargeSpec);
   let lastShotCount = 0;
+
+  /* Audio wants a user gesture before the context runs, and this
+     level has no intro to provide one - the first press or pointer
+     down is it. */
+  const unlockAudio = () => {
+    ctx.audio?.unlock?.({ ambience: false })?.catch?.(() => {});
+    window.removeEventListener("pointerdown", unlockAudio);
+    window.removeEventListener("keydown", unlockAudio);
+  };
+  window.addEventListener("pointerdown", unlockAudio);
+  window.addEventListener("keydown", unlockAudio);
 
   /* THE JETPACK, and on this level it is traversal rather than
      a combat mobility tool.
@@ -385,14 +440,53 @@ export async function start({ boot, build } = {}) {
   const UNLIMITED_JETPACK = params.get("fuel") !== "limited";
   ctx.jetpack = buildJetpack(ctx, player, { unlimitedFuel: UNLIMITED_JETPACK });
 
+  /* ------------------------- the trials ground -------------------------
+     Sited at boot rather than authored: seventy metres out from
+     basecamp - clear of the trials' own 40m wake radius, so arriving
+     at the gate is quiet and walking to the yard is the consent -
+     along whichever of eight bearings is flattest and most level
+     with the pads, so a terrain pass never silently buries the yard
+     in a drift or hangs it over the moraine. */
+  progress(0.955, "Marking the trial yard");
+  const trialYard = (() => {
+    const g0 = ctx.collide.groundHeight(BASECAMP.x, BASECAMP.z);
+    let best = null;
+    for (let k = 0; k < 8; k += 1) {
+      const a = (k / 8) * Math.PI * 2;
+      const x = BASECAMP.x + Math.sin(a) * 70;
+      const z = BASECAMP.z + Math.cos(a) * 70;
+      const g = ctx.collide.groundHeight(x, z);
+      let spread = 0;
+      for (const [ox, oz] of [[8, 0], [-8, 0], [0, 8], [0, -8]]) {
+        spread = Math.max(spread,
+          Math.abs(ctx.collide.groundHeight(x + ox, z + oz) - g));
+      }
+      const score = Math.abs(g - g0) * 0.5 + spread;
+      if (!best || score < best.score) best = { x, z, score };
+    }
+    return best;
+  })();
+  ctx.trials = buildSummitTrials(ctx, player, {
+    x: trialYard.x,
+    z: trialYard.z,
+    homeX: BASECAMP.x,
+    homeZ: BASECAMP.z,
+    homeYaw: BASECAMP.yaw,
+  });
+  /* Wire the ear last: attach() subscribes to whatever buses exist,
+     and by now combat does. */
+  ctx.audio.attach();
+
   progress(0.96, "Opening the operation");
   const hud = buildSummitHud(ctx, hudHost);
   ctx.hud = hud;
   /* The reticle belongs to a figure that has something to aim. Set
      here and not beside the discharge, because `hud` is a const
      declared further down and reaching it earlier is a dead-zone
-     throw, not an undefined. */
-  hud.setReticle?.(!!ctx.playerDischarge?.status?.()?.supported);
+     throw, not an undefined. The Bastion aims too now - the hammer
+     cast flies at the crosshair. */
+  hud.setReticle?.(!!ctx.playerDischarge?.status?.()?.supported
+    || ctx.playerCharacter?.id === "bastion-penitent");
   const touch = buildTouchControls(ctx, player, touchHost, stage);
   ctx.touch = touch;
   ctx.mission = makeVigilStub();
@@ -502,7 +596,20 @@ export async function start({ boot, build } = {}) {
        its blade-forward firing orientation against those live palms;
        only after both are final may a pulse read its emitter socket. */
     ctx.playerLoadout.update?.(d);
+    /* The kit is this level's input router (the campaign's main.js
+       drain loop is not here) and the hammer cast reads the posed
+       hand, so it runs after the solve and before the discharge. */
+    ctx.kenosis?.update?.(d);
     ctx.playerDischarge.update(d);
+    /* The campaign's own order: combat drives every enemy decision
+       and the player's regen; the trials then manage what exists to
+       decide about; crowding resolves the shared body space once;
+       and the bestiary's animation pass runs against final
+       positions. */
+    ctx.combat?.update?.(d);
+    ctx.trials?.update?.(d);
+    ctx.enemies?.resolveCrowding?.(player.state);
+    ctx.enemies?.update?.(d, render.camera);
     /* AFTER postUpdate, exactly as main.js:1016 has it. The pack's
        nozzles and plume are parented to the figure's rig, so a
        visual tick before the pose is resolved draws last frame's
@@ -510,6 +617,7 @@ export async function start({ boot, build } = {}) {
     ctx.jetpack.updateVisual(d);
     ctx.vfx.update(d, render.camera);
     ctx.weather.update(d, render.camera);
+    ctx.audio?.update?.(d, player, render.camera);
     touch.update?.(d);
     /* The reticle belongs to a figure that has something to aim, and
        its kick is the only feedback a discharge with no impact yet
@@ -564,6 +672,14 @@ export async function start({ boot, build } = {}) {
     jetpack: ctx.jetpack,
     loadout: ctx.playerLoadout,
     discharge: ctx.playerDischarge,
+    kenosis: ctx.kenosis,
+    trials: ctx.trials,
+    combat: ctx.combat,
+    enemies: ctx.enemies,
+    audio: ctx.audio,
+    boost: ctx.boost,
+    slam: ctx.slam,
+    shield: ctx.shield || null,
     runtime: ctx.runtime,
     fps: 0, frameMs: 0,
     resize, step, frameOnce: frame,

@@ -27,6 +27,28 @@ const WHITE_VIGIL = {
      carries a furnace with one bell. Vesper-IX names nothing and
      keeps the Seraph. */
   jetpack: "augur",
+  /* THE AUGUR CARRIES MORE CHARGE. The scout's whole pack is
+     instrument and tankage - no furnace, no bell - and the operative
+     is the mobility kit, so the shared reliquary meter runs deeper
+     and refills faster than Vesper's Seraph. Scalars over
+     JETPACK_CONFIG (see jetpack.js `figure.jetpackProfile`). */
+  jetpackProfile: {
+    maxFuelScale: 1.30,
+    rechargeRateScale: 1.25,
+  },
+  /* Dual crescents are wrist weapons: the combo runs 30% faster than
+     the lance tempo (player.js MELEE_TIME_SCALE). */
+  meleeProfile: { timeScale: 1.30 },
+  /* Fast movement is the identity: quicker on foot than Vesper, and
+     quicker to reach that speed. Everything not named keeps the
+     stock value. */
+  locomotionProfile: {
+    walkSpeed: 4.8,
+    sprintSpeed: 9.6,
+    groundAcceleration: 4.4,
+    groundDeceleration: 6.2,
+    turnResponseScale: 1.12,
+  },
   roughness: 0.56,
   metalness: 0.18,
   emissiveIntensity: 0.12,
@@ -102,6 +124,17 @@ const BASTION_PENITENT = {
   assetPath: "../../../assets/models/saintfall/red-bastion/red-bastion-player.glb",
   assetSource: "red-bastion-player.glb",
   jetpack: "censer",
+  /* THE CENSER CANNOT FLY. A boiler on legs buys leaps, not lift:
+     the flight chord performs a single jet-boosted leap and nothing
+     ever hovers (jetpack.js leap mode). Costs and impulse are the
+     bulwark's - expensive, high, and committed. */
+  jetpackProfile: {
+    mode: "leap",
+    leap: { cost: 22, vertical: 12.6, forwardSpeed: 11.0, cooldown: 1.9 },
+  },
+  /* The reliquary hammer swings at three quarters of lance tempo -
+     weight the player can feel between presses. */
+  meleeProfile: { timeScale: 0.78 },
   roughness: 0.58,
   metalness: 0.22,
   emissiveIntensity: 0.20,
@@ -491,5 +524,10 @@ async function buildMeshyVigilTrooper(ctx, spec) {
        trail the forearms naturally under jetpack flight. */
     freeArmPose: { ...spec.freeArmPose },
     locomotionProfile: spec.locomotionProfile ? { ...spec.locomotionProfile } : null,
+    /* Kenosis kit authorship channels, consumed by player.js
+       (melee tempo) and jetpack.js (pack proportions / leap mode). */
+    meleeProfile: spec.meleeProfile ? { ...spec.meleeProfile } : null,
+    jetpackProfile: spec.jetpackProfile
+      ? JSON.parse(JSON.stringify(spec.jetpackProfile)) : null,
   };
 }

@@ -588,6 +588,22 @@ export function installSummitQa(ctx, api, hook) {
     dischargeState: () => ctx.playerDischarge?.status?.() || null,
     fireCrescent: (hand = null) => ctx.playerDischarge?.fireOnce?.(hand) || false,
 
+    /* --------------------- the kenosis kits (m107) ---------------------
+       Every entry is the same code path the inputs take - a harness
+       that calls `blink()` is pressing E, not simulating it. */
+    kitState: () => ctx.kenosis?.status?.() || null,
+    blink: () => ctx.kenosis?.tryBlink?.() || false,
+    throwHammer: () => ctx.kenosis?.tryThrowHammer?.() || false,
+    blockState: () => ctx.shield?.status?.() || null,
+    trialsState: () => ctx.trials?.status?.() || null,
+    /* The live module, for probes that need to place a kite on a
+       flight line or read a drone's mutable state. */
+    trialsHandle: () => ctx.trials || null,
+    spawnTrials: () => ctx.trials?.spawnCohort?.() || false,
+    clearTrials: () => { ctx.trials?.clearCohort?.(); return true; },
+    combatStats: () => ctx.combat?.stats?.() || null,
+    kitDockState: () => api.hud?.kitDockState?.() || null,
+
     listTimes: () => Object.keys(SUMMIT_TIMES).map((k) => ({
       key: k, label: SUMMIT_TIMES[k].label, grade: SUMMIT_TIMES[k].grade,
     })),

@@ -359,6 +359,93 @@ html.sf-maximised .sf-stage.is-maxed { z-index: 2147483000; }
 }
 .sf-hud__hint b { color: var(--sf-gold); font-weight: 400; }
 
+.sf-hud__doctrine-cue {
+  position: absolute;
+  left: max(1.25rem, calc(env(safe-area-inset-left) + 1rem));
+  bottom: max(1.25rem, calc(env(safe-area-inset-bottom) + 1rem));
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.35rem 0.65rem 0.35rem 0.5rem;
+  border: 1px solid rgba(216, 164, 65, 0.45);
+  border-left: 3px solid var(--sf-gold, #d8a441);
+  background: linear-gradient(135deg, rgba(216, 164, 65, 0.14), rgba(12, 8, 9, 0.72));
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.65), 0 0 10px rgba(216, 164, 65, 0.22);
+  backdrop-filter: blur(4px);
+  color: var(--sf-bone, #f6edd9);
+  font-family: "Share Tech Mono", ui-monospace, monospace;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  pointer-events: auto;
+  cursor: pointer;
+  user-select: none;
+  z-index: 25;
+  animation: sf-doctrine-pulse 2.4s ease-in-out infinite;
+  transition: opacity 280ms ease, transform 280ms ease, border-color 200ms ease;
+}
+.sf-hud__doctrine-cue[hidden],
+body.rb-escape-menu-open .sf-hud__doctrine-cue {
+  display: none !important;
+}
+.sf-hud__doctrine-cue:hover,
+.sf-hud__doctrine-cue:focus-visible {
+  border-color: var(--sf-gold, #d8a441);
+  background: linear-gradient(135deg, rgba(216, 164, 65, 0.24), rgba(20, 14, 16, 0.82));
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.75), 0 0 16px rgba(216, 164, 65, 0.42);
+  transform: translateY(-1px);
+  outline: none;
+}
+.sf-doctrine-cue__icon {
+  color: var(--sf-gold, #d8a441);
+  font-size: 13px;
+  line-height: 1;
+  text-shadow: 0 0 8px rgba(216, 164, 65, 0.75);
+}
+.sf-doctrine-cue__copy {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.35rem;
+  white-space: nowrap;
+}
+.sf-doctrine-cue__copy strong {
+  color: #ffe6a3;
+  font-weight: 700;
+  font-size: 12px;
+  text-shadow: 0 0 6px rgba(216, 164, 65, 0.6);
+}
+.sf-doctrine-cue__copy span {
+  color: rgba(246, 237, 217, 0.88);
+  font-size: 10px;
+  letter-spacing: 0.09em;
+}
+.sf-doctrine-cue__key {
+  display: inline-block;
+  padding: 1px 5px;
+  border: 1px solid rgba(216, 164, 65, 0.45);
+  background: rgba(0, 0, 0, 0.45);
+  color: #ffd27a;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  box-shadow: inset 0 -1px 0 rgba(216, 164, 65, 0.3);
+}
+@keyframes sf-doctrine-pulse {
+  0%, 100% {
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.65), 0 0 10px rgba(216, 164, 65, 0.18);
+    border-left-color: var(--sf-gold, #d8a441);
+  }
+  50% {
+    box-shadow: 0 4px 18px rgba(0, 0, 0, 0.75), 0 0 18px rgba(216, 164, 65, 0.42);
+    border-left-color: #ffe6a3;
+  }
+}
+.sf-stage.sf-touch-enabled .sf-hud__doctrine-cue {
+  left: max(1rem, calc(env(safe-area-inset-left) + 0.8rem));
+  bottom: auto;
+  top: max(4.2rem, calc(env(safe-area-inset-top) + 3.8rem));
+}
+
 /* ------------------------------ loader ------------------------------ */
 
 #sf-boot {

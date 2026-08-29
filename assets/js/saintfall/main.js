@@ -373,6 +373,7 @@ export async function start({ boot, build } = {}) {
     stage, canvas, save: saves, touch, render, setQuality: (tier) => setQuality(tier),
   });
   ctx.gameUi = gameUi;
+  ctx.ui = gameUi;
 
   const tutorial = buildTutorial(ctx, {
     enabled: tutorialEnabled,
@@ -1198,7 +1199,7 @@ export async function start({ boot, build } = {}) {
        combat, encounter-owned bosses above, and event spawns in mission.
        Resolve their shared body space once, here, so no controller can undo
        another controller's separation later in the same frame. */
-    enemies.resolveCrowding?.();
+    enemies.resolveCrowding?.(player.state);
     progression.update?.(d);
     audio.update(d, player, render.camera);
     if (colliderView) {
@@ -1302,6 +1303,7 @@ export async function start({ boot, build } = {}) {
     if (ctx.runtime.paused) {
       gameUi.update?.(0);
       tutorial.update?.(0);
+      hud.update?.(0, player, render.camera);
       if (draw) render.render(render.camera);
       return;
     }

@@ -652,6 +652,12 @@ const CROWD_SOLVER = Object.freeze({
   slop: 0.008,
   epsilonSq: 1e-8,
   minCellSize: 16,
+  /* Remote garrisons are already placed collision-safe and are not visible.
+     Re-solving every one of their resting bodies every frame made the cost
+     scale with the whole save rather than the fight on screen. Bodies enter
+     the solver before they can be seen at this range, so an approaching
+     player still gets the same four-pass separation and world-safe slides. */
+  activeRadius: 280,
   keyOffset: 32768,
   keyStride: 65536,
 });
@@ -737,6 +743,17 @@ export async function buildEnemies(ctx, onProgress) {
   for (let i = 0; i < names.length; i += 1) {
     const key = names[i];
     const spec = BESTIARY[key];
+
+    /* A level may carry only part of the bestiary. `ctx.enemyRoster`
+       is an optional allowlist of species keys: a parallel world that
+       wants three castes for a trials ground should not download and
+       rig ten boss GLBs to get them. The campaign sets no roster and
+       keeps the whole bestiary; `spawn` already answers null for any
+       species that was never registered. */
+    if (Array.isArray(ctx.enemyRoster) && !ctx.enemyRoster.includes(key)) {
+      if (onProgress) onProgress((i + 1) / names.length, `Passing the ${key}`);
+      continue;
+    }
 
     /* A creature with no .glb behind it. The species is registered as an
        empty root with no clips, and the module that owns the creature
@@ -1966,6 +1983,11 @@ export async function buildEnemies(ctx, onProgress) {
   const crowdRadii = [];
   const crowdInverseMasses = [];
   const crowdGrid = new Map();
+  const crowdStats = {
+    eligible: 0,
+    totalGrounded: 0,
+    corrections: 0,
+  };
   const crowdCellKey = (x, z) => (x + CROWD_SOLVER.keyOffset) * CROWD_SOLVER.keyStride
     + z + CROWD_SOLVER.keyOffset;
 
@@ -1978,22 +2000,33 @@ export async function buildEnemies(ctx, onProgress) {
     inst.z = out[1];
   }
 
-  function resolveCrowding() {
+  function resolveCrowding(focus = null) {
     crowdBodies.length = 0;
     crowdRadii.length = 0;
     crowdInverseMasses.length = 0;
+    const focusX = Number(focus?.x);
+    const focusZ = Number(focus?.z);
+    const hasFocus = Number.isFinite(focusX) && Number.isFinite(focusZ);
+    const activeRadiusSq = CROWD_SOLVER.activeRadius * CROWD_SOLVER.activeRadius;
     let maxRadius = 0;
+    let totalGrounded = 0;
     for (const inst of live) {
       if (inst.state === "death" || inst.emerging?.active
         || inst.encounterHidden || inst.encounterLocked
         || inst.body || inst.grounded === false) continue;
       const radius = Math.max(0, Number(inst.spec.collisionRadius) || 0);
       if (radius <= 0) continue;
+      totalGrounded += 1;
+      if (hasFocus
+        && (inst.x - focusX) ** 2 + (inst.z - focusZ) ** 2 > activeRadiusSq) continue;
       crowdBodies.push(inst);
       crowdRadii.push(radius);
       crowdInverseMasses.push(inst.spec.selfDriven ? 0 : 1 / (radius * radius));
       maxRadius = Math.max(maxRadius, radius);
     }
+    crowdStats.totalGrounded = totalGrounded;
+    crowdStats.eligible = crowdBodies.length;
+    crowdStats.corrections = 0;
     if (crowdBodies.length < 2) return 0;
 
     /* A cell is at least twice the largest participating radius, so any
@@ -2071,7 +2104,79 @@ export async function buildEnemies(ctx, onProgress) {
       corrections += passCorrections;
       if (passCorrections === 0) break;
     }
+    crowdStats.corrections = corrections;
     return corrections;
+  }
+
+  /**
+   * Return the earliest clear fraction of a third-person camera boom.
+   *
+   * Rendering geometry is a poor collision contract here: animated skins
+   * move every frame, a Coulter has hundreds of metres of decorative spine,
+   * and raycasting all of it would put the obstruction fix back into the
+   * frame budget it is protecting. The bestiary footprint is authoritative,
+   * so each visible body becomes a conservative vertical capsule. The boom
+   * solves analytically in XZ and intersects that interval with its Y travel.
+   */
+  function cameraBoomReach(from, to, padding = 0.24) {
+    if (!from || !to) return { reach: 1, blocker: null };
+    const dx = to.x - from.x;
+    const dy = to.y - from.y;
+    const dz = to.z - from.z;
+    const horizontalSq = dx * dx + dz * dz;
+    if (horizontalSq < 1e-8) return { reach: 1, blocker: null };
+
+    let reach = 1;
+    let blocker = null;
+    const minX = Math.min(from.x, to.x);
+    const maxX = Math.max(from.x, to.x);
+    const minZ = Math.min(from.z, to.z);
+    const maxZ = Math.max(from.z, to.z);
+    for (const inst of live) {
+      if (!inst || inst.state === "death" || inst.emerging?.active
+        || inst.encounterHidden || inst.encounterLocked || !inst.root?.visible) continue;
+      const authoredScale = Math.max(1e-5, Number(inst.spec.scale) || 1);
+      const liveScale = Math.max(0.1, Number(inst.root.scale.x) || authoredScale);
+      const scale = liveScale / authoredScale;
+      const bodyRadius = Math.max(0.58,
+        Number(inst.spec.cameraRadius)
+          || (Number(inst.spec.collisionRadius) || 0.62) * 1.08) * scale + padding;
+      if (inst.x + bodyRadius < minX || inst.x - bodyRadius > maxX
+        || inst.z + bodyRadius < minZ || inst.z - bodyRadius > maxZ) continue;
+
+      const ox = from.x - inst.x;
+      const oz = from.z - inst.z;
+      const b = 2 * (ox * dx + oz * dz);
+      const c = ox * ox + oz * oz - bodyRadius * bodyRadius;
+      const disc = b * b - 4 * horizontalSq * c;
+      if (disc < 0) continue;
+      const root = Math.sqrt(disc);
+      let enter = Math.max(0, (-b - root) / (2 * horizontalSq));
+      let exit = Math.min(reach, (-b + root) / (2 * horizontalSq));
+      if (exit < enter || enter >= reach) continue;
+
+      const bodyBottom = inst.y - 0.18;
+      const bodyHeight = Math.max(1.35,
+        Number(inst.spec.cameraHeight)
+          || (Number(inst.spec.collisionRadius) || 0.62) * 2.45) * scale;
+      const bodyTop = inst.y + bodyHeight;
+      if (Math.abs(dy) < 1e-8) {
+        if (from.y < bodyBottom || from.y > bodyTop) continue;
+      } else {
+        const y0 = (bodyBottom - from.y) / dy;
+        const y1 = (bodyTop - from.y) / dy;
+        enter = Math.max(enter, Math.min(y0, y1));
+        exit = Math.min(exit, Math.max(y0, y1));
+        if (exit < enter || enter >= reach) continue;
+      }
+
+      /* Leave a small visual gap in front of the body, expressed in boom
+         fraction so it is stable across the death/jetpack boom lengths. */
+      const boomLength = Math.max(0.01, Math.hypot(dx, dy, dz));
+      reach = Math.max(0, enter - 0.18 / boomLength);
+      blocker = inst.id;
+    }
+    return { reach, blocker };
   }
 
   function update(dt, camera) {
@@ -2580,6 +2685,7 @@ export async function buildEnemies(ctx, onProgress) {
     rescaleForDifficulty,
     update,
     resolveCrowding,
+    cameraBoomReach,
     /* The body chain's public surface, for the encounter module that
        drives it. `seedBody` lays a worm out straight, `poseBody`
        resolves this frame's trail into joint targets, and `trailAt`
@@ -2609,6 +2715,7 @@ export async function buildEnemies(ctx, onProgress) {
       return {
         species: species.size,
         live: live.length,
+        crowd: { ...crowdStats },
         clips: [...species.values()].map((s) => `${s.key}:${s.clips.size}`),
       };
     },

@@ -1468,6 +1468,7 @@ export function installQa(ctx, api) {
     shotSolution() { return api.shotSolution?.() || null; },
     reticleState() { return api.hud?.reticleState?.() || null; },
     guardCueState() { return api.hud?.guardCueState?.() || null; },
+    doctrineCueState() { return api.hud?.doctrineCueState?.() || null; },
     guardThreatState() { return api.guardReadability?.status?.() || null; },
     previewGuardCue(options = {}) {
       return api.guardReadability?.preview?.(options) || null;
@@ -3074,27 +3075,49 @@ export function installQa(ctx, api) {
       const ps = api.player.state;
       const prof = api.terrain.field.roadProfile;
       const out = [];
-      for (let i = 0; i < runs; i += 1) {
-        const a = prof[Math.floor((i / runs) * (prof.length - 8)) + 4];
-        const b = prof[Math.floor((i / runs) * (prof.length - 8)) + 5];
-        const yaw = Math.atan2(b.z - a.z, b.x - a.x);
-        const side = i % 2 ? 1 : -1;
-        const ang = Math.atan2(Math.sin(yaw) * side, -Math.cos(yaw) * side);
-        const open = api.collide.findOpen(a.x, a.z, api.terrain.heightAt(a.x, a.z), 40, 20);
-        api.player.spawn(open ? open[0] : a.x, open ? open[1] : a.z, 0);
-        api.player.setFree(false);
-        ps.camYaw = 0;
-        ps.speed = 0;
-        for (let k = 0; k < 8; k += 1) api.step(1 / 60, false);
-        const x0 = ps.x;
-        const z0 = ps.z;
-        api.player.input.inject(-Math.sin(ang), -Math.cos(ang));
-        for (let k = 0; k < Math.round(seconds * 60); k += 1) api.step(1 / 60, false);
+      const life = api.combat.player;
+      const savedLife = {
+        invulnerable: !!life.invulnerable,
+        dead: !!life.dead,
+        hp: life.hp,
+        respawnIn: life.respawnIn,
+      };
+      /* This is a terrain-mobility scan. Twenty forty-second combat runs can
+         correctly kill the subject, but a dead controller reports zero
+         traversal and turns a survival outcome into a geometry failure. */
+      life.invulnerable = true;
+      life.dead = false;
+      life.hp = life.maxHp;
+      life.respawnIn = 0;
+      try {
+        for (let i = 0; i < runs; i += 1) {
+          const a = prof[Math.floor((i / runs) * (prof.length - 8)) + 4];
+          const b = prof[Math.floor((i / runs) * (prof.length - 8)) + 5];
+          const yaw = Math.atan2(b.z - a.z, b.x - a.x);
+          const side = i % 2 ? 1 : -1;
+          const ang = Math.atan2(Math.sin(yaw) * side, -Math.cos(yaw) * side);
+          const open = api.collide.findOpen(a.x, a.z, api.terrain.heightAt(a.x, a.z), 40, 20);
+          api.player.spawn(open ? open[0] : a.x, open ? open[1] : a.z, 0);
+          api.player.setFree(false);
+          ps.camYaw = 0;
+          ps.speed = 0;
+          for (let k = 0; k < 8; k += 1) api.step(1 / 60, false);
+          const x0 = ps.x;
+          const z0 = ps.z;
+          api.player.input.inject(-Math.sin(ang), -Math.cos(ang));
+          for (let k = 0; k < Math.round(seconds * 60); k += 1) api.step(1 / 60, false);
+          api.player.input.inject(null, null);
+          out.push({
+            from: [Math.round(x0), Math.round(z0)],
+            netM: Number(Math.hypot(ps.x - x0, ps.z - z0).toFixed(1)),
+          });
+        }
+      } finally {
         api.player.input.inject(null, null);
-        out.push({
-          from: [Math.round(x0), Math.round(z0)],
-          netM: Number(Math.hypot(ps.x - x0, ps.z - z0).toFixed(1)),
-        });
+        life.invulnerable = savedLife.invulnerable;
+        life.dead = savedLife.dead;
+        life.hp = savedLife.hp;
+        life.respawnIn = savedLife.respawnIn;
       }
       const free = 4.4 * seconds;
       const stuck = out.filter((o) => o.netM < free * 0.35);

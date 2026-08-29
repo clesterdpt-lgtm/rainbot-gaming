@@ -110,6 +110,39 @@ const ALTIMETER_CSS = `
 .sf-cross__e,.sf-cross__w{width:9px;height:2px;top:-1px}
 .sf-cross__dot{width:3px;height:3px;left:-1.5px;top:-1.5px;border-radius:50%;
   background:#eafff8;box-shadow:0 0 6px rgba(120,240,215,.9)}
+
+/* ---------------------------- kit dock ----------------------------
+   The operative's own numbers, bottom-left where the campaign keeps
+   its vitals: health, the shared reliquary charge, and one row per
+   doctrine verb (the Vigil's step charges, the Bastion's guard and
+   cast). Same hard-edged monospace as the altimeter. */
+.sf-kit{position:absolute;left:18px;bottom:18px;display:flex;
+  flex-direction:column;gap:7px;min-width:230px;pointer-events:none;
+  font:600 10px/1 ui-monospace,SFMono-Regular,Menlo,monospace;
+  color:#cfe0f4;letter-spacing:.08em;z-index:4}
+.sf-kit__bar{position:relative;height:14px;
+  background:rgba(10,16,26,.62);border:1px solid rgba(190,215,245,.28)}
+.sf-kit__bar i{position:absolute;left:0;top:0;bottom:0;width:100%;
+  transform-origin:0 50%;transform:scaleX(1)}
+.sf-kit__hp i{background:linear-gradient(to right,#e0b545,#ffcf90)}
+.sf-kit__hp[data-state="hurt"] i{background:linear-gradient(to right,#c2502f,#ff9540)}
+.sf-kit__hp[data-state="dead"] i{background:#6b1f14}
+.sf-kit__charge i{background:linear-gradient(to right,#3f7d92,#8fd6e6)}
+.sf-kit__charge[data-state="crit"] i{background:#a1452c}
+.sf-kit__bar b{position:absolute;right:6px;top:50%;transform:translateY(-50%);
+  font-size:9px;color:#f2f7ff;text-shadow:0 1px 2px rgba(0,0,0,.8)}
+.sf-kit__bar small{position:absolute;left:6px;top:50%;transform:translateY(-50%);
+  font-size:8px;opacity:.62;letter-spacing:.16em}
+.sf-kit__row{display:flex;align-items:center;gap:8px;height:16px;
+  background:rgba(10,16,26,.5);border:1px solid rgba(190,215,245,.2);
+  padding:0 6px}
+.sf-kit__row kbd{font:inherit;font-size:8px;padding:1px 4px;
+  border:1px solid rgba(190,215,245,.4);color:#eafff8}
+.sf-kit__row span{flex:1;font-size:9px;opacity:.85}
+.sf-kit__row b{font-size:10px;color:#ffe9c9}
+.sf-kit__row[data-state="ready"] b{color:#bfeee0}
+.sf-kit__row[data-state="cooldown"] b,.sf-kit__row[data-state="empty"] b{color:#e8a06a}
+.sf-kit__row[data-state="active"] b{color:#ffd76a}
 `;
 
 export function buildSummitHud(ctx, host) {
@@ -152,6 +185,22 @@ export function buildSummitHud(ctx, host) {
       <i class="sf-cross__e"></i><i class="sf-cross__w"></i>
       <i class="sf-cross__dot"></i>
     </div>
+    <div class="sf-kit" id="sf-kit" aria-label="Operative kit">
+      <div class="sf-kit__bar sf-kit__hp" id="sf-kit-hp"><i id="sf-kit-hp-fill"></i>
+        <small>VITALITY</small><b id="sf-kit-hp-value">150</b></div>
+      <div class="sf-kit__bar sf-kit__charge" id="sf-kit-charge"><i id="sf-kit-charge-fill"></i>
+        <small>RELIQUARY</small><b id="sf-kit-charge-value">READY</b></div>
+      <div class="sf-kit__row" id="sf-kit-ability" data-state="ready" hidden>
+        <kbd id="sf-kit-ability-key">E</kbd>
+        <span id="sf-kit-ability-name"></span>
+        <b id="sf-kit-ability-value"></b>
+      </div>
+      <div class="sf-kit__row" id="sf-kit-cast" data-state="ready" hidden>
+        <kbd>RMB</kbd>
+        <span id="sf-kit-cast-name">HAMMER CAST</span>
+        <b id="sf-kit-cast-value">READY</b>
+      </div>
+    </div>
     ${ctx.qa ? '<output class="sf-hud__readout" id="sf-readout" aria-label="QA world coordinates"></output>' : ""}
   `;
 
@@ -164,6 +213,88 @@ export function buildSummitHud(ctx, host) {
   const altMarks = el.querySelector("#sf-alt-marks");
   const altMe = el.querySelector("#sf-alt-me");
   const altRead = el.querySelector("#sf-alt-read");
+  const kitEls = {
+    hp: el.querySelector("#sf-kit-hp"),
+    hpFill: el.querySelector("#sf-kit-hp-fill"),
+    hpValue: el.querySelector("#sf-kit-hp-value"),
+    charge: el.querySelector("#sf-kit-charge"),
+    chargeFill: el.querySelector("#sf-kit-charge-fill"),
+    chargeValue: el.querySelector("#sf-kit-charge-value"),
+    ability: el.querySelector("#sf-kit-ability"),
+    abilityKey: el.querySelector("#sf-kit-ability-key"),
+    abilityName: el.querySelector("#sf-kit-ability-name"),
+    abilityValue: el.querySelector("#sf-kit-ability-value"),
+    cast: el.querySelector("#sf-kit-cast"),
+    castValue: el.querySelector("#sf-kit-cast-value"),
+  };
+  /* One-time dock identity, resolved on the first update once the
+     kit exists on ctx (the HUD is built before the kit's summit-main
+     wiring finished being read - pulling per frame is the campaign
+     HUD's own pattern anyway). */
+  let kitDockNamed = false;
+  function nameKitDock() {
+    const kit = ctx.kenosis;
+    if (!kit || kitDockNamed) return;
+    kitDockNamed = true;
+    if (kit.id === "white-vigil") {
+      kitEls.ability.hidden = false;
+      kitEls.abilityKey.textContent = keybindLabel("block").split(" / ")[0] || "E";
+      kitEls.abilityName.textContent = "VIGIL STEP";
+    } else if (kit.id === "bastion-penitent") {
+      kitEls.ability.hidden = false;
+      kitEls.abilityKey.textContent = keybindLabel("block").split(" / ")[0] || "E";
+      kitEls.abilityName.textContent = "TOWER SHIELD";
+      kitEls.cast.hidden = false;
+    }
+  }
+  function updateKitDock(player) {
+    const combatPlayer = ctx.combat?.player;
+    if (combatPlayer) {
+      const frac = clamp01(combatPlayer.hp / Math.max(1, combatPlayer.maxHp));
+      kitEls.hpFill.style.transform = `scaleX(${frac.toFixed(3)})`;
+      kitEls.hpValue.textContent = String(Math.max(0, Math.round(combatPlayer.hp)));
+      kitEls.hp.dataset.state = combatPlayer.dead ? "dead"
+        : frac < 0.35 ? "hurt" : "ok";
+    }
+    const jet = ctx.jetpack?.status?.(player.state);
+    if (jet) {
+      const frac = clamp01(jet.fuel / Math.max(1, jet.maxFuel));
+      kitEls.chargeFill.style.transform = `scaleX(${frac.toFixed(3)})`;
+      const label = jet.leapMode
+        ? (jet.mode === "cooldown" ? `LEAP ${jet.leapCooldownRemaining.toFixed(1)}S`
+          : jet.mode === "thrust" ? "LEAP"
+            : jet.mode.toUpperCase())
+        : jet.mode.toUpperCase();
+      kitEls.chargeValue.textContent = `${Math.round(frac * 100)}% · ${label}`;
+      kitEls.charge.dataset.state = frac < 0.18 ? "crit" : jet.mode;
+    }
+    nameKitDock();
+    const kit = ctx.kenosis;
+    if (!kit) return;
+    const status = kit.status();
+    if (status.blink) {
+      const b = status.blink;
+      const pips = "◆".repeat(b.charges) + "◇".repeat(b.maxCharges - b.charges);
+      kitEls.abilityValue.textContent = b.charges < b.maxCharges
+        ? `${pips} ${b.rechargeIn.toFixed(1)}S` : pips;
+      kitEls.ability.dataset.state = b.charges > 0 ? "ready" : "cooldown";
+    }
+    if (status.block) {
+      kitEls.abilityValue.textContent = status.block.active ? "HELD"
+        : status.block.blockedReason ? status.block.blockedReason.toUpperCase() : "READY";
+      kitEls.ability.dataset.state = status.block.active ? "active" : "ready";
+    }
+    if (status.hammer) {
+      const h = status.hammer;
+      kitEls.castValue.textContent = h.phase === "out" ? "CAST"
+        : h.phase === "return" ? "RETURNING"
+          : h.phase === "windup" ? "WINDING"
+            : h.cooldown > 0 ? `${h.cooldown.toFixed(1)}S` : "READY";
+      kitEls.cast.dataset.state = h.phase !== "held" ? "active"
+        : h.cooldown > 0 ? "cooldown" : "ready";
+    }
+  }
+
   const crossEl = el.querySelector("#sf-cross");
   const crossArms = {
     n: crossEl.querySelector(".sf-cross__n"),
@@ -439,6 +570,24 @@ export function buildSummitHud(ctx, host) {
         readoutEl.textContent =
           `${p.x.toFixed(1)} ${p.y.toFixed(1)} ${p.z.toFixed(1)}  ${s ? s.id : "-"}`;
       }
+
+      updateKitDock(player);
+    },
+    kitDockState() {
+      return {
+        hp: kitEls.hpValue.textContent,
+        hpState: kitEls.hp.dataset.state || null,
+        charge: kitEls.chargeValue.textContent,
+        ability: kitEls.ability.hidden ? null : {
+          name: kitEls.abilityName.textContent,
+          value: kitEls.abilityValue.textContent,
+          state: kitEls.ability.dataset.state,
+        },
+        cast: kitEls.cast.hidden ? null : {
+          value: kitEls.castValue.textContent,
+          state: kitEls.cast.dataset.state,
+        },
+      };
     },
     setVisible(v) { el.style.display = v ? "" : "none"; },
     flashDistrict(name) { nameEl.textContent = name; showFor = 5.2; },

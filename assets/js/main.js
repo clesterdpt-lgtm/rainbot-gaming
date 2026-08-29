@@ -5041,6 +5041,7 @@ function bindMaxScreenButton(fsButton, surface) {
   document.addEventListener("fullscreenchange", syncFullscreenState);
   document.addEventListener("webkitfullscreenchange", syncFullscreenState);
   document.addEventListener("keydown", (event) => {
+    if (document.body?.dataset.rbNativeEscapeMenu === "true" || document.querySelector(".saintfall-stage-shell")) return;
     if (event.key === "Escape" && surface.classList.contains("is-maxed") && !isNativeFullscreen()) {
       setMaxed(false);
     }

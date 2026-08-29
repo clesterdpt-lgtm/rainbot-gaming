@@ -106,7 +106,40 @@ function buildExhaust(ctx) {
 
 export function buildJetpack(ctx, player, options = {}) {
   const { THREE } = ctx;
-  const config = JETPACK_CONFIG;
+  /* --- THE FIGURE MAY RE-PROPORTION ITS OWN PACK -----------------
+     `figure.jetpackProfile` is the same authorship channel as
+     `figure.locomotionProfile`: per-figure scalars over the shared
+     design, defaulted so a figure that declares nothing (Vesper, and
+     every boss harness that borrows this module) flies on the exact
+     frozen JETPACK_CONFIG object it always did. The scales build ONE
+     effective config here because every gate below, player.js's
+     flight solve (via `ctx.jetpack.config`) and the HUD's percentage
+     all have to agree about what a full tank is.
+
+     `mode: "leap"` declares a pack that CANNOT sustain flight - the
+     Bastion's Censer boiler. The chord that lights other packs
+     instead buys a single jet-boosted leap (see `leap` state below);
+     `inFlight` is never set, so the flight solver, glide pose and
+     HUD flight modes are simply never entered. */
+  const profile = player?.figure?.jetpackProfile || null;
+  const profScale = (key, lo, hi) => {
+    const v = Number(profile?.[key]);
+    return Number.isFinite(v) ? clamp(v, lo, hi) : 1;
+  };
+  const config = !profile ? JETPACK_CONFIG : Object.freeze({
+    ...JETPACK_CONFIG,
+    maxFuel: JETPACK_CONFIG.maxFuel * profScale("maxFuelScale", 0.5, 2.5),
+    burnRate: JETPACK_CONFIG.burnRate * profScale("burnRateScale", 0.4, 2.5),
+    rechargeRate: JETPACK_CONFIG.rechargeRate * profScale("rechargeRateScale", 0.4, 2.5),
+  });
+  const leapMode = profile?.mode === "leap";
+  const LEAP = Object.freeze({
+    cost: Number.isFinite(profile?.leap?.cost) ? Math.max(0, profile.leap.cost) : 22,
+    vertical: Number.isFinite(profile?.leap?.vertical) ? profile.leap.vertical : 12.4,
+    forwardSpeed: Number.isFinite(profile?.leap?.forwardSpeed) ? profile.leap.forwardSpeed : 11.5,
+    cooldown: Number.isFinite(profile?.leap?.cooldown) ? Math.max(0, profile.leap.cooldown) : 1.9,
+    pulse: 0.55,
+  });
   /* --- FLYING WITHOUT PAYING, AND WHY IT IS NOT THE BOON ---------
 
      `ctx.mission.boon()` already means exactly this to the pack -
@@ -168,6 +201,14 @@ export function buildJetpack(ctx, player, options = {}) {
     distance: 0,
     blockedFrames: 0,
     lastLandingSpeed: 0,
+    /* Leap-mode packs only (see LEAP above). `leapPulse` is the
+       presentation window of the burn; `leapAirborne` marks a leap
+       whose landing this module still owes a thump for. */
+    leapCooldownRemaining: 0,
+    leapPulse: 0,
+    leapAirborne: false,
+    leaps: 0,
+    leapBlockedReason: null,
   };
 
   function clearExhaustPool() {
@@ -206,6 +247,10 @@ export function buildJetpack(ctx, player, options = {}) {
     state.landingAssistRetry = 0;
     state.takeoffClearing = false;
     state.landPulse = 0;
+    state.leapCooldownRemaining = 0;
+    state.leapPulse = 0;
+    state.leapAirborne = false;
+    state.leapBlockedReason = null;
     boostVisualThrottle = 0;
     wingSpread = 0;
     visual.root.userData.wingSpread = 0;
@@ -321,7 +366,46 @@ export function buildJetpack(ctx, player, options = {}) {
        flat by twenty metres of abdomen is not a thing you fly out of. */
     const pinned = ((playerState.rootFor || 0) > 0 && playerState.grounded)
       || (playerState.stunFor || 0) > 0;
-    if (pressed && !state.active && !state.needsRelease && !pinned
+    if (leapMode) {
+      /* THE CENSER CANNOT FLY. The chord buys one boosted leap from
+         the ground: a vertical impulse plus a speed floor along the
+         travel bearing, then plain ballistics - `inFlight` is never
+         set, so there is no hover, no glide and no cruise solve. The
+         refusal reasons mirror the flight gates so QA can name why a
+         press did nothing. */
+      state.leapCooldownRemaining = Math.max(0, state.leapCooldownRemaining - dt);
+      state.leapPulse = Math.max(0, state.leapPulse - dt);
+      if (pressed) {
+        state.leapBlockedReason = !playerState.grounded ? "airborne"
+          : pinned ? "pinned"
+            : state.needsRelease ? "release"
+              : state.leapCooldownRemaining > 0 ? "cooldown"
+                : !(state.fuel >= LEAP.cost || freeFlight()) ? "low-charge"
+                  : null;
+        if (!state.leapBlockedReason) {
+          if (!freeFlight()) state.fuel = Math.max(0, state.fuel - LEAP.cost);
+          state.rechargeDelayRemaining = Math.max(
+            state.rechargeDelayRemaining, config.rechargeDelay);
+          state.leapCooldownRemaining = LEAP.cooldown;
+          state.leapPulse = LEAP.pulse;
+          state.leapAirborne = true;
+          state.leaps += 1;
+          playerState.grounded = false;
+          playerState.vy = Math.max(playerState.vy, LEAP.vertical);
+          playerState.speed = Math.max(playerState.speed || 0, LEAP.forwardSpeed);
+          ctx.audio?.jetIgnite?.();
+          ctx.audio?.leapBlast?.(playerState.x, playerState.z);
+          ctx.vfx?.jetIgnite?.(playerState.x, playerState.y + 1.1, playerState.z,
+            0, -1, 0, 1);
+        }
+      }
+      if (state.leapAirborne && playerState.grounded) {
+        state.leapAirborne = false;
+        state.landPulse = 1;
+        state.landings += 1;
+        ctx.audio?.jetLand?.(Math.max(4, Math.abs(playerState.vy || 0)));
+      }
+    } else if (pressed && !state.active && !state.needsRelease && !pinned
       && (state.fuel >= config.minIgnitionFuel || freeFlight())
       && (state.cooldownRemaining <= 0 || freeFlight())) {
       const gy = ctx.collide?.groundHeight(playerState.x, playerState.z)
@@ -522,7 +606,8 @@ export function buildJetpack(ctx, player, options = {}) {
        reads the auxiliary boost/thrust and drives the identical wings, central
        ribbon and exhaust pool. */
     const isMeleePierce = !!player.action && player.action.name === "meleePierce";
-    const boostThrust = (!!ctx.boost?.state?.active && !!player.state.grounded) || isMeleePierce;
+    const boostThrust = (!!ctx.boost?.state?.active && !!player.state.grounded)
+      || isMeleePierce || state.leapPulse > 0;
     boostVisualThrottle = damp(boostVisualThrottle, boostThrust ? 1 : 0,
       boostThrust ? 18 : 8, dt);
     const throttle = Math.max(state.throttle, boostVisualThrottle);
@@ -928,13 +1013,24 @@ export function buildJetpack(ctx, player, options = {}) {
   function status(playerState = player.state) {
     const boostThrust = !!ctx.boost?.state?.active && !!playerState.grounded;
     let mode = "ready";
-    if (state.active) mode = "thrust";
+    if (leapMode) {
+      if (state.leapPulse > 0) mode = "thrust";
+      else if (boostThrust) mode = "boost";
+      else if (state.leapCooldownRemaining > 0) mode = "cooldown";
+      else if (state.recharging) mode = "recharging";
+      else if (state.fuel < LEAP.cost) mode = "low";
+    } else if (state.active) mode = "thrust";
     else if (boostThrust) mode = "boost";
     else if (state.inFlight) mode = state.exhausted ? "empty" : "glide";
     else if (state.cooldownRemaining > 0) mode = "cooldown";
     else if (state.recharging) mode = "recharging";
     else if (state.fuel < config.minIgnitionFuel) mode = "low";
     return {
+      leapMode,
+      leapCooldownRemaining: Number(state.leapCooldownRemaining.toFixed(3)),
+      leapCost: LEAP.cost,
+      leaps: state.leaps,
+      leapBlockedReason: state.leapBlockedReason,
       requested: state.requested,
       active: state.active,
       inFlight: state.inFlight,

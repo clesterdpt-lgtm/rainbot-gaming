@@ -19,7 +19,7 @@
       is per-feature rather than cumulative.
 
    Usage: node scripts/saintfall-perf-census.mjs [--frames 60] [--dpr 2]
-          [--scenario spawn|vista|combat]
+          [--scenario spawn|vista|combat|garrison]
    ============================================================ */
 
 import { spawn } from "node:child_process";
@@ -74,6 +74,7 @@ const SCENARIOS = {
     }
     T.advanceTime(1.5, 1/60);
   `,
+  garrison: `T.teleport(-655, -655, 0); T.advanceTime(4, 1/60);`,
 };
 
 async function main() {
@@ -200,6 +201,29 @@ async function main() {
       console.log(`  ${r.name.padEnd(44).slice(0, 44)} shadow ${fmt(r.shadowTris).padStart(10)}`);
     }
 
+    /* The broad gameplay gate uses this exact fixed-step measurement. Keep a
+       focused copy here so a renderer change can be profiled without first
+       simulating the entire campaign regression suite. */
+    const fixedStep = await page.evaluate(() => {
+      const T = window.__SF;
+      const previous = T.report().render.shadowEvery;
+      T.render.setShadowEvery(2);
+      T.render.requestShadowUpdate();
+      for (let i = 0; i < 12; i += 1) T.renderOnce(1 / 60);
+      const samples = [];
+      for (let pass = 0; pass < 3; pass += 1) {
+        const t0 = performance.now();
+        for (let i = 0; i < 240; i += 1) T.renderOnce(1 / 60);
+        samples.push((performance.now() - t0) / 240);
+      }
+      T.render.setShadowEvery(previous);
+      T.render.requestShadowUpdate();
+      samples.sort((a, b) => a - b);
+      return samples;
+    });
+    console.log(`\nproduction fixed-step averages: ${fixedStep.map((n) => n.toFixed(2)).join(" / ")}ms`
+      + `  median ${fixedStep[1].toFixed(2)}ms`);
+
     /* ------------------------- cost ladder ------------------------- */
     const MEASURE = `(frames) => {
       const T = window.__SF;
@@ -243,7 +267,7 @@ async function main() {
     await run("shadow frozen", `T.render.setShadowEvery(1e9);`, `T.render.setShadowEvery(1); T.render.requestShadowUpdate();`);
     await run("ao off", `T.render.setAo(0);`, `T.render.setAo(0.85);`);
     await run("msaa off", `const t=T.render.targets.sceneTarget; t.samples=0; t.dispose();`,
-      `const t=T.render.targets.sceneTarget; t.samples=4; t.dispose();`);
+      `const t=T.render.targets.sceneTarget; t.samples=2; t.dispose();`);
     /* setAutoScale(false) FIRST: it resets the scale to 1 as it
        disarms, so the other order silently measures native. */
     await run("renderScale 0.62", `T.render.setAutoScale(false); T.render.setRenderScale(0.62);`,
@@ -260,7 +284,7 @@ async function main() {
       const t=T.render.targets.sceneTarget; t.samples=0; t.dispose();
     `, `
       T.render.setShadowEvery(1); T.render.requestShadowUpdate(); T.render.setAo(0.85);
-      const t=T.render.targets.sceneTarget; t.samples=4; t.dispose();
+      const t=T.render.targets.sceneTarget; t.samples=2; t.dispose();
     `);
     await run("baseline again", ``);
 

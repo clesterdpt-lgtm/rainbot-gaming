@@ -72,8 +72,8 @@ export const KEYBIND_ACTIONS = Object.freeze([
     id: "stratagems", group: "COMMAND", label: "Field support panel", defaults: ["KeyV", null],
   },
   {
-    id: "menu", group: "COMMAND", label: "Field menu", detail: "ESC also opens and resumes",
-    defaults: ["Tab", null],
+    id: "menu", group: "COMMAND", label: "Field menu", detail: "ESC opens and resumes",
+    defaults: ["Escape", null],
   },
   {
     id: "map", group: "COMMAND", label: "Tactical map", detail: "Press again to resume",
@@ -95,10 +95,13 @@ function defaultTable() {
   return table;
 }
 
-function sanitizeCode(code) {
+function sanitizeCode(code, actionId = null) {
   if (typeof code !== "string") return null;
   const trimmed = code.trim();
-  if (!trimmed || trimmed.length > 32 || RESERVED_CODES.has(trimmed)) return null;
+  if (!trimmed || trimmed.length > 32) return null;
+  if (RESERVED_CODES.has(trimmed)) {
+    return actionId === "menu" && trimmed === "Escape" ? "Escape" : null;
+  }
   return trimmed;
 }
 
@@ -115,7 +118,13 @@ function loadTable() {
   for (const action of KEYBIND_ACTIONS) {
     const entry = saved[action.id];
     if (!Array.isArray(entry)) continue;
-    table[action.id] = [sanitizeCode(entry[0]), sanitizeCode(entry[1])];
+    let code0 = entry[0];
+    let code1 = entry[1];
+    if (action.id === "menu") {
+      if (code0 === "Tab") code0 = "Escape";
+      if (code1 === "Tab") code1 = null;
+    }
+    table[action.id] = [sanitizeCode(code0, action.id), sanitizeCode(code1, action.id)];
   }
   return table;
 }
@@ -245,6 +254,7 @@ export function onKeybindsChange(fn) {
 }
 
 const CODE_LABELS = Object.freeze({
+  Escape: "ESC",
   Space: "SPACE",
   Tab: "TAB",
   Enter: "ENTER",

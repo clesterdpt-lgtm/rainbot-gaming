@@ -2294,6 +2294,9 @@ export async function createPlayer(ctx, canvas) {
     camPitch: -0.10,
     camDist: 5.2,
     firstPerson: 0,
+    cameraObstructed: false,
+    cameraObstructionReach: 1,
+    cameraBlocker: null,
     /* Dying, and how far through the fall. `deathPose` is read by the
        camera here and by the harness; nothing else in the file needs
        to know, because the pose itself is carried by the `death`
@@ -3040,6 +3043,14 @@ export async function createPlayer(ctx, canvas) {
      Melee players need enough room to guard, sidestep, or reacquire a target
      between committed animations without losing the entire procession. */
   const MELEE_COMBO_GRACE_SECONDS = 1.35;
+  /* Per-figure melee tempo (see sampleAction). A light dual-wield
+     operative runs its swings above 1; a two-tonne bulwark below it.
+     Clamped so no author can make a hit window shorter than an input
+     frame or a swing slower than the combo grace can survive. */
+  const MELEE_TIME_SCALE = (() => {
+    const v = Number(figure?.meleeProfile?.timeScale);
+    return Number.isFinite(v) ? clamp(v, 0.55, 1.75) : 1;
+  })();
 
   const ACTIONS = {
     /* CLEAVING LUNGE - the opener has to read on the first press.
@@ -3289,6 +3300,39 @@ export async function createPlayer(ctx, canvas) {
         [0.62, 0.0, 0.0, 0.0, 0, 0, 0, "settle"],
       ],
     },
+    /* THE HAMMER CAST - the Bastion Penitent's ranged rite. Body
+       channels only (7..14): the Kenosis levels have no ctx.weapons,
+       so the weapon-mount channels 1-6 are never applied there, and
+       the arm itself is swung by the operative kit through the
+       loadout hooks. No `hit` window - the damage is the thrown
+       reliquary's, resolved by the kit's own flight sweep. The kit
+       reads `throwAt` off this spec to time the release: the coil
+       peaks at 0.34 and the hammer leaves the hand as the chest
+       unwinds through centre. */
+    hammerThrow: {
+      dur: 0.92, throwAt: 0.40,
+      keys: [
+        [0.00, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, "load"],
+        // Coil: chest wound onto the hammer shoulder, weight back.
+        [0.34, 0, 0, 0, 0, 0, 0, -0.78, 0.30, -0.34, 0.045, -0.14, 0.11, 0, -0.070, "strike"],
+        // Release: everything unwinds forward through the reticle.
+        [0.50, 0, 0, 0, 0, 0, 0, 0.92, -0.36, 0.44, -0.035, 0.32, 0.16, 0, 0.240, "settle"],
+        [0.92, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, "settle"],
+      ],
+    },
+    /* THE CATCH - the return beat when the reliquary slaps back into
+       the Bastion's fist. Short, heavy, and again body-only: a brace
+       through the knees and a half-turn of the chest toward the
+       incoming hammer, so the catch reads as weight received rather
+       than an object vanishing into a static glove. */
+    hammerCatch: {
+      dur: 0.42,
+      keys: [
+        [0.00, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, "load"],
+        [0.10, 0, 0, 0, 0, 0, 0, -0.34, 0.10, -0.16, 0.055, -0.06, 0.09, 0, -0.045, "strike"],
+        [0.42, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, "settle"],
+      ],
+    },
   };
 
   /* The spin can run either way, and a blade that TRAILS its own turn
@@ -3437,10 +3481,20 @@ export async function createPlayer(ctx, canvas) {
     return beginAction("death");
   }
 
-  /** Next attack in the three-hit chain, or the first if it lapsed. */
+  /** Next attack in the three-hit chain, or the first if it lapsed.
+   *
+   *  The armed check has two doors. The campaign door is unchanged:
+   *  `ctx.weapons.current` must be a melee-mode pattern. The Kenosis
+   *  door only opens where there is NO weapons module at all - those
+   *  levels carry their blades through `ctx.loadout`, and the loadout
+   *  publishes a `meleeSpec` (melee/reach/damage) for the operative's
+   *  held props. Gating the fallback on `!ctx.weapons` means a
+   *  campaign lance in ranged mode still refuses exactly as before. */
   function meleeSwing(capturedAimYaw = null) {
     const w = ctx.weapons && ctx.weapons.current;
-    if (!w || !w.spec.melee) return false;
+    const kitSpec = !ctx.weapons && ctx.loadout?.meleeSpec?.melee
+      ? ctx.loadout.meleeSpec : null;
+    if ((!w || !w.spec.melee) && !kitSpec) return false;
     const aimYaw = Number.isFinite(capturedAimYaw)
       ? capturedAimYaw
       : Number.isFinite(state.aimViewYaw) ? state.aimViewYaw : state.camYaw;
@@ -3579,7 +3633,15 @@ export async function createPlayer(ctx, canvas) {
       actionPose.slide = 0; actionPose.lean = 0;
       return;
     }
-    action.t += dt;
+    /* Per-figure melee tempo. A figure may declare
+       `meleeProfile.timeScale` (>1 = faster hands): the clock of every
+       melee* clip runs at that rate so the hit window, drive profile
+       and turn window all keep their authored relationship to the
+       clip. Non-melee clips (death, reload, throws) are never scaled,
+       and a figure that declares nothing plays at exactly 1 - Vesper
+       and White Vigil's Vesper-tempo baseline are bit-identical. */
+    action.t += dt * (action.name && action.name.startsWith("melee")
+      ? MELEE_TIME_SCALE : 1);
     const k = action.spec.keys;
     let i = 0;
     while (i < k.length - 2 && action.t >= k[i + 1][0]) i += 1;
@@ -5350,6 +5412,13 @@ export async function createPlayer(ctx, canvas) {
       const pz = lerp(tmp.z, want.z, t);
       if (py < groundY(px, pz) + 0.45) { reach = (i - 1) / STEPS; break; }
     }
+    const enemyBoom = ctx.enemies?.cameraBoomReach?.(tmp, want, 0.24) || null;
+    const enemyReach = clamp01(Number(enemyBoom?.reach ?? 1));
+    const enemyObstructed = enemyReach < reach;
+    if (enemyObstructed) reach = enemyReach;
+    state.cameraObstructed = reach < 0.999;
+    state.cameraObstructionReach = reach;
+    state.cameraBlocker = enemyObstructed ? enemyBoom.blocker : null;
     /* --- first-person mode on steep upward look angles ---
        When looking up steeply (e.g. aiming at Gleaners on ridges,
        flying bosses, or aerial threats), the third-person boom pulls
@@ -5357,11 +5426,18 @@ export async function createPlayer(ctx, canvas) {
        to obstruct the view. Seamlessly transition to a clean
        first-person camera directly at eye level. */
     const upAngle = -state.camPitch;
-    const fpTarget = clamp01((upAngle - 0.35) / 0.22);
+    const aimFpTarget = clamp01((upAngle - 0.35) / 0.22);
+    /* A very short enemy-clamped boom leaves the player's own armour
+       occupying the view even though the hostile body is no longer inside
+       the lens. Blend into the existing clean first-person presentation for
+       that last interval, then let the same damper restore third person. */
+    const obstructionFpTarget = enemyObstructed
+      ? clamp01((0.62 - reach) / 0.22) : 0;
+    const fpTarget = Math.max(aimFpTarget, obstructionFpTarget);
     state.firstPerson = damp(state.firstPerson || 0, fpTarget, 16, dt);
     const fpWeight = state.firstPerson;
 
-    if (reach < 1) want.lerpVectors(tmp, want, Math.max(0.16, reach));
+    if (reach < 1) want.lerpVectors(tmp, want, Math.max(0.12, reach));
     if (fpWeight > 0.001) want.lerp(tmp, fpWeight);
 
     /* The chase spring runs on its own anchor, and the camera is a
@@ -5375,7 +5451,15 @@ export async function createPlayer(ctx, canvas) {
       camAnchor.copy(want);
       camAnchorReady = true;
     } else {
-      camAnchor.lerp(want, 1 - Math.exp(-14 * dt));
+      /* Snap toward newly discovered cover so the smoothing spring cannot
+         carry the camera through a creature for several frames. Returning
+         to the full boom remains eased, which prevents camera pops as an
+         enemy crosses behind the player. */
+      const desiredDistance = camAnchor.distanceTo(tmp);
+      const nextDistance = want.distanceTo(tmp);
+      const response = state.cameraObstructed && nextDistance < desiredDistance
+        ? 42 : 14;
+      camAnchor.lerp(want, 1 - Math.exp(-response * dt));
     }
     camera.position.copy(camAnchor);
 
@@ -7301,6 +7385,13 @@ export async function createPlayer(ctx, canvas) {
     listActions: () => Object.keys(ACTIONS),
     actionSpec: (n) => ACTIONS[n] || null,
     get action() { return action.name; },
+    /* The live action RECORD - name, clock, spec, combo, turn state.
+       `action` above answers only the name (and most callers only ask
+       "is one running"); the Kenosis kit drives arm overlays and the
+       hammer release off the clip's own clock, which needs the record
+       itself. Read-only by convention: writes belong to beginAction
+       and sampleAction. */
+    get actionState() { return action; },
     update,
     postUpdate,
     legs,

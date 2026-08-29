@@ -3066,6 +3066,298 @@ export function buildAudio(ctx) {
     if (speed > 4) blip(66, 0.16, Math.min(0.16, 0.06 + speed * 0.006), "sine");
   }
 
+  /* ==========================================================
+     KENOSIS OPERATIVE CUES. Same two-to-three-layer discipline as
+     everything above: a single oscillator is a beep and a single
+     noise burst is a hiss. The Vigil's sounds live above the shot
+     spectrum (small weapon, fast hands); the Bastion's sit below it
+     (a furnace and a bell on legs).
+     ========================================================== */
+
+  /** One crescent pulse. `opts.hand` detunes left/right so an
+   *  alternating volley reads as two instruments, not a stutter. */
+  function crescentShot(x, z, opts = {}) {
+    const t = now();
+    const dur = 0.17;
+    const g = voice("weapon", dur + 0.05);
+    if (!g) return;
+    const p = place(g, x, z, 20, 300);
+    if (!p) return;
+    const amp = (opts.gain ?? 0.30) * p.atten;
+    const detune = opts.hand === 1 ? 1.06 : 1.0;
+    // Layer A: the pulse leaving - a falling sine, fast.
+    const tone = ac.createOscillator();
+    tone.type = "sine";
+    tone.frequency.setValueAtTime(1180 * detune, t);
+    tone.frequency.exponentialRampToValueAtTime(610 * detune, t + dur);
+    const tg = ac.createGain();
+    tg.gain.setValueAtTime(amp, t);
+    tg.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    tone.connect(tg); tg.connect(p.node);
+    tone.start(t); tone.stop(t + dur + 0.02);
+    // Layer B: the emitter's crack - a very short band of noise.
+    const crack = noiseSource(1.7);
+    const cf = ac.createBiquadFilter();
+    cf.type = "bandpass";
+    cf.frequency.value = 2300 * detune;
+    cf.Q.value = 1.3;
+    const cg = ac.createGain();
+    cg.gain.setValueAtTime(amp * 0.85, t);
+    cg.gain.exponentialRampToValueAtTime(0.0001, t + 0.05);
+    crack.connect(cf); cf.connect(cg); cg.connect(p.node);
+    crack.start(t); crack.stop(t + 0.07);
+  }
+
+  /** The Vigil Step, leaving. A rising tear with a choir edge. */
+  function blinkCast(x, z) {
+    const t = now();
+    const dur = 0.22;
+    const g = voice("world", dur + 0.05);
+    if (!g) return;
+    const p = place(g, x, z, 22, 240);
+    if (!p) return;
+    const amp = 0.30 * p.atten;
+    const rise = ac.createOscillator();
+    rise.type = "sine";
+    rise.frequency.setValueAtTime(520, t);
+    rise.frequency.exponentialRampToValueAtTime(1680, t + dur);
+    const rg = ac.createGain();
+    rg.gain.setValueAtTime(amp * 0.8, t);
+    rg.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    rise.connect(rg); rg.connect(p.node);
+    rise.start(t); rise.stop(t + dur + 0.02);
+    const shimmer = noiseSource(1.3);
+    const sf = ac.createBiquadFilter();
+    sf.type = "highpass";
+    sf.frequency.value = 3400;
+    const sg = ac.createGain();
+    sg.gain.setValueAtTime(amp * 0.5, t);
+    sg.gain.exponentialRampToValueAtTime(0.0001, t + dur * 0.8);
+    shimmer.connect(sf); sf.connect(sg); sg.connect(p.node);
+    shimmer.start(t); shimmer.stop(t + dur);
+  }
+
+  /** The Vigil Step, arriving: displaced air paid back in. */
+  function blinkArrive(x, z) {
+    const t = now();
+    const dur = 0.28;
+    const g = voice("world", dur + 0.05);
+    if (!g) return;
+    const p = place(g, x, z, 22, 240);
+    if (!p) return;
+    const amp = 0.32 * p.atten;
+    const thump = ac.createOscillator();
+    thump.type = "triangle";
+    thump.frequency.setValueAtTime(185, t);
+    thump.frequency.exponentialRampToValueAtTime(88, t + dur * 0.8);
+    const hg = ac.createGain();
+    hg.gain.setValueAtTime(amp, t);
+    hg.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    thump.connect(hg); hg.connect(p.node);
+    thump.start(t); thump.stop(t + dur + 0.02);
+    const chime = ac.createOscillator();
+    chime.type = "triangle";
+    chime.frequency.setValueAtTime(1320, t + 0.015);
+    chime.frequency.exponentialRampToValueAtTime(1180, t + 0.2);
+    const cg = ac.createGain();
+    cg.gain.setValueAtTime(amp * 0.30, t + 0.015);
+    cg.gain.exponentialRampToValueAtTime(0.0001, t + 0.24);
+    chime.connect(cg); cg.connect(p.node);
+    chime.start(t + 0.015); chime.stop(t + 0.26);
+  }
+
+  /** The reliquary hammer leaving the hand. */
+  function hammerThrow(x, z) {
+    const t = now();
+    const dur = 0.48;
+    const g = voice("weapon", dur + 0.05);
+    if (!g) return;
+    const p = place(g, x, z, 24, 300);
+    if (!p) return;
+    const amp = 0.48 * p.atten;
+    // Layer A: the swing tearing air - noise swept down.
+    const whoosh = noiseSource(1.0);
+    const wf = ac.createBiquadFilter();
+    wf.type = "lowpass";
+    wf.frequency.setValueAtTime(950, t);
+    wf.frequency.exponentialRampToValueAtTime(240, t + dur);
+    const wg = ac.createGain();
+    wg.gain.setValueAtTime(0.0001, t);
+    wg.gain.linearRampToValueAtTime(amp, t + 0.05);
+    wg.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    whoosh.connect(wf); wf.connect(wg); wg.connect(p.node);
+    whoosh.start(t); whoosh.stop(t + dur + 0.02);
+    // Layer B: the mass behind it.
+    const mass = ac.createOscillator();
+    mass.type = "triangle";
+    mass.frequency.setValueAtTime(138, t);
+    mass.frequency.exponentialRampToValueAtTime(72, t + dur * 0.7);
+    const mg = ac.createGain();
+    mg.gain.setValueAtTime(amp * 0.7, t);
+    mg.gain.exponentialRampToValueAtTime(0.0001, t + dur * 0.8);
+    mass.connect(mg); mg.connect(p.node);
+    mass.start(t); mass.stop(t + dur);
+  }
+
+  /** The cast landing. `heavy` is a body or a downed flyer;
+   *  the light variant is masonry and spent range. */
+  function hammerImpact(x, z, heavy = false) {
+    const t = now();
+    const dur = heavy ? 0.62 : 0.38;
+    const g = voice("world", dur + 0.1);
+    if (!g) return;
+    const p = place(g, x, z, 26, 320);
+    if (!p) return;
+    const amp = (heavy ? 0.60 : 0.44) * p.atten;
+    // Layer A: the body of the blow.
+    const body = ac.createOscillator();
+    body.type = "triangle";
+    body.frequency.setValueAtTime(heavy ? 108 : 150, t);
+    body.frequency.exponentialRampToValueAtTime(heavy ? 40 : 62, t + dur);
+    const bg = ac.createGain();
+    bg.gain.setValueAtTime(amp, t);
+    bg.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    body.connect(bg); bg.connect(p.node);
+    body.start(t); body.stop(t + dur + 0.02);
+    // Layer B: the bell of the reliquary - two detuned partials.
+    for (const [freq, gain] of [[522, 0.34], [787, 0.20]]) {
+      const bell = ac.createOscillator();
+      bell.type = "square";
+      bell.frequency.setValueAtTime(freq, t + 0.008);
+      bell.frequency.exponentialRampToValueAtTime(freq * 0.94, t + dur);
+      const gg = ac.createGain();
+      gg.gain.setValueAtTime(amp * gain, t + 0.008);
+      gg.gain.exponentialRampToValueAtTime(0.0001, t + dur * 0.9);
+      bell.connect(gg); gg.connect(p.node);
+      bell.start(t + 0.008); bell.stop(t + dur);
+    }
+    // Layer C: the crack.
+    const crack = noiseSource(1.45);
+    const cf = ac.createBiquadFilter();
+    cf.type = "bandpass";
+    cf.frequency.value = heavy ? 900 : 1300;
+    cf.Q.value = 1.1;
+    const cg = ac.createGain();
+    cg.gain.setValueAtTime(amp * 0.9, t);
+    cg.gain.exponentialRampToValueAtTime(0.0001, t + 0.1);
+    crack.connect(cf); cf.connect(cg); cg.connect(p.node);
+    crack.start(t); crack.stop(t + 0.12);
+  }
+
+  /** The hammer slapping back into the gauntlet. */
+  function hammerCatch(x, z) {
+    const t = now();
+    const dur = 0.26;
+    const g = voice("world", dur + 0.05);
+    if (!g) return;
+    const p = place(g, x, z, 18, 220);
+    if (!p) return;
+    const amp = 0.40 * p.atten;
+    const slap = noiseSource(1.5);
+    const sf = ac.createBiquadFilter();
+    sf.type = "bandpass";
+    sf.frequency.value = 1500;
+    sf.Q.value = 1.0;
+    const sg = ac.createGain();
+    sg.gain.setValueAtTime(amp, t);
+    sg.gain.exponentialRampToValueAtTime(0.0001, t + 0.08);
+    slap.connect(sf); sf.connect(sg); sg.connect(p.node);
+    slap.start(t); slap.stop(t + 0.1);
+    const ring = ac.createOscillator();
+    ring.type = "triangle";
+    ring.frequency.setValueAtTime(740, t + 0.01);
+    ring.frequency.exponentialRampToValueAtTime(690, t + dur);
+    const rg = ac.createGain();
+    rg.gain.setValueAtTime(amp * 0.35, t + 0.01);
+    rg.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    ring.connect(rg); rg.connect(p.node);
+    ring.start(t + 0.01); ring.stop(t + dur + 0.02);
+    const thud = ac.createOscillator();
+    thud.type = "sine";
+    thud.frequency.setValueAtTime(150, t);
+    thud.frequency.exponentialRampToValueAtTime(85, t + 0.18);
+    const tg = ac.createGain();
+    tg.gain.setValueAtTime(amp * 0.6, t);
+    tg.gain.exponentialRampToValueAtTime(0.0001, t + 0.2);
+    thud.connect(tg); tg.connect(p.node);
+    thud.start(t); thud.stop(t + 0.22);
+  }
+
+  /** A blow taken ON the tower shield. `perfect` brightens the ring -
+   *  the parry has to be audible before it is legible. */
+  function blockImpact(x, z, perfect = false) {
+    const t = now();
+    const dur = perfect ? 0.55 : 0.36;
+    const g = voice("world", dur + 0.1);
+    if (!g) return;
+    const p = place(g, x, z, 20, 240);
+    if (!p) return;
+    const amp = 0.46 * p.atten;
+    for (const [freq, gain] of [[452, 0.5], [678, 0.3]]) {
+      const clang = ac.createOscillator();
+      clang.type = "square";
+      clang.frequency.setValueAtTime(freq, t);
+      clang.frequency.exponentialRampToValueAtTime(freq * 0.95, t + dur * 0.8);
+      const gg = ac.createGain();
+      gg.gain.setValueAtTime(amp * gain, t);
+      gg.gain.exponentialRampToValueAtTime(0.0001, t + dur * 0.7);
+      clang.connect(gg); gg.connect(p.node);
+      clang.start(t); clang.stop(t + dur);
+    }
+    const crack = noiseSource(1.5);
+    const cf = ac.createBiquadFilter();
+    cf.type = "bandpass";
+    cf.frequency.value = 1700;
+    cf.Q.value = 1.2;
+    const cg = ac.createGain();
+    cg.gain.setValueAtTime(amp * 0.8, t);
+    cg.gain.exponentialRampToValueAtTime(0.0001, t + 0.07);
+    crack.connect(cf); cf.connect(cg); cg.connect(p.node);
+    crack.start(t); crack.stop(t + 0.09);
+    if (perfect) {
+      const bell = ac.createOscillator();
+      bell.type = "triangle";
+      bell.frequency.setValueAtTime(1568, t + 0.02);
+      bell.frequency.exponentialRampToValueAtTime(1490, t + dur);
+      const bg = ac.createGain();
+      bg.gain.setValueAtTime(amp * 0.4, t + 0.02);
+      bg.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      bell.connect(bg); bg.connect(p.node);
+      bell.start(t + 0.02); bell.stop(t + dur + 0.02);
+    }
+  }
+
+  /** The Censer's leap: one furnace huff, no sustain. */
+  function leapBlast(x, z) {
+    const t = now();
+    const dur = 0.42;
+    const g = voice("world", dur + 0.05);
+    if (!g) return;
+    const p = place(g, x, z, 24, 260);
+    if (!p) return;
+    const amp = 0.5 * p.atten;
+    const huff = noiseSource(0.9);
+    const hf = ac.createBiquadFilter();
+    hf.type = "lowpass";
+    hf.frequency.setValueAtTime(850, t);
+    hf.frequency.exponentialRampToValueAtTime(190, t + dur);
+    const hg = ac.createGain();
+    hg.gain.setValueAtTime(0.0001, t);
+    hg.gain.linearRampToValueAtTime(amp, t + 0.04);
+    hg.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    huff.connect(hf); hf.connect(hg); hg.connect(p.node);
+    huff.start(t); huff.stop(t + dur + 0.02);
+    const boom = ac.createOscillator();
+    boom.type = "sine";
+    boom.frequency.setValueAtTime(98, t);
+    boom.frequency.exponentialRampToValueAtTime(54, t + dur * 0.8);
+    const bg = ac.createGain();
+    bg.gain.setValueAtTime(amp * 0.8, t);
+    bg.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    boom.connect(bg); bg.connect(p.node);
+    boom.start(t); boom.stop(t + dur + 0.02);
+  }
+
   return {
     context: ac,
     shot,
@@ -3102,6 +3394,14 @@ export function buildAudio(ctx) {
     jetCutoff,
     jetEmpty,
     jetLand,
+    crescentShot,
+    blinkCast,
+    blinkArrive,
+    hammerThrow,
+    hammerImpact,
+    hammerCatch,
+    blockImpact,
+    leapBlast,
     attach,
     update,
     unlock,
@@ -3195,6 +3495,9 @@ function makeSilentApi() {
     rumble: noop, surface: noop, hiss: noop,
     step: noop, hurt: noop, blip: noop, chord: noop, attach: noop,
     jetIgnite: noop, jetCutoff: noop, jetEmpty: noop, jetLand: noop,
+    crescentShot: noop, blinkCast: noop, blinkArrive: noop,
+    hammerThrow: noop, hammerImpact: noop, hammerCatch: noop,
+    blockImpact: noop, leapBlast: noop,
     boostIgnite: noop, boostCut: noop, boostHit: noop,
     slamCharge: noop, slamPlunge: noop, slamImpact: noop,
     meleePierceCharge: noop, meleePierceLaunch: noop,

@@ -754,7 +754,12 @@ export async function buildSummitLoadout(ctx, player) {
   if (ctx.loadout) ctx.loadout.handBasis = handBasis;
 
   function update(dt) {
-    const firing = isWhiteVigil && !!player.input?.state?.firing;
+    /* RMB is a focus, not just fire: holding aim raises and converges
+       the crescents exactly as firing does (the kit narrows the shot
+       cone on the same flag). A running melee action owns the arms -
+       the guns come down for the length of the swing. */
+    const firing = isWhiteVigil && !player.action
+      && !!(player.input?.state?.firing || player.input?.state?.ads);
     const rate = firing ? 22 : 8;
     aimBlend += (Number(firing) - aimBlend)
       * (1 - Math.exp(-rate * Math.max(0, dt)));

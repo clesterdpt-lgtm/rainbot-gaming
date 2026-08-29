@@ -1,24 +1,34 @@
 /* ============================================================
    SAINTFALL - White Vigil crescent discharge
 
-   Kenosis deliberately has no campaign combat stack. This is a
-   level-local firing proof for the paired hybrid props: primary fire
-   alternates hands and launches a short-lived crescent from an
-   authored locator on the BLADE side of each Meshy model. There is no
-   damage or target query here; guardians will own that later.
+   The paired hybrids' primary fire: alternating hands launch a
+   crescent slice from an authored locator on the BLADE side of
+   each Meshy model. Since the Kenosis kits (m107) this is a REAL
+   mid-range weapon, not a firing proof: each pulse carries the
+   kit's damage numbers, sweeps the enemy field and the trials
+   targets as it flies, sparks what it hits, and pays a muzzle
+   flash and a report per shot. Where the level carries no combat
+   module the pulses still fly and die on the world exactly as
+   before - every combat reference is optional.
    ============================================================ */
 
-const DISCHARGE = Object.freeze({
+const DEFAULTS = Object.freeze({
   cooldown: 0.19,
   warmup: 0.11,
-  speed: 24,
-  range: 10,
+  speed: 46,
+  range: 42,
   radius: 0.30,
-  maxActive: 16,
+  maxActive: 24,
+  damage: 26,
+  falloffStart: 26,
+  falloffFloor: 0.55,
+  spreadHip: 0.030,
+  spreadAds: 0.007,
 });
 
-export function buildSummitDischarge(ctx, player, loadout) {
+export function buildSummitDischarge(ctx, player, loadout, spec = null) {
   const { THREE } = ctx;
+  const DISCHARGE = { ...DEFAULTS, ...(spec || {}) };
   const group = new THREE.Group();
   group.name = "white-vigil-crescent-discharges";
   ctx.scene.add(group);
@@ -68,12 +78,15 @@ export function buildSummitDischarge(ctx, player, loadout) {
   const sliceBasis = new THREE.Matrix4();
   const position = new THREE.Vector3();
   const direction = new THREE.Vector3();
+  const jitterA = new THREE.Vector3();
+  const jitterB = new THREE.Vector3();
   const shots = [];
   let cooldown = 0;
   let warmup = 0;
   let alternating = 0;
   let heldLast = false;
   let fired = 0;
+  let hitsLanded = 0;
   let lastShot = null;
   const recentShots = [];
 
@@ -98,6 +111,22 @@ export function buildSummitDischarge(ctx, player, loadout) {
     } else {
       direction.fromArray(part.spec.emitterAxis)
         .transformDirection(part.asset.matrixWorld)
+        .normalize();
+    }
+    /* The cone. RMB narrows it - that is the whole of "aiming" for a
+       weapon whose barrels already converge on the reticle. Uniform
+       over the disc, like the campaign's. */
+    const ads = !!player.input?.state?.ads;
+    const cone = ads ? DISCHARGE.spreadAds : DISCHARGE.spreadHip;
+    if (cone > 0) {
+      jitterA.set(0, 1, 0).addScaledVector(direction, -direction.y);
+      if (jitterA.lengthSq() < 1e-6) jitterA.set(1, 0, 0);
+      jitterA.normalize();
+      jitterB.crossVectors(direction, jitterA);
+      const r = Math.sqrt(Math.random()) * cone;
+      const a = Math.random() * Math.PI * 2;
+      direction.addScaledVector(jitterA, Math.cos(a) * r)
+        .addScaledVector(jitterB, Math.sin(a) * r)
         .normalize();
     }
 
@@ -163,6 +192,12 @@ export function buildSummitDischarge(ctx, player, loadout) {
     recentShots.push(lastShot);
     if (recentShots.length > 8) recentShots.shift();
     while (shots.length > DISCHARGE.maxActive) removeShot(shots[0]);
+    /* The report and the flash. Both optional-chained: a page with no
+       audio module fires silently, exactly as the whole site's
+       degraded path is meant to. */
+    ctx.vfx?.muzzle?.(position.x, position.y, position.z,
+      direction.x, direction.y, direction.z, 0.62, true);
+    ctx.audio?.crescentShot?.(position.x, position.z, { hand: part.spec.hand });
     return shot;
   }
 
@@ -183,9 +218,20 @@ export function buildSummitDischarge(ctx, player, loadout) {
     return true;
   }
 
+  /* Damage falls from full to `falloffFloor` between falloffStart and
+     the end of the range: a mid-range weapon, honest about it. */
+  function damageAt(distance) {
+    if (distance <= DISCHARGE.falloffStart) return DISCHARGE.damage;
+    const t = Math.min(1, (distance - DISCHARGE.falloffStart)
+      / Math.max(1e-4, DISCHARGE.range - DISCHARGE.falloffStart));
+    return DISCHARGE.damage * (1 - t * (1 - DISCHARGE.falloffFloor));
+  }
+
   function update(dt) {
     const d = Math.max(0, dt);
-    const held = supported && !!player.input?.state?.firing;
+    const held = supported && !!player.input?.state?.firing
+      && !player.action && !player.state.free
+      && !ctx.combat?.player?.dead;
     cooldown = Math.max(0, cooldown - d);
     if (held && !heldLast) warmup = DISCHARGE.warmup;
     heldLast = held;
@@ -198,6 +244,53 @@ export function buildSummitDischarge(ctx, player, loadout) {
     for (let i = shots.length - 1; i >= 0; i -= 1) {
       const shot = shots[i];
       const step = DISCHARGE.speed * d;
+      const px = shot.root.position.x;
+      const py = shot.root.position.y;
+      const pz = shot.root.position.z;
+      /* The pulse is swept, not point-tested: at 46 m/s it crosses
+         three quarters of a metre a frame, and a Thresher is smaller
+         than that. Enemies first (the pulse dies on what it hits),
+         then the trials targets, then masonry, then the ground. */
+      let consumed = false;
+      if (ctx.combat?.raycastEnemies) {
+        const hit = ctx.combat.raycastEnemies(px, py, pz,
+          shot.direction.x, shot.direction.y, shot.direction.z, step + 0.3);
+        if (hit && hit.inst) {
+          ctx.combat.damageEnemy(hit.inst, damageAt(shot.distance + hit.t), {
+            source: "crescent", x: hit.x, y: hit.y, z: hit.z,
+            head: !!hit.head, weak: !!hit.weak,
+          });
+          hitsLanded += 1;
+          ctx.vfx?.spark?.(hit.x, hit.y, hit.z, 1.0, false, true);
+          removeShot(shot);
+          consumed = true;
+        }
+      }
+      if (!consumed && ctx.trials?.sweep) {
+        const swept = ctx.trials.sweep(px, py, pz,
+          shot.direction.x, shot.direction.y, shot.direction.z, step + 0.3, {
+            damage: damageAt(shot.distance),
+          });
+        if (swept && swept.length) {
+          hitsLanded += 1;
+          ctx.vfx?.spark?.(swept[0].x, swept[0].y, swept[0].z, 1.0, false, true);
+          removeShot(shot);
+          consumed = true;
+        }
+      }
+      if (!consumed && ctx.collide?.rayBlock) {
+        const wallAt = ctx.collide.rayBlock(px, py, pz,
+          shot.direction.x, shot.direction.y, shot.direction.z, step + 0.2);
+        if (Number.isFinite(wallAt) && wallAt <= step + 0.2) {
+          const wx = px + shot.direction.x * wallAt;
+          const wy = py + shot.direction.y * wallAt;
+          const wz = pz + shot.direction.z * wallAt;
+          ctx.vfx?.spark?.(wx, wy, wz, 0.8, true, true);
+          removeShot(shot);
+          consumed = true;
+        }
+      }
+      if (consumed) continue;
       shot.root.position.addScaledVector(shot.direction, step);
       /* No spin. The face-first pulse span like a shuriken to sell
          its disc; a slice holds its plane, or the horns would swing
@@ -208,6 +301,10 @@ export function buildSummitDischarge(ctx, player, loadout) {
       shot.glowMaterial.opacity = 0.34 * fade;
       const ground = ctx.collide?.groundHeight?.(shot.root.position.x, shot.root.position.z);
       const struckGround = Number.isFinite(ground) && shot.root.position.y <= ground + 0.04;
+      if (struckGround) {
+        ctx.vfx?.spark?.(shot.root.position.x, ground + 0.06, shot.root.position.z,
+          0.7, true, true);
+      }
       if (shot.distance >= DISCHARGE.range || struckGround) removeShot(shot);
     }
   }
@@ -217,6 +314,12 @@ export function buildSummitDischarge(ctx, player, loadout) {
       supported,
       active: shots.length,
       fired,
+      hits: hitsLanded,
+      damage: DISCHARGE.damage,
+      falloffStart: DISCHARGE.falloffStart,
+      falloffFloor: DISCHARGE.falloffFloor,
+      spreadHip: DISCHARGE.spreadHip,
+      spreadAds: DISCHARGE.spreadAds,
       rangeM: DISCHARGE.range,
       speedMps: DISCHARGE.speed,
       alternatingNext: alternating % 2 === 0 ? "left" : "right",

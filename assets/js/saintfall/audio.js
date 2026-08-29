@@ -2143,12 +2143,8 @@ export function buildAudio(ctx) {
     state.paused = paused;
     if (paused) {
       stopInsectProximity();
-      if (music.bgAudio && !music.bgAudio.paused) music.bgAudio.pause();
-      if (music.bossAudio && !music.bossAudio.paused) music.bossAudio.pause();
-    } else if (state.enabled && music.started) {
-      if (music.isBossActive && music.bossAudio) music.bossAudio.play().catch(() => {});
-      else if (!music.isBossActive && music.bgAudio) music.bgAudio.play().catch(() => {});
-    }
+      pauseMusicAudio();
+    } else if (state.enabled && music.started) resumeMusicAudio();
     if (state.offline) return Promise.resolve(true);
     /* Share the cinematic transition queue so a handoff resume, menu
        suspend, and quick resume cannot finish out of order. */
@@ -2248,19 +2244,43 @@ export function buildAudio(ctx) {
   /* ============================================================
      MUSIC
 
-     Two dynamic soundtrack beds:
+     Four dynamic soundtrack beds:
      - Ashes Over Arrakis (Background / Exploration / Overworld)
      - Iron Chapel March (Boss Fights / Apex Engagements)
+     - Abyss of Bells (Apostate / Phase One)
+     - Vault-Cathedral Brood (Apostate / Phase Two)
 
      Uses HTML5 Audio streams piped into buses.music (with fallback
      direct audio element volume control if createMediaElementSource
-     is unavailable). Smoothly cross-fades between exploration and combat.
+     is unavailable). Smoothly cross-fades between exploration, ordinary
+     boss combat, and the two Apostate phases.
      ============================================================ */
 
   const MUSIC_ASSETS = Object.freeze({
     bg: new URL("../../Sounds/saintfall music/Ashes Over Arrakis.mp3", import.meta.url).href,
     boss: new URL("../../Sounds/saintfall music/Iron Chapel March.mp3", import.meta.url).href,
+    finalPhase1: new URL("../../Sounds/saintfall music/Abyss of Bells.mp3", import.meta.url).href,
+    finalPhase2: new URL("../../Sounds/saintfall music/Vault-Cathedral Brood.mp3", import.meta.url).href,
   });
+
+  const MUSIC_TRACKS = Object.freeze([
+    Object.freeze({
+      mode: "exploration", asset: MUSIC_ASSETS.bg,
+      audio: "bgAudio", gain: "bgGainNode", volume: "bgVol",
+    }),
+    Object.freeze({
+      mode: "boss", asset: MUSIC_ASSETS.boss,
+      audio: "bossAudio", gain: "bossGainNode", volume: "bossVol",
+    }),
+    Object.freeze({
+      mode: "finalPhase1", asset: MUSIC_ASSETS.finalPhase1,
+      audio: "finalPhase1Audio", gain: "finalPhase1GainNode", volume: "finalPhase1Vol",
+    }),
+    Object.freeze({
+      mode: "finalPhase2", asset: MUSIC_ASSETS.finalPhase2,
+      audio: "finalPhase2Audio", gain: "finalPhase2GainNode", volume: "finalPhase2Vol",
+    }),
+  ]);
 
   const music = {
     initialized: false,
@@ -2269,8 +2289,15 @@ export function buildAudio(ctx) {
     bossAudio: null,
     bgGainNode: null,
     bossGainNode: null,
+    finalPhase1Audio: null,
+    finalPhase2Audio: null,
+    finalPhase1GainNode: null,
+    finalPhase2GainNode: null,
     bgVol: 0,
     bossVol: 0,
+    finalPhase1Vol: 0,
+    finalPhase2Vol: 0,
+    mode: "exploration",
     isBossActive: false,
     pollIn: 0,
   };
@@ -2281,36 +2308,27 @@ export function buildAudio(ctx) {
     music.initialized = true;
 
     try {
-      const bg = new Audio(MUSIC_ASSETS.bg);
-      bg.loop = true;
-      bg.preload = "auto";
-      bg.crossOrigin = "anonymous";
-      music.bgAudio = bg;
-
-      const boss = new Audio(MUSIC_ASSETS.boss);
-      boss.loop = true;
-      boss.preload = "auto";
-      boss.crossOrigin = "anonymous";
-      music.bossAudio = boss;
+      for (const track of MUSIC_TRACKS) {
+        const audio = new Audio(track.asset);
+        audio.loop = true;
+        audio.preload = "auto";
+        audio.crossOrigin = "anonymous";
+        music[track.audio] = audio;
+      }
 
       if (ac && typeof ac.createMediaElementSource === "function") {
         try {
-          const bgSource = ac.createMediaElementSource(bg);
-          const bgGain = ac.createGain();
-          bgGain.gain.value = 0;
-          bgSource.connect(bgGain);
-          bgGain.connect(buses.music);
-          music.bgGainNode = bgGain;
-
-          const bossSource = ac.createMediaElementSource(boss);
-          const bossGain = ac.createGain();
-          bossGain.gain.value = 0;
-          bossSource.connect(bossGain);
-          bossGain.connect(buses.music);
-          music.bossGainNode = bossGain;
+          for (const track of MUSIC_TRACKS) {
+            const audio = music[track.audio];
+            const source = ac.createMediaElementSource(audio);
+            const gain = ac.createGain();
+            gain.gain.value = 0;
+            source.connect(gain);
+            gain.connect(buses.music);
+            music[track.gain] = gain;
+          }
         } catch (_) {
-          music.bgGainNode = null;
-          music.bossGainNode = null;
+          for (const track of MUSIC_TRACKS) music[track.gain] = null;
         }
       }
     } catch (_) {
@@ -2324,10 +2342,8 @@ export function buildAudio(ctx) {
     music.started = true;
   }
 
-  function isBossFightActive() {
+  function isOrdinaryBossFightActive() {
     if (ctx.districtBosses?.anyFightActive?.()) return true;
-    const apostate = ctx.apostate?.status?.();
-    if (apostate && !apostate.dead && apostate.phase !== "dormant" && apostate.phase !== "alert") return true;
     const winnower = ctx.winnower?.status?.();
     if (winnower && !winnower.dead && winnower.phase !== "dormant" && winnower.phase !== "return") return true;
     const distaff = ctx.distaff?.status?.();
@@ -2345,66 +2361,68 @@ export function buildAudio(ctx) {
     return false;
   }
 
+  function currentMusicMode() {
+    const apostate = ctx.apostate?.status?.();
+    if (apostate && !apostate.dead && apostate.phase !== "dormant" && apostate.phase !== "alert") {
+      return apostate.stage === 2 || apostate.phase === "descent"
+        ? "finalPhase2" : "finalPhase1";
+    }
+    return isOrdinaryBossFightActive() ? "boss" : "exploration";
+  }
+
+  function pauseMusicAudio() {
+    for (const track of MUSIC_TRACKS) {
+      const audio = music[track.audio];
+      if (audio && !audio.paused) audio.pause();
+    }
+  }
+
+  function resumeMusicAudio() {
+    if (!state.enabled || state.paused || !music.started) return;
+    const track = MUSIC_TRACKS.find((candidate) => candidate.mode === music.mode);
+    const audio = track && music[track.audio];
+    if (audio) audio.play().catch(() => {});
+  }
+
   function updateMusic(dt) {
     if (!music.started || !music.initialized) return;
     const muted = !state.enabled || state.paused || ctx.deferAmbience || ctx.intro?.isBlocking?.();
-    /* Polled at 4Hz, not per frame. isBossFightActive fans out into
+    /* Polled at 4Hz, not per frame. currentMusicMode fans out into
        eight modules' status() calls, several of which assemble fresh
        snapshot objects - a dozen-plus allocations a frame, peaking
-       exactly during boss fights, purely to choose between two songs.
+       exactly during boss fights, purely to choose between soundtrack beds.
        The answer moves on encounter timescales and the crossfade below
        takes ~1.2s, so a quarter-second poll is inaudible and removes
        the churn. */
     music.pollIn -= dt;
     if (music.pollIn <= 0) {
       music.pollIn = 0.25;
-      music.isBossActive = isBossFightActive();
+      music.mode = currentMusicMode();
+      music.isBossActive = music.mode !== "exploration";
     }
-    const bossEngaged = music.isBossActive;
-
-    const targetBg = muted ? 0 : (bossEngaged ? 0 : 1);
-    const targetBoss = muted ? 0 : (bossEngaged ? 1 : 0);
 
     const fadeRate = 2.4; // smooth ~1.2s crossfade
     const step = Math.min(1, Math.max(0, dt * fadeRate));
 
-    music.bgVol += (targetBg - music.bgVol) * step;
-    music.bossVol += (targetBoss - music.bossVol) * step;
+    for (const track of MUSIC_TRACKS) {
+      const target = muted || track.mode !== music.mode ? 0 : 1;
+      const volumeKey = track.volume;
+      music[volumeKey] += (target - music[volumeKey]) * step;
+      if (Math.abs(music[volumeKey] - target) < 0.025) music[volumeKey] = target;
 
-    if (Math.abs(music.bgVol - targetBg) < 0.025) music.bgVol = targetBg;
-    if (Math.abs(music.bossVol - targetBoss) < 0.025) music.bossVol = targetBoss;
-
-    // Background track (Ashes Over Arrakis)
-    if (music.bgAudio) {
-      if (music.bgVol > 0.001) {
-        if (music.bgAudio.paused) {
-          music.bgAudio.play().catch(() => {});
-        }
-      } else if (music.bgVol === 0 && !music.bgAudio.paused && targetBg === 0) {
-        music.bgAudio.pause();
+      const audio = music[track.audio];
+      if (!audio) continue;
+      if (music[volumeKey] > 0.001) {
+        if (audio.paused) audio.play().catch(() => {});
+      } else if (music[volumeKey] === 0 && !audio.paused && target === 0) {
+        audio.pause();
       }
-      if (music.bgGainNode) {
-        music.bgGainNode.gain.value = music.bgVol;
-        music.bgAudio.volume = 1.0;
+      if (music[track.gain]) {
+        music[track.gain].gain.value = music[volumeKey];
+        audio.volume = 1.0;
       } else {
-        music.bgAudio.volume = clamp01(music.bgVol * 0.52 * (state.musicVolume / 0.8) * state.masterVolume * (state.enabled ? 1 : 0));
-      }
-    }
-
-    // Boss track (Iron Chapel March)
-    if (music.bossAudio) {
-      if (music.bossVol > 0.001) {
-        if (music.bossAudio.paused) {
-          music.bossAudio.play().catch(() => {});
-        }
-      } else if (music.bossVol === 0 && !music.bossAudio.paused && targetBoss === 0) {
-        music.bossAudio.pause();
-      }
-      if (music.bossGainNode) {
-        music.bossGainNode.gain.value = music.bossVol;
-        music.bossAudio.volume = 1.0;
-      } else {
-        music.bossAudio.volume = clamp01(music.bossVol * 0.52 * (state.musicVolume / 0.8) * state.masterVolume * (state.enabled ? 1 : 0));
+        audio.volume = clamp01(music[volumeKey] * 0.52 * (state.musicVolume / 0.8)
+          * state.masterVolume * (state.enabled ? 1 : 0));
       }
     }
   }
@@ -2445,11 +2463,14 @@ export function buildAudio(ctx) {
       }
     }
 
-    if (music.initialized && !music.bgGainNode && music.bgAudio) {
-      music.bgAudio.volume = clamp01(music.bgVol * 0.52 * (state.musicVolume / 0.8) * state.masterVolume * (state.enabled ? 1 : 0));
-    }
-    if (music.initialized && !music.bossGainNode && music.bossAudio) {
-      music.bossAudio.volume = clamp01(music.bossVol * 0.52 * (state.musicVolume / 0.8) * state.masterVolume * (state.enabled ? 1 : 0));
+    if (music.initialized) {
+      for (const track of MUSIC_TRACKS) {
+        const audio = music[track.audio];
+        if (audio && !music[track.gain]) {
+          audio.volume = clamp01(music[track.volume] * 0.52 * (state.musicVolume / 0.8)
+            * state.masterVolume * (state.enabled ? 1 : 0));
+        }
+      }
     }
   }
 
@@ -3106,12 +3127,8 @@ export function buildAudio(ctx) {
       if (!state.enabled) stopInsectProximity();
       master.gain.setTargetAtTime(v ? 1.35 : 0, now(), 0.05);
       if (!v) {
-        if (music.bgAudio && !music.bgAudio.paused) music.bgAudio.pause();
-        if (music.bossAudio && !music.bossAudio.paused) music.bossAudio.pause();
-      } else if (music.started) {
-        if (music.isBossActive && music.bossAudio) music.bossAudio.play().catch(() => {});
-        else if (!music.isBossActive && music.bgAudio) music.bgAudio.play().catch(() => {});
-      }
+        pauseMusicAudio();
+      } else if (music.started) resumeMusicAudio();
     },
     get enabled() { return state.enabled; },
     stats() {
@@ -3145,11 +3162,16 @@ export function buildAudio(ctx) {
         },
         music: {
           started: music.started,
+          activeTrack: music.mode,
           bossActive: music.isBossActive,
           bgVol: Number(music.bgVol.toFixed(3)),
           bossVol: Number(music.bossVol.toFixed(3)),
+          finalPhase1Vol: Number(music.finalPhase1Vol.toFixed(3)),
+          finalPhase2Vol: Number(music.finalPhase2Vol.toFixed(3)),
           bgPlaying: !!music.bgAudio && !music.bgAudio.paused,
           bossPlaying: !!music.bossAudio && !music.bossAudio.paused,
+          finalPhase1Playing: !!music.finalPhase1Audio && !music.finalPhase1Audio.paused,
+          finalPhase2Playing: !!music.finalPhase2Audio && !music.finalPhase2Audio.paused,
         },
         cinematic: {
           active: drop.active,
@@ -3199,11 +3221,16 @@ function makeSilentApi() {
         },
         music: {
           started: false,
+          activeTrack: "exploration",
           bossActive: false,
           bgVol: 0,
           bossVol: 0,
+          finalPhase1Vol: 0,
+          finalPhase2Vol: 0,
           bgPlaying: false,
           bossPlaying: false,
+          finalPhase1Playing: false,
+          finalPhase2Playing: false,
         },
         cinematic: {
           active: false, sources: 0, buffers: 0, loadErrors: [], paused: false,

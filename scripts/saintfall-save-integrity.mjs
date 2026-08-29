@@ -1015,9 +1015,13 @@ async function pendingCommandRollbackPass(browser) {
     const ps = T.player.state;
     const callX = ps.x;
     const callZ = ps.z + 22;
-    const subject = T.enemies.spawn("matriarch", callX, callZ, {
+    /* This pass is about the command transaction, not boss-surface routing.
+       Use a durable ordinary target with enough pool to survive the cluster;
+       dedicated bosses resolve damage through their authored hit surfaces. */
+    const subject = T.enemies.spawn("harrow", callX, callZ, {
       yaw: Math.PI,
-      health: 3600,
+      health: 5000,
+      exactHealth: true,
     });
 
     /* Normalise generated enemy defaults once so the later comparison is
@@ -1171,8 +1175,16 @@ async function emptyActiveBreachRoundtripPass(browser) {
     T.startBreachWave(0, ps.x, ps.z - 44, true);
     T.advanceTime(0.12, 1 / 60);
     /* Damage is intentionally rejected during the rise. Cross the complete
-       emergence window before taking the authoritative last-member kills. */
-    T.advanceTime(2.0, 1 / 60);
+       emergence window before taking the authoritative last-member kills.
+       The roster is production-owned and its stagger grows with its size, so
+       a fixed delay silently became too short when First Stirring expanded. */
+    const launchedMemberIds = T.breachState().memberIds.slice();
+    let emergenceFrames = 0;
+    while (emergenceFrames < 720 && launchedMemberIds.some((id) =>
+      T.enemies.live.find((enemy) => enemy.id === id)?.emerging?.active)) {
+      T.advanceTime(1 / 60, 1 / 60);
+      emergenceFrames += 1;
+    }
     const memberIds = T.breachState().memberIds.slice();
     for (const id of memberIds) {
       const member = T.enemies.live.find((enemy) => enemy.id === id);
@@ -1211,6 +1223,8 @@ async function emptyActiveBreachRoundtripPass(browser) {
     const intermissionRestored = T.breachState();
     return {
       controlId: control.id,
+      waveRoster: launchedMemberIds.length,
+      emergenceFrames,
       killedMemberIds: memberIds,
       boundary,
       saved: {
@@ -1252,7 +1266,8 @@ async function emptyActiveBreachRoundtripPass(browser) {
   evidence.emptyActiveBreachRoundtrip = probe;
   check("legitimate active empty breach snapshot loads without fallback spawning",
     !probe.setupError
-      && probe.killedMemberIds?.length === 4
+      && probe.waveRoster > 0
+      && probe.killedMemberIds?.length === probe.waveRoster
       && probe.boundary?.phase === "active"
       && probe.boundary?.remaining === 0
       && probe.boundary?.memberIds?.length === 0

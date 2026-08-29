@@ -89,17 +89,14 @@ async function waitForServer() {
   throw new Error("local server did not start");
 }
 
-/* Rosters mirror breaches.js BREACH_WAVES; the micro-duels isolate one caste
-   at damageScale 1, which is what every roaming garrison enemy runs at. */
-const SCENARIOS = [
+/* Micro-duels isolate one caste at damageScale 1, which is what every roaming
+   garrison enemy runs at. Production breach scenarios are read from the live
+   BREACH_WAVES table after boot so this probe cannot drift from the game. */
+const MICRO_SCENARIOS = [
   { label: "1x thresher", roster: [{ key: "thresher", count: 1 }], hs: 1, ds: 1 },
   { label: "3x thresher", roster: [{ key: "thresher", count: 3 }], hs: 1, ds: 1 },
   { label: "1x harrow", roster: [{ key: "harrow", count: 1 }], hs: 1, ds: 1 },
   { label: "1x gleaner", roster: [{ key: "gleaner", count: 1 }], hs: 1, ds: 1 },
-  { label: "W1 First Stirring (4T)", roster: [{ key: "thresher", count: 4 }], hs: 0.82, ds: 0.72 },
-  { label: "W2 Needle Brood (6T 1G)", roster: [{ key: "thresher", count: 6 }, { key: "gleaner", count: 1 }], hs: 0.92, ds: 0.82 },
-  { label: "W3 Breaker Brood (7T 2G 1H)", roster: [{ key: "thresher", count: 7 }, { key: "gleaner", count: 2 }, { key: "harrow", count: 1 }], hs: 1, ds: 0.92 },
-  { label: "W4 Crowned Surge (9T 3G 2H)", roster: [{ key: "thresher", count: 9 }, { key: "gleaner", count: 3 }, { key: "harrow", count: 2 }], hs: 1.06, ds: 1 },
 ];
 const MODES = ["ranged", "melee", "melee-guard"];
 
@@ -111,6 +108,7 @@ async function main() {
   const duel = [];
   let mechanism = null;
   let byTier = {};
+  let scenarios = [];
   try {
     await waitForServer();
     browser = await chromium.launch({
@@ -496,6 +494,7 @@ async function main() {
           /* The tier thickens breach rosters in breaches.js; the duel spawns
              its own roster, so apply the same arithmetic here. */
           const tierValues = T.difficultyState?.()?.values || null;
+          const heatPerShot = 0.0333 * (tierValues?.heat || 1);
           const hasGleaner = roster.some((e) => e.key === "gleaner");
           const keys = [];
           for (const entry of roster) {
@@ -648,7 +647,7 @@ async function main() {
                 shots += 1;
                 if (hit) shotHits += 1;
                 lastShotAt = t;
-                heat += 0.0333;
+                heat += heatPerShot;
                 fireTimer = 1 / 9;
                 if (heat >= 1) { lockedUntil = t + 2.425; heat = 0.25; }
               }
@@ -676,7 +675,11 @@ async function main() {
           for (const h of hurt) bySource[h.src] = (bySource[h.src] || 0) + h.dmg;
           return {
             label, mode, roster: keys.join(","), spawned: spawned.length,
-            tierValues: tierValues ? { incoming: tierValues.incoming, roster: tierValues.roster } : null,
+            tierValues: tierValues ? {
+              incoming: tierValues.incoming,
+              roster: tierValues.roster,
+              heat: tierValues.heat,
+            } : null,
             seconds: Number(t.toFixed(2)),
             outcome: deadAt !== null ? "DIED" : clearedAt !== null ? "cleared" : "timeout",
             firstContactAt: firstContactAt !== null ? Number(firstContactAt.toFixed(2)) : null,
@@ -702,6 +705,19 @@ async function main() {
     });
     console.log(`arena ${setup.site.map((v) => v.toFixed(1)).join(", ")} yaw ${setup.yaw.toFixed(2)}`
       + `${setup.fallback ? " (FALLBACK - sightlines not clear)" : ""}  maxHp ${setup.maxHp}`);
+    const productionScenarios = await page.evaluate(() => {
+      const short = { thresher: "T", gleaner: "G", harrow: "H" };
+      return (window.__SF.ctx.breaches.waves || []).slice(0, 4).map((wave, index) => ({
+        wave: index + 1,
+        label: `W${index + 1} ${wave.name} (${wave.roster
+          .map((entry) => `${entry.count}${short[entry.key] || entry.key[0].toUpperCase()}`)
+          .join(" ")})`,
+        roster: wave.roster.map((entry) => ({ key: entry.key, count: entry.count })),
+        hs: wave.healthScale,
+        ds: wave.damageScale,
+      }));
+    });
+    scenarios = [...MICRO_SCENARIOS, ...productionScenarios];
 
     /* ---------------- mechanism checks ---------------- */
     console.log("\nMechanism:");
@@ -771,7 +787,7 @@ async function main() {
       console.log(`\nDuel [${tierName.toUpperCase()}]:`);
       const rows = [];
       byTier[tierName] = rows;
-      for (const scenario of SCENARIOS) {
+      for (const scenario of scenarios) {
         if (only && !scenario.label.toLowerCase().includes(only.toLowerCase())) continue;
         for (const mode of MODES) {
           const r = await page.evaluate((o) => window.__SF_MELEE_DUEL_QA.run(o), { ...scenario, mode });
@@ -799,14 +815,16 @@ async function main() {
         check("one Harrow costs a lance player at most one telegraphed bite (<= 30 HP)",
           harrow.outcome === "cleared" && harrow.hpLost <= 30, `hpLost=${harrow.hpLost} outcome=${harrow.outcome}`);
       }
-      const w2m = cell("W2 Needle Brood (6T 1G)", "melee");
-      const w2r = cell("W2 Needle Brood (6T 1G)", "ranged");
+      const waveLabel = (number) => scenarios.find((scenario) => scenario.wave === number)?.label;
+      const w2Label = waveLabel(2);
+      const w2m = cell(w2Label, "melee");
+      const w2r = cell(w2Label, "ranged");
       if (w2m && w2r) {
         check("Needle Brood costs the lance no more than 40 HP",
           w2m.outcome === "cleared" && w2m.hpLost <= 40,
           `lance=${w2m.hpLost} volley=${w2r.hpLost} (Gleaner aim is seeded but diverges with behaviour; the absolute cap is the gate)`);
       }
-      for (const label of ["W3 Breaker Brood (7T 2G 1H)", "W4 Crowned Surge (9T 3G 2H)"]) {
+      for (const label of [waveLabel(3), waveLabel(4)].filter(Boolean)) {
         for (const mode of ["melee", "melee-guard"]) {
           const r = cell(label, mode);
           if (!r) continue;
@@ -822,7 +840,8 @@ async function main() {
     }
     /* Close the loop on the penitent rows too, and gate every tier. */
     if (!skipDuel && Object.keys(byTier).length) {
-      const heavy = ["W3 Breaker Brood (7T 2G 1H)", "W4 Crowned Surge (9T 3G 2H)"];
+      const heavy = [3, 4].map((number) =>
+        scenarios.find((scenario) => scenario.wave === number)?.label).filter(Boolean);
       const cellOf = (rows, label, mode) => rows.find((r) => r.label === label && r.mode === mode);
       const sumLost = (rows, mode) => heavy.reduce((s, label) => s + (cellOf(rows, label, mode)?.hpLost || 0), 0);
       /* Floored at 60 HP over two waves: below that the Volley is simply
@@ -906,7 +925,7 @@ async function main() {
     `page=${diagnostics.pageErrors.length}, console=${diagnostics.consoleErrors.length}`);
 
   await writeFile(path.join(outDir, "report.json"),
-    JSON.stringify({ checks: results, mechanism, duel, tiers: TIERS, byTier, diagnostics }, null, 2));
+    JSON.stringify({ checks: results, mechanism, scenarios, duel, tiers: TIERS, byTier, diagnostics }, null, 2));
   console.log(`\nReport: ${path.relative(root, path.join(outDir, "report.json"))}`);
   if (failures) {
     console.log(`\n${failures} check(s) failed`);

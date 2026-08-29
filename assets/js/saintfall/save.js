@@ -10,6 +10,7 @@
 import { DAY_CYCLE_SECONDS } from "saintfall/art.js";
 import { clamp, clamp01 } from "saintfall/core.js";
 import { DIFFICULTY_TIERS } from "saintfall/difficulty.js";
+import { MAX_SAVED_ENEMIES } from "saintfall/enemies.js";
 import {
   FIELD_RANK_CAP,
   FIELD_RANK_XP_THRESHOLDS,
@@ -669,7 +670,7 @@ export function buildSaveSystem(ctx, options = {}) {
 
     const enemies = snapshot.enemies;
     if (!isRecord(enemies) || !Array.isArray(enemies.live)
-      || enemies.live.length > 420 || !Number.isSafeInteger(enemies.nextId)
+      || enemies.live.length > MAX_SAVED_ENEMIES || !Number.isSafeInteger(enemies.nextId)
       || enemies.nextId < 1 || enemies.nextId >= Number.MAX_SAFE_INTEGER
       || !validRngState(enemies.rng)) return false;
     const enemyIds = new Set();

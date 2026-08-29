@@ -419,11 +419,19 @@ export function buildBreaches(ctx) {
       const point = spawnPoint(i, roster.length, wave.clusters, key, centre);
       const emerge = EMERGENCE[key] || EMERGENCE.thresher;
       const baseHealth = BESTIARY[key]?.health || 100;
-      const maxHealth = Math.max(1, Number(record.maxHealth)
-        || Math.round(baseHealth * wave.healthScale));
+      const savedMaxHealth = Number(record.maxHealth);
+      const hasSavedPool = Number.isFinite(savedMaxHealth) && savedMaxHealth > 0;
+      const tierHealth = ctx.difficulty?.healthScale?.(key) ?? 1;
+      /* Fresh breach pools combine the wave modifier and the selected tier
+         exactly once. Buried/restored members already carry their scaled
+         pool, so they are passed through unchanged. */
+      const maxHealth = Math.max(1, hasSavedPool
+        ? Math.round(savedMaxHealth)
+        : Math.round(baseHealth * wave.healthScale * tierHealth));
       const inst = enemies.spawn(key, point.x, point.z, {
         yaw: Math.atan2(ps.x - point.x, ps.z - point.z),
         health: maxHealth,
+        exactHealth: true,
         damageScale: Number.isFinite(record.damageScale)
           ? record.damageScale : wave.damageScale,
         eventId: id,
@@ -437,7 +445,6 @@ export function buildBreaches(ctx) {
         },
       });
       if (!inst) continue;
-      inst.maxHealth = maxHealth;
       inst.health = Math.max(1, Math.min(maxHealth,
         Number(record.health) || maxHealth));
       inst.home = { x: centre.x, z: centre.z };

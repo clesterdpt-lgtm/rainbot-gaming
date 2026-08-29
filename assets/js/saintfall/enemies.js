@@ -22,6 +22,12 @@ import { TAU, clamp, clamp01, lerp, damp, makeRng } from "saintfall/core.js";
 import { patchMaterial } from "saintfall/art.js";
 import { applySurface } from "saintfall/boss-surface.js";
 
+/* A fresh Martyr field can legitimately contain more than eight hundred
+   durable enemies before a breach begins. Keep one shared ceiling for save
+   validation and restore so a valid high-tier field is neither rejected nor
+   silently truncated. This remains a bounded payload, not an open-ended one. */
+export const MAX_SAVED_ENEMIES = 1024;
+
 /* Which bones the IK solver owns. Must agree with the `--leg-bones`
    pattern the model optimiser strips channels against; if these two
    drift apart, a clip and the solver end up writing the same bone.
@@ -2440,7 +2446,8 @@ export async function buildEnemies(ctx, onProgress) {
   }
 
   function restore(saved = {}) {
-    const records = Array.isArray(saved.live) ? saved.live.slice(0, 420) : [];
+    const records = Array.isArray(saved.live)
+      ? saved.live.slice(0, MAX_SAVED_ENEMIES) : [];
     clearAll();
     const byId = new Map();
     nextId = Math.max(1, Math.round(Number(saved.nextId) || 1));

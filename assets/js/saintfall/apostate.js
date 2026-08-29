@@ -1450,6 +1450,9 @@ export async function buildApostate(ctx) {
   );
   const spawnX = open?.[0] ?? C.arenaX;
   const spawnZ = open?.[1] ?? C.arenaZ;
+  const difficultyHealth = () => Math.max(1,
+    Math.round(C.health * (ctx.difficulty?.healthScale?.("apostate") ?? 1)));
+  const initialHealth = difficultyHealth();
   const inst = {
     id: "sf-enemy-apostate",
     key: "apostate",
@@ -1469,8 +1472,8 @@ export async function buildApostate(ctx) {
     roll: 0,
     speed: 0,
     state: "idle",
-    health: C.health,
-    maxHealth: C.health,
+    health: initialHealth,
+    maxHealth: initialHealth,
     damageScale: 1,
     stride: 0,
     current: null,
@@ -3149,7 +3152,7 @@ export async function buildApostate(ctx) {
     state.boostTimer = Number(cds.boost) || 0;
     state.shieldTimer = Number(cds.shield) || 0;
     state.jetTimer = Number(cds.jet) || 0;
-    inst.maxHealth = Math.max(1, Number(saved.maxHealth) || C.health);
+    inst.maxHealth = Math.max(1, Number(saved.maxHealth) || difficultyHealth());
     const savedHealth = Number(saved.health);
     inst.health = clamp(Number.isFinite(savedHealth) ? savedHealth : inst.maxHealth,
       0, inst.maxHealth);
@@ -3230,7 +3233,7 @@ export async function buildApostate(ctx) {
     state.boostTimer = C.boostCadence * 0.65;
     state.shieldTimer = C.shieldCadence * 0.62;
     state.jetTimer = C.jetCadence * 0.72;
-    inst.health = inst.maxHealth = C.health;
+    inst.health = inst.maxHealth = difficultyHealth();
     delete inst.diedAt;
     inst.state = "idle";
     inst.grounded = true;

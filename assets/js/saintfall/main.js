@@ -42,6 +42,7 @@ import { buildApostate } from "saintfall/apostate.js";
 import { buildUndercroft } from "saintfall/undercroft.js";
 import { buildGuardReadability } from "saintfall/guard-readability.js";
 import { buildProgression } from "saintfall/progression.js";
+import { buildCampaignScore } from "saintfall/campaign-score.js";
 import { FURNACE_LANCE_RULES } from "saintfall/progression-config.js";
 import { buildAudio } from "saintfall/audio.js";
 import { buildWeapons } from "saintfall/weapons.js";
@@ -333,6 +334,12 @@ export async function start({ boot, build } = {}) {
   const progression = buildProgression(ctx);
   ctx.progression = progression;
 
+  /* The campaign score observes the completed mission after progression, so
+     the victory XP and any resulting Field Rank are part of the debrief. It
+     is built before saves and UI because both consume its durable record. */
+  const campaignScore = buildCampaignScore(ctx);
+  ctx.campaignScore = campaignScore;
+
   /* Audio subscribes to the buses combat and mission already emit,
      so it can be removed without touching either. It is built after
      both so there is something to subscribe to. */
@@ -550,6 +557,7 @@ export async function start({ boot, build } = {}) {
     undercroft,
     guardReadability,
     progression,
+    campaignScore,
     audio,
     intro,
     saves,

@@ -2876,3 +2876,96 @@ body.sf-high-contrast .sf-stage:not(.sf-touch-enabled) #sf-native-ui :is(
   .sf-stage:not(.sf-touch-enabled).is-maxed #sf-native-ui .sf-doctrine__preview-foot>small{font-size:10.5px}
   .sf-stage:not(.sf-touch-enabled).is-maxed #sf-native-ui .sf-doctrine__preview-foot button{min-height:38px;font-size:11px}
 }
+
+/* ======================================================================
+   SAINTFALL - completed campaign debrief
+   ====================================================================== */
+
+#sf-native-ui .sf-menu[data-phase="won"] .sf-operation-grid{grid-template-columns:repeat(4,minmax(0,1fr))}
+#sf-native-ui .sf-menu[data-phase="won"] .sf-operation-card--objective{grid-column:span 2}
+#sf-native-ui .sf-menu[data-phase="won"] .sf-operation-card--breach{grid-column:span 2}
+#sf-native-ui .sf-menu[data-phase="won"] .sf-menu__callout{display:none}
+#sf-native-ui .sf-menu[data-phase="won"] [data-menu-page="operation"]{display:flex;flex-direction:column}
+#sf-native-ui .sf-menu[data-phase="won"] [data-menu-page="operation"]>.sf-menu__pagehead{order:1}
+#sf-native-ui .sf-menu[data-phase="won"] [data-menu-page="operation"]>.sf-campaign-debrief{order:2;margin-top:0;margin-bottom:.8rem}
+#sf-native-ui .sf-menu[data-phase="won"] [data-menu-page="operation"]>.sf-operation-grid{order:3}
+#sf-native-ui .sf-menu[data-phase="won"] [data-menu-page="operation"]>.sf-menu__callout{order:4}
+#sf-native-ui .sf-campaign-debrief{
+  position:relative;display:grid;align-self:center;box-sizing:border-box;width:min(100%,60rem);
+  gap:.7rem;margin-top:.8rem;padding:.9rem;
+  border:1px solid rgba(216,164,65,.5);border-left:3px solid #d8a441;
+  background:linear-gradient(112deg,rgba(216,164,65,.12),transparent 42%),rgba(5,10,12,.88);
+  box-shadow:inset 0 0 0 1px rgba(115,216,237,.08),0 16px 34px rgba(0,0,0,.24)
+}
+#sf-native-ui .sf-campaign-debrief[hidden]{display:none}
+#sf-native-ui .sf-campaign-debrief__head{display:flex;align-items:center;justify-content:space-between;gap:1rem}
+#sf-native-ui .sf-campaign-debrief__head>span{display:grid;gap:.12rem;min-width:0}
+#sf-native-ui .sf-campaign-debrief__head small,
+#sf-native-ui .sf-campaign-debrief__score small,
+#sf-native-ui .sf-campaign-debrief__factors small{
+  color:rgba(115,216,237,.76);font-size:9px;letter-spacing:.16em
+}
+#sf-native-ui .sf-campaign-debrief__head h4{
+  margin:0;color:#f6f0dd;font:600 16px/1.15 "Cinzel",Georgia,serif;letter-spacing:.07em
+}
+#sf-native-ui .sf-campaign-debrief__head>b{
+  flex:0 0 auto;padding:.36rem .5rem;border:1px solid rgba(115,216,237,.45);
+  color:#bff5ff;background:rgba(115,216,237,.08);font-size:9px;letter-spacing:.12em
+}
+#sf-native-ui .sf-campaign-debrief[data-new-high="true"] .sf-campaign-debrief__head>b{
+  border-color:#f0d58c;color:#fff0b5;background:rgba(216,164,65,.15);
+  box-shadow:inset 3px 0 0 #d8a441
+}
+#sf-native-ui .sf-campaign-debrief__score{
+  display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:.55rem
+}
+#sf-native-ui .sf-campaign-debrief__score>span{
+  display:grid;align-content:center;min-height:4.4rem;padding:.55rem .7rem;
+  border:1px solid rgba(115,216,237,.18);background:rgba(1,5,7,.52)
+}
+#sf-native-ui .sf-campaign-debrief__score strong{
+  color:#f0d58c;font:700 clamp(1.55rem,3vw,2.45rem)/1 "Cinzel",Georgia,serif;letter-spacing:.05em
+}
+#sf-native-ui .sf-campaign-debrief__score b{
+  color:#f6f0dd;font:600 clamp(1rem,1.8vw,1.45rem)/1.1 "Cinzel",Georgia,serif;letter-spacing:.05em
+}
+#sf-native-ui .sf-campaign-debrief__factors{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.55rem}
+#sf-native-ui .sf-campaign-debrief__factors article{
+  display:grid;grid-template-columns:minmax(0,1fr) auto;gap:.2rem .5rem;padding:.55rem .65rem;
+  border-top:1px solid rgba(216,164,65,.34);background:rgba(216,164,65,.045)
+}
+#sf-native-ui .sf-campaign-debrief__factors small{grid-column:1/-1}
+#sf-native-ui .sf-campaign-debrief__factors strong{overflow:hidden;color:#f6f0dd;font-size:12px;text-overflow:ellipsis;white-space:nowrap}
+#sf-native-ui .sf-campaign-debrief__factors span{color:#f0d58c;font:700 11px/1.2 monospace}
+#sf-native-ui .sf-campaign-debrief>footer{display:flex;align-items:center;justify-content:space-between;gap:1rem}
+#sf-native-ui .sf-campaign-debrief>footer p{max-width:46rem;margin:0;color:rgba(225,236,236,.62);font-size:10px;line-height:1.5}
+#sf-native-ui .sf-campaign-debrief>footer button{
+  flex:0 0 auto;min-height:40px;padding:.55rem .8rem;border:1px solid rgba(216,164,65,.55);
+  border-radius:0;color:#f6f0dd;background:rgba(216,164,65,.1);font:700 10px/1 "Cinzel",Georgia,serif;
+  letter-spacing:.1em;cursor:pointer
+}
+#sf-native-ui .sf-campaign-debrief>footer button:hover,
+#sf-native-ui .sf-campaign-debrief>footer button:focus-visible{border-color:#f0d58c;background:rgba(216,164,65,.2);outline:1px solid rgba(115,216,237,.75);outline-offset:2px}
+
+@media (max-width:760px), (max-height:700px){
+  #sf-native-ui .sf-menu[data-phase="won"] .sf-operation-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  #sf-native-ui .sf-campaign-debrief{gap:.45rem;margin-top:.5rem;padding:.6rem}
+  #sf-native-ui .sf-campaign-debrief__head h4{font-size:13px}
+  #sf-native-ui .sf-campaign-debrief__score>span{min-height:3.4rem;padding:.4rem .5rem}
+  #sf-native-ui .sf-campaign-debrief__score strong{font-size:1.35rem}
+  #sf-native-ui .sf-campaign-debrief__factors{gap:.35rem}
+  #sf-native-ui .sf-campaign-debrief__factors article{padding:.4rem}
+  #sf-native-ui .sf-campaign-debrief>footer p{display:none}
+}
+@media (max-width:520px){
+  #sf-native-ui .sf-campaign-debrief__head{align-items:flex-start;flex-direction:column;gap:.35rem}
+  #sf-native-ui .sf-campaign-debrief__score{grid-template-columns:1fr 1fr}
+  #sf-native-ui .sf-campaign-debrief__factors{grid-template-columns:1fr}
+  #sf-native-ui .sf-campaign-debrief>footer{justify-content:stretch}
+  #sf-native-ui .sf-campaign-debrief>footer button{width:100%}
+}
+
+/* The shared score panel remains the authority for local/cloud standings;
+   square its outer chrome to Saintfall's hardline interface. */
+.saintfall-shell .rb-standalone-leaderboard-btn,
+.saintfall-shell [data-rb-leaderboard]{border-radius:0}

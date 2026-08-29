@@ -311,6 +311,22 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render, setQualit
                 <article class="sf-operation-card"><small>MISSION CLOCK</small><strong data-operation-clock>00:00</strong><span>Elapsed</span></article>
                 <article class="sf-operation-card sf-operation-card--breach"><small>BLOOM CONTAINMENT</small><strong data-operation-breach>Signal quiet</strong><span data-operation-breach-detail>No active rupture</span></article>
               </div>
+              <section class="sf-campaign-debrief" data-campaign-debrief aria-labelledby="sf-debrief-title" hidden>
+                <header class="sf-campaign-debrief__head">
+                  <span><small>CAMPAIGN DEBRIEF</small><h4 id="sf-debrief-title">THE GILDED SILENCE · CLEARED</h4></span>
+                  <b data-debrief-badge>SCORE RECORDED</b>
+                </header>
+                <div class="sf-campaign-debrief__score">
+                  <span><small>FINAL SCORE</small><strong data-debrief-score>0</strong></span>
+                  <span><small>HIGH SCORE</small><b data-debrief-best>0</b></span>
+                </div>
+                <div class="sf-campaign-debrief__factors" aria-label="Campaign score multipliers">
+                  <article><small>SCORED DIFFICULTY</small><strong data-debrief-difficulty>PENITENT</strong><span data-debrief-difficulty-multiplier>×1.000</span></article>
+                  <article><small>CLEAR TIME</small><strong data-debrief-time>00:00</strong><span data-debrief-time-multiplier>×1.000</span></article>
+                  <article><small>FIELD RANK ATTAINED</small><strong data-debrief-rank>1</strong><span data-debrief-rank-multiplier>×1.000</span></article>
+                </div>
+                <footer><p>Harder roads, faster clears, and higher Field Rank produce a stronger campaign score. The lowest difficulty used during this operation is the scored difficulty.</p><button type="button" data-menu-action="leaderboard">VIEW HIGH SCORES</button></footer>
+              </section>
               <div class="sf-menu__callout"><span>FIELD DOCTRINE</span><p>Hold <kbd>Q</kbd>, hover toward a command sigil, and left click to confirm. Releasing <kbd>Q</kbd> cancels.</p></div>
             </section>
             <section class="sf-menu__page sf-menu__page--map" data-menu-page="map" hidden>
@@ -1689,8 +1705,8 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render, setQualit
     const heading = root.querySelector("[data-operation-heading]");
     const copy = root.querySelector("[data-operation-copy]");
     if (phase === "won") {
-      heading.textContent = "OPERATION COMPLETE";
-      copy.textContent = "The standing order and the false saint are broken. Vesper-IX releases you.";
+      heading.textContent = "CAMPAIGN DEBRIEF";
+      copy.textContent = "The standing order and the false saint are broken. Your campaign record is sealed.";
     } else if (phase === "lost") {
       heading.textContent = "OPERATION FAILED";
       copy.textContent = "The reliquary is dark. Restart the operation to return.";
@@ -1707,8 +1723,10 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render, setQualit
       heading.textContent = "THE SEVENFOLD HUNT";
       copy.textContent = "Defeat the six district guardians while intermittent Bloom waves pursue you.";
     }
-    root.querySelector("[data-operation-objective]").textContent = objective?.name || "Awaiting field order";
-    root.querySelector("[data-operation-distance]").textContent = objective ? `${Math.round(objective.dist || 0)}m from current position` : "No active directive";
+    root.querySelector("[data-operation-objective]").textContent = phase === "won"
+      ? "THE GILDED SILENCE · COMPLETE" : objective?.name || "Awaiting field order";
+    root.querySelector("[data-operation-distance]").textContent = phase === "won"
+      ? "Campaign record sealed" : objective ? `${Math.round(objective.dist || 0)}m from current position` : "No active directive";
     root.querySelector("[data-operation-relays]").textContent = `${state.bossesDone || 0} / ${ctx.mission.bosses?.length || 7}`;
     root.querySelector("[data-operation-deaths]").textContent = String(Math.max(0, state.deaths ?? 0));
     root.querySelector("[data-operation-clock]").textContent = formatClock(state.elapsed);
@@ -1721,6 +1739,30 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render, setQualit
       ? (breach.phase === "warning" ? `${Math.ceil(breach.timer || 0)} seconds to emergence`
         : `${Math.max(0, breach.remaining || 0)} hostiles remain`)
       : breach?.complete ? `Next pressure cycle in ${formatClock(breach.timer)}` : "No active rupture";
+
+    const debrief = root.querySelector("[data-campaign-debrief]");
+    const campaign = ctx.campaignScore?.status?.();
+    const result = campaign?.result;
+    const showDebrief = phase === "won" && !!result;
+    if (debrief) {
+      debrief.hidden = !showDebrief;
+      debrief.dataset.newHigh = result?.newHighScore ? "true" : "false";
+    }
+    if (showDebrief) {
+      const score = Math.max(0, Math.floor(Number(result.score) || 0));
+      const best = Math.max(score, Math.floor(Number(campaign.highScore || result.best) || 0));
+      root.querySelector("[data-debrief-score]").textContent = score.toLocaleString();
+      root.querySelector("[data-debrief-best]").textContent = best.toLocaleString();
+      root.querySelector("[data-debrief-difficulty]").textContent = result.difficulty?.label || "PENITENT";
+      root.querySelector("[data-debrief-difficulty-multiplier]").textContent = `×${Number(result.difficulty?.multiplier || 1).toFixed(3)}`;
+      root.querySelector("[data-debrief-time]").textContent = formatClock(result.time?.seconds);
+      root.querySelector("[data-debrief-time-multiplier]").textContent = `×${Number(result.time?.multiplier || 1).toFixed(3)}`;
+      root.querySelector("[data-debrief-rank]").textContent = String(result.doctrine?.rank || 1);
+      root.querySelector("[data-debrief-rank-multiplier]").textContent = `×${Number(result.doctrine?.multiplier || 1).toFixed(3)}`;
+      const badge = root.querySelector("[data-debrief-badge]");
+      if (badge) badge.textContent = result.eligible === false ? "QA SCORE · NOT SUBMITTED"
+        : result.newHighScore ? "NEW HIGH SCORE" : score >= best ? "HIGH SCORE MATCHED" : "SCORE RECORDED";
+    }
   }
 
   function readCareerConflict() {
@@ -2518,6 +2560,23 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render, setQualit
       return;
     }
     if (target.matches('[data-menu-action="maximize"]')) { toggleMaximized(); return; }
+    if (target.matches('[data-menu-action="leaderboard"]')) {
+      const leaderboard = document.querySelector("[data-rb-leaderboard]");
+      const toggle = document.querySelector(".rb-standalone-leaderboard-btn");
+      if (toggle) {
+        closeMenu({ requestLock: false });
+        toggle.click();
+        toggle.focus?.({ preventScroll: true });
+      } else if (leaderboard) {
+        closeMenu({ requestLock: false });
+        if (isMaximized()) setMaximized(false);
+        leaderboard.scrollIntoView?.({ behavior: "auto", block: "center" });
+        leaderboard.querySelector?.("h2, h3")?.focus?.({ preventScroll: true });
+      } else {
+        announce("High scores are unavailable in this view");
+      }
+      return;
+    }
     if (target.matches('[data-menu-action="unstuck"]') || target.matches('[data-setting-action="unstuck"]')) {
       ctx.player?.unstuck?.("menu");
       menuSfx("confirm");
@@ -2886,6 +2945,7 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render, setQualit
     if (menu.open && menu.panel === "doctrine") refreshDoctrine(state);
     if (result?.message) announce(result.message);
   });
+  const stopCampaignScore = ctx.campaignScore?.onChange?.(() => refreshOperation());
 
   function update(dt = 0) {
     if (destroyed) return;
@@ -2980,6 +3040,7 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render, setQualit
         activeVows: activeCapstones(doctrine.latestState || {}).filter(Boolean),
         respecArmed: doctrine.respecUntil > performance.now(),
       },
+      debrief: ctx.campaignScore?.status?.() || null,
       careerRecovery: {
         active: !!readCareerConflict()?.active,
         armedChoice: careerRecovery.armedChoice,
@@ -3068,7 +3129,7 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render, setQualit
 
       touchObserver.disconnect();
       detachTouchCommands();
-      stopWon?.(); stopLost?.(); stopSave?.(); stopProgression?.();
+      stopWon?.(); stopLost?.(); stopSave?.(); stopProgression?.(); stopCampaignScore?.();
 
       for (const timer of pendingTimers) window.clearTimeout(timer);
       pendingTimers.clear();

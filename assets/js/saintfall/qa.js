@@ -4541,6 +4541,52 @@ export function installQa(ctx, api) {
         ?? progression?.resetForQA?.()
         ?? { ok: false, reason: "progression-unavailable" };
     },
+    campaignScoreForQA(values = {}) {
+      if (!ctx.qa) return null;
+      return (api.campaignScore || ctx.campaignScore)?.calculate?.(values) || null;
+    },
+    campaignScoreStateForQA() {
+      if (!ctx.qa) return null;
+      return (api.campaignScore || ctx.campaignScore)?.status?.() || null;
+    },
+    campaignScoreRecordForQA() {
+      if (!ctx.qa) return null;
+      return (api.campaignScore || ctx.campaignScore)?.capture?.() || null;
+    },
+    completeCampaignForQA(elapsed = api.mission?.state?.elapsed || 0) {
+      if (!ctx.qa) return null;
+      if (api.mission?.state?.phase === "won") {
+        (api.campaignScore || ctx.campaignScore)?.finalize?.({ source: "qa-repeat" });
+        return (api.campaignScore || ctx.campaignScore)?.status?.() || null;
+      }
+      const saved = api.mission.snapshot();
+      saved.phase = "cathedralBoss";
+      saved.elapsed = Math.max(0, Number(elapsed) || 0);
+      saved.extractCalled = false;
+      saved.extractTimer = 0;
+      saved.relays = saved.relays.map((relay) => ({ ...relay, done: true, progress: 1 }));
+      saved.relaysDone = saved.relays.length;
+      saved.bosses = saved.bosses.map((boss) => ({ ...boss, done: true }));
+      saved.bossesDone = saved.bosses.length;
+      api.mission.restore(saved);
+      api.mission.completeFinalBoss("apostate");
+      return (api.campaignScore || ctx.campaignScore)?.status?.() || null;
+    },
+    campaignDebriefForQA() {
+      if (!ctx.qa) return null;
+      const debrief = document.querySelector("[data-campaign-debrief]");
+      const menu = (api.gameUi || ctx.gameUi)?.menuState?.() || null;
+      return {
+        visible: !!debrief && !debrief.hidden,
+        text: debrief?.textContent?.replace(/\s+/g, " ").trim() || "",
+        score: document.querySelector("[data-debrief-score]")?.textContent?.trim() || "",
+        best: document.querySelector("[data-debrief-best]")?.textContent?.trim() || "",
+        difficulty: document.querySelector("[data-debrief-difficulty]")?.textContent?.trim() || "",
+        time: document.querySelector("[data-debrief-time]")?.textContent?.trim() || "",
+        rank: document.querySelector("[data-debrief-rank]")?.textContent?.trim() || "",
+        menu,
+      };
+    },
     openMenu(panel = "operation") {
       return (api.gameUi || ctx.gameUi)?.openMenu?.(panel) ?? false;
     },

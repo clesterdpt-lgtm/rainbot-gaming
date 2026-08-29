@@ -530,6 +530,10 @@ export function buildSaveSystem(ctx, options = {}) {
          receipts, and the authoritative talent ledger are envelope data and
          must never be rolled backward by loading an old field save. */
       progression: ctx.progression?.captureField?.() || null,
+      /* Lowest difficulty used, peak Field Rank, and the completed score.
+         Optional on restore so schema-2 saves from before debriefs remain
+         valid and can receive a deterministic legacy debrief. */
+      campaignScore: ctx.campaignScore?.capture?.() || null,
     };
   }
 
@@ -1089,6 +1093,8 @@ export function buildSaveSystem(ctx, options = {}) {
     if (snapshot.progression !== undefined && !validFieldProgression(snapshot.progression)) {
       return false;
     }
+    if (snapshot.campaignScore !== undefined && snapshot.campaignScore !== null
+      && ctx.campaignScore?.validate?.(snapshot.campaignScore) === false) return false;
     /* Optional, so saves written before the Coulter existed still load.
        Present and malformed is a rejection; absent is a zero. */
     if (snapshot.coulter !== null && snapshot.coulter !== undefined) {
@@ -1607,6 +1613,9 @@ export function buildSaveSystem(ctx, options = {}) {
       ctx.progression?.restoreField?.(snapshot.progression);
     } else {
       ctx.progression?.clearFieldLoadout?.({ source: "legacy-field-save" });
+    }
+    if (ctx.campaignScore?.restore?.(snapshot.campaignScore ?? null) === false) {
+      throw new Error("Campaign score state was rejected.");
     }
     ctx.hud?.redrawMinimap?.();
   }

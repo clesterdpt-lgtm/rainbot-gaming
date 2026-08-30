@@ -129,7 +129,7 @@ try {
     roster.described && roster.images.every((image) => image.width === 768 && image.height === 768
       && image.src.includes("profile-v3.png")),
     roster, "three 768px profile-v3 images and three descriptions");
-  check("Vesper Reliquary is the deterministic default",
+  check("Saint Aurel keeps the deterministic Vesper character ID",
     roster.selected === "vesper-reliquary", roster.selected, "vesper-reliquary");
 
   await page.locator('[data-intro-character="vesper-reliquary"]').press("ArrowRight");
@@ -140,8 +140,8 @@ try {
   }));
   check("arrow keys move selection and update confirmation",
     keyboard.selected === "white-vigil" && keyboard.focused === "white-vigil"
-      && keyboard.confirm === "BEGIN AS WHITE VIGIL",
-    keyboard, { selected: "white-vigil", focused: "white-vigil", confirm: "BEGIN AS WHITE VIGIL" });
+      && keyboard.confirm === "SELECT SAINT VEYRA",
+    keyboard, { selected: "white-vigil", focused: "white-vigil", confirm: "SELECT SAINT VEYRA" });
 
   await rosterLayout(page, "desktop-1440x900", { width: 1440, height: 900 });
   await rosterLayout(page, "portrait-430x932", { width: 430, height: 932 });
@@ -154,7 +154,22 @@ try {
     page.locator("[data-intro-character-confirm]").click(),
   ]);
   await waitForGame(page);
-  await page.waitForFunction(() => window.__SF?.introState?.()?.started, null, { timeout: 300000 });
+  await page.waitForFunction(() => window.__SF?.introState?.()?.entryPanel === "briefing", null,
+    { timeout: 300000 });
+  const reloaded = await page.evaluate(() => ({
+    character: window.__SF.introState().characterId,
+    panel: window.__SF.introState().entryPanel,
+    started: window.__SF.introState().started,
+    asset: window.__SF.figureInfo().assetSource,
+    stored: localStorage.getItem("sf-saintfall-character"),
+  }));
+  check("confirming Saint Torren reloads the matching body into the briefing",
+    reloaded.character === "bastion-penitent" && reloaded.panel === "briefing"
+      && !reloaded.started && reloaded.asset === "red-bastion-player.glb"
+      && reloaded.stored === "bastion-penitent",
+    reloaded, "Torren body, durable selection, briefing held before drop");
+  await page.locator("[data-intro-briefing-deploy]").click();
+  await page.waitForFunction(() => window.__SF?.introState?.()?.started, null, { timeout: 10000 });
   const bastion = await page.evaluate(() => ({
     character: window.__SF.introState().characterId,
     mode: window.__SF.introState().mode,
@@ -163,7 +178,7 @@ try {
     url: location.href,
     stored: localStorage.getItem("sf-saintfall-character"),
   }));
-  check("confirming Bastion reloads the matching live body and starts a new drop",
+  check("accepting Saint Torren's briefing starts a new drop",
     bastion.character === "bastion-penitent" && bastion.mode === "running"
       && bastion.launchMode === "new" && bastion.asset === "red-bastion-player.glb"
       && bastion.stored === "bastion-penitent" && !new URL(bastion.url).searchParams.has("newGame"),
@@ -175,7 +190,7 @@ try {
   });
   await waitForGame(page);
   const white = await page.evaluate(() => window.__SF.figureInfo().assetSource);
-  check("White Vigil resolves to the current live body",
+  check("Saint Veyra resolves to the current live body",
     white === "white-vigil-player.glb", white, "white-vigil-player.glb");
 
   check("browser console remains clean", consoleErrors.length === 0 && pageErrors.length === 0,

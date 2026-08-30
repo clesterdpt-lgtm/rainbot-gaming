@@ -1391,9 +1391,31 @@ function buildMarkup(host, characters = [], selectedCharacterId = "") {
       <section class="sf-entry__panel sf-entry__panel--characters" data-intro-panel="characters"
         aria-labelledby="sf-entry-character-title" hidden>
         <header><span id="sf-entry-character-title">CHOOSE YOUR SAINT</span><button type="button" data-intro-panel-close aria-label="Back to main menu">×</button></header>
-        <p class="sf-entry__character-brief">Each operative carries their own weapons, traversal profile, and active doctrine into the full campaign.</p>
+        <p class="sf-entry__character-brief">Each Saint carries their own weapons, traversal profile, and active doctrine into the full campaign.</p>
         <div class="sf-entry__characters" role="radiogroup" aria-label="Playable operatives">${roster}</div>
-        <button class="sf-entry__character-confirm" type="button" data-intro-character-confirm>BEGIN AS ${escapeEntryText(characters.find((character) => character.id === selectedCharacterId)?.name || characters[0]?.name || "VESPER RELIQUARY")}</button>
+        <button class="sf-entry__character-confirm" type="button" data-intro-character-confirm>SELECT ${escapeEntryText(characters.find((character) => character.id === selectedCharacterId)?.name || characters[0]?.name || "SAINT AUREL")}</button>
+      </section>
+      <section class="sf-entry__panel sf-entry__panel--briefing" data-intro-panel="briefing"
+        aria-labelledby="sf-entry-briefing-title" hidden>
+        <header><span id="sf-entry-briefing-title">MISSION BRIEFING</span><button type="button" data-intro-briefing-back aria-label="Change selected Saint">×</button></header>
+        <div class="sf-entry__briefing-body">
+          <div class="sf-entry__briefing-primary">
+            <small>OPERATION · THE GILDED SILENCE</small>
+            <h3>RECLAIM VESPER-IX</h3>
+            <p><strong data-intro-briefing-saint>SAINT AUREL</strong>, you will make saintfall from orbit aboard Sanctum VII and enter the occupied Concord basin alone.</p>
+            <p>The Bloom destroyed the basin and its ancient Saint statue. Its Brood now nests through the surrounding districts and beneath the Vault-Cathedral.</p>
+            <p class="sf-entry__briefing-order">Destroy the invasion. Break its false Saint. Reclaim Vesper-IX.</p>
+          </div>
+          <ol class="sf-entry__briefing-directives" aria-label="Mission directives">
+            <li><b>01</b><span><small>BREAK THE BROOD</small><strong>Purge the six occupied districts.</strong></span></li>
+            <li><b>02</b><span><small>RECLAIM THE MONUMENT</small><strong>Destroy the Coulter beneath the ruined ancient statue.</strong></span></li>
+            <li><b>03</b><span><small>END THE INVASION</small><strong>Enter the Vault-Cathedral and destroy the Apostate.</strong></span></li>
+          </ol>
+        </div>
+        <footer class="sf-entry__briefing-actions">
+          <button type="button" data-intro-briefing-back>CHANGE SAINT</button>
+          <button type="button" data-intro-briefing-deploy>BEGIN SAINTFALL</button>
+        </footer>
       </section>
       <section class="sf-entry__panel sf-entry__panel--options" data-intro-panel="options" aria-label="Options" hidden>
         <header><span>OPTIONS</span><button type="button" data-intro-panel-close aria-label="Close options">×</button></header>
@@ -1519,6 +1541,8 @@ export function buildDropIntro(ctx, options = {}) {
   const optionsToggle = el("[data-intro-options-toggle]");
   const characterCards = [...host.querySelectorAll("[data-intro-character]")];
   const characterConfirm = el("[data-intro-character-confirm]");
+  const briefingDeploy = el("[data-intro-briefing-deploy]");
+  const briefingSaint = el("[data-intro-briefing-saint]");
   const saveStatusEl = el("[data-intro-save-status]");
   const continueMetaEl = el("[data-intro-continue-meta]");
   const skipButton = el("[data-intro-skip]");
@@ -1585,16 +1609,17 @@ export function buildDropIntro(ctx, options = {}) {
      stage and the overlay scrollbar is invisible until touched. */
   function syncPanelScrollHint(section) {
     if (!section || section.hidden) return;
-    const list = section.querySelector(".sf-entry__slots, .sf-entry__options, .sf-entry__characters");
+    const list = section.querySelector(".sf-entry__slots, .sf-entry__options, .sf-entry__characters, .sf-entry__briefing-body");
     if (!list) return;
     const more = list.scrollHeight - list.clientHeight - list.scrollTop > 2;
     section.dataset.scrollMore = more ? "true" : "false";
   }
-  host.querySelectorAll("[data-intro-panel] .sf-entry__slots, [data-intro-panel] .sf-entry__options, [data-intro-panel] .sf-entry__characters")
+  host.querySelectorAll("[data-intro-panel] .sf-entry__slots, [data-intro-panel] .sf-entry__options, [data-intro-panel] .sf-entry__characters, [data-intro-panel] .sf-entry__briefing-body")
     .forEach((list) => list.addEventListener("scroll", () => syncPanelScrollHint(list.closest("[data-intro-panel]")), { passive: true }));
 
   function setEntryPanel(panel = "main", { focus = true } = {}) {
     const next = panel === "load" || panel === "options" || panel === "characters"
+      || panel === "briefing"
       ? panel : "main";
     state.entryPanel = next;
     gate.dataset.entryPanel = next;
@@ -1608,7 +1633,8 @@ export function buildDropIntro(ctx, options = {}) {
       requestAnimationFrame(() => {
         const target = next === "characters"
           ? host.querySelector(`[data-intro-character="${state.characterId}"]`)
-          : host.querySelector(`[data-intro-panel="${next}"] button:not([disabled])`);
+          : next === "briefing" ? briefingDeploy
+            : host.querySelector(`[data-intro-panel="${next}"] button:not([disabled])`);
         target?.focus?.({ preventScroll: true });
       });
     }
@@ -1627,8 +1653,9 @@ export function buildDropIntro(ctx, options = {}) {
     }
     if (characterConfirm) {
       characterConfirm.disabled = !selected || state.mode !== "awaiting-gesture";
-      characterConfirm.textContent = selected ? `BEGIN AS ${selected.name.toUpperCase()}` : "SELECT AN OPERATIVE";
+      characterConfirm.textContent = selected ? `SELECT ${selected.name.toUpperCase()}` : "SELECT A SAINT";
     }
+    if (briefingSaint) briefingSaint.textContent = selected?.name?.toUpperCase() || "SELECTED SAINT";
     return selected;
   }
 
@@ -1709,6 +1736,7 @@ export function buildDropIntro(ctx, options = {}) {
     loadToggle.disabled = disabled;
     optionsToggle.disabled = disabled;
     characterConfirm.disabled = disabled;
+    if (briefingDeploy) briefingDeploy.disabled = disabled;
     characterCards.forEach((button) => { button.disabled = disabled; });
     host.querySelectorAll("[data-intro-load-kind]").forEach((button) => {
       if (disabled) button.disabled = true;
@@ -2511,13 +2539,21 @@ export function buildDropIntro(ctx, options = {}) {
     return true;
   }
 
-  async function beginNewGame() {
+  function confirmCharacter() {
     if (state.mode !== "awaiting-gesture" || !state.characterId) return false;
     const reloading = options.onCharacterChange?.(state.characterId) === true;
     if (reloading) {
       setEntryActionsDisabled(true);
       return true;
     }
+    refreshCharacterRoster();
+    setEntryPanel("briefing");
+    return true;
+  }
+
+  async function beginNewGame() {
+    if (state.mode !== "awaiting-gesture" || !state.characterId
+      || state.entryPanel !== "briefing") return false;
     setEntryPanel("main", { focus: false });
     return start();
   }
@@ -2855,7 +2891,10 @@ export function buildDropIntro(ctx, options = {}) {
     refreshEntryMenu();
     applyTimeline(state.canonical, false);
     renderFrame();
-    if (options.autoStartNewGame) queueMicrotask(() => { void beginNewGame(); });
+    /* A character change reloads the correctly authored body before the
+       mission starts. The one-shot flag resumes at the briefing, never past
+       it, so every new operation still receives its orders. */
+    if (options.autoStartNewGame) queueMicrotask(() => { confirmCharacter(); });
     return true;
   }
 
@@ -2898,6 +2937,10 @@ export function buildDropIntro(ctx, options = {}) {
       returnTarget?.focus?.();
       return;
     }
+    if (target.matches("[data-intro-briefing-back]")) {
+      setEntryPanel("characters");
+      return;
+    }
     if (target.matches("[data-intro-load-kind]")) {
       void resumeSaved(target.dataset.introLoadKind, Number(target.dataset.introLoadIndex));
       return;
@@ -2908,6 +2951,10 @@ export function buildDropIntro(ctx, options = {}) {
       return;
     }
     if (target.matches("[data-intro-character-confirm]")) {
+      confirmCharacter();
+      return;
+    }
+    if (target.matches("[data-intro-briefing-deploy]")) {
       void beginNewGame();
       return;
     }
@@ -3003,6 +3050,7 @@ export function buildDropIntro(ctx, options = {}) {
        after this menu is built. */
     refreshMenu: refreshEntryMenu,
     start,
+    confirmCharacter,
     beginNewGame,
     resumeSaved,
     update,

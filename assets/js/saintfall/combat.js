@@ -1612,31 +1612,77 @@ export function buildCombat(ctx) {
   }
 
   /** KNOCK A FLYER OUT OF THE SKY. The generic anti-air verdict for a
-   *  heavy blow (the Bastion's thrown reliquary is the first caller):
-   *  a creature that declares `flies` and is airborne is forced to the
-   *  ground and stunned there.
+   *  heavy blow (the Bastion's thrown reliquary is the first caller).
    *
-   *  The Winnower keeps its own physics: its module owns lift, stall
-   *  and the crash cinematics, so for that creature this DELEGATES to
-   *  `forcePhase("stoke")` - the boss's own forced-landing verb, which
-   *  already grounds it, plays the sprawl, and pays the crash-stun -
-   *  and then only tops up the stun. Any future ordinary flyer gets
-   *  the direct treatment: grounded flag, a fall to `groundHeight`,
-   *  and the shared saturating stun. Grounded or non-flying creatures
-   *  return false - the blow was just a blow. */
+   *  TWO CLASSES OF FLYER, and they are told apart by whether the
+   *  creature carries a LIFT POOL rather than by its key:
+   *
+   *  Trash - no pool - is switched off outright: grounded flag, a fall
+   *  to `groundHeight`, and the shared saturating stun. That is the
+   *  Bastion's anti-air identity and it should feel absolute.
+   *
+   *  A boss with a pool is BROUGHT DOWN instead, by draining it. The
+   *  creature's own module then decides what that means, which for the
+   *  Winnower is its stall path - the longer, worse landing it already
+   *  gives a player who empties the sacs. See the note in the body for
+   *  why this is not a phase force.
+   *
+   *  Grounded or non-flying creatures return false; the blow was just
+   *  a blow. */
+  /* How much LIFT a blow that grounds flyers takes out of a boss that
+     has a lift pool. The pool is 4 and each of the Winnower's two sacs
+     is worth half of it, so 1.5 means three connected casts bring the
+     animal down - about sixteen seconds of committed anti-air work on
+     the hammer's own cooldown, against a boss that lands by itself
+     every twenty-one regardless. */
+  const BOSS_LIFT_DRAIN = 1.5;
+
   function groundFlyer(inst, opts = {}) {
     if (!inst || untouchable(inst)) return false;
     if (!inst.spec?.flies || inst.grounded) return false;
     const stun = Number.isFinite(opts.stun) ? Math.max(0, opts.stun) : 2.6;
-    if (inst.key === "winnower" && ctx.winnower?.forcePhase) {
-      const phase = ctx.winnower.status?.()?.phase;
-      if (phase === "soar" || phase === "strafe") {
-        ctx.winnower.forcePhase("stoke");
-        if (stun > 0) enemies.stun?.(inst, stun);
-        bus.emit("flyerGrounded", { ...enemyIdentity(inst), forced: "stoke", stun });
-        return true;
-      }
-      return false;
+
+    /* A BOSS WITH A LIFT POOL IS BROUGHT DOWN, NOT SWITCHED OFF.
+     *
+     * This used to call `ctx.winnower.forcePhase("stoke")` with no
+     * timer - and `forcePhase` only sets `state.timer` when it is
+     * GIVEN one, so the stoke inherited whatever fraction of a second
+     * the interrupted soar had left. The boss hit the ground and
+     * launched again immediately, which is exactly how it was
+     * reported from play. `beginStoke()` sets 5.5s; the forced path
+     * set nothing.
+     *
+     * Restoring the timer would have fixed the flicker and left a
+     * worse problem: one thrown hammer, on one cooldown, opening a
+     * boss window that the fight otherwise makes you EARN. The
+     * Winnower already states its own design - "two ways to reach the
+     * same landing: the fuel, which always runs out, and the lift
+     * pool, which the player empties by shooting the sacs". A heavy
+     * weapon that grounds things is a third way in, and it belongs in
+     * the same currency: the cast takes a large bite out of lift, an
+     * emptied pool drops the animal through its OWN stall path, and
+     * the stall is the good landing - 7.5 seconds instead of 5.5,
+     * opening with 2.6 in which it cannot answer at all.
+     *
+     * Nothing here can burst a boss down either: `downDamageCap`
+     * already limits a single downing to 18% of its health.
+     *
+     * Trash flyers have no lift pool and are still switched off
+     * outright, which is the Bastion's whole anti-air identity. */
+    if (Number.isFinite(inst.lift) && (inst.maxLift || 0) > 0) {
+      const drained = drainLift(inst, Number.isFinite(opts.lift)
+        ? Math.max(0, opts.lift) : BOSS_LIFT_DRAIN, -1, {
+        source: opts.source || "grounding-blow",
+      });
+      if (drained <= 0) return false;
+      bus.emit("flyerGrounded", {
+        ...enemyIdentity(inst),
+        forced: "lift",
+        drained: Number(drained.toFixed(2)),
+        liftLeft: Number(Math.max(0, inst.lift).toFixed(2)),
+        stalling: inst.lift <= 0,
+      });
+      return true;
     }
     inst.grounded = true;
     const gy = collide?.groundHeight

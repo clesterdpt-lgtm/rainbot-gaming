@@ -100,6 +100,9 @@ export function buildHud(ctx, host) {
         <div class="sf-hud__jetlabel"><span>CHARGE</span><b id="sf-jet-value">100%</b></div>
         <div class="sf-hud__jettrack"><i id="sf-jet-fill"></i></div>
         <div class="sf-hud__boost" id="sf-boost"><span><b data-bind-face="boost">${keybindLabel("boost")}</b> GLIDE</span><strong id="sf-boost-value">READY</strong></div>
+        <div class="sf-hud__ability sf-hud__ability--teleport" id="sf-teleport" hidden><span><b data-bind-face="block">${keybindLabel("block")}</b> VIGIL STEP</span><strong id="sf-teleport-value">READY</strong></div>
+        <div class="sf-hud__ability sf-hud__ability--cast" id="sf-cast" hidden><span><b>RMB</b> HAMMER CAST</span><strong id="sf-cast-value">READY</strong></div>
+        <div class="sf-hud__ability sf-hud__ability--shield" id="sf-shield" hidden><span><b data-bind-face="block">${keybindLabel("block")}</b> TOWER SHIELD</span><strong id="sf-shield-value">READY</strong></div>
       </div>
     </div>
     <div class="sf-hud__heat sf-heat" id="sf-ammo" role="progressbar"
@@ -206,6 +209,20 @@ export function buildHud(ctx, host) {
   const jetValueEl = el.querySelector("#sf-jet-value");
   const boostEl = el.querySelector("#sf-boost");
   const boostValueEl = el.querySelector("#sf-boost-value");
+  const teleportEl = el.querySelector("#sf-teleport");
+  const teleportValueEl = el.querySelector("#sf-teleport-value");
+  const castEl = el.querySelector("#sf-cast");
+  const castValueEl = el.querySelector("#sf-cast-value");
+  const towerShieldEl = el.querySelector("#sf-shield");
+  const towerShieldValueEl = el.querySelector("#sf-shield-value");
+
+  if (ctx.playerCharacter?.id === "white-vigil") {
+    if (teleportEl) teleportEl.hidden = false;
+  } else if (ctx.playerCharacter?.id === "bastion-penitent") {
+    if (castEl) castEl.hidden = false;
+    if (towerShieldEl) towerShieldEl.hidden = false;
+    if (boostEl) boostEl.hidden = true;
+  }
   const ammoEl = el.querySelector("#sf-ammo");
   const heatFillEls = [...ammoEl.querySelectorAll(".sf-heat__fill")];
   const heatStateEl = ammoEl.querySelector("u");
@@ -294,6 +311,28 @@ export function buildHud(ctx, host) {
       <svg viewBox="0 0 32 32" focusable="false" aria-hidden="true">
         <path d="M16 2v8M12 6l4 4 4-4"/>
         <path d="M7 13h18v15H7zM16 16v9M11.5 20.5h9"/>
+      </svg>`,
+    mirrorchoir: `
+      <svg viewBox="0 0 32 32" focusable="false" aria-hidden="true">
+        <path d="M16 4v10M11 9l5-5 5 5"/>
+        <path d="M6 18v10M16 20v9M26 18v10"/>
+        <path d="M3 16h26"/>
+      </svg>`,
+    crescentrain: `
+      <svg viewBox="0 0 32 32" focusable="false" aria-hidden="true">
+        <path d="M6 5c5 2 8 6 8 11M16 3c5 2 8 6 8 11M26 6c3 2 4 5 4 9"/>
+        <path d="M8 22l-2 6M17 23l-2 6M26 22l-2 6"/>
+      </svg>`,
+    standinggate: `
+      <svg viewBox="0 0 32 32" focusable="false" aria-hidden="true">
+        <path d="M5 26V11h22v15"/>
+        <path d="M2 26h28M9 26V15M23 26V15M16 11v15"/>
+      </svg>`,
+    fallinganvil: `
+      <svg viewBox="0 0 32 32" focusable="false" aria-hidden="true">
+        <path d="M16 2v7M12 6l4 4 4-4"/>
+        <path d="M6 14h20l-3 6H9Z"/>
+        <path d="M13 20v4h6v-4M9 28h14"/>
       </svg>`,
   }[key] || `
     <svg viewBox="0 0 32 32" focusable="false" aria-hidden="true">
@@ -1574,6 +1613,54 @@ export function buildHud(ctx, host) {
           jetEl.dataset.state = "shield";
           jetEl.setAttribute("aria-valuetext", `${value} percent, Aegis blocking`);
         }
+      }
+
+      const kit = ctx.kenosis;
+      if (kit?.status) {
+        const kitStatus = kit.status();
+        if (kitStatus?.blink && teleportEl) {
+          teleportEl.hidden = false;
+          const b = kitStatus.blink;
+          const held = Math.max(0, Math.min(b.maxCharges, b.charges));
+          const pips = "◆".repeat(held) + "◇".repeat(Math.max(0, b.maxCharges - held));
+          const cooling = b.charges < b.maxCharges;
+          teleportValueEl.textContent = cooling
+            ? `${pips} ${b.rechargeIn.toFixed(1)}S CD`
+            : `${pips} READY`;
+          teleportEl.dataset.state = b.charges > 0 ? "ready" : "cooldown";
+        } else if (teleportEl) {
+          teleportEl.hidden = true;
+        }
+
+        if (kitStatus?.hammer && castEl) {
+          castEl.hidden = false;
+          const h = kitStatus.hammer;
+          castValueEl.textContent = h.phase === "out" ? "CAST"
+            : h.phase === "return" ? "RETURNING"
+              : h.phase === "windup" ? "WINDING"
+                : h.cooldown > 0 ? `${h.cooldown.toFixed(1)}S CD` : "READY";
+          castEl.dataset.state = h.phase !== "held" ? "active"
+            : h.cooldown > 0 ? "cooldown" : "ready";
+        } else if (castEl) {
+          castEl.hidden = true;
+        }
+
+        if (kitStatus?.block && towerShieldEl) {
+          towerShieldEl.hidden = false;
+          towerShieldValueEl.textContent = kitStatus.block.active ? "HELD"
+            : kitStatus.block.blockedReason ? kitStatus.block.blockedReason.toUpperCase() : "READY";
+          towerShieldEl.dataset.state = kitStatus.block.active ? "active" : "ready";
+        } else if (towerShieldEl) {
+          towerShieldEl.hidden = true;
+        }
+
+        if (kitStatus?.id === "bastion-penitent" && boostEl) {
+          boostEl.hidden = true;
+        }
+      } else {
+        if (teleportEl) teleportEl.hidden = true;
+        if (castEl) castEl.hidden = true;
+        if (towerShieldEl) towerShieldEl.hidden = true;
       }
 
       /* One quiet, attacker-anchored omen for Aegis-readable melee. No words,

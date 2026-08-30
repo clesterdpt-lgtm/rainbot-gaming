@@ -7,7 +7,7 @@
 (() => {
   "use strict";
 
-  const BUILD = "20260830-cast-aim-1";
+  const BUILD = "20260830-mission-presentation-1";
   const THREE_VERSION = "0.180.0";
   const CDN_BASES = [
     `https://cdn.jsdelivr.net/npm/three@${THREE_VERSION}/`,
@@ -33,7 +33,7 @@
      change. */
   const TIP_POOLS = {
     default: [
-      "The Saint fell here in 811.M2. Nobody has ever found the rest of it.",
+      "The ancient Saint statue stood for centuries. The Bloom broke it in one night.",
       "Vesper-IX turns once every ninety hours. The sun barely moves.",
       "The halo still holds orbit. Its shadow crosses the basin twice a day.",
       "Sand carries sound further than you expect. So does the Choir.",

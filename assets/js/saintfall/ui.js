@@ -285,6 +285,22 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render, setQualit
       aria-labelledby="sf-menu-title" aria-describedby="sf-menu-subtitle"
       aria-hidden="true" data-panel="operation" data-phase="districtBosses" hidden>
       <div class="sf-menu__veil"></div>
+      <section class="sf-mission-wrap" data-mission-wrap aria-labelledby="sf-mission-wrap-title" hidden>
+        <div class="sf-mission-wrap__art" aria-hidden="true"></div>
+        <div class="sf-mission-wrap__card">
+          <span class="sf-mission-wrap__kicker">THE GILDED SILENCE · CLOSED</span>
+          <h2 id="sf-mission-wrap-title">MISSION COMPLETE</h2>
+          <p data-mission-wrap-saint>One Saint fell from orbit. Vesper-IX rises from silence.</p>
+          <div class="sf-mission-wrap__verdict">
+            <strong>THE BLOOM IS BROKEN</strong>
+            <span>The Apostate is gone. The ancient Saint remains in ruins, but its basin belongs to the Concord again. Vesper-IX is reclaimed.</span>
+          </div>
+          <footer>
+            <small>FIELD RECORD SEALED · SCORE CALCULATION READY</small>
+            <button type="button" data-menu-action="mission-record">VIEW MISSION RECORD</button>
+          </footer>
+        </div>
+      </section>
       <div class="sf-menu__frame">
         <header class="sf-menu__masthead">
           <div class="sf-menu__crest">${ICONS.crest}</div>
@@ -320,7 +336,7 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render, setQualit
               </div>
               <section class="sf-campaign-debrief" data-campaign-debrief aria-labelledby="sf-debrief-title" hidden>
                 <header class="sf-campaign-debrief__head">
-                  <span><small>CAMPAIGN DEBRIEF</small><h4 id="sf-debrief-title">THE GILDED SILENCE · CLEARED</h4></span>
+                  <span><small>CAMPAIGN DEBRIEF</small><h4 id="sf-debrief-title" tabindex="-1">THE GILDED SILENCE · CLEARED</h4></span>
                   <b data-debrief-badge>SCORE RECORDED</b>
                 </header>
                 <div class="sf-campaign-debrief__score">
@@ -528,7 +544,7 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render, setQualit
   };
   const menu = {
     open: false, panel: "operation", lastFocus: null, restartUntil: 0,
-    ariaRestore: null, returnToPointerLock: false,
+    ariaRestore: null, returnToPointerLock: false, victoryWrapSeen: false,
   };
   const doctrine = {
     orderId: null,
@@ -1785,11 +1801,25 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render, setQualit
       : breach?.complete ? `Next pressure cycle in ${formatClock(breach.timer)}` : "No active rupture";
 
     const debrief = root.querySelector("[data-campaign-debrief]");
+    const missionWrap = root.querySelector("[data-mission-wrap]");
     const campaign = ctx.campaignScore?.status?.();
     const result = campaign?.result;
     const showDebrief = phase === "won" && !!result;
+    const showMissionWrap = showDebrief && !menu.victoryWrapSeen;
+    const menuFrame = root.querySelector(".sf-menu__frame");
+    if (menuFrame) {
+      menuFrame.inert = showMissionWrap;
+      if (showMissionWrap) menuFrame.setAttribute("aria-hidden", "true");
+      else menuFrame.removeAttribute("aria-hidden");
+    }
+    if (missionWrap) {
+      missionWrap.hidden = !showMissionWrap;
+      missionWrap.setAttribute("aria-hidden", showMissionWrap ? "false" : "true");
+      const saint = missionWrap.querySelector("[data-mission-wrap-saint]");
+      if (saint) saint.textContent = `${ctx.playerCharacter?.name || "The Saint"} fell from orbit. Vesper-IX rises from silence.`;
+    }
     if (debrief) {
-      debrief.hidden = !showDebrief;
+      debrief.hidden = !showDebrief || showMissionWrap;
       debrief.dataset.newHigh = result?.newHighScore ? "true" : "false";
     }
     if (showDebrief) {
@@ -2196,7 +2226,12 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render, setQualit
     if (focusRaf) cancelAnimationFrame(focusRaf);
     focusRaf = requestAnimationFrame(() => {
       focusRaf = 0;
-      if (!destroyed && menu.open) root.querySelector("[data-menu-close]")?.focus();
+      if (!destroyed && menu.open) {
+        const focusTarget = !root.querySelector("[data-mission-wrap]")?.hidden
+          ? root.querySelector('[data-menu-action="mission-record"]')
+          : root.querySelector("[data-menu-close]");
+        focusTarget?.focus();
+      }
     });
     menuSfx("open");
     announce("Field menu open. Operation paused.");
@@ -2621,6 +2656,16 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render, setQualit
       }
       return;
     }
+    if (target.matches('[data-menu-action="mission-record"]')) {
+      menu.victoryWrapSeen = true;
+      refreshOperation();
+      menuSfx("confirm");
+      announce("Mission record opened.");
+      requestAnimationFrame(() => {
+        if (!destroyed && menu.open) root.querySelector("#sf-debrief-title")?.focus?.({ preventScroll: true });
+      });
+      return;
+    }
     if (target.matches('[data-menu-action="unstuck"]') || target.matches('[data-setting-action="unstuck"]')) {
       ctx.player?.unstuck?.("menu");
       menuSfx("confirm");
@@ -2960,6 +3005,7 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render, setQualit
   document.addEventListener("rainbot:sfx-muted", onSfxMuted);
 
   const stopWon = ctx.mission.bus?.on?.("won", () => {
+    menu.victoryWrapSeen = false;
     scheduleUiTimeout(() => openMenu("operation", { force: true }), 900);
   });
   const stopLost = ctx.mission.bus?.on?.("lost", () => {
@@ -3085,6 +3131,10 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render, setQualit
         respecArmed: doctrine.respecUntil > performance.now(),
       },
       debrief: ctx.campaignScore?.status?.() || null,
+      missionWrap: {
+        visible: !root.querySelector("[data-mission-wrap]")?.hidden,
+        acknowledged: menu.victoryWrapSeen,
+      },
       careerRecovery: {
         active: !!readCareerConflict()?.active,
         armedChoice: careerRecovery.armedChoice,

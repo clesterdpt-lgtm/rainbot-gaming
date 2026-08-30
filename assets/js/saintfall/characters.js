@@ -24,8 +24,8 @@ const portrait = (file) => new URL(
 export const SAINTFALL_CHARACTERS = Object.freeze([
   Object.freeze({
     id: "vesper-reliquary",
-    name: "Vesper Reliquary",
-    role: "Balanced Vanguard",
+    name: "Saint Aurel",
+    role: "Saint Vanguard",
     summary: "Censer-lance volleys, melee procession, Aegis guard, and sustained flight make a flexible all-range vanguard.",
     traits: Object.freeze(["CENSER-LANCE", "AEGIS GUARD", "SUSTAINED FLIGHT"]),
     accent: "gold",
@@ -34,8 +34,8 @@ export const SAINTFALL_CHARACTERS = Object.freeze([
   }),
   Object.freeze({
     id: "white-vigil",
-    name: "White Vigil",
-    role: "Reliquary Scout",
+    name: "Saint Veyra",
+    role: "Saint Scout",
     summary: "Twin crescent emitters, Vigil Step, quick blades, and an aimed aerial Stoop reward relentless movement.",
     traits: Object.freeze(["CRESCENT VOLLEY", "VIGIL STEP", "AERIAL STOOP"]),
     accent: "verdigris",
@@ -44,8 +44,8 @@ export const SAINTFALL_CHARACTERS = Object.freeze([
   }),
   Object.freeze({
     id: "bastion-penitent",
-    name: "Bastion Penitent",
-    role: "Reliquary Bulwark",
+    name: "Saint Torren",
+    role: "Saint Bulwark",
     summary: "Reliquary hammer, unlimited tower guard, Hammer Cast, and a powered leap favor committed advances.",
     traits: Object.freeze(["RELIQUARY HAMMER", "TOWER GUARD", "HAMMER CAST"]),
     accent: "crimson",
@@ -58,11 +58,17 @@ const byId = new Map(SAINTFALL_CHARACTERS.map((character) => [character.id, char
 const aliases = new Map([
   ["vesper", "vesper-reliquary"],
   ["reliquary", "vesper-reliquary"],
+  ["aurel", "vesper-reliquary"],
+  ["saint-aurel", "vesper-reliquary"],
   ["white", "white-vigil"],
   ["vigil", "white-vigil"],
+  ["veyra", "white-vigil"],
+  ["saint-veyra", "white-vigil"],
   ["bastion", "bastion-penitent"],
   ["penitent", "bastion-penitent"],
   ["red-bastion", "bastion-penitent"],
+  ["torren", "bastion-penitent"],
+  ["saint-torren", "bastion-penitent"],
 ]);
 
 export function resolveSaintfallCharacter(id) {

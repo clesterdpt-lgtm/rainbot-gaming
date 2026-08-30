@@ -320,7 +320,7 @@ export function buildSummitHud(ctx, host) {
       const held = Math.max(0, Math.min(b.maxCharges, b.charges));
       const pips = "◆".repeat(held) + "◇".repeat(Math.max(0, b.maxCharges - held));
       kitEls.abilityValue.textContent = b.charges < b.maxCharges
-        ? `${pips} ${b.rechargeIn.toFixed(1)}S` : pips;
+        ? `${pips} ${b.rechargeIn.toFixed(1)}S CD` : `${pips} READY`;
       kitEls.ability.dataset.state = b.charges > 0 ? "ready" : "cooldown";
     }
     if (status.block) {
@@ -347,7 +347,7 @@ export function buildSummitHud(ctx, host) {
       kitEls.castValue.textContent = h.phase === "out" ? "CAST"
         : h.phase === "return" ? "RETURNING"
           : h.phase === "windup" ? "WINDING"
-            : h.cooldown > 0 ? `${h.cooldown.toFixed(1)}S` : "READY";
+            : h.cooldown > 0 ? `${h.cooldown.toFixed(1)}S CD` : "READY";
       kitEls.cast.dataset.state = h.phase !== "held" ? "active"
         : h.cooldown > 0 ? "cooldown" : "ready";
     }

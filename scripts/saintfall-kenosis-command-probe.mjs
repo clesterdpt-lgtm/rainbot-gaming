@@ -404,16 +404,27 @@ async function auditOperative(browser, character) {
         const inst = T.enemies.live.find((e) => e.key === "gleaner");
         if (!inst) return null;
         inst.stunTime = 999;
-        const before = T.combat.player.hp;
+        /* COUNTED, NOT INFERRED FROM HP. The first cut measured the
+           player's health delta and was flaky run to run - regen, the
+           post-hit grace and six bolts on one identical path share a
+           single fate. `projectileState()` already counts what this
+           check is actually about: how many bolts REACHED the player
+           and how many did damage. */
+        const t0 = T.combat.projectileState();
         const shots = [];
         for (let i = 0; i < 6; i += 1) {
           const r = T.combat.launchEnemyProjectile(inst, inst.spec, {
-            horizontalSpread: 0, verticalSpread: 0, directAimChance: 1,
+            horizontalSpread: 0.02, verticalSpread: 0.01, directAimChance: 1,
           });
           if (r && Number.isFinite(r.span)) shots.push(Number(r.span.toFixed(2)));
         }
         T.advanceTime(2.5, 1 / 60);
-        const out = { spans: shots, took: before - T.combat.player.hp };
+        const t1 = T.combat.projectileState();
+        const out = {
+          spans: shots,
+          contacts: t1.contacts - t0.contacts,
+          hits: t1.damagingHits - t0.damagingHits,
+        };
         T.clearEnemies();
         T.combat.clearProjectiles?.();
         T.combat.player.hp = T.combat.player.maxHp;
@@ -444,12 +455,19 @@ async function auditOperative(browser, character) {
         width: gate ? gate.width : null };
     }, { seconds: RESOLVE_SECONDS });
     const gs = effects.gateSolid;
+    /* CONTACTS, not damage. Bolts fired at a Bastion reach him and are
+       then eaten by the tower shield he is holding - `damagingHits`
+       came back 0 or 1 at random and had nothing to do with the wall.
+       What the Gate is for is stopping a bolt REACHING you, and the
+       shield's opinion of the ones that get through is a different
+       system's business. */
     check("bastion-penitent: bolts die at the Gate instead of at the player",
       gs.open && gs.walled
-      && gs.open.took > 0 && gs.walled.took === 0
+      && gs.open.contacts > 0 && gs.walled.contacts === 0 && gs.walled.hits === 0
       && Math.min(...gs.walled.spans) < Math.min(...gs.open.spans) * 0.75,
       { openSpans: gs.open?.spans, walledSpans: gs.walled?.spans,
-        openTook: gs.open?.took, walledTook: gs.walled?.took });
+        open: { contacts: gs.open?.contacts, hits: gs.open?.hits },
+        walled: { contacts: gs.walled?.contacts, hits: gs.walled?.hits } });
     check("bastion-penitent: the Gate is solid underfoot and open above it",
       gs.atWall === true && gs.beside === false && gs.overhead === false,
       { atWall: gs.atWall, beside: gs.beside, overhead: gs.overhead });

@@ -166,6 +166,20 @@ export async function start({ boot, build } = {}) {
   progress(0.22, "Opening the eye");
   const render = createRenderer(ctx, canvas);
   ctx.scene = render.scene;
+  /* THE RENDERER ITSELF, not just its scene.
+   *
+   * The summit and the atoll have both published this for a while and
+   * the campaign never did, which was invisible until the Kenosis
+   * loadout came across in m111: `summit-loadout.aimPoint()` reads
+   * `ctx.render?.camera` to find the reticle's world point, got
+   * nothing here, and silently fell back to the emitter's own rest
+   * axis - so the White Vigil's crescents left the barrels pointing
+   * wherever the arms happened to hang. Measured before this line:
+   * 56 to 88 degrees off the camera, firing into the ground.
+   *
+   * `hud.js` also reaches for `ctx.render?.renderer?.domElement` when
+   * it places the reticle, and gets it now too. */
+  ctx.render = render;
   ctx.camera = render.camera;
   ctx.materials = makeMaterials(THREE, atmos);
   render.applyAtmosphere(atmos);

@@ -107,6 +107,17 @@ const KITS = {
     hammer: {
       damage: 260, returnDamage: 130, speed: 34, returnSpeed: 40,
       range: 46, cooldown: 8.0, knockdownStun: 3.0, knockback: 14,
+      /* THE FLYER ASSIST. The cast is the Bastion's whole answer to
+         anything airborne - he cannot fly, his hammer is the only
+         thing he owns that leaves the ground, and a small fast target
+         at 30 metres against an open sky is close to unhittable with
+         a chase camera and a thrown weapon.
+         So the throw SNAPS onto a flyer inside this cone. Deliberately
+         flyers only: ground targets are already reachable and a
+         magnetised hammer against a Thresher pack would take the aim
+         out of the player's hands. */
+      assistCone: 0.38,     // ~22 degrees off the reticle
+      assistLead: 0.55,     // fraction of flight time led, see launchHammer
     },
   },
 };
@@ -1172,6 +1183,9 @@ export function buildKenosisKit(ctx, player, loadout) {
     pendingLaunch: false,
     wakeAt: 0,
     spinPhase: 0,
+    /* Which flyer the last cast snapped onto, or null for a free
+       throw. Read by the HUD dock and by the assist probe. */
+    assisted: null,
   };
   const hammerPart = isBastion
     ? (loadout.parts || []).find((part) => part.spec.id === "bastion-hammer") || null
@@ -1243,6 +1257,80 @@ export function buildKenosisKit(ctx, player, loadout) {
     return true;
   }
 
+  /* WATCHING THE FLYERS MOVE.
+     `enemies.js` publishes no velocity - a creature is a position that
+     changes - so leading a target means measuring it. One Map entry
+     per airborne body, refreshed each frame from the position delta
+     and dropped when it lands or dies, which keeps this to a handful
+     of entries even in a full swarm. */
+  const assistTrack = new Map();
+  function trackFlyers(dt) {
+    if (dt <= 1e-5) return;
+    const live = ctx.enemies?.live || [];
+    for (const inst of live) {
+      if (!inst || inst.id === undefined) continue;
+      if (!inst.spec?.flies || inst.grounded || inst.health <= 0) {
+        assistTrack.delete(inst.id);
+        continue;
+      }
+      const prev = assistTrack.get(inst.id);
+      if (prev) {
+        /* Smoothed: one frame's delta is noisy enough that a hovering
+           kite reads as darting. */
+        const k = 0.35;
+        prev.vx += ((inst.x - prev.x) / dt - prev.vx) * k;
+        prev.vy += ((inst.y - prev.y) / dt - prev.vy) * k;
+        prev.vz += ((inst.z - prev.z) / dt - prev.vz) * k;
+        prev.x = inst.x; prev.y = inst.y; prev.z = inst.z;
+      } else {
+        assistTrack.set(inst.id, {
+          x: inst.x, y: inst.y, z: inst.z, vx: 0, vy: 0, vz: 0,
+        });
+      }
+    }
+    if (assistTrack.size > 24) {
+      const alive = new Set(live.map((e) => e?.id));
+      for (const id of assistTrack.keys()) if (!alive.has(id)) assistTrack.delete(id);
+    }
+  }
+
+  /* The best flyer to snap onto, or null. "Best" is the one closest
+     to the reticle AXIS rather than the nearest one: with two kites in
+     frame the player has already said which they meant by pointing at
+     it, and picking by distance would overrule them. */
+  const assistCentre = new THREE.Vector3();
+  function flyerAssist(from, dir) {
+    const cone = Math.max(0, tune("castAssistCone", KIT.hammer.assistCone));
+    if (cone <= 0) return null;
+    let best = null;
+    for (const inst of ctx.enemies?.live || []) {
+      if (!inst || !inst.spec?.flies || inst.grounded) continue;
+      if (inst.health <= 0 || inst.state === "death") continue;
+      if (ctx.combat?.targetable && !ctx.combat.targetable(inst)) continue;
+      const box = ctx.combat?.hitbox?.[inst.key];
+      const cy = inst.y + (box ? (box.y0 + box.y1) * 0.5 : 1.1);
+      assistCentre.set(inst.x, cy, inst.z);
+      const dx = assistCentre.x - from.x;
+      const dy = assistCentre.y - from.y;
+      const dz = assistCentre.z - from.z;
+      const dist = Math.hypot(dx, dy, dz);
+      if (dist < 2.5 || dist > KIT.hammer.range) continue;
+      const cos = (dx * dir.x + dy * dir.y + dz * dir.z) / dist;
+      const ang = Math.acos(clamp(cos, -1, 1));
+      if (ang > cone) continue;
+      /* Not through a wall. Snapping onto something behind cover
+         spends the cast on masonry and reads as the assist stealing
+         the throw. */
+      const wall = ctx.collide?.rayBlock?.(from.x, from.y, from.z,
+        dx / dist, dy / dist, dz / dist, dist);
+      if (Number.isFinite(wall) && wall < dist - 0.5) continue;
+      if (!best || ang < best.ang) {
+        best = { ang, dist, inst, x: assistCentre.x, y: cy, z: assistCentre.z };
+      }
+    }
+    return best;
+  }
+
   function launchHammer() {
     buildHammerVisual();
     handPosition(handWorld);
@@ -1257,7 +1345,27 @@ export function buildKenosisKit(ctx, player, loadout) {
       hammerVel.set(Math.sin(ps.yaw), 0, Math.cos(ps.yaw));
     }
     if (hammerVel.lengthSq() < 1e-8) hammerVel.set(0, 0, 1);
-    hammerVel.normalize().multiplyScalar(KIT.hammer.speed);
+    hammerVel.normalize();
+    /* SNAP ONTO A FLYER, and lead it. The hammer covers its 46m in
+       about 1.35 seconds, which is long enough for a kite to leave the
+       point it was aimed at - so the throw is put part of the way
+       toward where the target is heading, using the movement the kit
+       has watched since the last cast. */
+    const assist = flyerAssist(handWorld, hammerVel);
+    hammer.assisted = assist ? assist.inst.key : null;
+    if (assist) {
+      const flight = assist.dist / Math.max(1e-3, KIT.hammer.speed);
+      const lead = KIT.hammer.assistLead * flight;
+      const track = assistTrack.get(assist.inst.id);
+      hammerVel.set(
+        assist.x - handWorld.x + (track ? track.vx * lead : 0),
+        assist.y - handWorld.y + (track ? track.vy * lead : 0),
+        assist.z - handWorld.z + (track ? track.vz * lead : 0),
+      );
+      if (hammerVel.lengthSq() < 1e-8) hammerVel.set(0, 0, 1);
+      hammerVel.normalize();
+    }
+    hammerVel.multiplyScalar(KIT.hammer.speed);
     hammerPos.copy(handWorld);
     hammerHits.clear();
     hammer.phase = "out";
@@ -1370,6 +1478,7 @@ export function buildKenosisKit(ctx, player, loadout) {
 
   function updateHammer(dt) {
     if (!isBastion) return;
+    trackFlyers(dt);
     hammer.cooldown = Math.max(0, hammer.cooldown - dt);
     const action = player.actionState;
     if (hammer.pendingLaunch) {
@@ -1586,6 +1695,9 @@ export function buildKenosisKit(ctx, player, loadout) {
       } : null,
       hammer: isBastion ? {
         phase: hammer.phase,
+        assisted: hammer.assisted || null,
+        assistCone: KIT.hammer.assistCone,
+        tracking: assistTrack.size,
         cooldown: Number(hammer.cooldown.toFixed(2)),
         cooldownSeconds: KIT.hammer.cooldown,
         casts: hammer.casts,

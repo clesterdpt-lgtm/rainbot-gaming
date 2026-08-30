@@ -56,6 +56,9 @@ import { buildHud } from "saintfall/hud.js";
 import { buildTouchControls } from "saintfall/touch.js";
 import { buildTutorial } from "saintfall/tutorial.js";
 import { buildDropIntro } from "saintfall/intro.js";
+import { buildSummitLoadout } from "saintfall/summit-loadout.js";
+import { buildSummitDischarge } from "saintfall/summit-discharge.js";
+import { buildKenosisKit } from "saintfall/summit-kenosis.js";
 import { buildSaveSystem } from "saintfall/save.js";
 import { buildGameUi, readStoredSettings } from "saintfall/ui.js";
 import { buildDifficulty } from "saintfall/difficulty.js";
@@ -69,6 +72,8 @@ export async function start({ boot, build } = {}) {
   const apostateTestStart = params.get("boss") === "apostate";
   const qa = params.has("qa") || apostateTestStart;
   const character = chooseSaintfallCharacter({ params, qa });
+  const usesOperativeKit = character.id === "white-vigil"
+    || character.id === "bastion-penitent";
   const autoStartNewGame = params.get("newGame") === "1";
   /* The reload handoff is one-shot. Remove it before any gameplay
      starts so refreshing during the descent returns to the entry
@@ -138,6 +143,7 @@ export async function start({ boot, build } = {}) {
       role: character.role,
       accent: character.accent,
     },
+    operativeKitActive: usesOperativeKit,
     deferAmbience: introEnabled,
     runtime: {
       phase: introEnabled ? "awaiting-deploy" : "playing",
@@ -233,9 +239,26 @@ export async function start({ boot, build } = {}) {
      and a rise close enough in front to stop a shot at 13m. */
   player.spawn(DROP_SITE.x, DROP_SITE.z, DROP_SITE.yaw);
 
+  /* White Vigil and Bastion carry the same authored weapons in the
+     campaign that they carry on Kenosis. The loadout is built before
+     the compatibility weapon module so the visible hands, grips and
+     emitters are always the operative's; the campaign module remains
+     present (but visually dormant) because old field-save schemas
+     still require its normalized heat record. */
+  const operativeLoadout = usesOperativeKit
+    ? await buildSummitLoadout(ctx, player) : null;
+  if (operativeLoadout) {
+    ctx.playerLoadout = operativeLoadout;
+    ctx.loadout = operativeLoadout;
+  }
+
   const weapons = buildWeapons(ctx);
   ctx.weapons = weapons;
-  weapons.equip("autogun", player.figure.weaponMount);
+  const campaignWeapon = weapons.equip("autogun", player.figure.weaponMount);
+  if (usesOperativeKit && campaignWeapon) {
+    campaignWeapon.root.visible = false;
+    if (campaignWeapon.reliquaryLight) campaignWeapon.reliquaryLight.intensity = 0;
+  }
 
   const jetpack = buildJetpack(ctx, player);
   ctx.jetpack = jetpack;
@@ -247,12 +270,37 @@ export async function start({ boot, build } = {}) {
   ctx.mission = mission;
   const breaches = buildBreaches(ctx);
   ctx.breaches = breaches;
-  const shield = buildShield(ctx, player);
+  let shield = buildShield(ctx, player);
   ctx.shield = shield;
   const boost = buildBoost(ctx, player);
   ctx.boost = boost;
   const slam = buildSlam(ctx, player);
   ctx.slam = slam;
+
+  /* The active doctrines are the operatives' actual input/combat
+     adapters, not cosmetic labels: Wing owns twin crescent fire,
+     Vigil Step and the aimed Stoop; Censer owns the hammer, tower
+     guard, Hammer Cast, powered leap and Penitent's Fall. They sit on
+     the full campaign combat stack exactly as they do on Kenosis. */
+  const kenosis = operativeLoadout
+    ? buildKenosisKit(ctx, player, operativeLoadout) : null;
+  const noShield = {
+    config: { moveSpeed: 0 },
+    state: { active: false, requested: false },
+    beginFrame: () => null,
+    updateVisual: () => {},
+    reset: () => {},
+    status: () => ({ active: false, requested: false }),
+  };
+  if (kenosis) {
+    ctx.kenosis = kenosis;
+    shield = kenosis.blockModule || noShield;
+    ctx.shield = shield;
+  }
+  const playerDischarge = operativeLoadout
+    ? buildSummitDischarge(ctx, player, operativeLoadout, kenosis?.dischargeSpec)
+    : null;
+  if (playerDischarge) ctx.playerDischarge = playerDischarge;
   /* The burrower owns its own behaviour, its projectiles and the venom
      they leave. Built after combat because it damages through it, and
      before audio because audio subscribes to its bus. */
@@ -475,8 +523,13 @@ export async function start({ boot, build } = {}) {
     terrain.updateLod(cam);
     enemies.update(d, cam);
     if (opts.figure) {
-      weapons.update(d, player, render.camera);
-      player.postUpdate(d);
+      if (usesOperativeKit) {
+        player.postUpdate(d);
+        operativeLoadout?.update?.(d);
+      } else {
+        weapons.update(d, player, render.camera);
+        player.postUpdate(d);
+      }
       jetpack.updateVisual(d);
       shield.updateVisual(d);
     }
@@ -574,6 +627,9 @@ export async function start({ boot, build } = {}) {
     vfx,
     enemies,
     weapons,
+    loadout: operativeLoadout,
+    kenosis,
+    discharge: playerDischarge,
     jetpack,
     boost,
     slam,
@@ -1042,6 +1098,14 @@ export async function start({ boot, build } = {}) {
       player.input.clearAll?.();
       weapons.setAds(0);
     }
+    if (usesOperativeKit) {
+      /* The operative kit is the one input consumer for these two
+         bodies. It routes the held mouse buttons and E into their
+         authored verbs, while the crescent module owns the Vigil's
+         continuous primary fire. */
+      kenosis?.update?.(d);
+      playerDischarge?.update?.(d);
+    } else {
     /* FLATTENED. `player.applyStun` takes the hands as well as the
        feet - see its note - and this is the half of that the player
        module cannot enforce, because what a press MEANS is decided
@@ -1205,6 +1269,7 @@ export async function start({ boot, build } = {}) {
         && !shield.state.active && player.input.state.ads ? 1 : 0);
     }
     updateStow(d);
+    }
     combat.update(d);
     /* After combat, because the burrower damages through it and reads
        the player position combat has just resolved against - and before
@@ -1310,11 +1375,19 @@ export async function start({ boot, build } = {}) {
     advanceSky(d, render.camera, draw);
     terrain.updateLod(render.camera);
     enemies.update(d, render.camera);
-    stepGame(d);
-    weapons.update(d, player, render.camera);
-    player.postUpdate(d);
-    flushShot();
-    flushFurnaceLance();
+    if (usesOperativeKit) {
+      /* Kenosis weapon mounts are solved from the final live palms,
+         and their attacks read those sockets in the same frame. */
+      player.postUpdate(d);
+      operativeLoadout?.update?.(d);
+      stepGame(d);
+    } else {
+      stepGame(d);
+      weapons.update(d, player, render.camera);
+      player.postUpdate(d);
+      flushShot();
+      flushFurnaceLance();
+    }
     jetpack.updateVisual(d);
     shield.updateVisual(d);
     vfx.update(d, render.camera);

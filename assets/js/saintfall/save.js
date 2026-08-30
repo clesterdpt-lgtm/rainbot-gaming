@@ -1596,6 +1596,12 @@ export function buildSaveSystem(ctx, options = {}) {
     ctx.slam?.restore?.(snapshot.slam || {});
     ctx.shield?.reset?.(true);
     ctx.jetpack?.reset?.(true);
+    /* Operative abilities are intentionally transient, just like an active
+       melee swing or a lance heat cycle. A field restore must pull Bastion's
+       thrown hammer back into his hand and clear White Vigil crescents rather
+       than leaking effects from the timeline that was just replaced. */
+    ctx.kenosis?.reset?.();
+    ctx.playerDischarge?.reset?.();
     if (ctx.jetpack?.state) {
       const maxFuel = Math.max(1, finite(ctx.jetpack.config?.maxFuel,
         snapshot.reliquary?.maxFuel || 100));

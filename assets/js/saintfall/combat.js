@@ -2224,13 +2224,14 @@ export function buildCombat(ctx) {
     sweepId = 0) {
     const ps = ctx.player.state;
     /* Two doors, same as player.meleeSwing: the campaign's weapons
-       module, or - only where no weapons module exists at all - a
-       Kenosis loadout's published `meleeSpec` (melee/reach/damage for
-       the operative's held props). The fallback never engages while
-       `ctx.weapons` is present, so a ranged-mode lance still refuses. */
+       module, or a selected operative's Kenosis loadout. The full
+       campaign keeps a dormant weapons module for save compatibility,
+       so the explicit operative flag is authoritative; Vesper's
+       ranged-mode lance still refuses exactly as before. */
     const w = ctx.weapons && ctx.weapons.current;
-    const spec = w && w.spec.melee ? w.spec
-      : (!ctx.weapons && ctx.loadout?.meleeSpec?.melee ? ctx.loadout.meleeSpec : null);
+    const kitSpec = (ctx.operativeKitActive || !ctx.weapons)
+      && ctx.loadout?.meleeSpec?.melee ? ctx.loadout.meleeSpec : null;
+    const spec = kitSpec || (w && w.spec.melee ? w.spec : null);
     if (!spec) return 0;
     const isPierce = Math.abs(sweepId) === 6 || comboStep === 6;
     const reach = spec.reach * lunge * MELEE_CONFIG.reachMultiplier * (isPierce ? 1.15 : 1);

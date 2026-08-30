@@ -3589,14 +3589,16 @@ export async function createPlayer(ctx, canvas) {
    *
    *  The armed check has two doors. The campaign door is unchanged:
    *  `ctx.weapons.current` must be a melee-mode pattern. The Kenosis
-   *  door only opens where there is NO weapons module at all - those
-   *  levels carry their blades through `ctx.loadout`, and the loadout
+   *  door opens where the selected operative owns the weapon even if
+   *  the campaign keeps a dormant compatibility weapons module for
+   *  old field saves. Those bodies carry their blades through `ctx.loadout`, and the loadout
    *  publishes a `meleeSpec` (melee/reach/damage) for the operative's
-   *  held props. Gating the fallback on `!ctx.weapons` means a
+   *  held props. Gating the fallback on the explicit operative flag means a
    *  campaign lance in ranged mode still refuses exactly as before. */
   function meleeSwing(capturedAimYaw = null) {
     const w = ctx.weapons && ctx.weapons.current;
-    const kitSpec = !ctx.weapons && ctx.loadout?.meleeSpec?.melee
+    const kitSpec = (ctx.operativeKitActive || !ctx.weapons)
+      && ctx.loadout?.meleeSpec?.melee
       ? ctx.loadout.meleeSpec : null;
     if ((!w || !w.spec.melee) && !kitSpec) return false;
     const aimYaw = Number.isFinite(capturedAimYaw)

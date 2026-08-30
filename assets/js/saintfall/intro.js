@@ -1391,7 +1391,7 @@ function buildMarkup(host, characters = [], selectedCharacterId = "") {
       <section class="sf-entry__panel sf-entry__panel--characters" data-intro-panel="characters"
         aria-labelledby="sf-entry-character-title" hidden>
         <header><span id="sf-entry-character-title">CHOOSE YOUR SAINT</span><button type="button" data-intro-panel-close aria-label="Back to main menu">×</button></header>
-        <p class="sf-entry__character-brief">Your operative changes movement, acceleration, and reliquary traversal. The campaign arsenal remains mission-standard.</p>
+        <p class="sf-entry__character-brief">Each operative carries their own weapons, traversal profile, and active doctrine into the full campaign.</p>
         <div class="sf-entry__characters" role="radiogroup" aria-label="Playable operatives">${roster}</div>
         <button class="sf-entry__character-confirm" type="button" data-intro-character-confirm>BEGIN AS ${escapeEntryText(characters.find((character) => character.id === selectedCharacterId)?.name || characters[0]?.name || "VESPER RELIQUARY")}</button>
       </section>

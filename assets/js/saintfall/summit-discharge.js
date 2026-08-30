@@ -336,11 +336,19 @@ export function buildSummitDischarge(ctx, player, loadout, spec = null) {
     };
   }
 
-  function destroy() {
+  function reset() {
     while (shots.length) removeShot(shots[0]);
+    cooldown = 0;
+    warmup = 0;
+    alternating = 0;
+    heldLast = false;
+  }
+
+  function destroy() {
+    reset();
     geometry.dispose();
     ctx.scene.remove(group);
   }
 
-  return { group, update, fireOnce, status, destroy };
+  return { group, update, fireOnce, status, reset, destroy };
 }

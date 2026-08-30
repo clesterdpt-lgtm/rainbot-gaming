@@ -1309,7 +1309,33 @@ function buildDescentRig(ctx, reducedMotion, site) {
 
 /* ------------------------------- markup ------------------------------- */
 
-function buildMarkup(host) {
+function escapeEntryText(value) {
+  return String(value ?? "").replace(/[&<>"']/g, (character) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;",
+  }[character]));
+}
+
+function buildMarkup(host, characters = [], selectedCharacterId = "") {
+  const roster = characters.map((character, index) => {
+    const selected = character.id === selectedCharacterId;
+    const traits = (character.traits || []).map((trait) =>
+      `<span>${escapeEntryText(trait)}</span>`).join("");
+    return `
+      <button class="sf-entry__character-card sf-entry__character-card--${escapeEntryText(character.accent || "gold")}" type="button"
+        data-intro-character="${escapeEntryText(character.id)}" role="radio" aria-checked="${selected ? "true" : "false"}"
+        tabindex="${selected || (!selectedCharacterId && index === 0) ? "0" : "-1"}">
+        <span class="sf-entry__character-portrait">
+          <img src="${escapeEntryText(character.portrait)}" alt="Portrait of ${escapeEntryText(character.name)}" />
+        </span>
+        <span class="sf-entry__character-copy">
+          <small>${escapeEntryText(character.role)}</small>
+          <strong>${escapeEntryText(character.name)}</strong>
+          <span>${escapeEntryText(character.summary)}</span>
+          <span class="sf-entry__character-traits" aria-label="Playstyle traits">${traits}</span>
+        </span>
+      </button>`;
+  }).join("");
+
   host.innerHTML = `
     <div class="sf-intro__art" aria-hidden="true"></div>
     <div class="sf-intro__letterbox sf-intro__letterbox--top"></div>
@@ -1361,6 +1387,13 @@ function buildMarkup(host) {
             <span><small>RELIQUARY III</small><strong data-intro-slot-district>EMPTY</strong></span><b data-intro-slot-time>—</b>
           </button>
         </div>
+      </section>
+      <section class="sf-entry__panel sf-entry__panel--characters" data-intro-panel="characters"
+        aria-labelledby="sf-entry-character-title" hidden>
+        <header><span id="sf-entry-character-title">CHOOSE YOUR SAINT</span><button type="button" data-intro-panel-close aria-label="Back to main menu">×</button></header>
+        <p class="sf-entry__character-brief">Your operative changes movement, acceleration, and reliquary traversal. The campaign arsenal remains mission-standard.</p>
+        <div class="sf-entry__characters" role="radiogroup" aria-label="Playable operatives">${roster}</div>
+        <button class="sf-entry__character-confirm" type="button" data-intro-character-confirm>BEGIN AS ${escapeEntryText(characters.find((character) => character.id === selectedCharacterId)?.name || characters[0]?.name || "VESPER RELIQUARY")}</button>
       </section>
       <section class="sf-entry__panel sf-entry__panel--options" data-intro-panel="options" aria-label="Options" hidden>
         <header><span>OPTIONS</span><button type="button" data-intro-panel-close aria-label="Close options">×</button></header>
@@ -1471,7 +1504,12 @@ export function buildDropIntro(ctx, options = {}) {
       materials: own.materials + p.materials,
     };
   })();
-  buildMarkup(host);
+  const characters = Array.isArray(options.characters)
+    ? options.characters.filter((character) => character?.id && character?.name && character?.portrait)
+    : [];
+  const initialCharacter = characters.find((character) => character.id === options.characterId)
+    || characters[0] || null;
+  buildMarkup(host, characters, initialCharacter?.id || "");
 
   const el = (selector) => host.querySelector(selector);
   const startButton = el("[data-intro-start]");
@@ -1479,6 +1517,8 @@ export function buildDropIntro(ctx, options = {}) {
   const gate = el(".sf-intro__gate");
   const loadToggle = el("[data-intro-load-toggle]");
   const optionsToggle = el("[data-intro-options-toggle]");
+  const characterCards = [...host.querySelectorAll("[data-intro-character]")];
+  const characterConfirm = el("[data-intro-character-confirm]");
   const saveStatusEl = el("[data-intro-save-status]");
   const continueMetaEl = el("[data-intro-continue-meta]");
   const skipButton = el("[data-intro-skip]");
@@ -1524,6 +1564,7 @@ export function buildDropIntro(ctx, options = {}) {
     entryPanel: "main",
     latestSave: null,
     launchMode: "menu",
+    characterId: initialCharacter?.id || null,
   };
 
   function fieldRecords() {
@@ -1544,16 +1585,17 @@ export function buildDropIntro(ctx, options = {}) {
      stage and the overlay scrollbar is invisible until touched. */
   function syncPanelScrollHint(section) {
     if (!section || section.hidden) return;
-    const list = section.querySelector(".sf-entry__slots, .sf-entry__options");
+    const list = section.querySelector(".sf-entry__slots, .sf-entry__options, .sf-entry__characters");
     if (!list) return;
     const more = list.scrollHeight - list.clientHeight - list.scrollTop > 2;
     section.dataset.scrollMore = more ? "true" : "false";
   }
-  host.querySelectorAll("[data-intro-panel] .sf-entry__slots, [data-intro-panel] .sf-entry__options")
+  host.querySelectorAll("[data-intro-panel] .sf-entry__slots, [data-intro-panel] .sf-entry__options, [data-intro-panel] .sf-entry__characters")
     .forEach((list) => list.addEventListener("scroll", () => syncPanelScrollHint(list.closest("[data-intro-panel]")), { passive: true }));
 
   function setEntryPanel(panel = "main", { focus = true } = {}) {
-    const next = panel === "load" || panel === "options" ? panel : "main";
+    const next = panel === "load" || panel === "options" || panel === "characters"
+      ? panel : "main";
     state.entryPanel = next;
     gate.dataset.entryPanel = next;
     host.querySelectorAll("[data-intro-panel]").forEach((section) => {
@@ -1563,10 +1605,31 @@ export function buildDropIntro(ctx, options = {}) {
     loadToggle.setAttribute("aria-expanded", next === "load" ? "true" : "false");
     optionsToggle.setAttribute("aria-expanded", next === "options" ? "true" : "false");
     if (focus && next !== "main") {
-      requestAnimationFrame(() => host.querySelector(
-        `[data-intro-panel="${next}"] button:not([disabled])`)?.focus?.({ preventScroll: true }));
+      requestAnimationFrame(() => {
+        const target = next === "characters"
+          ? host.querySelector(`[data-intro-character="${state.characterId}"]`)
+          : host.querySelector(`[data-intro-panel="${next}"] button:not([disabled])`);
+        target?.focus?.({ preventScroll: true });
+      });
     }
     return next;
+  }
+
+  function refreshCharacterRoster() {
+    const selected = characters.find((character) => character.id === state.characterId)
+      || characters[0] || null;
+    if (selected) state.characterId = selected.id;
+    for (const card of characterCards) {
+      const active = card.dataset.introCharacter === state.characterId;
+      card.classList.toggle("is-active", active);
+      card.setAttribute("aria-checked", active ? "true" : "false");
+      card.tabIndex = active ? 0 : -1;
+    }
+    if (characterConfirm) {
+      characterConfirm.disabled = !selected || state.mode !== "awaiting-gesture";
+      characterConfirm.textContent = selected ? `BEGIN AS ${selected.name.toUpperCase()}` : "SELECT AN OPERATIVE";
+    }
+    return selected;
   }
 
   function refreshEntryMenu() {
@@ -1636,6 +1699,7 @@ export function buildDropIntro(ctx, options = {}) {
     });
     const difficultyBlurbEl = host.querySelector("[data-intro-difficulty-blurb]");
     if (difficultyBlurbEl) difficultyBlurbEl.textContent = difficultyBlurb(difficulty);
+    refreshCharacterRoster();
     return state.latestSave;
   }
 
@@ -1644,6 +1708,8 @@ export function buildDropIntro(ctx, options = {}) {
     continueButton.disabled = disabled || !state.latestSave;
     loadToggle.disabled = disabled;
     optionsToggle.disabled = disabled;
+    characterConfirm.disabled = disabled;
+    characterCards.forEach((button) => { button.disabled = disabled; });
     host.querySelectorAll("[data-intro-load-kind]").forEach((button) => {
       if (disabled) button.disabled = true;
     });
@@ -2445,6 +2511,17 @@ export function buildDropIntro(ctx, options = {}) {
     return true;
   }
 
+  async function beginNewGame() {
+    if (state.mode !== "awaiting-gesture" || !state.characterId) return false;
+    const reloading = options.onCharacterChange?.(state.characterId) === true;
+    if (reloading) {
+      setEntryActionsDisabled(true);
+      return true;
+    }
+    setEntryPanel("main", { focus: false });
+    return start();
+  }
+
   async function resumeSaved(kind, index = -1) {
     if (state.mode !== "awaiting-gesture" || !state.revealed || state.disposed
       || document.hidden || document.body.classList.contains("rb-escape-menu-open")) return false;
@@ -2662,9 +2739,11 @@ export function buildDropIntro(ctx, options = {}) {
     state.disposed = true;
     observer?.disconnect();
     stopSaveSubscription?.();
-    startButton.removeEventListener("click", start);
     continueButton.removeEventListener("click", onContinue);
     gate.removeEventListener("click", onGateClick);
+    gate.removeEventListener("keydown", onGateKeyDown);
+    host.removeEventListener("input", onIntroRangeInput);
+    host.removeEventListener("change", onIntroRangeInput);
     skipButton.removeEventListener("click", skip);
     window.removeEventListener("keydown", onKeyDown, true);
     document.removeEventListener("visibilitychange", onVisibility);
@@ -2708,6 +2787,7 @@ export function buildDropIntro(ctx, options = {}) {
       mode: state.mode,
       launchMode: state.launchMode,
       entryPanel: state.entryPanel,
+      characterId: state.characterId,
       hasSave: !!state.latestSave,
       paused: state.paused,
       phase: state.phase,
@@ -2775,6 +2855,7 @@ export function buildDropIntro(ctx, options = {}) {
     refreshEntryMenu();
     applyTimeline(state.canonical, false);
     renderFrame();
+    if (options.autoStartNewGame) queueMicrotask(() => { void beginNewGame(); });
     return true;
   }
 
@@ -2791,12 +2872,16 @@ export function buildDropIntro(ctx, options = {}) {
     if (target?.closest?.("button, a, input, textarea, select, [contenteditable='true'], [role='button']")) return;
     event.preventDefault();
     if (state.latestSave) void resumeSaved(state.latestSave.kind, state.latestSave.index);
-    else void start();
+    else setEntryPanel("characters");
   }
 
   function onGateClick(event) {
     const target = event.target.closest("button");
     if (!target || state.mode !== "awaiting-gesture") return;
+    if (target.matches("[data-intro-start]")) {
+      setEntryPanel("characters");
+      return;
+    }
     if (target.matches("[data-intro-load-toggle]")) {
       setEntryPanel(state.entryPanel === "load" ? "main" : "load");
       return;
@@ -2808,11 +2893,22 @@ export function buildDropIntro(ctx, options = {}) {
     if (target.matches("[data-intro-panel-close]")) {
       const previous = state.entryPanel;
       setEntryPanel("main", { focus: false });
-      (previous === "load" ? loadToggle : optionsToggle)?.focus?.();
+      const returnTarget = previous === "load" ? loadToggle
+        : (previous === "options" ? optionsToggle : startButton);
+      returnTarget?.focus?.();
       return;
     }
     if (target.matches("[data-intro-load-kind]")) {
       void resumeSaved(target.dataset.introLoadKind, Number(target.dataset.introLoadIndex));
+      return;
+    }
+    if (target.matches("[data-intro-character]")) {
+      state.characterId = target.dataset.introCharacter;
+      refreshCharacterRoster();
+      return;
+    }
+    if (target.matches("[data-intro-character-confirm]")) {
+      void beginNewGame();
       return;
     }
     if (target.matches("[data-intro-setting]")) {
@@ -2840,6 +2936,20 @@ export function buildDropIntro(ctx, options = {}) {
     }
   }
 
+  function onGateKeyDown(event) {
+    const target = event.target?.closest?.("[data-intro-character]");
+    if (!target || state.mode !== "awaiting-gesture") return;
+    const direction = event.key === "ArrowRight" || event.key === "ArrowDown" ? 1
+      : (event.key === "ArrowLeft" || event.key === "ArrowUp" ? -1 : 0);
+    if (!direction || characterCards.length < 2) return;
+    event.preventDefault();
+    const index = characterCards.indexOf(target);
+    const next = characterCards[(index + direction + characterCards.length) % characterCards.length];
+    state.characterId = next.dataset.introCharacter;
+    refreshCharacterRoster();
+    next.focus({ preventScroll: true });
+  }
+
   function onIntroRangeInput(event) {
     const target = event.target;
     if (!target || !target.matches("[data-intro-range]")) return;
@@ -2861,9 +2971,9 @@ export function buildDropIntro(ctx, options = {}) {
   });
   observer.observe(document.body, { attributes: true, attributeFilter: ["class"] });
   const stopSaveSubscription = options.subscribeSaves?.(() => refreshEntryMenu()) || null;
-  startButton.addEventListener("click", start);
   continueButton.addEventListener("click", onContinue);
   gate.addEventListener("click", onGateClick);
+  gate.addEventListener("keydown", onGateKeyDown);
   skipButton.addEventListener("click", skip);
   window.addEventListener("keydown", onKeyDown, true);
   document.addEventListener("visibilitychange", onVisibility);
@@ -2893,6 +3003,7 @@ export function buildDropIntro(ctx, options = {}) {
        after this menu is built. */
     refreshMenu: refreshEntryMenu,
     start,
+    beginNewGame,
     resumeSaved,
     update,
     resize,

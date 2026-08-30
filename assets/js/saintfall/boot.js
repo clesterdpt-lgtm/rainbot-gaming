@@ -7,7 +7,7 @@
 (() => {
   "use strict";
 
-  const BUILD = "20260829-kenosis-doctrines-1";
+  const BUILD = "20260829-character-roster-1";
   const THREE_VERSION = "0.180.0";
   const CDN_BASES = [
     `https://cdn.jsdelivr.net/npm/three@${THREE_VERSION}/`,
@@ -118,7 +118,7 @@
   // shipped fix look like it did not work.
   const MODULES = [
     "core", "keybinds", "art", "sky", "terrain", "structures", "world", "collide", "intro-models",
-    "vfx", "render", "player", "jetpack", "jetpack-kit", "jetpacks", "boost", "slam", "shield", "boss-surface", "enemies", "weapons", "ik", "combat", "difficulty", "reveal-camera", "guard-rules", "guard-readability", "campaign-score",
+    "vfx", "render", "player", "characters", "jetpack", "jetpack-kit", "jetpacks", "boost", "slam", "shield", "boss-surface", "enemies", "weapons", "ik", "combat", "difficulty", "reveal-camera", "guard-rules", "guard-readability", "campaign-score",
     "mission", "breaches", "abbess", "coulter", "distaff", "garner", "matriarch", "stylite", "winnower", "district-bosses", "apostate", "undercroft", "progression-config", "progression", "audio", "hud", "touch", "tutorial", "intro", "pod", "save", "ui", "qa", "main",
     /* THE SECOND WORLD. Kenosis - "The White Vigil" - is a parallel
        content pack rather than a fork: it reuses render, player,

@@ -20,6 +20,12 @@ import { loadIntroVehicleModels } from "saintfall/intro-models.js";
 import { buildPod } from "saintfall/pod.js";
 import { buildVfx } from "saintfall/vfx.js";
 import { createPlayer } from "saintfall/player.js";
+import {
+  SAINTFALL_CHARACTERS,
+  chooseSaintfallCharacter,
+  persistSaintfallCharacter,
+  resolveSaintfallCharacter,
+} from "saintfall/characters.js";
 import { keybindMatches } from "saintfall/keybinds.js";
 import { buildJetpack } from "saintfall/jetpack.js";
 import { buildBoost } from "saintfall/boost.js";
@@ -62,6 +68,16 @@ export async function start({ boot, build } = {}) {
      field save or award durable career progress. */
   const apostateTestStart = params.get("boss") === "apostate";
   const qa = params.has("qa") || apostateTestStart;
+  const character = chooseSaintfallCharacter({ params, qa });
+  const autoStartNewGame = params.get("newGame") === "1";
+  /* The reload handoff is one-shot. Remove it before any gameplay
+     starts so refreshing during the descent returns to the entry
+     menu instead of silently resetting the campaign again. */
+  if (autoStartNewGame) {
+    const cleanUrl = new URL(window.location.href);
+    cleanUrl.searchParams.delete("newGame");
+    history.replaceState(null, "", cleanUrl);
+  }
   const introParam = params.get("intro");
   const tutorialParam = params.get("tutorial");
   /* Existing QA harnesses expect assets-ready to mean immediately
@@ -114,6 +130,14 @@ export async function start({ boot, build } = {}) {
     atmos,
     districts: DISTRICTS,
     qa,
+    playerFigureFactory: character.factory,
+    playerFigureName: character.name,
+    playerCharacter: {
+      id: character.id,
+      name: character.name,
+      role: character.role,
+      accent: character.accent,
+    },
     deferAmbience: introEnabled,
     runtime: {
       phase: introEnabled ? "awaiting-deploy" : "playing",
@@ -479,6 +503,20 @@ export async function start({ boot, build } = {}) {
       saves.resetCareer?.({ source: "new-game" })
         ?? progression.resetCareer?.({ source: "new-game" });
     },
+    characters: SAINTFALL_CHARACTERS,
+    characterId: character.id,
+    autoStartNewGame,
+    onCharacterChange: (id) => {
+      const next = resolveSaintfallCharacter(id);
+      if (!next) return false;
+      persistSaintfallCharacter(next);
+      if (next.id === character.id) return false;
+      const nextUrl = new URL(window.location.href);
+      nextUrl.searchParams.set("character", next.id);
+      nextUrl.searchParams.set("newGame", "1");
+      window.location.assign(nextUrl.href);
+      return true;
+    },
     settingsState: () => gameUi.settingsState?.() || {},
     onSetting: (name, value) => gameUi.setSetting?.(name, value),
     onComplete({ launchMode } = {}) {
@@ -564,6 +602,7 @@ export async function start({ boot, build } = {}) {
     saves,
     gameUi,
     tutorial,
+    playerCharacter: ctx.playerCharacter,
     runtime: ctx.runtime,
     audioFactory: buildAudio,
     fps: 0,

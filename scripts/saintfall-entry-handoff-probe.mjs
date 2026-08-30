@@ -142,6 +142,22 @@ try {
     fullPage: false,
   });
   await page.locator("[data-intro-start]").click();
+  await page.waitForFunction(() => window.__SF?.introState?.()?.entryPanel === "characters", null,
+    { timeout: 10000 });
+  const roster = await page.evaluate(() => ({
+    panel: window.__SF.introState().entryPanel,
+    cards: [...document.querySelectorAll("[data-intro-character]")].map((card) => ({
+      id: card.dataset.introCharacter,
+      role: card.querySelector("small")?.textContent?.trim(),
+      summary: card.querySelector(".sf-entry__character-copy > span:not(.sf-entry__character-traits)")?.textContent?.trim(),
+      portraitReady: Boolean(card.querySelector("img")?.complete && card.querySelector("img")?.naturalWidth),
+    })),
+  }));
+  check("new game opens the three-operative roster",
+    roster.panel === "characters" && roster.cards.length === 3
+      && roster.cards.every((card) => card.role && card.summary && card.portraitReady),
+    roster, "characters panel with three described, loaded operative cards");
+  await page.locator("[data-intro-character-confirm]").click();
   await page.waitForFunction(() => window.__SF?.introState?.()?.mode === "running", null,
     { timeout: 10000 });
   const launched = await page.evaluate(() => ({
@@ -149,7 +165,7 @@ try {
     shot: window.__SF.introState().shot,
     runtimePhase: window.__SF.ctx.runtime.phase,
   }));
-  check("orbital intro begins only after Begin New Operation is pressed",
+  check("orbital intro begins only after the operative is confirmed",
     launched.mode === "running" && launched.shot === "orbit" && launched.runtimePhase === "intro",
     launched, { mode: "running", shot: "orbit", runtimePhase: "intro" });
   check("browser console remains clean", consoleErrors.length === 0 && pageErrors.length === 0,

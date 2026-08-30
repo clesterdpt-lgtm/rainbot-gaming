@@ -584,6 +584,10 @@ export function installSummitQa(ctx, api, hook) {
     }),
 
     loadoutState: () => ctx.playerLoadout?.status?.() || null,
+    /* The live loadout, for probes that must follow a mounted prop
+       through a swing (the arc probe measures the WEAPON tip, which
+       no status snapshot can express). */
+    loadoutHandle: () => ctx.playerLoadout || null,
     setLoadoutTransform: (id, transform) => ctx.playerLoadout?.setTransform?.(id, transform) || null,
     dischargeState: () => ctx.playerDischarge?.status?.() || null,
     fireCrescent: (hand = null) => ctx.playerDischarge?.fireOnce?.(hand) || false,
@@ -594,6 +598,8 @@ export function installSummitQa(ctx, api, hook) {
     kitState: () => ctx.kenosis?.status?.() || null,
     blink: () => ctx.kenosis?.tryBlink?.() || false,
     throwHammer: () => ctx.kenosis?.tryThrowHammer?.() || false,
+    aerialThrust: () => ctx.kenosis?.tryAerialThrust?.() || false,
+    kitReset: () => { ctx.kenosis?.reset?.(); return true; },
     blockState: () => ctx.shield?.status?.() || null,
     trialsState: () => ctx.trials?.status?.() || null,
     /* The live module, for probes that need to place a kite on a
@@ -602,7 +608,54 @@ export function installSummitQa(ctx, api, hook) {
     spawnTrials: () => ctx.trials?.spawnCohort?.() || false,
     clearTrials: () => { ctx.trials?.clearCohort?.(); return true; },
     combatStats: () => ctx.combat?.stats?.() || null,
+
+    /* --------------------- the doctrine (m108) --------------------- */
+    doctrineState: () => ctx.doctrine?.state?.() || null,
+    doctrineDefinitions: () => ctx.doctrine?.definitions?.() || null,
+    doctrineGrantXp: (amount) => ctx.doctrine?.grantXp?.(amount, null, "qa") || null,
+    doctrineSpend: (id) => ctx.doctrine?.spend?.(id) || null,
+    doctrineRefund: (id) => ctx.doctrine?.refund?.(id) || null,
+    doctrineRespec: () => ctx.doctrine?.respec?.() || null,
+    doctrineEquip: (id, slot) => ctx.doctrine?.equipCapstone?.(id, slot) || null,
+    /* Every authoritative proc, by talent id. A rite absent from this
+       map did not fire - the same instrument the campaign's talent
+       audit leans on. */
+    doctrineProcs: () => ctx.doctrine?.procCounts?.() || null,
+    /* The live module, for a harness that must drive a verb directly. */
+    doctrineHandle: () => ctx.doctrine || null,
+    doctrineVfxState: () => ctx.vfx?.doctrineState?.() || null,
     kitDockState: () => api.hud?.kitDockState?.() || null,
+
+    /* ---- FIELD COMMANDS ----
+       `commandCall` returns the KEY on acceptance and null on refusal,
+       exactly as `ctx.mission.call` does, so a harness can assert a
+       cooldown refusal as easily as a launch. */
+    commandCatalog: () => ({
+      order: Array.from(ctx.command?.wheelOrder || []),
+      stratagems: Object.fromEntries(
+        Object.entries(ctx.command?.stratagems || {}).map(([k, v]) => [k, { ...v }])),
+    }),
+    commandCall: (key) => ctx.command?.call?.(key) ?? null,
+    commandCooldowns: () => ({ ...(ctx.command?.cooldowns || {}) }),
+    commandCharges: () => ctx.command?.charges?.() || null,
+    commandPending: () => ctx.command?.pending?.() || [],
+    commandFields: () => ctx.command?.activeFields?.() || null,
+    commandBoon: () => ctx.command?.boon?.() || null,
+    commandDock: () => ctx.command?.dockState?.() || null,
+    commandBlocks: (detail) => ctx.command?.blocksEnemyProjectile?.(detail || {}) || false,
+    commandReset: () => { ctx.command?.reset?.(); return true; },
+    commandHandle: () => ctx.command || null,
+    /** Every impact this level has resolved since the hook was armed.
+     *  A command is asynchronous by design - the harness cannot look
+     *  at a return value and know what landed. */
+    armCommandLog() {
+      if (api.__commandLog) return true;
+      api.__commandLog = [];
+      ctx.command?.bus?.on?.("impact", (e) => api.__commandLog.push({ ...e }));
+      return true;
+    },
+    commandLog: () => (api.__commandLog || []).map((e) => ({ ...e })),
+    clearCommandLog() { if (api.__commandLog) api.__commandLog.length = 0; return true; },
 
     listTimes: () => Object.keys(SUMMIT_TIMES).map((k) => ({
       key: k, label: SUMMIT_TIMES[k].label, grade: SUMMIT_TIMES[k].grade,

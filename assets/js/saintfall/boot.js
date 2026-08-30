@@ -128,7 +128,7 @@
        its own exact-specifier key or the browser serves it with no
        cache key at all - see the block comment below. */
     "summit-art", "summit-terrain", "summit-structures", "summit-weather",
-    "summit-sky", "summit-world", "summit-hud", "summit-lights", "summit-player", "summit-characters", "summit-loadout", "summit-discharge", "summit-kenosis", "summit-trials", "summit-qa", "summit-main",
+    "summit-sky", "summit-world", "summit-hud", "summit-lights", "summit-player", "summit-characters", "summit-loadout", "summit-discharge", "summit-kenosis", "summit-trials", "summit-doctrine-config", "summit-doctrine", "summit-command", "summit-qa", "summit-main",
     /* THE THIRD WORLD. Meridian-IV - "The Green Antiphon" - is the
        same arrangement again: a parallel content pack reusing
        render, player, collide, vfx, art, core, ui, qa, touch,

@@ -2194,6 +2194,19 @@ export async function createPlayer(ctx, canvas) {
     wing: new THREE.Color(0x58b8c9),
     halo: new THREE.Color(0x7898d5),
     edict: new THREE.Color(0x76ad78),
+    /* The Kenosis Orders. Muted the same way the five above are -
+       these are the lamp CHANGING CHARACTER, not a neon overlay, so
+       each is its Order's hue pulled well back from full. */
+    quicksilver: new THREE.Color(0x8fd8c8),
+    crescent: new THREE.Color(0xe6cf92),
+    stoop: new THREE.Color(0x84bccb),
+    vigil: new THREE.Color(0xbcc9da),
+    antiphon: new THREE.Color(0xa892cc),
+    bulwark: new THREE.Color(0xdf8b45),
+    cast: new THREE.Color(0xe0b053),
+    forge: new THREE.Color(0xd9633a),
+    anvil: new THREE.Color(0xcb5442),
+    tocsin: new THREE.Color(0x64b79b),
   };
   const doctrineGlow = {
     colour: new THREE.Color(0xf0b84c),
@@ -3025,6 +3038,94 @@ export async function createPlayer(ctx, canvas) {
     linear: (t) => t,
   };
 
+  /* ============================================================
+     C1 CLIP SAMPLING - opt-in, per figure.
+
+     The easing table above is applied PER SEGMENT, which makes every
+     channel continuous in value and discontinuous in VELOCITY: a
+     `load` segment arrives at a key with one speed and the `strike`
+     segment leaves it with another, and the difference is a jolt
+     delivered to the chest, the pelvis and therefore to the shoulder
+     carrying the weapon.
+
+     Vesper and the White Vigil absorb it because their hands are
+     fast and their weapons are short. The Bastion does not: it runs
+     at 0.78x tempo with a hammer head 0.83m past the fist, so the
+     same discontinuity is both slower on screen and multiplied by a
+     long lever. Measured with `saintfall-kenosis-swing-probe.mjs`:
+     the hammer tip ran a smooth ramp to 20 m/s and then covered
+     0.83m in a single frame - 77 m/s for one sample - with no key
+     crossing in any arm or wrist track to explain it.
+
+     This is the same clamped cubic Hermite the Kenosis arm tracks
+     use: it passes through every authored key, its velocity is
+     continuous across all of them, and its end tangents are zero so
+     a clip still leaves and arrives at rest. Tangents use real key
+     TIMES because melee keys are deliberately unevenly spaced.
+
+     OPT-IN, and the default is the old path exactly: a figure that
+     declares nothing samples through EASE as before, so the
+     campaign's clips are bit-identical. */
+  const MELEE_SMOOTH = figure?.meleeProfile?.smooth === true;
+
+  function hermiteChannel(k, i, col, tt) {
+    const k1 = k[i];
+    const k2 = k[i + 1];
+    const h = Math.max(1e-4, k2[0] - k1[0]);
+    const u = clamp01((tt - k1[0]) / h);
+    const v1 = chan(k1, col);
+    const v2 = chan(k2, col);
+    const m1 = i === 0 ? 0
+      : (v2 - chan(k[i - 1], col)) / Math.max(1e-4, k2[0] - k[i - 1][0]);
+    const m2 = i + 2 > k.length - 1 ? 0
+      : (chan(k[i + 2], col) - v1) / Math.max(1e-4, k[i + 2][0] - k1[0]);
+    const u2 = u * u;
+    const u3 = u2 * u;
+    return (2 * u3 - 3 * u2 + 1) * v1
+      + (u3 - 2 * u2 + u) * h * m1
+      + (-2 * u3 + 3 * u2) * v2
+      + (u3 - u2) * h * m2;
+  }
+
+  /** Write every pose channel for `time`, by whichever rule the
+   *  figure asked for. One place, so the two samplers below cannot
+   *  drift apart. */
+  function writeActionPose(k, i, a, b, time) {
+    if (MELEE_SMOOTH) {
+      actionPose.x = hermiteChannel(k, i, 1, time);
+      actionPose.y = hermiteChannel(k, i, 2, time);
+      actionPose.z = hermiteChannel(k, i, 3, time);
+      actionPose.pitch = hermiteChannel(k, i, 4, time);
+      actionPose.yaw = hermiteChannel(k, i, 5, time);
+      actionPose.roll = hermiteChannel(k, i, 6, time);
+      actionPose.chestYaw = hermiteChannel(k, i, 7, time);
+      actionPose.chestPitch = hermiteChannel(k, i, 8, time);
+      actionPose.pelvisYaw = hermiteChannel(k, i, 9, time);
+      actionPose.drop = hermiteChannel(k, i, 10, time);
+      actionPose.stanceZ = hermiteChannel(k, i, 11, time);
+      actionPose.stanceSpread = hermiteChannel(k, i, 12, time);
+      actionPose.slide = hermiteChannel(k, i, 13, time);
+      actionPose.lean = hermiteChannel(k, i, 14, time);
+      return;
+    }
+    const span = Math.max(1e-4, b[0] - a[0]);
+    const u = (EASE[b[b.length - 1]] || EASE.linear)(clamp01((time - a[0]) / span));
+    actionPose.x = lerp(a[1], b[1], u);
+    actionPose.y = lerp(a[2], b[2], u);
+    actionPose.z = lerp(a[3], b[3], u);
+    actionPose.pitch = lerp(a[4], b[4], u);
+    actionPose.yaw = lerp(a[5], b[5], u);
+    actionPose.roll = lerp(a[6], b[6], u);
+    actionPose.chestYaw = lerp(chan(a, 7), chan(b, 7), u);
+    actionPose.chestPitch = lerp(chan(a, 8), chan(b, 8), u);
+    actionPose.pelvisYaw = lerp(chan(a, 9), chan(b, 9), u);
+    actionPose.drop = lerp(chan(a, 10), chan(b, 10), u);
+    actionPose.stanceZ = lerp(chan(a, 11), chan(b, 11), u);
+    actionPose.stanceSpread = lerp(chan(a, 12), chan(b, 12), u);
+    actionPose.slide = lerp(chan(a, 13), chan(b, 13), u);
+    actionPose.lean = lerp(chan(a, 14), chan(b, 14), u);
+  }
+
   /* Keys are [time, x, y, z, pitch, yaw, roll], in weapon-mount
      space. Offsets are metres and radians off the carry pose. */
   /* Keyframe TRANSLATIONS are small; the arc comes from rotation.
@@ -3335,6 +3436,26 @@ export async function createPlayer(ctx, canvas) {
     },
   };
 
+  /* PER-FIGURE CLIP OVERRIDES.
+   *
+   * `meleeProfile.timeScale` says how fast a figure swings and
+   * `meleeProfile.smooth` says how its keys are sampled, but neither
+   * can change what a blow IS. A two-handed reliquary and a pair of
+   * wrist blades do not want the same opener: the shared melee1
+   * carries the chest through 1.56 radians of counter-rotation, which
+   * on a hammer reads as the body twisting mid-swing.
+   *
+   * A figure may therefore replace whole clips. Merged rather than
+   * mutated, once, at build - so the table every other figure sees is
+   * untouched and a figure that declares nothing is bit-identical. */
+  if (figure?.meleeProfile?.clips) {
+    for (const [name, spec] of Object.entries(figure.meleeProfile.clips)) {
+      if (spec && Array.isArray(spec.keys) && spec.keys.length >= 2) {
+        ACTIONS[name] = { ...(ACTIONS[name] || {}), ...spec };
+      }
+    }
+  }
+
   /* The spin can run either way, and a blade that TRAILS its own turn
      reads as being dragged rather than swung. `meleeTurn` is authored
      for a positive sweep; this builds the clockwise copy once by
@@ -3424,24 +3545,7 @@ export async function createPlayer(ctx, canvas) {
     const k = action.spec.keys;
     let i = 0;
     while (i < k.length - 2 && time >= k[i + 1][0]) i += 1;
-    const a = k[i];
-    const b = k[Math.min(k.length - 1, i + 1)];
-    const span = Math.max(1e-4, b[0] - a[0]);
-    const u = (EASE[b[b.length - 1]] || EASE.linear)(clamp01((time - a[0]) / span));
-    actionPose.x = lerp(a[1], b[1], u);
-    actionPose.y = lerp(a[2], b[2], u);
-    actionPose.z = lerp(a[3], b[3], u);
-    actionPose.pitch = lerp(a[4], b[4], u);
-    actionPose.yaw = lerp(a[5], b[5], u);
-    actionPose.roll = lerp(a[6], b[6], u);
-    actionPose.chestYaw = lerp(chan(a, 7), chan(b, 7), u);
-    actionPose.chestPitch = lerp(chan(a, 8), chan(b, 8), u);
-    actionPose.pelvisYaw = lerp(chan(a, 9), chan(b, 9), u);
-    actionPose.drop = lerp(chan(a, 10), chan(b, 10), u);
-    actionPose.stanceZ = lerp(chan(a, 11), chan(b, 11), u);
-    actionPose.stanceSpread = lerp(chan(a, 12), chan(b, 12), u);
-    actionPose.slide = lerp(chan(a, 13), chan(b, 13), u);
-    actionPose.lean = lerp(chan(a, 14), chan(b, 14), u);
+    writeActionPose(k, i, k[i], k[Math.min(k.length - 1, i + 1)], time);
   }
 
   function beginAction(name, aimYaw = null) {
@@ -3645,24 +3749,7 @@ export async function createPlayer(ctx, canvas) {
     const k = action.spec.keys;
     let i = 0;
     while (i < k.length - 2 && action.t >= k[i + 1][0]) i += 1;
-    const a = k[i];
-    const b = k[Math.min(k.length - 1, i + 1)];
-    const span = Math.max(1e-4, b[0] - a[0]);
-    const u = (EASE[b[b.length - 1]] || EASE.linear)(clamp01((action.t - a[0]) / span));
-    actionPose.x = lerp(a[1], b[1], u);
-    actionPose.y = lerp(a[2], b[2], u);
-    actionPose.z = lerp(a[3], b[3], u);
-    actionPose.pitch = lerp(a[4], b[4], u);
-    actionPose.yaw = lerp(a[5], b[5], u);
-    actionPose.roll = lerp(a[6], b[6], u);
-    actionPose.chestYaw = lerp(chan(a, 7), chan(b, 7), u);
-    actionPose.chestPitch = lerp(chan(a, 8), chan(b, 8), u);
-    actionPose.pelvisYaw = lerp(chan(a, 9), chan(b, 9), u);
-    actionPose.drop = lerp(chan(a, 10), chan(b, 10), u);
-    actionPose.stanceZ = lerp(chan(a, 11), chan(b, 11), u);
-    actionPose.stanceSpread = lerp(chan(a, 12), chan(b, 12), u);
-    actionPose.slide = lerp(chan(a, 13), chan(b, 13), u);
-    actionPose.lean = lerp(chan(a, 14), chan(b, 14), u);
+    writeActionPose(k, i, k[i], k[Math.min(k.length - 1, i + 1)], action.t);
 
     // The hit window: one connect per swing, in the middle of it.
     const hitWin = action.spec.hit;
@@ -3675,10 +3762,18 @@ export async function createPlayer(ctx, canvas) {
            the spin direction so a clockwise spin draws a clockwise
            crescent. `combo` stays 1-3 for progression - the spin and
            the lunge ARE the procession's first blow. */
+        /* A loadout may name the sweep for a clip, because which WAY a
+           blow travels is the kit's business, not the clip's: a
+           dual-wield procession alternates hands, and the hand that
+           swings decides which way the crescent must reveal (a
+           negative id draws it mirrored). Optional and defaulted, so
+           every level without a loadout keeps the clip's own sweep. */
+        const kitSweep = ctx.loadout?.meleeSweep?.(action.name, action.combo);
+        const sweep = Number.isFinite(kitSweep) ? kitSweep : (action.spec.sweep || 0);
         ctx.combat.meleeStrike(action.spec.damage,
           action.strikeArc || action.spec.arc,
           !!action.spec.slam, action.spec.lunge || 1, action.combo,
-          (action.spec.sweep || 0) * (action.turnDir || 1));
+          sweep * (action.turnDir || 1));
       }
     }
 
@@ -4513,6 +4608,12 @@ export async function createPlayer(ctx, canvas) {
       } else if (dt0 <= driveSpec.end) lungeDrive = 1;
       else lungeDrive = clamp01(1 - (dt0 - driveSpec.end) / Math.max(1e-4, driveSpec.fade));
     }
+    /* The leap's sustained horizontal (leap-mode packs only). Read
+       once here because it gates the travel below as well as the
+       speed: with the stick centred the solver drives `wanted` to
+       zero AND closes the movement gate, so a floor alone would have
+       produced a fast trooper who never moved. */
+    const jetDrive = rooted || slamMode ? null : (ctx.jetpack?.driveState?.() || null);
     const wanted = rooted || slamMode || (shieldMode && shieldState?.movementLocked) ? 0
       : (mag > 0.01 || boostMode)
         ? target * lerp(1, ADS_SPEED, sighted) * inputAmount * state.slowFactor : 0;
@@ -4541,6 +4642,14 @@ export async function createPlayer(ctx, canvas) {
           : MELEE_LUNGE_SPEED;
         state.speed = Math.max(state.speed,
           driveMax * lungeDrive * state.slowFactor);
+      }
+      /* A LEAPING PACK CARRIES ITS OWN HORIZONTAL, on exactly the
+         terms the lunge does: a floor under the damped speed rather
+         than a target, so releasing the stick cannot abort a leap
+         that is already in the air. Null for every pack that does
+         not leap - which is every pack but the Censer. */
+      if (jetDrive && jetDrive.speed > 0) {
+        state.speed = Math.max(state.speed, jetDrive.speed * state.slowFactor);
       }
     }
     if (flightMode) jetState.horizontalSpeed = state.speed;
@@ -4694,7 +4803,7 @@ export async function createPlayer(ctx, canvas) {
     const motionStartX = state.x;
     const motionStartZ = state.z;
     let downhillUpdated = false;
-    if ((mag > 0.01 || boostMode || lungeDrive > 0) && !slamMode) {
+    if ((mag > 0.01 || boostMode || lungeDrive > 0 || !!jetDrive) && !slamMode) {
       const step = state.speed * dt;
       /* Melee and ranged aim commitment can own the BODY bearing, but
          neither may steal the movement stick. Preserve the same
@@ -4709,8 +4818,13 @@ export async function createPlayer(ctx, canvas) {
          stick cannot steer it mid-flight and releasing W does not
          stop it - which is what separates a lunge from a jog that
          happens to be swinging. */
+      /* A leap with the stick centred travels the bearing it was
+         launched along; a leap being steered belongs to the stick,
+         because air control over a jump is what makes it a verb
+         rather than a cutscene. */
       const moveYaw = boostMode ? boostState.yaw
         : lungeDrive > 0 && Number.isFinite(action.aimYaw) ? action.aimYaw
+        : (jetDrive && mag <= 0.01) ? jetDrive.yaw
         : (shieldMode || meleeFacing || state.aimCommit > 0.002)
           ? state.camYaw + Math.atan2(-mx, -mz)
           : state.yaw;
@@ -6708,6 +6822,50 @@ export async function createPlayer(ctx, canvas) {
     return 18 * clamp(frameDt, 1 / 240, 1 / 30);
   }
 
+  /* THE FLIP CEILING.
+   *
+   * A grip quaternion built from a basis can change which shortest
+   * arc it represents between one frame and the next, and the result
+   * is the gauntlet - and everything welded into it - rolling through
+   * a large angle in a single frame. The transition path below
+   * already rate-limits for exactly this reason, but it is armed only
+   * while a hand is RELEASING, so a hand that simply carries
+   * something through a swing copies the raw quaternion and takes the
+   * flip at full size.
+   *
+   * Measured on the Bastion (`saintfall-kenosis-swing-probe.mjs`,
+   * sampled at the real 60Hz): the hammer palm turned 2.05 RADIANS in
+   * one frame at 40% through melee1, carrying a head 0.83m past the
+   * fist about a metre sideways between two frames. It is present on
+   * Vesper and the White Vigil too, just smaller and over faster - it
+   * is the single biggest contributor to a swing reading as
+   * mechanical rather than heavy.
+   *
+   * This ceiling is deliberately far above any authored motion: 40
+   * rad/s is roughly five times the fastest wrist roll in the kit, so
+   * nothing that was ever meant to happen is slowed by it. It exists
+   * only to turn a discontinuity into two or three frames of very
+   * fast rotation, which is what the eye reads as a whip instead of a
+   * snap. */
+  const HAND_FLIP_RATE = 40;
+  /* Counted, because "this guard is inert on the campaign" is a claim
+     and not an argument. `flipStats` is read by qa.js. */
+  const flipStats = { clamped: 0, frames: 0, worst: 0 };
+  function settleHand(hand, target, dt) {
+    const step = HAND_FLIP_RATE * clamp(
+      Number.isFinite(dt) && dt > 0 ? dt : 1 / 60, 1 / 240, 1 / 30);
+    const want = hand.quaternion.angleTo(target);
+    flipStats.frames += 1;
+    if (want > flipStats.worst) flipStats.worst = want;
+    if (want > step) {
+      flipStats.clamped += 1;
+      hand.quaternion.rotateTowards(target, step);
+      return true;
+    }
+    hand.quaternion.copy(target);
+    return false;
+  }
+
   function solveRestArm(i, dt) {
     restArmTarget(i, restHand);
     /* The elbow trails the hand. Poling it straight back on both
@@ -6741,7 +6899,7 @@ export async function createPlayer(ctx, canvas) {
         handOrientationTransition[i] = false;
       }
     } else {
-      hand.quaternion.copy(handRestTarget);
+      settleHand(hand, handRestTarget, dt);
     }
     hand.updateWorldMatrix(false, true);
   }
@@ -7160,7 +7318,7 @@ export async function createPlayer(ctx, canvas) {
           handOrientationTransition[i] = false;
         }
       } else {
-        hand.quaternion.copy(handRestQuaternion);
+        settleHand(hand, handRestQuaternion, dt);
       }
       hand.updateWorldMatrix(false, true);
     }
@@ -7378,6 +7536,8 @@ export async function createPlayer(ctx, canvas) {
     }),
     beginAction,
     sampleActionAt,
+    handFlipStats: () => ({ ...flipStats }),
+    resetHandFlipStats: () => { flipStats.clamped = 0; flipStats.frames = 0; flipStats.worst = 0; },
     meleeSwing,
     meleePierce,
     die,

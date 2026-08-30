@@ -200,6 +200,16 @@ export function buildSummitHud(ctx, host) {
         <span id="sf-kit-cast-name">HAMMER CAST</span>
         <b id="sf-kit-cast-value">READY</b>
       </div>
+      <div class="sf-kit__row" id="sf-kit-command" data-state="ready" hidden>
+        <kbd>Q</kbd>
+        <span id="sf-kit-command-name">FIELD COMMAND</span>
+        <b id="sf-kit-command-value">READY</b>
+      </div>
+      <div class="sf-kit__row" id="sf-kit-doctrine" data-state="ready" hidden>
+        <kbd>${keybindLabel("menu").split(" / ")[0] || "ESC"}</kbd>
+        <span id="sf-kit-doctrine-name">DOCTRINE POINT</span>
+        <b id="sf-kit-doctrine-value">1</b>
+      </div>
     </div>
     ${ctx.qa ? '<output class="sf-hud__readout" id="sf-readout" aria-label="QA world coordinates"></output>' : ""}
   `;
@@ -226,6 +236,12 @@ export function buildSummitHud(ctx, host) {
     abilityValue: el.querySelector("#sf-kit-ability-value"),
     cast: el.querySelector("#sf-kit-cast"),
     castValue: el.querySelector("#sf-kit-cast-value"),
+    command: el.querySelector("#sf-kit-command"),
+    commandName: el.querySelector("#sf-kit-command-name"),
+    commandValue: el.querySelector("#sf-kit-command-value"),
+    doctrine: el.querySelector("#sf-kit-doctrine"),
+    doctrineName: el.querySelector("#sf-kit-doctrine-name"),
+    doctrineValue: el.querySelector("#sf-kit-doctrine-value"),
   };
   /* One-time dock identity, resolved on the first update once the
      kit exists on ctx (the HUD is built before the kit's summit-main
@@ -269,12 +285,40 @@ export function buildSummitHud(ctx, host) {
       kitEls.charge.dataset.state = frac < 0.18 ? "crit" : jet.mode;
     }
     nameKitDock();
+    /* THE COMMAND ROW. Ahead of the kit early-out on purpose: the
+       wheel is the mission's, not the kit's, and a level that somehow
+       had no kit would still want to know what it can call. It shows
+       whatever is IN THE AIR first, then whatever is closest to
+       ready - which are the only two things the player can act on. */
+    const command = ctx.command?.dockState?.();
+    if (command) {
+      kitEls.command.hidden = false;
+      if (command.inbound) {
+        kitEls.commandName.textContent = "INBOUND";
+        kitEls.commandValue.textContent = `${command.inbound.remaining.toFixed(1)}S`;
+        kitEls.command.dataset.state = "active";
+      } else if (command.boon.active) {
+        kitEls.commandName.textContent = "GILDED";
+        kitEls.commandValue.textContent = `${command.boon.remaining.toFixed(0)}S`;
+        kitEls.command.dataset.state = "active";
+      } else if (command.best) {
+        kitEls.commandName.textContent = String(command.best.name).toUpperCase();
+        kitEls.commandValue.textContent = command.best.ready
+          ? (command.best.spare > 0 ? `READY ×${command.best.spare + 1}` : "READY")
+          : `${Math.ceil(command.best.remaining)}S`;
+        kitEls.command.dataset.state = command.best.ready ? "ready" : "cooldown";
+      }
+    }
     const kit = ctx.kenosis;
     if (!kit) return;
     const status = kit.status();
     if (status.blink) {
       const b = status.blink;
-      const pips = "◆".repeat(b.charges) + "◇".repeat(b.maxCharges - b.charges);
+      /* Clamped both ways: `repeat` throws on a negative count, and
+         a doctrine that widens or narrows the step's magazine can
+         put these two out of order for a frame. */
+      const held = Math.max(0, Math.min(b.maxCharges, b.charges));
+      const pips = "◆".repeat(held) + "◇".repeat(Math.max(0, b.maxCharges - held));
       kitEls.abilityValue.textContent = b.charges < b.maxCharges
         ? `${pips} ${b.rechargeIn.toFixed(1)}S` : pips;
       kitEls.ability.dataset.state = b.charges > 0 ? "ready" : "cooldown";
@@ -283,6 +327,20 @@ export function buildSummitHud(ctx, host) {
       kitEls.abilityValue.textContent = status.block.active ? "HELD"
         : status.block.blockedReason ? status.block.blockedReason.toUpperCase() : "READY";
       kitEls.ability.dataset.state = status.block.active ? "active" : "ready";
+    }
+    /* The doctrine's own cue. The campaign HUD has a dedicated
+       banner for this; here it is one more row of the kit dock, and
+       it only exists while there is something to spend. */
+    const doctrine = ctx.doctrine?.state?.();
+    if (doctrine) {
+      const free = Math.max(0, Math.floor(Number(doctrine.pointsAvailable) || 0));
+      kitEls.doctrine.hidden = free < 1;
+      if (free >= 1) {
+        kitEls.doctrineValue.textContent = String(free);
+        kitEls.doctrineName.textContent = free === 1
+          ? "DOCTRINE POINT" : "DOCTRINE POINTS";
+        kitEls.doctrine.dataset.state = "ready";
+      }
     }
     if (status.hammer) {
       const h = status.hammer;
@@ -573,6 +631,7 @@ export function buildSummitHud(ctx, host) {
 
       updateKitDock(player);
     },
+    commandDockState: () => ctx.command?.dockState?.() || null,
     kitDockState() {
       return {
         hp: kitEls.hpValue.textContent,
@@ -586,6 +645,10 @@ export function buildSummitHud(ctx, host) {
         cast: kitEls.cast.hidden ? null : {
           value: kitEls.castValue.textContent,
           state: kitEls.cast.dataset.state,
+        },
+        doctrine: kitEls.doctrine.hidden ? null : {
+          points: kitEls.doctrineValue.textContent,
+          label: kitEls.doctrineName.textContent,
         },
       };
     },

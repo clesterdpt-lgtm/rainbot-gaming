@@ -4927,6 +4927,7 @@ function initGameEscapeMenu() {
     if (isMaxed() && maxButton && !maxButton.disabled) maxButton.click();
     document.querySelectorAll(".is-maxed").forEach((element) => element.classList.remove("is-maxed"));
     document.body.classList.remove("rb-game-maxed");
+    document.documentElement.classList.remove("sf-maximised");
   };
   const closeMenu = ({ resume = false } = {}) => {
     if (resume) resumeGameIfPossible();
@@ -5011,6 +5012,10 @@ function bindMaxScreenButton(fsButton, surface) {
   const setMaxed = (active) => {
     surface.classList.toggle("is-maxed", active);
     document.body.classList.toggle("rb-game-maxed", active);
+    if (!active) {
+      document.documentElement.classList.remove("sf-maximised");
+      document.querySelectorAll(".is-maxed").forEach((el) => el.classList.remove("is-maxed"));
+    }
     updateButton();
     scheduleGameCanvasFit();
   };
@@ -5083,6 +5088,10 @@ function togglePlayMax(surface) {
   const next = !isPlayMaxed(surface);
   surface.classList.toggle("is-maxed", next);
   document.body.classList.toggle("rb-game-maxed", next);
+  if (!next) {
+    document.documentElement.classList.remove("sf-maximised");
+    document.querySelectorAll(".is-maxed").forEach((el) => el.classList.remove("is-maxed"));
+  }
   scheduleGameCanvasFit();
   try {
     if (next) {

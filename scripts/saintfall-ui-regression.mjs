@@ -1563,11 +1563,17 @@ async function desktopPass(browser) {
   const closedByEsc = await page.evaluate(() => !window.__SF.menuState()?.open);
   check("Escape exits the operation menu", closedByEsc);
 
-  // Tab must NOT open the menu
+  // Tab opens the menu
   await page.keyboard.press("Tab");
-  await page.waitForTimeout(100);
-  const notOpenedByTab = await page.evaluate(() => !window.__SF.menuState()?.open);
-  check("Tab does not open the operation menu", notOpenedByTab);
+  await page.waitForFunction(() => window.__SF.menuState()?.open, null, { timeout: 3000 });
+  const openedByTab = await page.evaluate(() => window.__SF.menuState()?.open);
+  check("Tab opens the operation menu", openedByTab);
+
+  // Tab exits the menu
+  await page.keyboard.press("Tab");
+  await page.waitForFunction(() => !window.__SF.menuState()?.open, null, { timeout: 3000 });
+  const closedByTab = await page.evaluate(() => !window.__SF.menuState()?.open);
+  check("Tab exits the operation menu", closedByTab);
 
   // Escape opens the menu
   await page.keyboard.press("Escape");

@@ -614,26 +614,26 @@ export async function buildSummitLoadout(ctx, player) {
         name: "bastion-shield-gold-glow",
         intensity: 4.35,
       });
-      /* +Y is the raw shield height and +Z its face. The inset's
-         complete aperture straddles the generated mesh centre; the
-         earlier x 0.040 / 38mm card sat on only its right ridge.
-         Centre and widen this fill while staying inside the existing
-         gold surround, then carry it through both pointed ends. */
+      /* +Y is the raw shield height and +Z its face. The lamp must
+         tuck beneath the complete inner rim: even the 110 x 665mm
+         pass left a dark, uneven band in the recess at the player's
+         close camera angle. Keep it centred, overscan the aperture,
+         and seat it beneath the raised rim so the metal masks it. */
       const mesh = makeGoldLampMesh(THREE, {
         name: "bastion-shield-core-gold",
         material,
         targets: [{
           name: "bastion-shield-core",
-          position: [0.020, 0.115, 0.110],
+          position: [0.017, 0.115, 0.110],
           normal: [0, 0, 1],
           up: [0, 1, 0],
-          widthM: 0.074,
-          heightM: 0.640,
+          widthM: 0.149,
+          heightM: 0.718,
           perimeterBrightness: 0.88,
         }],
         /* raw model units per final world metre */
         unitsPerMetre: sourceSpan / spec.targetSize,
-        standoffM: 0.003,
+        standoffM: 0.001,
       });
       asset.add(mesh);
       goldGlow = { mesh, material };
@@ -754,12 +754,12 @@ export async function buildSummitLoadout(ctx, player) {
   if (ctx.loadout) ctx.loadout.handBasis = handBasis;
 
   function update(dt) {
-    /* RMB is a focus, not just fire: holding aim raises and converges
-       the crescents exactly as firing does (the kit narrows the shot
-       cone on the same flag). A running melee action owns the arms -
-       the guns come down for the length of the swing. */
+    /* FIRING ONLY. The right button is the Vigil's melee hand (see
+       summit-kenosis), so reading `ads` here would raise the guns on
+       the same press that swings them. A running melee action owns
+       the arms outright - the guns come down for the swing. */
     const firing = isWhiteVigil && !player.action
-      && !!(player.input?.state?.firing || player.input?.state?.ads);
+      && !!player.input?.state?.firing;
     const rate = firing ? 22 : 8;
     aimBlend += (Number(firing) - aimBlend)
       * (1 - Math.exp(-rate * Math.max(0, dt)));

@@ -113,11 +113,11 @@ export function buildSummitDischarge(ctx, player, loadout, spec = null) {
         .transformDirection(part.asset.matrixWorld)
         .normalize();
     }
-    /* The cone. RMB narrows it - that is the whole of "aiming" for a
-       weapon whose barrels already converge on the reticle. Uniform
-       over the disc, like the campaign's. */
-    const ads = !!player.input?.state?.ads;
-    const cone = ads ? DISCHARGE.spreadAds : DISCHARGE.spreadHip;
+    /* ONE CONE. The right button became the Vigil's melee hand, so
+       there is no aim state to narrow on - and these barrels already
+       converge on the reticle, which is what "aiming" meant here. The
+       cone stays tight enough to hit at range on its own. */
+    const cone = DISCHARGE.spreadHip;
     if (cone > 0) {
       jitterA.set(0, 1, 0).addScaledVector(direction, -direction.y);
       if (jitterA.lengthSq() < 1e-6) jitterA.set(1, 0, 0);

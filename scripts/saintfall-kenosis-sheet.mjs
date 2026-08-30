@@ -98,29 +98,71 @@ async function freePlate(page, file, bearing = 0, dist = 3.4, height = 1.5) {
   await page.evaluate(() => window.__SF.releaseCamera());
 }
 
+/* THE CRESCENT PLATE. The hit fires inside the clip's own window, so
+   this walks to the frame the strike lands on and shoots a beat
+   later, from high and in front - the one bearing that sees the whole
+   sweep rather than its edge. This is the plate that says whether the
+   effect travels the way the weapon did. */
+async function crescentPlate(page, clip, file, tempo) {
+  const timing = await page.evaluate(({ clip, tempo }) => {
+    const T = window.__SF;
+    T.releaseCamera();
+    T.player.beginAction(clip);
+    const spec = T.player.actionSpec?.(clip) || null;
+    const hit = spec?.hit?.[0] ?? 0.32;
+    return { wall: hit / tempo };
+  }, { clip, tempo });
+  await runTo(page, timing.wall + 0.05);
+  await page.evaluate(() => {
+    const T = window.__SF;
+    const ps = T.player.state;
+    T.hidePlayer(false);
+    const a = ps.yaw + 0.55;
+    const pos = [ps.x + Math.sin(a) * 5.4, ps.y + 3.5, ps.z + Math.cos(a) * 5.4];
+    T.lookAt(pos, [ps.x, ps.y + 1.25, ps.z], 52);
+    T.renderStill();
+  });
+  await shot(page, file);
+  await page.evaluate(() => window.__SF.releaseCamera());
+  await runTo(page, 1.8);
+}
+
 async function bastion(browser) {
   const { page, context, errors } = await boot(browser, "bastion-penitent");
-  const swing = async (name, t, file) => {
+  /* Two instants per opener - the wind-out and the carve - so the
+     lateral SPAN of the arc is on the sheet, not one point of it.
+     Wall time = clipTime / 0.78 (the bulwark tempo). */
+  const swing = async (name, times, file) => {
     await page.evaluate(({ name }) => {
       const T = window.__SF;
       T.releaseCamera();
       T.player.beginAction(name);
     }, { name });
-    await runTo(page, t);
-    await freePlate(page, `${file}-side.png`, 0.9, 3.6, 1.6);
+    let at = 0;
+    for (const [suffix, t] of times) {
+      await runTo(page, t - at);
+      at = t;
+      await freePlate(page, `${file}-${suffix}.png`, 0.9, 3.6, 1.6);
+    }
     await chasePlate(page, `${file}-chase.png`);
     await runTo(page, 2.0);
   };
-  await swing("melee1", 0.45, "bastion-melee1");
-  await swing("melee2", 0.52, "bastion-melee2");
-  await swing("melee3", 0.60, "bastion-melee3");
+  /* wall = clipU * dur / 0.78. The keys are the authored wind / apex
+     / carve of each track, so the sheet lands on the shape rather
+     than wherever a round number fell. */
+  await swing("melee1", [["wind", 0.21], ["apex", 0.39], ["carve", 0.56]], "bastion-melee1");
+  await swing("melee2", [["apex", 0.58], ["carve", 0.75]], "bastion-melee2");
+  await swing("melee3", [["apex", 0.52], ["smash", 0.71]], "bastion-melee3");
 
   await page.evaluate(() => { window.__SF.summit.throwHammer(); });
   await runTo(page, 0.30);
   await freePlate(page, "bastion-throw-windup.png", 0.85, 3.8, 1.7);
   await runTo(page, 0.22);
   await freePlate(page, "bastion-throw-release.png", 0.85, 3.8, 1.7);
-  await runTo(page, 0.20);
+  /* The hammer 3-4m out: the plate that proves its SIZE in flight. */
+  await runTo(page, 0.06);
+  await freePlate(page, "bastion-hammer-close.png", 1.45, 5.2, 1.7);
+  await runTo(page, 0.14);
   await chasePlate(page, "bastion-hammer-flight.png", -0.25, 0.02, 5.4);
   await runTo(page, 2.6);
   await chasePlate(page, "bastion-catch.png", -0.85, 0.05, 3.8);
@@ -138,26 +180,36 @@ async function bastion(browser) {
   await page.evaluate(() => window.__SF.setJetInput(false));
   await freePlate(page, "bastion-leap.png", 1.1, 5.6, 1.9);
   await runTo(page, 3.0);
+
+  for (const clip of ["melee1", "melee2", "melee3"]) {
+    await crescentPlate(page, clip, `bastion-${clip}-crescent.png`, 0.78);
+  }
   if (errors.length) console.log("bastion pageErrors:", errors);
   await context.close();
 }
 
 async function vigil(browser) {
   const { page, context, errors } = await boot(browser, "white-vigil");
-  const swing = async (name, t, file) => {
+  /* Wall time = clipTime / 1.30 (the scout tempo). */
+  const swing = async (name, times, file) => {
     await page.evaluate(({ name }) => {
       const T = window.__SF;
       T.releaseCamera();
       T.player.beginAction(name);
     }, { name });
-    await runTo(page, t);
-    await freePlate(page, `${file}-side.png`, 0.9, 3.3, 1.55);
+    let at = 0;
+    for (const [suffix, t] of times) {
+      await runTo(page, t - at);
+      at = t;
+      await freePlate(page, `${file}-${suffix}.png`, 0.9, 3.3, 1.55);
+    }
     await chasePlate(page, `${file}-chase.png`);
     await runTo(page, 1.6);
   };
-  await swing("melee1", 0.28, "vigil-melee1");
-  await swing("melee2", 0.30, "vigil-melee2");
-  await swing("melee3", 0.36, "vigil-melee3");
+  /* wall = clipU * dur / 1.30. */
+  await swing("melee1", [["wind", 0.105], ["apex", 0.199], ["carve", 0.304]], "vigil-melee1");
+  await swing("melee2", [["apex", 0.20], ["carve", 0.31]], "vigil-melee2");
+  await swing("melee3", [["apex", 0.28], ["smash", 0.41]], "vigil-melee3");
 
   await page.evaluate(() => { window.__SF.setFiring(true); });
   await runTo(page, 0.55);
@@ -170,6 +222,42 @@ async function vigil(browser) {
   await runTo(page, 0.08);
   await chasePlate(page, "vigil-blink-arrival.png", -0.7, 0.04, 6.4);
   await runTo(page, 6.5);
+
+  for (const clip of ["melee1", "melee2", "melee3"]) {
+    await crescentPlate(page, clip, `vigil-${clip}-crescent.png`, 1.30);
+  }
+
+  /* The stoop, flown FLAT and photographed from the side: the plate
+     that shows the lance lying along its own line rather than a
+     column standing over the trooper. */
+  await page.evaluate(() => {
+    const T = window.__SF;
+    const P = T.player;
+    T.releaseCamera();
+    T.teleport(90, 900, Math.PI);
+    T.advanceTime(0.8, 1 / 60);
+    T.summit.kitReset();
+    P.state.y += 18;
+    P.state.grounded = false;
+    P.state.vy = 0;
+    P.state.aimViewYaw = P.state.yaw;
+    P.state.aimViewPitch = 0;
+    T.advanceTime(1 / 60, 1 / 60);
+    T.summit.aerialThrust();
+  });
+  await runTo(page, 0.22);
+  await page.evaluate(() => {
+    const T = window.__SF;
+    const ps = T.player.state;
+    T.hidePlayer(false);
+    const a = ps.yaw + 1.55;
+    T.lookAt([ps.x + Math.sin(a) * 13, ps.y + 2.5, ps.z + Math.cos(a) * 13],
+      [ps.x, ps.y + 0.6, ps.z], 55);
+    T.renderStill();
+  });
+  await shot(page, "vigil-stoop-flat.png");
+  await page.evaluate(() => window.__SF.releaseCamera());
+  await runTo(page, 2.5);
   if (errors.length) console.log("vigil pageErrors:", errors);
   await context.close();
 }

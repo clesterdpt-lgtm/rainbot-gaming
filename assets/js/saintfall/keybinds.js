@@ -72,8 +72,8 @@ export const KEYBIND_ACTIONS = Object.freeze([
     id: "stratagems", group: "COMMAND", label: "Field support panel", defaults: ["KeyV", null],
   },
   {
-    id: "menu", group: "COMMAND", label: "Field menu", detail: "ESC opens and resumes",
-    defaults: ["Escape", null],
+    id: "menu", group: "COMMAND", label: "Field menu", detail: "ESC or TAB opens and resumes",
+    defaults: ["Escape", "Tab"],
   },
   {
     id: "map", group: "COMMAND", label: "Tactical map", detail: "Press again to resume",
@@ -120,9 +120,8 @@ function loadTable() {
     if (!Array.isArray(entry)) continue;
     let code0 = entry[0];
     let code1 = entry[1];
-    if (action.id === "menu") {
-      if (code0 === "Tab") code0 = "Escape";
-      if (code1 === "Tab") code1 = null;
+    if (action.id === "menu" && (!code1 || code1 === "Escape") && code0 === "Escape") {
+      code1 = "Tab";
     }
     table[action.id] = [sanitizeCode(code0, action.id), sanitizeCode(code1, action.id)];
   }

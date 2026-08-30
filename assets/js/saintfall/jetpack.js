@@ -133,11 +133,23 @@ export function buildJetpack(ctx, player, options = {}) {
     rechargeRate: JETPACK_CONFIG.rechargeRate * profScale("rechargeRateScale", 0.4, 2.5),
   });
   const leapMode = profile?.mode === "leap";
+  const leapCfg = profile?.leap || {};
   const LEAP = Object.freeze({
-    cost: Number.isFinite(profile?.leap?.cost) ? Math.max(0, profile.leap.cost) : 22,
-    vertical: Number.isFinite(profile?.leap?.vertical) ? profile.leap.vertical : 12.4,
-    forwardSpeed: Number.isFinite(profile?.leap?.forwardSpeed) ? profile.leap.forwardSpeed : 11.5,
-    cooldown: Number.isFinite(profile?.leap?.cooldown) ? Math.max(0, profile.leap.cooldown) : 1.9,
+    cost: Number.isFinite(leapCfg.cost) ? Math.max(0, leapCfg.cost) : 22,
+    vertical: Number.isFinite(leapCfg.vertical) ? leapCfg.vertical : 12.4,
+    /* A LEAP IS A DISTANCE, NOT AN IMPULSE. The first version set a
+       one-frame speed floor and let the movement solver have it back
+       immediately - and that solver drives `wanted` to ZERO whenever
+       the stick is centred, so a leap with no input travelled almost
+       nowhere. The horizontal is now a sustained DRIVE, held for
+       `driveSeconds` and faded over the last `fade` of it, published
+       through `driveState()` for the controller to floor its speed
+       and open its travel gate against (mirroring the melee lunge,
+       which had this problem solved already). */
+    driveSpeed: Number.isFinite(leapCfg.driveSpeed) ? leapCfg.driveSpeed : 11.5,
+    driveSeconds: Number.isFinite(leapCfg.driveSeconds) ? Math.max(0, leapCfg.driveSeconds) : 0.35,
+    fade: Number.isFinite(leapCfg.fade) ? Math.max(0.01, leapCfg.fade) : 0.25,
+    cooldown: Number.isFinite(leapCfg.cooldown) ? Math.max(0, leapCfg.cooldown) : 1.9,
     pulse: 0.55,
   });
   /* --- FLYING WITHOUT PAYING, AND WHY IT IS NOT THE BOON ---------
@@ -209,6 +221,10 @@ export function buildJetpack(ctx, player, options = {}) {
     leapAirborne: false,
     leaps: 0,
     leapBlockedReason: null,
+    /* The sustained horizontal of a leap in flight, and the bearing
+       it was launched along. */
+    leapDriveRemaining: 0,
+    leapYaw: 0,
   };
 
   function clearExhaustPool() {
@@ -375,6 +391,12 @@ export function buildJetpack(ctx, player, options = {}) {
          press did nothing. */
       state.leapCooldownRemaining = Math.max(0, state.leapCooldownRemaining - dt);
       state.leapPulse = Math.max(0, state.leapPulse - dt);
+      state.leapDriveRemaining = Math.max(0, state.leapDriveRemaining - dt);
+      /* Landing ends the drive: a leap is the flight, not a skate
+         along the ground after it. */
+      if (playerState.grounded && state.leapDriveRemaining > 0 && !pressed) {
+        state.leapDriveRemaining = 0;
+      }
       if (pressed) {
         state.leapBlockedReason = !playerState.grounded ? "airborne"
           : pinned ? "pinned"
@@ -390,11 +412,26 @@ export function buildJetpack(ctx, player, options = {}) {
           state.leapPulse = LEAP.pulse;
           state.leapAirborne = true;
           state.leaps += 1;
+          /* The bearing is the STICK's, read camera-relative exactly
+             as the boost reads it, so a leap goes where the player
+             asked rather than where the body happens to be pointing.
+             A centred stick leaps straight ahead. */
+          const mv = inputState.move || { x: 0, y: 0 };
+          if (Math.hypot(mv.x, mv.y) > 0.2) {
+            state.leapYaw = playerState.camYaw + Math.atan2(mv.x, -mv.y);
+          } else {
+            state.leapYaw = Number.isFinite(playerState.camYaw)
+              ? playerState.camYaw : playerState.yaw;
+          }
+          state.leapDriveRemaining = LEAP.driveSeconds;
           playerState.grounded = false;
           playerState.vy = Math.max(playerState.vy, LEAP.vertical);
-          playerState.speed = Math.max(playerState.speed || 0, LEAP.forwardSpeed);
+          playerState.speed = Math.max(playerState.speed || 0, LEAP.driveSpeed);
           ctx.audio?.jetIgnite?.();
           ctx.audio?.leapBlast?.(playerState.x, playerState.z);
+          /* The Forge hears the firebox open. Optional-chained, like
+             every other doctrine seam - Vesper's packs never leap. */
+          ctx.doctrine?.verb?.("leap", { x: playerState.x, z: playerState.z });
           ctx.vfx?.jetIgnite?.(playerState.x, playerState.y + 1.1, playerState.z,
             0, -1, 0, 1);
         }
@@ -404,6 +441,7 @@ export function buildJetpack(ctx, player, options = {}) {
         state.landPulse = 1;
         state.landings += 1;
         ctx.audio?.jetLand?.(Math.max(4, Math.abs(playerState.vy || 0)));
+        ctx.doctrine?.verb?.("leapLand", { x: playerState.x, z: playerState.z });
       }
     } else if (pressed && !state.active && !state.needsRelease && !pinned
       && (state.fuel >= config.minIgnitionFuel || freeFlight())
@@ -442,6 +480,21 @@ export function buildJetpack(ctx, player, options = {}) {
     state.landingAssistRetry = Math.max(0, state.landingAssistRetry - dt);
     lastRawRequested = rawRequested;
     return state;
+  }
+
+  /** The leap's sustained horizontal, or null when nothing is driving.
+   *  Read by the player controller as a speed FLOOR and a travel
+   *  bearing - the same contract the melee lunge already uses. Always
+   *  null on a pack that is not in leap mode, so Vesper's controller
+   *  path is untouched. */
+  function driveState() {
+    if (!leapMode || state.leapDriveRemaining <= 0) return null;
+    const elapsed = LEAP.driveSeconds - state.leapDriveRemaining;
+    const fadeFrom = Math.max(0, LEAP.driveSeconds - LEAP.fade);
+    const profileN = elapsed <= fadeFrom
+      ? 1
+      : clamp(1 - (elapsed - fadeFrom) / LEAP.fade, 0, 1);
+    return { speed: LEAP.driveSpeed * profileN, yaw: state.leapYaw };
   }
 
   function noteMotion(distance, blocked = false) {
@@ -1028,6 +1081,8 @@ export function buildJetpack(ctx, player, options = {}) {
     return {
       leapMode,
       leapCooldownRemaining: Number(state.leapCooldownRemaining.toFixed(3)),
+      leapDriveRemaining: Number(state.leapDriveRemaining.toFixed(3)),
+      leapDriveSpeed: LEAP.driveSpeed,
       leapCost: LEAP.cost,
       leaps: state.leaps,
       leapBlockedReason: state.leapBlockedReason,
@@ -1071,6 +1126,7 @@ export function buildJetpack(ctx, player, options = {}) {
     visual,
     beginFrame,
     noteMotion,
+    driveState,
     land,
     reset,
     setState,

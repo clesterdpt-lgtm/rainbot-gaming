@@ -484,7 +484,33 @@ export function buildAudio(ctx) {
      feedback remains centred when they are absent.
      ============================================================ */
 
-  const DOCTRINE_ORDERS = new Set(["censer", "procession", "wing", "halo", "edict"]);
+  /* Vesper's five, then the Kenosis Orders. An order missing from
+     this Set is not quiet - `doctrineEvent` returns null and the cue
+     is silent with no error, which is the easiest kind of gap to
+     miss in playtest. The two worlds' Orders never coexist (one
+     operative is deployed at a time), but they share the table. */
+  const DOCTRINE_ORDERS = new Set([
+    "censer", "procession", "wing", "halo", "edict",
+    "quicksilver", "crescent", "stoop", "vigil", "antiphon",
+    "bulwark", "cast", "forge", "anvil", "tocsin",
+  ]);
+  /* Which voice each Kenosis Order speaks with, and the interval it
+     is transposed by, so four Orders sharing a synth still read as
+     four different Orders. */
+  const KENOSIS_VOICES = Object.freeze({
+    quicksilver: { voice: "rite", semitones: 7 },
+    crescent: { voice: "rite", semitones: 0 },
+    stoop: { voice: "rite", semitones: -5 },
+    vigil: { voice: "rite", semitones: 12 },
+    /* The two call Orders sit a fourth away from their tree's other
+       four, so a command rite is audibly not a weapon rite. */
+    antiphon: { voice: "rite", semitones: 5 },
+    bulwark: { voice: "liturgy", semitones: 0 },
+    cast: { voice: "liturgy", semitones: 5 },
+    forge: { voice: "liturgy", semitones: -4 },
+    anvil: { voice: "liturgy", semitones: -9 },
+    tocsin: { voice: "liturgy", semitones: -14 },
+  });
   const doctrineLastCue = new Map();
   const doctrineCurrentOrder = new Map();
   const doctrineActive = new Set();
@@ -780,13 +806,127 @@ export function buildAudio(ctx) {
     return true;
   }
 
+  /* ============================================================
+     THE KENOSIS VOICES
+
+     Two, not eight: the Kenotic Rite speaks in glass and the Iron
+     Liturgy in struck metal, and the four Orders inside each are
+     separated by transposition rather than by timbre - the same way
+     the campaign separates its cues by `doctrinePitch`. Sharing a
+     synth across an operative's four Orders is what makes the tree
+     sound like ONE doctrine while still being legible per Order.
+     ============================================================ */
+
+  /** The White Vigil: a struck glass harmonic with an airy tail.
+   *  Bright, short, and it rings up rather than down - the opposite
+   *  gesture to the Bastion's bell. */
+  function riteDoctrine(event, semitones) {
+    const dur = event.capstone ? 0.72 : 0.36;
+    const out = doctrineVoice(event, dur);
+    if (!out) return false;
+    const transpose = Math.pow(2, semitones / 12) * doctrinePitch(event.cue);
+    const amp = (0.085 + event.intensity * 0.05) * out.atten;
+    // Layer A: the glass - a rising fifth in two sines.
+    for (const [mult, gainScale, delay] of [[1, 1, 0], [1.5, 0.55, 0.018]]) {
+      const osc = ac.createOscillator();
+      osc.type = "sine";
+      const base = 660 * mult * transpose;
+      osc.frequency.setValueAtTime(base * 0.86, out.t + delay);
+      osc.frequency.exponentialRampToValueAtTime(base, out.t + delay + dur * 0.55);
+      const gain = ac.createGain();
+      gain.gain.setValueAtTime(0.0001, out.t + delay);
+      gain.gain.linearRampToValueAtTime(amp * gainScale, out.t + delay + 0.008);
+      gain.gain.exponentialRampToValueAtTime(0.0001, out.t + delay + dur);
+      osc.connect(gain); gain.connect(out.node);
+      osc.start(out.t + delay); osc.stop(out.t + delay + dur + 0.02);
+    }
+    // Layer B: the air it displaced.
+    const air = noiseSource(1.5);
+    const hp = ac.createBiquadFilter();
+    hp.type = "highpass";
+    hp.frequency.setValueAtTime(2600, out.t);
+    hp.frequency.exponentialRampToValueAtTime(6200, out.t + dur * 0.8);
+    const ag = ac.createGain();
+    ag.gain.setValueAtTime(amp * 0.42, out.t);
+    ag.gain.exponentialRampToValueAtTime(0.0001, out.t + dur * 0.8);
+    air.connect(hp); hp.connect(ag); ag.connect(out.node);
+    air.start(out.t); air.stop(out.t + dur);
+    if (event.capstone) {
+      const bell = ac.createOscillator();
+      bell.type = "triangle";
+      bell.frequency.setValueAtTime(1320 * transpose, out.t + 0.05);
+      const bg = ac.createGain();
+      bg.gain.setValueAtTime(amp * 0.5, out.t + 0.05);
+      bg.gain.exponentialRampToValueAtTime(0.0001, out.t + dur);
+      bell.connect(bg); bg.connect(out.node);
+      bell.start(out.t + 0.05); bell.stop(out.t + dur + 0.02);
+    }
+    return true;
+  }
+
+  /** The Bastion Penitent: struck iron. A low body, a square partial
+   *  for the clang, and a slow decay - weight, answered. */
+  function liturgyDoctrine(event, semitones) {
+    const dur = event.capstone ? 0.95 : 0.52;
+    const out = doctrineVoice(event, dur);
+    if (!out) return false;
+    const transpose = Math.pow(2, semitones / 12) * doctrinePitch(event.cue);
+    const amp = (0.10 + event.intensity * 0.055) * out.atten;
+    // Layer A: the mass.
+    const body = ac.createOscillator();
+    body.type = "triangle";
+    body.frequency.setValueAtTime(146 * transpose, out.t);
+    body.frequency.exponentialRampToValueAtTime(88 * transpose, out.t + dur);
+    const bg = ac.createGain();
+    bg.gain.setValueAtTime(amp, out.t);
+    bg.gain.exponentialRampToValueAtTime(0.0001, out.t + dur);
+    body.connect(bg); bg.connect(out.node);
+    body.start(out.t); body.stop(out.t + dur + 0.02);
+    // Layer B: the iron partials, slightly detuned so it clangs.
+    for (const [freq, gainScale] of [[392, 0.4], [587, 0.24]]) {
+      const par = ac.createOscillator();
+      par.type = "square";
+      par.frequency.setValueAtTime(freq * transpose, out.t + 0.006);
+      par.frequency.exponentialRampToValueAtTime(freq * transpose * 0.94, out.t + dur);
+      const lp = ac.createBiquadFilter();
+      lp.type = "lowpass";
+      lp.frequency.value = 2200;
+      const pg = ac.createGain();
+      pg.gain.setValueAtTime(amp * gainScale, out.t + 0.006);
+      pg.gain.exponentialRampToValueAtTime(0.0001, out.t + dur * 0.85);
+      par.connect(lp); lp.connect(pg); pg.connect(out.node);
+      par.start(out.t + 0.006); par.stop(out.t + dur);
+    }
+    // Layer C: the strike itself.
+    const hit = noiseSource(1.2);
+    const bp = ac.createBiquadFilter();
+    bp.type = "bandpass";
+    bp.frequency.value = 1150;
+    bp.Q.value = 1.1;
+    const hg = ac.createGain();
+    hg.gain.setValueAtTime(amp * 0.85, out.t);
+    hg.gain.exponentialRampToValueAtTime(0.0001, out.t + 0.1);
+    hit.connect(bp); bp.connect(hg); hg.connect(out.node);
+    hit.start(out.t); hit.stop(out.t + 0.12);
+    return true;
+  }
+
   function doctrineCue(raw = {}) {
     const event = doctrineEvent(raw);
     if (!event) return false;
-    const played = event.order === "censer" ? censerDoctrine(event)
-      : event.order === "procession" ? processionDoctrine(event)
-        : event.order === "wing" ? wingDoctrine(event)
-          : event.order === "halo" ? haloDoctrine(event) : edictDoctrine(event);
+    /* Kenosis Orders route by table BEFORE the campaign chain, whose
+       terminal `else` is Edict - an unrouted order would otherwise
+       speak with the Edict cipher, which is worse than silence for a
+       doctrine meant to have its own identity. */
+    const kenosis = KENOSIS_VOICES[event.order];
+    const played = kenosis
+      ? (kenosis.voice === "rite"
+        ? riteDoctrine(event, kenosis.semitones)
+        : liturgyDoctrine(event, kenosis.semitones))
+      : event.order === "censer" ? censerDoctrine(event)
+        : event.order === "procession" ? processionDoctrine(event)
+          : event.order === "wing" ? wingDoctrine(event)
+            : event.order === "halo" ? haloDoctrine(event) : edictDoctrine(event);
     if (played) {
       doctrineCueSerial += 1;
       const id = `${event.order}:${event.cue}`;
@@ -3328,6 +3468,234 @@ export function buildAudio(ctx) {
   }
 
   /** The Censer's leap: one furnace huff, no sustain. */
+  /* ============================================================
+     THE KENOSIS COMMANDS
+
+     One cue for the ask and one per thing that arrives. Each is
+     built the same way every cue in this file is - oscillators and
+     filtered noise through `place`, nothing sampled, nothing held
+     open longer than it sounds. The four arrivals are deliberately
+     spread across the spectrum so a player with three commands on a
+     wheel can tell which one landed without looking: the Choir is
+     the only one that is pitched and consonant, the Rain is the only
+     one that descends, the Gate is the only one with a scrape, and
+     the Anvil is the only one with nothing above 900 Hz.
+     ============================================================ */
+
+  /** The beacon leaving the hand: a mechanism, then a pitch going up. */
+  function commandCast(x, z) {
+    const t = now();
+    const dur = 0.3;
+    const g = voice("world", dur + 0.05);
+    if (!g) return;
+    const p = place(g, x, z, 20, 220);
+    if (!p) return;
+    const amp = 0.26 * p.atten;
+    const clack = noiseSource(1.6);
+    const cf = ac.createBiquadFilter();
+    cf.type = "bandpass";
+    cf.frequency.value = 2600;
+    cf.Q.value = 1.4;
+    const cg = ac.createGain();
+    cg.gain.setValueAtTime(amp, t);
+    cg.gain.exponentialRampToValueAtTime(0.0001, t + 0.06);
+    clack.connect(cf); cf.connect(cg); cg.connect(p.node);
+    clack.start(t); clack.stop(t + 0.07);
+    const ping = ac.createOscillator();
+    ping.type = "triangle";
+    ping.frequency.setValueAtTime(660, t + 0.03);
+    ping.frequency.exponentialRampToValueAtTime(1480, t + dur);
+    const pg = ac.createGain();
+    pg.gain.setValueAtTime(amp * 0.5, t + 0.03);
+    pg.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    ping.connect(pg); pg.connect(p.node);
+    ping.start(t + 0.03); ping.stop(t + dur + 0.02);
+  }
+
+  /** The Gilding Rite landing. Warm, consonant, and the only cue in
+   *  this group with no noise in it at all - it has to read as HELP. */
+  function gildingRite(x, z) {
+    const t = now();
+    const dur = 1.6;
+    const g = voice("world", dur + 0.1);
+    if (!g) return;
+    const p = place(g, x, z, 26, 340);
+    if (!p) return;
+    const amp = 0.30 * p.atten;
+    [220, 330, 440, 660].forEach((hz, i) => {
+      const osc = ac.createOscillator();
+      osc.type = i === 3 ? "triangle" : "sine";
+      osc.frequency.setValueAtTime(hz, t + i * 0.05);
+      const og = ac.createGain();
+      og.gain.setValueAtTime(0.0001, t + i * 0.05);
+      og.gain.exponentialRampToValueAtTime(amp * (0.5 - i * 0.09), t + i * 0.05 + 0.12);
+      og.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      osc.connect(og); og.connect(p.node);
+      osc.start(t + i * 0.05); osc.stop(t + dur + 0.05);
+    });
+  }
+
+  /** The Mirror Choir: three of the same tone, detuned apart. */
+  function mirrorChoirCue(x, z) {
+    const t = now();
+    const dur = 0.85;
+    const g = voice("world", dur + 0.1);
+    if (!g) return;
+    const p = place(g, x, z, 24, 300);
+    if (!p) return;
+    const amp = 0.27 * p.atten;
+    [1.0, 1.006, 0.994].forEach((detune, i) => {
+      const osc = ac.createOscillator();
+      osc.type = "triangle";
+      osc.frequency.setValueAtTime(880 * detune, t + i * 0.07);
+      osc.frequency.exponentialRampToValueAtTime(1320 * detune, t + 0.22 + i * 0.07);
+      const og = ac.createGain();
+      og.gain.setValueAtTime(amp * 0.42, t + i * 0.07);
+      og.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      osc.connect(og); og.connect(p.node);
+      osc.start(t + i * 0.07); osc.stop(t + dur + 0.03);
+    });
+    const air = noiseSource(1.2);
+    const af = ac.createBiquadFilter();
+    af.type = "highpass";
+    af.frequency.value = 4200;
+    const ag = ac.createGain();
+    ag.gain.setValueAtTime(amp * 0.35, t);
+    ag.gain.exponentialRampToValueAtTime(0.0001, t + 0.4);
+    air.connect(af); af.connect(ag); ag.connect(p.node);
+    air.start(t); air.stop(t + 0.42);
+  }
+
+  /** Crescent Rain: a fan of falling whistles, then the edges landing. */
+  function crescentRainCue(x, z) {
+    const t = now();
+    const dur = 1.5;
+    const g = voice("world", dur + 0.1);
+    if (!g) return;
+    const p = place(g, x, z, 30, 420);
+    if (!p) return;
+    const amp = 0.24 * p.atten;
+    for (let i = 0; i < 5; i += 1) {
+      const at = t + 0.08 + i * 0.13;
+      const osc = ac.createOscillator();
+      osc.type = "sawtooth";
+      osc.frequency.setValueAtTime(2300 - i * 130, at);
+      osc.frequency.exponentialRampToValueAtTime(420, at + 0.4);
+      const of = ac.createBiquadFilter();
+      of.type = "bandpass";
+      of.frequency.setValueAtTime(2600, at);
+      of.frequency.exponentialRampToValueAtTime(600, at + 0.4);
+      of.Q.value = 3.2;
+      const og = ac.createGain();
+      og.gain.setValueAtTime(amp * 0.34, at);
+      og.gain.exponentialRampToValueAtTime(0.0001, at + 0.46);
+      osc.connect(of); of.connect(og); og.connect(p.node);
+      osc.start(at); osc.stop(at + 0.48);
+      const hit = noiseSource(1.5);
+      const hf = ac.createBiquadFilter();
+      hf.type = "bandpass";
+      hf.frequency.value = 3200;
+      hf.Q.value = 1.1;
+      const hg = ac.createGain();
+      hg.gain.setValueAtTime(amp * 0.5, at + 0.38);
+      hg.gain.exponentialRampToValueAtTime(0.0001, at + 0.5);
+      hit.connect(hf); hf.connect(hg); hg.connect(p.node);
+      hit.start(at + 0.38); hit.stop(at + 0.52);
+    }
+  }
+
+  /** The Standing Gate planting: a slab of iron, and the scrape of it
+   *  settling into the ground. */
+  function gateRaise(x, z) {
+    const t = now();
+    const dur = 1.2;
+    const g = voice("world", dur + 0.1);
+    if (!g) return;
+    const p = place(g, x, z, 26, 380);
+    if (!p) return;
+    const amp = 0.36 * p.atten;
+    const thud = ac.createOscillator();
+    thud.type = "sine";
+    thud.frequency.setValueAtTime(150, t);
+    thud.frequency.exponentialRampToValueAtTime(46, t + 0.4);
+    const tg = ac.createGain();
+    tg.gain.setValueAtTime(amp, t);
+    tg.gain.exponentialRampToValueAtTime(0.0001, t + 0.5);
+    thud.connect(tg); tg.connect(p.node);
+    thud.start(t); thud.stop(t + 0.52);
+    // The bell in the trim: two partials, held.
+    [385, 578].forEach((hz, i) => {
+      const osc = ac.createOscillator();
+      osc.type = "triangle";
+      osc.frequency.setValueAtTime(hz, t + 0.02);
+      const og = ac.createGain();
+      og.gain.setValueAtTime(amp * (0.30 - i * 0.11), t + 0.02);
+      og.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      osc.connect(og); og.connect(p.node);
+      osc.start(t + 0.02); osc.stop(t + dur + 0.03);
+    });
+    // The scrape. Nothing else in this group has one.
+    const scrape = noiseSource(0.7);
+    const sf = ac.createBiquadFilter();
+    sf.type = "bandpass";
+    sf.frequency.setValueAtTime(1500, t + 0.05);
+    sf.frequency.exponentialRampToValueAtTime(380, t + 0.55);
+    sf.Q.value = 0.9;
+    const sg = ac.createGain();
+    sg.gain.setValueAtTime(amp * 0.5, t + 0.05);
+    sg.gain.exponentialRampToValueAtTime(0.0001, t + 0.6);
+    scrape.connect(sf); sf.connect(sg); sg.connect(p.node);
+    scrape.start(t + 0.05); scrape.stop(t + 0.62);
+  }
+
+  /** The Falling Anvil. Everything above 900 Hz is deliberately
+   *  absent: it is a mass arriving, not an explosion. */
+  function anvilFall(x, z) {
+    const t = now();
+    const dur = 1.9;
+    const g = voice("world", dur + 0.1);
+    if (!g) return;
+    const p = place(g, x, z, 34, 520);
+    if (!p) return;
+    const amp = 0.42 * p.atten;
+    // The descent, arriving under the impact rather than before it.
+    const fall = ac.createOscillator();
+    fall.type = "sawtooth";
+    fall.frequency.setValueAtTime(340, t);
+    fall.frequency.exponentialRampToValueAtTime(120, t + 0.2);
+    const ff = ac.createBiquadFilter();
+    ff.type = "lowpass";
+    ff.frequency.value = 900;
+    const fg = ac.createGain();
+    fg.gain.setValueAtTime(amp * 0.22, t);
+    fg.gain.exponentialRampToValueAtTime(0.0001, t + 0.24);
+    fall.connect(ff); ff.connect(fg); fg.connect(p.node);
+    fall.start(t); fall.stop(t + 0.26);
+    // The arrival: two sines an octave apart, both falling.
+    [88, 44].forEach((hz, i) => {
+      const osc = ac.createOscillator();
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(hz * 2.4, t + 0.19);
+      osc.frequency.exponentialRampToValueAtTime(hz * 0.62, t + 0.19 + dur * 0.5);
+      const og = ac.createGain();
+      og.gain.setValueAtTime(amp * (0.85 - i * 0.2), t + 0.19);
+      og.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      osc.connect(og); og.connect(p.node);
+      osc.start(t + 0.19); osc.stop(t + dur + 0.05);
+    });
+    // The ground going with it.
+    const rubble = noiseSource(0.45);
+    const rf = ac.createBiquadFilter();
+    rf.type = "lowpass";
+    rf.frequency.setValueAtTime(700, t + 0.19);
+    rf.frequency.exponentialRampToValueAtTime(150, t + 1.3);
+    const rg = ac.createGain();
+    rg.gain.setValueAtTime(amp * 0.7, t + 0.19);
+    rg.gain.exponentialRampToValueAtTime(0.0001, t + 1.4);
+    rubble.connect(rf); rf.connect(rg); rg.connect(p.node);
+    rubble.start(t + 0.19); rubble.stop(t + 1.42);
+  }
+
   function leapBlast(x, z) {
     const t = now();
     const dur = 0.42;
@@ -3402,6 +3770,12 @@ export function buildAudio(ctx) {
     hammerCatch,
     blockImpact,
     leapBlast,
+    commandCast,
+    gildingRite,
+    mirrorChoir: mirrorChoirCue,
+    crescentRain: crescentRainCue,
+    gateRaise,
+    anvilFall,
     attach,
     update,
     unlock,
@@ -3498,6 +3872,8 @@ function makeSilentApi() {
     crescentShot: noop, blinkCast: noop, blinkArrive: noop,
     hammerThrow: noop, hammerImpact: noop, hammerCatch: noop,
     blockImpact: noop, leapBlast: noop,
+    commandCast: noop, gildingRite: noop, mirrorChoir: noop,
+    crescentRain: noop, gateRaise: noop, anvilFall: noop,
     boostIgnite: noop, boostCut: noop, boostHit: noop,
     slamCharge: noop, slamPlunge: noop, slamImpact: noop,
     meleePierceCharge: noop, meleePierceLaunch: noop,

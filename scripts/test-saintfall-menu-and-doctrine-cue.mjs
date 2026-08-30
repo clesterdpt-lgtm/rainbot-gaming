@@ -97,13 +97,23 @@ async function run() {
     assert("Initial menu is closed", !initial.menuOpen, JSON.stringify(initial));
     assert("Doctrine cue is hidden with 0 points", initial.doctrineCue?.hidden === true, JSON.stringify(initial));
 
-    // TEST 2: Pressing Tab does NOT open the menu
+    // TEST 2: Pressing Tab opens the menu
     await page.keyboard.press("Tab");
-    await page.waitForTimeout(100);
-    const afterTab = await page.evaluate(() => window.__SF.menuState()?.open);
-    assert("Tab does NOT open the menu", !afterTab);
+    await page.waitForFunction(() => window.__SF.menuState()?.open, null, { timeout: 3000 });
+    const tabOpened = await page.evaluate(() => ({
+      open: window.__SF.menuState()?.open,
+      panel: window.__SF.menuState()?.panel,
+      paused: document.body.classList.contains("rb-escape-menu-open"),
+    }));
+    assert("Tab opens the menu", tabOpened.open && tabOpened.paused, JSON.stringify(tabOpened));
 
-    // TEST 3: Pressing Escape opens the menu
+    // TEST 3: Pressing Tab inside menu closes the menu
+    await page.keyboard.press("Tab");
+    await page.waitForFunction(() => !window.__SF.menuState()?.open, null, { timeout: 3000 });
+    const tabClosed = await page.evaluate(() => !window.__SF.menuState()?.open);
+    assert("Tab closes the menu", tabClosed);
+
+    // TEST 4: Pressing Escape opens the menu
     await page.keyboard.press("Escape");
     await page.waitForFunction(() => window.__SF.menuState()?.open, null, { timeout: 3000 });
     const escOpened = await page.evaluate(() => ({
@@ -113,29 +123,26 @@ async function run() {
     }));
     assert("Escape opens the menu", escOpened.open && escOpened.paused, JSON.stringify(escOpened));
 
-    // TEST 4: Pressing Tab inside menu does NOT close the menu
-    await page.keyboard.press("Tab");
-    await page.waitForTimeout(100);
-    const stillOpenAfterTab = await page.evaluate(() => window.__SF.menuState()?.open);
-    assert("Tab inside menu does NOT close the menu", stillOpenAfterTab);
-
     // TEST 5: Pressing Escape closes the menu
     await page.keyboard.press("Escape");
     await page.waitForFunction(() => !window.__SF.menuState()?.open, null, { timeout: 3000 });
     const escClosed = await page.evaluate(() => !window.__SF.menuState()?.open);
     assert("Escape closes the menu", escClosed);
 
-    // TEST 6: Maximize screen, then press Escape to open menu - must NOT minimize screen!
+    // TEST 6: Maximize screen, open menu, close menu, and fully minimize
+    // Maximize via menu button
+    await page.keyboard.press("Escape");
+    await page.waitForFunction(() => window.__SF.menuState()?.open, null, { timeout: 3000 });
     await page.evaluate(() => {
-      document.documentElement.classList.add("sf-maximised");
-      document.querySelector(".sf-stage")?.classList.add("is-maxed");
-      document.body.classList.add("rb-game-maxed");
+      const maxBtn = document.querySelector('[data-menu-action="maximize"]');
+      maxBtn?.click();
     });
-    const maxBefore = await page.evaluate(() => ({
+    const maxActive = await page.evaluate(() => ({
       htmlMax: document.documentElement.classList.contains("sf-maximised"),
       stageMax: document.querySelector(".sf-stage")?.classList.contains("is-maxed"),
+      bodyMax: document.body.classList.contains("rb-game-maxed"),
     }));
-    assert("Screen is maximized", maxBefore.htmlMax && maxBefore.stageMax);
+    assert("Screen is maximized", maxActive.htmlMax && maxActive.stageMax && maxActive.bodyMax, JSON.stringify(maxActive));
 
     // Open menu with Escape while maximized
     await page.keyboard.press("Escape");
@@ -147,15 +154,23 @@ async function run() {
     }));
     assert("Escape opens menu while keeping screen maximized", maxDuringMenu.menuOpen && maxDuringMenu.htmlMax && maxDuringMenu.stageMax, JSON.stringify(maxDuringMenu));
 
-    // Close menu with Escape while maximized
-    await page.keyboard.press("Escape");
-    await page.waitForFunction(() => !window.__SF.menuState()?.open, null, { timeout: 3000 });
-    const maxAfterMenu = await page.evaluate(() => ({
+    // Minimize from menu: click "EXIT MAX SCREEN"
+    await page.evaluate(() => {
+      const maxBtn = document.querySelector('[data-menu-action="maximize"]');
+      maxBtn?.click();
+    });
+    const minAfterMenu = await page.evaluate(() => ({
       menuOpen: window.__SF.menuState()?.open,
       htmlMax: document.documentElement.classList.contains("sf-maximised"),
       stageMax: document.querySelector(".sf-stage")?.classList.contains("is-maxed"),
+      bodyMax: document.body.classList.contains("rb-game-maxed"),
+      navVisible: getComputedStyle(document.querySelector(".nav")).visibility !== "hidden",
+      sideVisible: getComputedStyle(document.querySelector(".game-side")).visibility !== "hidden",
     }));
-    assert("Escape closes menu while keeping screen maximized", !maxAfterMenu.menuOpen && maxAfterMenu.htmlMax && maxAfterMenu.stageMax, JSON.stringify(maxAfterMenu));
+    assert("Exit max screen fully minimizes game and restores site visibility",
+      !minAfterMenu.htmlMax && !minAfterMenu.stageMax && !minAfterMenu.bodyMax && minAfterMenu.navVisible && minAfterMenu.sideVisible,
+      JSON.stringify(minAfterMenu)
+    );
 
     // TEST 7: Doctrine talent points HUD cue
     // Grant XP to reach Rank 2 (1 doctrine point)

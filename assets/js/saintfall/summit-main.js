@@ -86,6 +86,9 @@ import { buildBoost } from "saintfall/boost.js";
 import { buildSlam } from "saintfall/slam.js";
 import { buildKenosisKit } from "saintfall/summit-kenosis.js";
 import { buildSummitTrials } from "saintfall/summit-trials.js";
+import { buildSummitDoctrine } from "saintfall/summit-doctrine.js";
+import { buildSummitCommand } from "saintfall/summit-command.js";
+import { KENOSIS_TREES } from "saintfall/summit-doctrine-config.js";
 
 /* The LABELS are alpine and the ROW NAMES are not - see
    summit-art.js's header: `goldenhour`/`dusk`/`night` set
@@ -391,6 +394,27 @@ export async function start({ boot, build } = {}) {
      shield rides the same contract the Aegis does, so the player
      controller's shield walk and combat's hurtPlayer intercept both
      engage without either knowing the difference. */
+  /* THE DOCTRINE, BEFORE THE KIT THAT READS IT. The kit asks the
+     doctrine for its numbers (`doctrine.kit(...)`) and reports its
+     verbs to it (`doctrine.verb(...)`), so the doctrine has to exist
+     first. `ctx.progression` is the name ui.js's board and audio's
+     cue subscriber both look for - this level's doctrine answers the
+     same contract the campaign's does. */
+  ctx.doctrine = buildSummitDoctrine(ctx, player);
+  ctx.progression = ctx.doctrine;
+  if (ctx.doctrine) {
+    /* Publish this operative's Orders into the VFX vocabulary. The
+       style `id` claims one of the five doctrine mote channels and
+       repoints it at the Order's own colour - Vesper's Orders are
+       never on screen here, so nothing is taken from anyone. */
+    const tree = KENOSIS_TREES[ctx.doctrine.treeId];
+    const styles = {};
+    tree.orders.forEach((order, index) => {
+      styles[order.id] = { ...order.art, id: 6 + index, family: "kenosis" };
+    });
+    ctx.vfx.registerDoctrineOrders?.(styles);
+  }
+
   ctx.kenosis = buildKenosisKit(ctx, player, ctx.playerLoadout);
   if (ctx.kenosis?.blockModule) ctx.shield = ctx.kenosis.blockModule;
   ctx.playerDischarge = buildSummitDischarge(ctx, player, ctx.playerLoadout,
@@ -490,6 +514,31 @@ export async function start({ boot, build } = {}) {
   const touch = buildTouchControls(ctx, player, touchHost, stage);
   ctx.touch = touch;
   ctx.mission = makeVigilStub();
+  /* THE COMMAND WHEEL. Built after the stub and merged ONTO it, not
+     instead of it: `combat.respawn()` reads `ctx.mission.spawn.x/z`
+     unguarded and `ui.js` refuses to build at all without a mission,
+     so the stub stays the object and the command layer supplies the
+     four fields the wheel, combat and the pack actually read.
+
+     Also published as `ctx.command`, because the doctrine's call
+     Orders reach it by name - `ctx.mission` is the campaign's word
+     for a phase machine this level does not have. */
+  ctx.command = buildSummitCommand(ctx, player, {
+    characterId: ctx.playerCharacter?.id,
+  });
+  if (ctx.command) {
+    ctx.mission.wheelOrder = ctx.command.wheelOrder;
+    ctx.mission.stratagems = ctx.command.stratagems;
+    ctx.mission.cooldowns = ctx.command.cooldowns;
+    ctx.mission.call = ctx.command.call;
+    ctx.mission.boon = ctx.command.boon;
+    ctx.mission.grantBoon = ctx.command.grantBoon;
+    ctx.mission.blocksEnemyProjectile = ctx.command.blocksEnemyProjectile;
+    ctx.mission.pending = ctx.command.pending;
+    ctx.mission.activeFields = ctx.command.activeFields;
+    ctx.mission.announce = ctx.command.announce;
+    ctx.mission.bus = ctx.command.bus;
+  }
 
   /* ---------------------------- shell ---------------------------- */
 
@@ -606,7 +655,13 @@ export async function start({ boot, build } = {}) {
        decide about; crowding resolves the shared body space once;
        and the bestiary's animation pass runs against final
        positions. */
+    /* BEFORE combat. A beacon's lure and a lingering field's slow are
+       both written onto enemies and then READ by combat's decision
+       pass in the same frame - reversed, every command is one frame
+       stale and the Choir visibly fails to hold anything. */
+    ctx.command?.update?.(d);
     ctx.combat?.update?.(d);
+    ctx.doctrine?.update?.(d);
     ctx.trials?.update?.(d);
     ctx.enemies?.resolveCrowding?.(player.state);
     ctx.enemies?.update?.(d, render.camera);
@@ -673,6 +728,8 @@ export async function start({ boot, build } = {}) {
     loadout: ctx.playerLoadout,
     discharge: ctx.playerDischarge,
     kenosis: ctx.kenosis,
+    doctrine: ctx.doctrine,
+    progression: ctx.doctrine,
     trials: ctx.trials,
     combat: ctx.combat,
     enemies: ctx.enemies,

@@ -3317,6 +3317,83 @@ export function buildVfx(ctx, world) {
     }
   }
 
+  /* THE STOOP - a body flying its own line, and every part of it is
+     expressed along the FLIGHT AXIS.
+
+     The first version borrowed the Penitent's Fall's trail, and that
+     rig is authored straight up: a cylinder built along +Y with a
+     halo tightening over the head. On a vertical plunge that is the
+     effect; on a horizontal lance it is a beam standing over a
+     trooper who is nowhere near it, which is what "the VFX comes
+     from overhead" meant. Nothing here has an up. */
+  const stoopDir = new THREE.Vector3();
+  const stoopQuat = new THREE.Quaternion();
+  const STOOP_UP = new THREE.Vector3(0, 1, 0);
+
+  /** The launch: a ring standing square ACROSS the line and cinders
+   *  thrown back down it. */
+  function stoopLaunch(x, y, z, dx, dy, dz) {
+    const m = Math.hypot(dx, dy, dz) || 1;
+    const ux = dx / m; const uy = dy / m; const uz = dz / m;
+    flashes.emit(x + ux * 0.5, y + uy * 0.5, z + uz * 0.5, 2.1, 0.16, 2.0);
+    /* The ring's geometry lies in XZ with its normal up, so pointing
+       that normal down the line stands the ring across the flight -
+       a gate the body leaves through, at any pitch. */
+    const slot = ringFx(x - ux * 0.5, y - uy * 0.5, z - uz * 0.5,
+      0.3, 2.2, 0.34, "#9df3e0", 0.75, "#eafff7", 0.95);
+    stoopDir.set(ux, uy, uz);
+    stoopQuat.setFromUnitVectors(STOOP_UP, stoopDir);
+    slot.mesh.rotation.setFromQuaternion(stoopQuat);
+    slot.wall = 0.2;
+    // Thrown back along the line, not down at the ground.
+    impacts.emitDirected(x, y, z, 14, -ux, -uy, -uz, 8.5, 0.7, 1.0, 0.5, IK_GLINT);
+    sparks.burst(x, y, z, 10, -ux, -uy, -uz, 9, 0.4, 1.0, 0.32, 0.018);
+  }
+
+  /** Held while the line runs: a bloom at the point of the lance and
+   *  a plume shedding astern, all on the flight axis.
+   *
+   *  THIS HAS TO BE LOUD. The body crosses 0.57m per frame and the
+   *  chase camera goes with it, so anything emitted in world space is
+   *  behind the trooper by the next frame - the first version shed
+   *  two motes and a hairline and was invisible in play ("no VFX
+   *  until ground impact"). Density is what makes a 0.6s line read.
+   *
+   *  It also does NOT use `tracers.emit` directly: that pool takes a
+   *  travel SPEED, and the zero passed to it meant the bolt never
+   *  crossed its own span and drew nothing at all. */
+  function stoopWake(x, y, z, dx, dy, dz) {
+    const m = Math.hypot(dx, dy, dz) || 1;
+    const ux = dx / m; const uy = dy / m; const uz = dz / m;
+    /* THE SHAFT, through the same primitive every bolt in the game
+       uses - refreshed each frame so it reads as one continuous
+       blade of light rather than a shot. This is what makes the
+       LINE legible; the motes alone only ever read as a flare
+       sitting on the body. */
+    tracer(x - ux * 1.4, y - uy * 1.4, z - uz * 1.4, ux, uy, uz, 6.0, 0.17, true);
+    // The point of the lance: a bloom riding just ahead of the fist.
+    flashes.emit(x + ux * 0.75, y + uy * 0.75, z + uz * 0.75, 0.85, 0.075, 2.0);
+    // Exhaust: what 34 m/s looks like from behind, held long enough
+    // to leave a wake rather than a puff.
+    impacts.emitDirected(x - ux * 0.3, y - uy * 0.3, z - uz * 0.3, 8,
+      -ux, -uy, -uz, 7.0, 0.8, 2.0, 0.55, IK_EMBER);
+    sparks.burst(x, y, z, 5, -ux, -uy, -uz, 9.5, 0.32, 2.0, 0.34, 0.018);
+    // Glints strung ALONG the axis, so the line itself is legible.
+    impacts.emitTrail(x - ux * 2.0, y - uy * 2.0, z - uz * 2.0, ux, uy, uz,
+      4.0, 3.0, 5, 0.6, 1.0, 0.26, IK_GLINT);
+  }
+
+  /** The line running out in open air - no ground to strike, so the
+   *  lance simply lets go. (A stoop that lands pays `slamImpact`
+   *  instead, which is the right effect for hitting the floor.) */
+  function stoopSpend(x, y, z, dx, dy, dz) {
+    const m = Math.hypot(dx, dy, dz) || 1;
+    const ux = dx / m; const uy = dy / m; const uz = dz / m;
+    flashes.emit(x, y, z, 0.9, 0.10, 1.0);
+    impacts.emitRing(x, y, z, 12, 0.3, 3.4, 0.4, 0.6, 1.0, 0.34, 0, 0, IK_GLINT);
+    sparks.burst(x, y, z, 6, ux, uy, uz, 5, 0.7, 1.0, 0.24, 0.014);
+  }
+
   /** The hang, with the charge building overhead. */
   function slamCharge(x, y, z, charge) {
     const L = impulse.live;
@@ -4401,6 +4478,252 @@ export function buildVfx(ctx, world) {
     }
   }
 
+  /* ==================================================================
+     THE KENOSIS COMMANDS
+
+     Four calls the summit operatives own, drawn in the same idiom as
+     the campaign's three above: pooled primitives only, no geometry
+     allocated per call, no lights ever. Each one has to answer a
+     different question at a glance, and the question is what shapes
+     it - the Choir asks WHERE ARE YOU, the Rain asks HOW WIDE, the
+     Gate asks WHICH WAY IS IT FACING, and the Anvil asks HOW HARD.
+
+     The Gate is the one with a direction, and a directional effect
+     drawn radially is a bug you cannot see in a still frame: it just
+     looks like a slightly odd explosion. Everything it emits runs
+     ALONG the wall's span.
+     ================================================================== */
+
+  const CHOIR_HOT = "#9df3e0";
+  const CHOIR_PALE = "#eafff7";
+  const RAIN_HOT = "#ffe6a2";
+  const GATE_HOT = "#ff9540";
+  const ANVIL_HOT = "#e8503a";
+
+  /**
+   * MIRROR CHOIR. One body becomes three.
+   *
+   * The read is a SPLIT, so the effect starts as a single contracting
+   * column - the Quicksilver gesture, the one shape in this file that
+   * closes rather than opens - and then throws three of itself
+   * outward to the points the effigies will actually stand on. A
+   * player who sees this knows immediately that there are now three
+   * things worth shooting and only one of them is real.
+   */
+  function mirrorChoir(x, y, z, radius = 12, count = 3, yaw = 0) {
+    const ground = terrain.heightAt(x, z);
+    beamFx(x, ground - 1, z, 2.6, 22, 0.55, CHOIR_HOT, CHOIR_PALE, 1.15);
+    flashes.emit(x, ground + 1.6, z, 3.0, 0.20, 1.0);
+    // Inward first: the body being taken apart.
+    ringFx(x, ground + 0.35, z, radius * 1.15, 0.6, 0.62, CHOIR_HOT, 1.2, CHOIR_PALE, 1.1);
+    impacts.emitRing(x, ground + 0.3, z, 30, radius * 0.85, -5.5, 1.4,
+      0.7, 1.0, 1.1, 0, 0, IK_GLINT);
+
+    const n = Math.max(1, Math.round(count));
+    for (let i = 0; i < n; i += 1) {
+      const a = (i / n) * Math.PI * 2 + yaw;
+      const r = Math.min(radius * 0.45, 4.5);
+      const ex = x + Math.sin(a) * r;
+      const ez = z + Math.cos(a) * r;
+      later(0.10 + i * 0.06, () => {
+        const ey = terrain.heightAt(ex, ez);
+        // The line the copy travelled, then the copy standing up.
+        impacts.emitTrail(x, ground + 1.0, z,
+          Math.sin(a), 0.02, Math.cos(a), r, 16, 12, 0.42, 1.0, 0.5, IK_GLINT);
+        beamFx(ex, ey - 0.4, ez, 0.62, 4.2, 1.1, CHOIR_HOT, CHOIR_PALE, 1.0);
+        flashes.emit(ex, ey + 1.1, ez, 1.15, 0.16, 1.0);
+        ringFx(ex, ey + 0.2, ez, 0.2, 2.6, 0.5, CHOIR_PALE, 0.8, CHOIR_HOT, 0.9);
+        sparks.burst(ex, ey + 0.9, ez, 14, 0, 1, 0, 7, 0.6, 1.0, 0.7, 0.018);
+      });
+    }
+    // The ground they hold, marked for as long as they hold it.
+    sigilFx(x, z, radius * 0.62, 8.4, CHOIR_HOT, CHOIR_PALE, 3, 0.16, 0.7);
+  }
+
+  /**
+   * CRESCENT RAIN. The emitters answer from the cloud deck.
+   *
+   * The Crescent Order's own vocabulary is BLADES, and `slashFx` is
+   * the only primitive in this file that draws one - so the rain is
+   * literally crescents falling, rolled near-upright so they read as
+   * descending edges rather than as flat ground rings. They walk
+   * outward from the centre, which is what tells the player where the
+   * pattern is going next while there is still time to move.
+   */
+  function crescentRain(x, y, z, radius = 15, blades = 9) {
+    const ground = terrain.heightAt(x, z);
+    const deck = ground + 30;
+    // The release, high enough to be above any camera's horizon.
+    flashes.emit(x, deck, z, 2.2, 0.18, 1.0);
+    ringFx(x, deck, z, 0.5, 9.0, 0.5, RAIN_HOT, 1.3, "#fff6dc", 1.0);
+
+    const n = Math.max(3, Math.round(blades));
+    for (let i = 0; i < n; i += 1) {
+      const angle = i * 2.3999632297;
+      const dist = Math.sqrt((i + 0.4) / n) * radius * 0.92;
+      const bx = x + Math.cos(angle) * dist;
+      const bz = z + Math.sin(angle) * dist;
+      const at = 0.09 + (dist / Math.max(1, radius)) * 0.62 + i * 0.024;
+      // The blade in the air, still falling.
+      later(at, () => {
+        const by = terrain.heightAt(bx, bz);
+        tracers.emit(bx, by + 26, bz, 0, -1, 0, 24, 0.10, 1.0, 90);
+        slashFx(bx, by + 6.5, bz, angle, 3.4, 1.5, 0.26,
+          RAIN_HOT, "#fff6dc", 1.35, 0.2, 0.1, 0.5, 0, Math.PI * 0.46);
+      });
+      // The blade arriving.
+      later(at + 0.12, () => {
+        const by = terrain.heightAt(bx, bz);
+        flashes.emit(bx, by + 0.8, bz, 1.25, 0.12, 1.0);
+        slashFx(bx, by + 1.1, bz, angle + 1.2, 3.0, 1.9, 0.24,
+          RAIN_HOT, "#fff6dc", 1.2, 0.12, 0.06, 0.6, 0, 0.12);
+        ringFx(bx, by + 0.22, bz, 0.4, 4.6, 0.42, RAIN_HOT, 0.9, "#fff6dc", 0.9);
+        sparks.burst(bx, by + 0.3, bz, 16, 0, 1, 0, 11, 0.85, 0.95, 0.5, 0.022);
+        impacts.emit(bx, by + 0.3, bz, 14, 3.0, 1.1, 0.85, 0.7);
+        if (i % 3 === 0) domeFx(bx, by, bz, 4.2, 0.62, DUST, "#e8c9a0", 0.9);
+      });
+    }
+  }
+
+  /**
+   * THE STANDING GATE. A wall arriving.
+   *
+   * Everything here is drawn ALONG the span. A wall is the one thing
+   * in this file with a facing, and a radial burst under it would
+   * read as an explosion that happens to have left a slab behind.
+   * The dust runs the length of the foot, the sparks climb the two
+   * ENDS, and the shock ring is thrown out of both faces rather than
+   * out of the centre.
+   */
+  function standingGate(x, y, z, yaw, width = 8.5, height = 3.2) {
+    const ground = terrain.heightAt(x, z);
+    // Local +X is the span; the normal is the facing.
+    const sx = -Math.cos(yaw);
+    const sz = Math.sin(yaw);
+    const nx = Math.sin(yaw);
+    const nz = Math.cos(yaw);
+    const half = width * 0.5;
+
+    flashes.emit(x, ground + height * 0.6, z, 3.2, 0.20, 0.9);
+    // The foot of the wall, from end to end.
+    const feet = 9;
+    for (let i = 0; i < feet; i += 1) {
+      const t = (i / (feet - 1) - 0.5) * 2;
+      const fx = x + sx * half * t;
+      const fz = z + sz * half * t;
+      const fy = terrain.heightAt(fx, fz);
+      impacts.emit(fx, fy + 0.25, fz, 12, 1.5, 2.4, 0.85, 1.0);
+      impacts.emit(fx, fy + 0.2, fz, 10, 1.1, 3.6, 13.0, 1.7, IK_SMOKE);
+      sparks.burst(fx, fy + 0.2, fz, 7, nx, 0.35, nz, 8, 1.1, 0.95, 0.45, 0.024);
+    }
+    // Both faces shoved outward - the air the slab displaced.
+    for (const side of [1, -1]) {
+      const px = x + nx * side * 0.6;
+      const pz = z + nz * side * 0.6;
+      impacts.emitDirected(px, ground + height * 0.4, pz, 20,
+        nx * side, 0.12, nz * side, 9.5, 2.6, 12.0, 1.5, IK_SMOKE);
+    }
+    // The two ends, lighting up the trim.
+    for (const side of [1, -1]) {
+      const ex = x + sx * half * side;
+      const ez = z + sz * half * side;
+      const ey = terrain.heightAt(ex, ez);
+      beamFx(ex, ey, ez, 0.42, height * 1.25, 0.85, GATE_HOT, "#ffd9a0", 1.2);
+      sparks.burst(ex, ey + height * 0.5, ez, 12, 0, 1, 0, 9, 0.5, 0.9, 0.7, 0.02);
+    }
+    later(0.10, () => {
+      ringFx(x, ground + 0.3, z, 1.0, width * 1.15, 0.62, GATE_HOT, 1.0, "#ffd9a0", 0.9);
+      scorchFx(x, z, width * 0.32, 8, "#2a1a10", 0.34);
+    });
+    // A slow gold pulse up the face while it stands, so a gate at the
+    // edge of vision still says it is there.
+    for (let i = 1; i <= 6; i += 1) {
+      later(i * 2.7, () => {
+        ringFx(x, ground + 0.24, z, width * 0.2, width * 0.62, 1.1,
+          GATE_HOT, 0.5, "#ffd9a0", 0.55);
+      });
+    }
+  }
+
+  /**
+   * THE FALLING ANVIL. Two tonnes, dropped.
+   *
+   * The lance is a beam and the salvo is a carpet; this has to be
+   * neither, so it is a MASS - something with a descent you can watch,
+   * an arrival with almost no light in it, and a pressure ring that
+   * keeps going long after the flash is gone. The wide outer ring
+   * carries no damage at all, and drawing it anyway is the point: it
+   * is the ring that takes the sky away from anything flying.
+   */
+  function fallingAnvil(x, y, z, radius = 11) {
+    const ground = terrain.heightAt(x, z);
+    /* THE FIRST VERSION READ AS A SMALL WHITE PUFF, and the reason is
+       worth keeping: this world's ground is SNOW at golden hour, so
+       an additive effect is competing with a surface that is already
+       near white. Adding light to white does nothing. What reads
+       against snow is DARKNESS and SCALE - smoke, thrown grit, a
+       scorch, and rings that actually span the radius the number
+       promises. The hot core is now the smallest part of this. */
+
+    // THE DESCENT. A dark mass, ahead of a thin hot thread.
+    for (let i = 0; i < 10; i += 1) {
+      later(i * 0.021, () => {
+        const h = 58 - i * 5.4;
+        impacts.emit(x, ground + h, z, 12, 2.2, 7.5, 13.0, 0.75, IK_SMOKE);
+        impacts.emit(x, ground + h, z, 4, 1.0, 3.0, 12.0, 0.5, IK_SHARD);
+      });
+    }
+    later(0.13, () => tracers.emit(x, ground + 30, z, 0, -1, 0, 30, 0.30, 1.0, 260));
+
+    later(0.22, () => {
+      // Arrival. A tight core, and then everything else is weight.
+      flashes.emit(x, ground + 1.4, z, 5.0, 0.16, 0.45);
+      flashes.emit(x, ground + 0.5, z, 9.5, 0.30, 0.85);
+      ringFx(x, ground + 0.35, z, 0.8, radius, 0.46, ANVIL_HOT, 1.6, "#ffb489", 1.3);
+      // The crater, in dust rather than light - this is the part that
+      // is actually visible from any distance on a bright surface.
+      domeFx(x, ground, z, radius * 0.95, 1.15, DUST, "#c99a68", 1.35);
+      scorchFx(x, z, radius * 0.72, 16, "#1c0d06", 0.78);
+      // Debris thrown low and flat: a dropped mass makes a skirt, not
+      // a column. Counts are high because grit on snow is the read.
+      sparks.ring(x, ground + 0.3, z, 64, 1.6, radius * 1.5, 3.0, 0.9, 0.9, 0.034);
+      impacts.emitRing(x, ground + 0.4, z, 70, radius * 0.45, 13.0, 1.6,
+        4.2, 0.8, 1.5, 0, 0, IK_SHARD);
+      impacts.emit(x, ground + 0.5, z, 90, radius * 0.5, 9.5, 13.0, 3.2, IK_SMOKE);
+      impacts.emitRing(x, ground + 0.3, z, 54, radius * 0.8, 9.0, 0.9,
+        7.5, 13.0, 3.4, 0, 0, IK_SMOKE);
+    });
+
+    /* THE PRESSURE RING. Wide, slow, carries no damage - and drawing
+       it anyway is the point: it is the ring that takes the sky away
+       from anything flying, and a Bastion who cannot fly is buying
+       exactly this. Two rings at different speeds, because an air
+       blast outruns its own debris. */
+    later(0.30, () => {
+      ringFx(x, ground + 0.6, z, radius * 0.6, radius * 1.85, 1.15,
+        "#ffb489", 0.9, ANVIL_HOT, 0.95);
+      gyreFx(x, ground + 2.2, z, radius * 0.3, radius * 1.6, 1.7,
+        DUST, 0.75, 0.36, 1.2, 0.4);
+      impacts.emitRing(x, ground + 0.6, z, 46, radius * 1.1, 11.0, 1.2,
+        8.5, 13.0, 3.6, 0, 0, IK_SMOKE);
+    });
+    later(0.52, () => {
+      ringFx(x, ground + 0.45, z, radius * 1.2, radius * 2.4, 1.5, DUST, 0.7, "#c99a68", 0.8);
+      domeFx(x, ground, z, radius * 1.7, 1.5, DUST, "#c99a68", 0.7);
+    });
+
+    /* The column that stands afterwards - the part someone across the
+       basin sees, and the reason the Anvil marks a place for ten
+       seconds rather than for one. */
+    for (let i = 1; i <= 9; i += 1) {
+      later(0.6 + i * 0.3, () => {
+        impacts.emitDirected(x + (Math.random() - 0.5) * radius * 0.7, ground + 0.6,
+          z + (Math.random() - 0.5) * radius * 0.7, 26, 0, 1, 0,
+          3.6, 5.5, 13.0, 4.0, IK_SMOKE);
+      });
+    }
+  }
+
   /* ------------------------------------------------------------------
      DOCTRINE CUES
 
@@ -4424,7 +4747,11 @@ export function buildVfx(ctx, world) {
      tolls, two for the Wing, twelve for the Halo's crown, six for the
      Edict's seal. `spin` is signed, so the Orders do not all turn the
      same way - the Halo runs backwards, because it counters. */
-  const DOCTRINE_STYLES = Object.freeze(Object.assign(Object.create(null), {
+  /* THE TABLE IS A REGISTRY, NOT A CONSTANT. A parallel world brings
+     its own Orders (see `registerDoctrineOrders`), so the outer table
+     is open while every entry in it stays frozen. The five below are
+     Vesper's and are never removed. */
+  const DOCTRINE_STYLES = Object.assign(Object.create(null), {
     censer: Object.freeze({
       id: 6, colour: "#ffad2f", accent: "#ffd56a", folds: 8, spin: 0.18,
     }),
@@ -4440,7 +4767,58 @@ export function buildVfx(ctx, world) {
     edict: Object.freeze({
       id: 10, colour: "#20e0a6", accent: "#70ffd0", folds: 6, spin: 0.14,
     }),
-  }));
+  });
+
+  /* THE STYLE `id` IS A GPU CHANNEL, AND THERE ARE ONLY FIVE OF THEM.
+     The impacts, sparks and flash shaders all read the doctrine band
+     as `step(5.5, aTint) * (1 - step(10.5, aTint))` and pick a colour
+     from five named uniforms - so ids 6..10 are the whole supply, and
+     widening the band would mean editing three shaders and shifting
+     steam, ichor, sand and grain up behind it.
+
+     It is also unnecessary. Those five colours are UNIFORMS: a world
+     that never shows Vesper's Orders can point them at its own
+     palette and get per-Order motes for free, with no shader touched
+     and no program recompiled. Geometry primitives already take
+     explicit colours, so they never needed this. */
+  const DOCTRINE_SLOT_UNIFORMS = Object.freeze({
+    6: "uDoctrineCenser",
+    7: "uDoctrineProcession",
+    8: "uDoctrineWing",
+    9: "uDoctrineHalo",
+    10: "uDoctrineEdict",
+  });
+
+  /**
+   * Publish a world's own Orders into the doctrine vocabulary.
+   *
+   * `entries` is `{ orderId: { id, colour, accent, folds, spin, family } }`.
+   * `id` claims one of the five style channels; the mote colour for
+   * that channel is repointed to the Order's own colour. Returns the
+   * ids that were accepted.
+   */
+  function registerDoctrineOrders(entries) {
+    const taken = [];
+    for (const [orderId, style] of Object.entries(entries || {})) {
+      const slot = Math.round(Number(style?.id));
+      if (!DOCTRINE_SLOT_UNIFORMS[slot]) continue;
+      DOCTRINE_STYLES[orderId] = Object.freeze({
+        id: slot,
+        colour: style.colour || "#ffffff",
+        accent: style.accent || style.colour || "#ffffff",
+        folds: Math.max(2, Math.min(12, Math.round(Number(style.folds) || 6))),
+        spin: Number.isFinite(style.spin) ? style.spin : 0.2,
+        family: style.family || "",
+      });
+      const uniform = DOCTRINE_SLOT_UNIFORMS[slot];
+      for (const mat of [impacts.mat, sparks.mat, flashes.mat]) {
+        mat?.uniforms?.[uniform]?.value?.set(style.colour || "#ffffff");
+      }
+      if (!(orderId in doctrineStats)) doctrineStats[orderId] = 0;
+      taken.push(orderId);
+    }
+    return taken;
+  }
   const doctrineReducedQuery = typeof window !== "undefined" && window.matchMedia
     ? window.matchMedia("(prefers-reduced-motion: reduce)") : null;
   const doctrineCoarseQuery = typeof window !== "undefined" && window.matchMedia
@@ -4504,6 +4882,13 @@ export function buildVfx(ctx, world) {
       case "chapel": return 8;
       case "sigil": return 9;
       case "fusion": return 9;
+      /* The Kenosis call Orders. A command-scale cue is bigger than a
+         melee-scale one by default: a rite that answers from the sky
+         and lands at 3 metres reads as a misfire. */
+      case "verse": return 8;
+      case "answer": return 9;
+      case "chorus": return 11;
+      case "brace": return 4.2;
       case "capstone": return 7;
       default: return capstone ? 6 : 3;
     }
@@ -5263,6 +5648,257 @@ export function buildVfx(ctx, world) {
       }
     }
 
+    /* ------------------------------------------------------------
+       THE KENOTIC RITE AND THE IRON LITURGY.
+
+       A world's Orders get their own vocabulary rather than borrowing
+       Vesper's: these read as displacement, edges, dives and weight,
+       where the campaign's read as heat, procession, flight and
+       guard. Two things separate them visually from anything above.
+
+       First, `slashFx` - the melee crescent - has never been used by
+       a doctrine cue. A tree whose weapons ARE blades draws actual
+       blades, and nothing in the campaign does.
+
+       Second, the Vigil's rites CONTRACT where every campaign rite
+       expands: a step's echo falls inward to the point the body left,
+       which is the opposite gesture to a shockwave and reads as one
+       even at a glance.
+       ------------------------------------------------------------ */
+    if (!handled && palette.family === "kenosis") {
+      handled = true;
+      switch (kind) {
+        /* Quicksilver: the body was here, and the world closes over
+           the hole. Ring runs big to small; motes fall inward. */
+        case "afterimage": {
+          /* The whole read is CONTRACTION, and it has to be legible
+             from eight metres back on a nearly level camera - so the
+             collapse owns the vertical volume (a column that retracts
+             into the point, a gyre falling as it closes) rather than
+             living on the ground, and it ends on a hard collapse
+             flash so the eye is told exactly where the body went. */
+          ringFx(x, ringY, z, radius, 0.18, reduced ? 0.34 : 0.52,
+            colour, 1.1, accent, 1.15);
+          flashes.emit(x, visualY, z, 0.95 * scale, 0.15, style);
+          doctrineWave(x, visualY, z, radius * 0.95, compact ? 14 : 26,
+            -5.4, 0.6, 0.72 * scale, style, compact, 0.8);
+          if (!reduced) {
+            shaftFx(x, ground, z, radius * 0.26, 7.0, 0.42, colour, accent, 1.05, 0.16);
+            gyreFx(x, visualY + 0.5, z, radius * 0.8, 0.25, 0.56, colour, 0.85,
+              0.32, -0.5, spin);
+          }
+          if (!compact) {
+            later(0.18, () => {
+              flashes.emit(x, visualY, z, 0.8 * scale, 0.12, style);
+              impacts.emit(x, visualY, z, 14, 0.35, 0.5 * scale, style, 0.8);
+              ringFx(x, ringY, z, radius * 0.5, 0.12, 0.3, accent, 0.7, colour, 1.0);
+            });
+          }
+          break;
+        }
+        /* Crescent: a verdict is a blade, so draw one. */
+        case "verdict":
+        case "sunder": {
+          /* A crescent doctrine draws actual crescents - `slashFx` is
+             the melee sweep primitive and no campaign rite uses it.
+             The blades must OUTLIVE their own stagger: at 0.24s the
+             first was already spent before the last was thrown, and
+             the whole fan read as an empty frame. */
+          const blades = kind === "sunder" ? Math.max(2, Math.min(5, count)) : 3;
+          for (let i = 0; i < blades; i += 1) {
+            const off = (i - (blades - 1) / 2) * 0.62;
+            later(i * 0.055, () => slashFx(x, y + 1.2, z, yaw + off,
+              radius * 1.35, 1.7, 0.44, colour, accent,
+              1.6, 0.18, 0.06, 0.7, 0, 0.14 * (i % 2 ? -1 : 1)));
+          }
+          flashes.emit(x, visualY, z, 0.85 * scale, 0.13, style);
+          if (!reduced) {
+            gyreFx(x, visualY, z, 0.4, radius * 0.9, 0.5, accent, 0.6,
+              0.28, 0.8, spin);
+          }
+          if (!compact) {
+            doctrineWave(x, visualY, z, radius * 0.85, 16, 6.0, 1.0,
+              0.56 * scale, style, compact, 0.8);
+          }
+          break;
+        }
+        /* Stoop: a low, fast line laid back along the flight. */
+        case "wake": {
+          const bx = -Math.sin(yaw);
+          const bz = -Math.cos(yaw);
+          ringFx(x, ringY, z, 0.3, radius, 0.5, colour, 0.75, accent, 0.9);
+          if (!reduced) {
+            gyreFx(x + bx * radius * 0.3, ringY + 0.7, z + bz * radius * 0.3,
+              0.4, radius * 0.8, 0.62, colour, 0.6, 0.42, 0.5, spin);
+          }
+          impacts.emitTrail(x, ringY + 0.5, z, bx, 0.12, bz,
+            radius * 1.1, 5.5, compact ? 8 : 16, 0.55 * scale, style, 0.9);
+          break;
+        }
+        /* Bulwark / Cast: a struck bell. One hard ring and a wall. */
+        case "bell": {
+          ringFx(x, ringY, z, 0.3, radius, 0.44, colour, 1.15, accent, 1.15);
+          flashes.emit(x, visualY, z, 0.9 * scale, 0.14, style);
+          if (!reduced) {
+            shellFx(x, y + 0.2, z, Math.min(3.4, radius * 0.55), 0.5,
+              colour, accent, 0.95);
+          }
+          doctrineWave(x, visualY, z, radius * 0.85, compact ? 10 : 20,
+            6.5, 1.3, 0.62 * scale, style, compact, 0.85);
+          if (!compact) later(0.11, () => ringFx(x, ringY, z, radius * 0.35,
+            radius * 1.15, 0.6, accent, 0.6, colour, 0.7));
+          break;
+        }
+        /* Cast: the chain that drags a flyer home. */
+        case "chain": {
+          const fx2 = Math.sin(yaw);
+          const fz2 = Math.cos(yaw);
+          impacts.emitTrail(x, y + 0.9, z, fx2, 0.05, fz2,
+            radius * 1.3, 8.5, compact ? 9 : 18, 0.5 * scale, style, 0.75);
+          ringFx(x, ringY, z, radius * 0.8, 0.25, 0.42, colour, 0.85, accent, 1.0);
+          flashes.emit(x, y + 0.9, z, 0.6 * scale, 0.11, style);
+          break;
+        }
+        /* Forge: the firebox opening. A column, and heat off it. */
+        case "stoke": {
+          if (!reduced) shaftFx(x, ground, z, radius * 0.42, 9.5, 0.7,
+            colour, accent, 1.0, 0.3);
+          doctrineGround(x, ringY, z, radius, colour, accent, compact, 1.1);
+          doctrineEmbers(x, visualY, z, radius * 0.8,
+            compact ? 8 : 16, 0.7 * scale, style, compact, 1.6);
+          break;
+        }
+        /* Forge: two tonnes arriving. */
+        case "landing": {
+          ringFx(x, ringY, z, 0.3, radius * 1.1, 0.5, colour, 1.2, accent, 1.1);
+          flashes.emit(x, ringY + 0.5, z, 1.0 * scale, 0.15, style);
+          if (!reduced) domeFx(x, ringY, z, radius * 0.75, 0.62, colour, accent, 0.85);
+          doctrineWave(x, ringY + 0.3, z, radius, compact ? 12 : 24,
+            7.5, 1.1, 0.66 * scale, style, compact, 0.9);
+          if (!compact) later(0.14, () => scorchFx(x, z, radius * 0.5, 4.5,
+            "#180a04", 0.26));
+          break;
+        }
+        /* Vigil: a lantern held up. Quiet, vertical, and it hangs. */
+        case "lantern": {
+          if (!reduced) shellFx(x, y + 0.1, z, Math.min(3.2, radius * 0.6), 1.1,
+            colour, accent, 0.8);
+          if (!reduced) {
+            gyreFx(x, y + 1.3, z, 0.4, radius * 0.6, 1.0, accent, 0.55,
+              0.26, 1.5, spin);
+          }
+          doctrineEmbers(x, y + 1.0, z, radius * 0.5,
+            compact ? 7 : 14, 0.5 * scale, style, compact, 2.4);
+          flashes.emit(x, y + 1.3, z, 0.66 * scale, 0.2, style);
+          break;
+        }
+        /* Anvil: a breath returned. */
+        case "mercy": {
+          ringFx(x, ringY, z, 0.3, radius, 0.62, accent, 0.55, colour, 0.75);
+          impacts.emitDirected(x, y + 0.7, z,
+            Math.max(4, Math.round(10 * particleScale)), 0, 1, 0,
+            3.2, 0.5 * scale, style, 1.2);
+          break;
+        }
+
+        /* ---------------------------------------------------------
+           ANTIPHON and TOCSIN - the two call Orders.
+
+           These have to read as SOMETHING ANSWERING FROM ELSEWHERE,
+           which is the one thing no other Order in either tree says.
+           So every kind below is built around a vertical arrival or a
+           second beat: a shape reaches the ground from above (verse,
+           answer), or a shape happens and then happens again a
+           quarter-second later (toll, brace). Nothing here expands
+           from the player.
+           --------------------------------------------------------- */
+
+        /* Antiphon: the verse. A hanging field, restated on a beat -
+           called repeatedly for as long as a lingering field stands,
+           so it must be CHEAP and must not stack into a glare. */
+        case "verse": {
+          ringFx(x, ringY, z, radius * 0.92, radius, 0.7, colour, 0.55, accent, 0.6);
+          if (!reduced) {
+            impacts.emitRing(x, ringY + 0.1, z,
+              compact ? 6 : 12, radius * 0.85, 0.8, 1.5,
+              0.42 * scale, style, 1.3, 0, spin, IK_GLINT);
+          }
+          break;
+        }
+        /* Antiphon: the response. One command answered by another -
+           drawn as a shape arriving from the deck and landing wide,
+           because the player has to know a SECOND thing is coming
+           down and roughly where. */
+        case "answer": {
+          if (!reduced) {
+            tracers.emit(x, ground + 24, z, 0, -1, 0, 22, 0.09, style, 110);
+          }
+          flashes.emit(x, visualY + 0.6, z, 0.9 * scale, 0.14, style);
+          ringFx(x, ringY, z, 0.3, radius, 0.52, colour, 1.1, accent, 1.1);
+          doctrineWave(x, visualY, z, radius * 0.9, compact ? 12 : 22,
+            6.0, 1.4, 0.6 * scale, style, compact, 0.85);
+          if (!compact) {
+            later(0.16, () => ringFx(x, ringY, z, radius * 0.4, radius * 1.25,
+              0.62, accent, 0.6, colour, 0.75));
+          }
+          break;
+        }
+        /* Antiphon capstone: the whole verse at once. Three arrivals
+           on a stagger, so the Vow reads as a COUNT and not as one
+           larger ring. */
+        case "chorus": {
+          for (let i = 0; i < 3; i += 1) {
+            const a = (i / 3) * TAU + yaw;
+            const cx = x + Math.sin(a) * radius * 0.5;
+            const cz = z + Math.cos(a) * radius * 0.5;
+            later(i * 0.14, () => {
+              const cy = terrain.heightAt(cx, cz);
+              if (!reduced) tracers.emit(cx, cy + 20, cz, 0, -1, 0, 18, 0.08, style, 120);
+              flashes.emit(cx, cy + 0.9, cz, 1.0 * scale, 0.14, style);
+              ringFx(cx, cy + 0.22, cz, 0.3, radius * 0.62, 0.5, colour, 1.15, accent, 1.1);
+              impacts.emitDirected(cx, cy + 0.3, cz,
+                Math.max(4, Math.round(12 * particleScale)), 0, 1, 0,
+                6.5, 0.6 * scale, style, 0.9);
+            });
+          }
+          ringFx(x, ringY, z, radius * 1.3, radius * 0.3, 0.9, accent, 0.7, colour, 0.85);
+          break;
+        }
+        /* Tocsin: the bell struck. One hard toll and then its echo,
+           which is what separates it from Bulwark's single ring. */
+        case "toll": {
+          ringFx(x, ringY, z, 0.3, radius, 0.4, colour, 1.25, accent, 1.2);
+          flashes.emit(x, visualY, z, 1.05 * scale, 0.13, style);
+          if (!reduced) shaftFx(x, ground, z, radius * 0.2, 8.0, 0.44, colour, accent, 1.1, 0.2);
+          doctrineWave(x, visualY, z, radius * 0.8, compact ? 10 : 20,
+            7.5, 1.2, 0.62 * scale, style, compact, 0.9);
+          if (!compact) {
+            later(0.22, () => {
+              ringFx(x, ringY, z, 0.3, radius * 1.3, 0.55, accent, 0.7, colour, 0.8);
+              flashes.emit(x, visualY, z, 0.7 * scale, 0.11, style);
+            });
+          }
+          break;
+        }
+        /* Tocsin: planted. The Bastion braces while the sky works -
+           drawn downward and inward, a body being pressed into the
+           ground rather than a shield going up. */
+        case "brace": {
+          ringFx(x, ringY, z, radius * 1.4, radius * 0.35, 0.62, colour, 0.9, accent, 0.9);
+          if (!reduced) {
+            shellFx(x, y + 0.1, z, Math.min(2.6, radius * 0.7), 0.8, colour, accent, 0.8);
+            impacts.emitRing(x, ringY + 0.1, z,
+              compact ? 8 : 16, radius * 0.9, -4.5, 0.4,
+              0.55 * scale, style, 0.9, 0, 0, IK_SHARD);
+          }
+          flashes.emit(x, y + 0.9, z, 0.7 * scale, 0.12, style);
+          break;
+        }
+        default:
+          handled = false;
+      }
+    }
+
     if (!handled) {
       doctrineStats.fallbacks += 1;
       ringFx(x, ringY, z, 0.35, radius, reduced ? 0.34 : 0.56, colour, 0.82);
@@ -5273,7 +5909,9 @@ export function buildVfx(ctx, world) {
     }
 
     doctrineStats.accepted += 1;
-    doctrineStats[order] += 1;
+    /* `|| 0` because a registered world Order has no counter until
+       its first cue, and `undefined + 1` is a NaN that never heals. */
+    doctrineStats[order] = (doctrineStats[order] || 0) + 1;
     if (reduced) doctrineStats.reduced += 1;
     if (capstone) doctrineStats.capstones += 1;
     doctrineStats.lastOrder = order;
@@ -5304,13 +5942,13 @@ export function buildVfx(ctx, world) {
       fallbacks: doctrineStats.fallbacks,
       reduced: doctrineStats.reduced,
       capstones: doctrineStats.capstones,
-      byOrder: {
-        censer: doctrineStats.censer,
-        procession: doctrineStats.procession,
-        wing: doctrineStats.wing,
-        halo: doctrineStats.halo,
-        edict: doctrineStats.edict,
-      },
+      /* Built from the live registry rather than a fixed five, so a
+         world's own Orders are visible to a probe the moment they
+         are registered. */
+      byOrder: Object.keys(DOCTRINE_STYLES).reduce((out, id) => {
+        out[id] = doctrineStats[id] || 0;
+        return out;
+      }, {}),
       last: {
         order: doctrineStats.lastOrder,
         kind: doctrineStats.lastKind,
@@ -5459,7 +6097,8 @@ export function buildVfx(ctx, world) {
     }),
   });
 
-  function meleeArc(x, y, z, yaw, reach, arc, hits = 0, slam = false, step = 0) {
+  function meleeArc(x, y, z, yaw, reach, arc, hits = 0, slam = false, step = 0,
+    scale = 1) {
     /* Steps 4 and 5 are SHAPES, not combo indices, and a NEGATIVE step
        is the same shape mirrored: the turn slash spins either way, and
        its crescent must reveal in the direction the body actually
@@ -5467,13 +6106,24 @@ export function buildVfx(ctx, world) {
     const mirror = step < 0 ? -1 : 1;
     const isPierce = Math.abs(step) === 6;
     const S = MELEE_SWEEPS[Math.abs(step)] || MELEE_SWEEPS[slam ? 3 : 1];
-    const sweepReach = isPierce && reach > 0 ? Math.max(3.5, Math.min(24.0, reach * 0.55)) : S.reach;
+    /* `scale` sizes the sweep to the WEAPON, and it exists because the
+       gameplay `reach` cannot: these shapes are measured off Vesper's
+       lance tip (see the contract above), so a two-handed reliquary
+       hammer and a pair of wrist blades drew the identical crescent.
+       Reach scales fully; the angular span only half as much, because
+       a swing that wraps much past the body stops reading as a swing.
+       Defaulted to 1, so every existing caller is untouched. */
+    const k = Number.isFinite(scale) ? clamp(scale, 0.5, 2.2) : 1;
+    const arcScale = 1 + (k - 1) * 0.5;
+    const sweepReach = isPierce && reach > 0
+      ? Math.max(3.5, Math.min(24.0, reach * 0.55)) : S.reach * k;
+    const sweepArc = S.arc * mirror * arcScale;
     /* Per-step, because the three sweeps present differently: the
        rising diagonal is drawn in a rolled plane and is seen close to
        edge-on from behind the shoulder, so at a shared level it read
        as a thread while the flat opener read as a blade. */
     const gain = (S.gain ?? 1) * (hits ? 1.25 : 0.92);
-    slashFx(x, y + S.height, z, yaw, sweepReach, S.arc * mirror, S.life,
+    slashFx(x, y + S.height, z, yaw, sweepReach, sweepArc, S.life,
       "#ffb63a", "#fff0c8", gain, S.lift, S.tilt, S.inner,
       S.centre * mirror, S.roll * mirror);
 
@@ -5494,7 +6144,7 @@ export function buildVfx(ctx, world) {
        the same place the crescent ends - rather than off a bearing
        derived from the gameplay cone, which pointed them into open
        sand on every swing that finished across the body. */
-    const endYaw = yaw + (S.centre + S.arc * 0.5) * mirror;
+    const endYaw = yaw + S.centre * mirror + sweepArc * 0.5;
     const tx = x + Math.sin(endYaw) * sweepReach * 0.92;
     const tz = z + Math.cos(endYaw) * sweepReach * 0.92;
     const ty = y + S.height + (slam ? -0.35 : 0.18);
@@ -5879,6 +6529,12 @@ export function buildVfx(ctx, world) {
     clusterSalvo,
     consecration,
     gild,
+    /* The Kenosis calls. Same tier of effect as the campaign's three
+       above and drawn from the same pools. */
+    mirrorChoir,
+    crescentRain,
+    standingGate,
+    fallingAnvil,
     tracer,
     furnaceCharge,
     furnaceBeam,
@@ -5888,6 +6544,9 @@ export function buildVfx(ctx, world) {
     blinkFx,
     hammerWake,
     hammerImpactFx,
+    stoopLaunch,
+    stoopWake,
+    stoopSpend,
     slamCharge,
     slamTrail,
     slamImpact,
@@ -5896,6 +6555,7 @@ export function buildVfx(ctx, world) {
     winnowerBracketTell,
     doctrineCue,
     doctrineState,
+    registerDoctrineOrders,
     /* Diagnostic only. The rite primitives are normally reachable just
        through a cue, which means a defect in one of them can only be
        observed with the other two drawing over it. */

@@ -128,13 +128,74 @@ const BASTION_PENITENT = {
      the flight chord performs a single jet-boosted leap and nothing
      ever hovers (jetpack.js leap mode). Costs and impulse are the
      bulwark's - expensive, high, and committed. */
+  /* A boiler on legs buys ground, not lift: 24 m/s held for most of
+     the arc carries the bulwark ~18m and clears most of what the
+     mountain puts in its way, which is the whole point of the verb
+     for a figure that walks at 3.15. Higher and faster than the
+     first pass, which set a one-frame nudge and travelled ~4m. */
   jetpackProfile: {
     mode: "leap",
-    leap: { cost: 22, vertical: 12.6, forwardSpeed: 11.0, cooldown: 1.9 },
+    leap: {
+      cost: 22,
+      vertical: 13.8,
+      driveSpeed: 24.0,
+      driveSeconds: 0.85,
+      fade: 0.30,
+      cooldown: 1.7,
+    },
   },
   /* The reliquary hammer swings at three quarters of lance tempo -
      weight the player can feel between presses. */
-  meleeProfile: { timeScale: 0.78 },
+  /* A HEAVY FIGURE NEEDS A CONTINUOUS CLIP, not just a slower one.
+     `smooth` samples the melee keys with a C1 Hermite instead of the
+     per-segment easing: the easing is continuous in value but not in
+     VELOCITY, and the Bastion multiplies every one of those jolts by
+     a 0.83m hammer lever at 0.78x tempo. See player.js's
+     MELEE_SMOOTH. */
+  meleeProfile: {
+    timeScale: 0.78,
+    smooth: true,
+    /* THE OPENER IS A THRUST, NOT A SWING.
+     *
+     * The shared melee1 is authored for Vesper's polearm: it counters
+     * the chest through 1.56 radians and the pelvis through 0.72
+     * while the blade crosses the body. On a figure carrying a
+     * two-handed hammer and a tower shield that reads as the torso
+     * twisting mid-blow - reported from play as "a weird twist".
+     *
+     * So the Bastion opens by driving the reliquary straight out
+     * instead. The chest barely rotates; what moves is the WEIGHT -
+     * the hips square up, the body sinks and leans into the drive,
+     * and the front foot plants. Holding forward still turns this
+     * press into `meleeLunge`, which is the same shape with a
+     * committed dash under it, so a standing thrust and a charging
+     * one are the same blow at two ranges.
+     *
+     * `sweep: 5` draws the lunge STREAK rather than a wide crescent:
+     * a thrust that paints an arc is a thrust nobody believes.
+     *
+     * Channels: [t, x,y,z, pitch,yaw,roll, chestYaw, chestPitch,
+     *            pelvisYaw, drop, stanceZ, stanceSpread, slide, lean] */
+    clips: {
+      melee1: {
+        dur: 0.72, hit: [0.28, 0.46], damage: 1.25, arc: 1.0, lunge: 1.45,
+        sweep: 5,
+        keys: [
+          [0.00, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, "load"],
+          // Cock: hammer drawn back beside the hip, weight onto the
+          // rear foot, shoulders squaring to the target.
+          [0.24, 0, 0, 0, 0, 0, 0, -0.16, 0.10, -0.08, 0.045, -0.15, 0.08, -0.045, -0.04, "load"],
+          // The drive: everything goes FORWARD. The chest opens only
+          // enough to let the arm through - a twelfth of what the
+          // shared clip does - and the body sinks into the plant.
+          [0.40, 0, 0, 0, 0, 0, 0, 0.13, -0.26, 0.06, -0.075, 0.30, 0.16, 0.235, 0.14, "strike"],
+          // Riding it out at full extension before the recovery.
+          [0.54, 0, 0, 0, 0, 0, 0, 0.07, -0.14, 0.03, -0.035, 0.17, 0.11, 0.130, 0.07, "settle"],
+          [0.72, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, "settle"],
+        ],
+      },
+    },
+  },
   roughness: 0.58,
   metalness: 0.22,
   emissiveIntensity: 0.20,

@@ -37,6 +37,13 @@ const ICONS = Object.freeze({
   orbital: `<svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16 2v8M11 6l5 5 5-5M16 12v17"/><path d="M7 25h18M10 29h12"/></svg>`,
   cluster: `<svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16 3v9M12 8l4 4 4-4"/><circle cx="8" cy="23" r="3"/><circle cx="16" cy="26" r="3"/><circle cx="24" cy="23" r="3"/></svg>`,
   resupply: `<svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16 2v8M12 6l4 4 4-4"/><path d="M7 13h18v15H7zM16 16v9M11.5 20.5h9"/></svg>`,
+  /* The Kenosis commands. `commandMarkup` resolves a wheel sigil as
+     `ICONS[key] || ICONS.crest`, so a command without one is not an
+     error - it is three identical crests on a three-sector wheel. */
+  mirrorchoir: `<svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16 4v10M11 9l5-5 5 5"/><path d="M6 18v10M16 20v9M26 18v10"/><path d="M3 16h26"/></svg>`,
+  crescentrain: `<svg viewBox="0 0 32 32" aria-hidden="true"><path d="M6 5c5 2 8 6 8 11M16 3c5 2 8 6 8 11M26 6c3 2 4 5 4 9"/><path d="M8 22l-2 6M17 23l-2 6M26 22l-2 6"/></svg>`,
+  standinggate: `<svg viewBox="0 0 32 32" aria-hidden="true"><path d="M5 26V11h22v15"/><path d="M2 26h28M9 26V15M23 26V15M16 11v15"/></svg>`,
+  fallinganvil: `<svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16 2v7M12 6l4 4 4-4"/><path d="M6 14h20l-3 6H9Z"/><path d="M13 20v4h6v-4M9 28h14"/></svg>`,
   operation: `<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="m12 7 3 5-3 5-3-5Z"/></svg>`,
   map: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 5 5-2 6 2 5-2v16l-5 2-6-2-5 2Z"/><path d="M9 3v16M15 5v16"/><circle cx="15" cy="11" r="2"/></svg>`,
   doctrine: `<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="2.4"/><path d="M12 3v6M20.6 9.2l-5.7 1.9M17.3 19l-3.5-4.9M6.7 19l3.5-4.9M3.4 9.2l5.7 1.9"/><path d="m12 3 8.6 6.2-3.3 9.8H6.7L3.4 9.2Z"/></svg>`,
@@ -345,7 +352,7 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render, setQualit
               </div>
             </section>
             <section class="sf-menu__page sf-menu__page--doctrine" data-menu-page="doctrine" hidden>
-              <div class="sf-menu__pagehead"><span>RELIQUARY FORMATION</span><h3 tabindex="-1">FIELD DOCTRINE</h3><p>One T1 path of six points binds the Vow. The other T1 is optional.</p></div>
+              <div class="sf-menu__pagehead"><span>RELIQUARY FORMATION</span><h3 tabindex="-1" data-doctrine-title>FIELD DOCTRINE</h3><p data-doctrine-subtitle>One T1 path of six points binds the Vow. The other T1 is optional.</p></div>
               <div class="sf-doctrine__summary" aria-label="Field rank and doctrine summary">
                 <div class="sf-doctrine__rank"><small>FIELD RANK</small><strong data-doctrine-rank>1</strong></div>
                 <div class="sf-doctrine__xp">
@@ -1022,7 +1029,15 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render, setQualit
       canRefund: !refundReason, refundReason };
   }
 
-  function talentIconUrl(talentId) {
+  /* A tree may carry its own art. Vesper's 25 rites resolve straight
+     from the id to a plate in `img/saintfall/talents/`; a world that
+     ships no plates gives each node an `icon` instead (the Kenosis
+     trees generate themed SVG sigils). Without this a node with no
+     plate renders as an empty black square with the tier chip still
+     on it - there is no `onerror` anywhere in this file. */
+  function talentIconUrl(talentId, definition = null) {
+    const own = definition && definition.icon;
+    if (typeof own === "string" && own) return own;
     return `../assets/img/saintfall/talents/${encodeURIComponent(talentId)}.jpg?v=20260829-doctrine-v2`;
   }
 
@@ -1085,7 +1100,7 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render, setQualit
       ? "" : ' tabindex="0" aria-controls="sf-doctrine-preview"';
     const accessibleName = `${definition.name || "Unnamed Rite"}. Tier ${Math.max(1,
       Number(definition.tier) || 1)}. Rank ${rank} of ${maxRank}. ${definition.summary || ""} ${reason}`;
-    const iconSrc = talentIconUrl(definition.id);
+    const iconSrc = talentIconUrl(definition.id, definition);
     const tier = Math.max(1, Number(definition.tier) || 1);
     const gate = Math.max(0, Math.floor(Number(definition?.requires?.orderPoints) || 0));
     const invested = orderPoints(orderState);
@@ -1162,7 +1177,7 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render, setQualit
       : rank >= maxRank ? "MAX RANK" : `INSCRIBE RANK ${rankNumeral(rank + 1)}`;
     const actionButtons = `<button type="button" data-doctrine-action="refund" data-talent-action="refund" data-talent-id="${escapeHtml(definition.id)}"${disabledAttributes(!eligibility.canRefund, eligibility.refundReason)}>REFUND RANK</button>
       <button type="button" data-doctrine-action="spend" data-talent-action="spend" data-talent-id="${escapeHtml(definition.id)}"${disabledAttributes(!eligibility.canSpend, eligibility.reason)}>${spendLabel}</button>`;
-    const iconSrc = talentIconUrl(definition.id);
+    const iconSrc = talentIconUrl(definition.id, definition);
 
     host.dataset.state = stateName;
     host.dataset.talentId = definition.id;
@@ -1202,7 +1217,7 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render, setQualit
   function renderCapstonePreview(host, definition, orderDefinition, orderState,
     state, edit, definitions) {
     const status = capstoneStatus(definition, orderDefinition, orderState, state, edit, definitions);
-    const iconSrc = talentIconUrl(definition.id);
+    const iconSrc = talentIconUrl(definition.id, definition);
     const fusions = Array.isArray(definition.fusions) ? definition.fusions : [];
     const body = fusions.length
       ? fusions.map((fusion, index) => `<li data-state="${status.slot >= 0 ? "owned" : "locked"}"><b>${String(index + 1).padStart(2, "0")}</b><span><small>${escapeHtml(fusion.name || "FUSION")}</small><strong>${escapeHtml(fusion.description || "Fusion effect awaiting record.")}</strong></span></li>`).join("")
@@ -1270,7 +1285,7 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render, setQualit
     const fusions = Array.isArray(definition.fusions) && definition.fusions.length
       ? `<ul class="sf-doctrine__fusions">${definition.fusions.map((fusion) =>
         `<li><b>${escapeHtml(fusion.name)}</b><span>${escapeHtml(fusion.description)}</span></li>`).join("")}</ul>` : "";
-    const iconSrc = talentIconUrl(definition.id);
+    const iconSrc = talentIconUrl(definition.id, definition);
     const gateFill = clamp(invested / Math.max(1, required), 0, 1);
     const cardInteraction = stage.classList.contains("sf-touch-enabled")
       ? "" : ' tabindex="0" aria-controls="sf-doctrine-preview"';
@@ -1329,6 +1344,18 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render, setQualit
       doctrine.orderId = orders[0]?.id || null;
       doctrine.inspectedTalentId = null;
       doctrine.previewTalentId = null;
+    }
+    /* A tree may name itself. Vesper's is "FIELD DOCTRINE" and the
+       markup's default says so; a world that supplies `title` and
+       `subtitle` gets its own heading rather than the campaign's
+       (whose copy also quotes Vesper's own capstone threshold). */
+    const titleEl = root.querySelector("[data-doctrine-title]");
+    if (titleEl && typeof definitions.title === "string" && definitions.title) {
+      titleEl.textContent = definitions.title.toUpperCase();
+    }
+    const subtitleEl = root.querySelector("[data-doctrine-subtitle]");
+    if (subtitleEl && typeof definitions.subtitle === "string" && definitions.subtitle) {
+      subtitleEl.textContent = definitions.subtitle;
     }
     const rank = Math.max(1, Math.floor(Number(state?.rank) || 1));
     const xpInto = Math.max(0, Math.floor(Number(state?.xpIntoRank) || 0));
@@ -1490,10 +1517,18 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render, setQualit
   }
 
   function ownsGameKeyboard() {
+    const active = document.activeElement;
+    if (active && active.closest && active.closest("a, button, input, textarea, select, [contenteditable='true'], [role='button'], [role='tab'], [role='menuitem']") && !active.closest(".sf-stage")) {
+      return false;
+    }
     return document.pointerLockElement === canvas
       || ctx.player?.input?.state?.locked
-      || document.activeElement === canvas
-      || document.documentElement.classList.contains("sf-maximised");
+      || active === canvas
+      || !active
+      || active === document.body
+      || document.documentElement.classList.contains("sf-maximised")
+      || document.body.classList.contains("rb-game-maxed")
+      || !!active.closest?.(".sf-stage");
   }
 
   function isMaximized() {
@@ -1516,13 +1551,20 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render, setQualit
 
   function setMaximized(active) {
     stage.classList.toggle("is-maxed", active);
+    surface?.classList?.toggle?.("is-maxed", active);
+    if (!active) {
+      document.querySelectorAll(".is-maxed").forEach((el) => {
+        el.classList.remove("is-maxed");
+      });
+    }
     document.documentElement.classList.toggle("sf-maximised", active);
     document.body.classList.toggle("rb-game-maxed", active);
     syncMaximizeButton();
     if (active && !document.fullscreenElement && surface.requestFullscreen) {
       try { surface.requestFullscreen().catch(() => false); } catch (_) { /* CSS fallback remains active. */ }
-    } else if (!active && document.fullscreenElement && document.exitFullscreen) {
-      try { document.exitFullscreen().catch(() => false); } catch (_) { /* CSS state already restored. */ }
+    } else if (!active && (document.fullscreenElement || document.webkitFullscreenElement)) {
+      const exitFs = document.exitFullscreen || document.webkitExitFullscreen;
+      try { exitFs?.call?.(document)?.catch?.(() => false); } catch (_) { /* CSS state already restored. */ }
     }
     window.dispatchEvent(new Event("resize"));
     return active;
@@ -1537,7 +1579,15 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render, setQualit
   }
 
   function onFullscreenChange() {
-    syncMaximizeButton();
+    const hasNativeFs = Boolean(
+      document.fullscreenElement ||
+      document.webkitFullscreenElement
+    );
+    if (!hasNativeFs && (stage.classList.contains("is-maxed") || document.documentElement.classList.contains("sf-maximised") || document.body.classList.contains("rb-game-maxed"))) {
+      setMaximized(false);
+    } else {
+      syncMaximizeButton();
+    }
   }
 
   function openWheel(source = "keyboard", origin = null) {

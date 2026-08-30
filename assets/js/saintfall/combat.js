@@ -2477,8 +2477,12 @@ export function buildCombat(ctx) {
        different planes - so it has to reach the effect. It was already
        being passed into this function and stopping here. */
     if (vfx && vfx.meleeArc) {
+      /* A kit may size its own crescent: the sweep shapes are measured
+         off Vesper's lance, and a reliquary hammer has to leave a
+         bigger mark than a pair of wrist blades. Absent on every
+         weapons-module spec, so the campaign passes 1. */
       vfx.meleeArc(ps.x, ps.y, ps.z, ps.yaw, reach, arc, hits, slam,
-        sweepId || comboStep);
+        sweepId || comboStep, spec.sweepScale);
     }
     ctx.player.punch?.(isPierce
       ? 1.4
@@ -2937,7 +2941,7 @@ export function buildCombat(ctx) {
         inst.yaw += clamp(turn, -2.9 * dt, 2.9 * dt);
         if (lure.mode === "pull" && ld > 2.4) {
           approach(inst, lure.x, lure.z,
-            inst.spec.speed.walk * clamp(Number(lure.speedScale) || 0.72, 0.2, 1.4), dt);
+            walkSpeed(inst) * clamp(Number(lure.speedScale) || 0.72, 0.2, 1.4), dt);
           if (inst.state !== "alert") enemies.play(inst, "alert", 0.2);
         }
       }
@@ -2990,7 +2994,7 @@ export function buildCombat(ctx) {
       const hz = inst.home.z - inst.z;
       const hd = Math.hypot(hx, hz);
       if (hd > 3) {
-        approach(inst, inst.home.x, inst.home.z, inst.spec.speed.walk * 0.45, dt);
+        approach(inst, inst.home.x, inst.home.z, walkSpeed(inst) * 0.45, dt);
         if (inst.state !== "idle") enemies.play(inst, "idle", 0.3);
       } else if (inst.state !== "idle") {
         enemies.play(inst, "idle", 0.3);
@@ -3040,9 +3044,9 @@ export function buildCombat(ctx) {
       const oldX = inst.x;
       const oldZ = inst.z;
       approach(inst, inst.x + Math.sin(away) * 6, inst.z + Math.cos(away) * 6,
-        inst.spec.speed.charge, dt);
+        chargeSpeed(inst), dt);
       const gave = Math.hypot(inst.x - oldX, inst.z - oldZ);
-      if (gave > inst.spec.speed.charge * dt * 0.3) {
+      if (gave > chargeSpeed(inst) * dt * 0.3) {
         inst.fireTimer = Math.max(inst.fireTimer, GLEANER_PROJECTILE_CONFIG.fallbackReload);
         inst.burstLeft = 0;
         if (inst.state !== "alert") enemies.play(inst, "alert", 0.2);
@@ -3067,7 +3071,7 @@ export function buildCombat(ctx) {
       return;
     }
 
-    const speed = spec.reach > 8 ? inst.spec.speed.walk : chargeSpeed(inst);
+    const speed = spec.reach > 8 ? walkSpeed(inst) : chargeSpeed(inst);
     approach(inst, px, pz, speed, dt);
     if (inst.state !== "alert") enemies.play(inst, "alert", 0.24);
   }
@@ -3509,9 +3513,26 @@ export function buildCombat(ctx) {
 
   /** A caste's charge speed under the live tier: Martyr's Threshers run
    *  past the trooper's 8.6 m/s, so kiting them stops being free. */
+  /* HOW A CREATURE IS SLOWED. `inst.slowUntil` / `inst.slowFactor` was
+     already being written - by the Shearwater rite and by anything else
+     that wanted a wake to mean something - and read by NOTHING, which
+     is the quietest kind of dead mechanic: the field is set, the probe
+     sees it set, and the creature walks at full speed anyway. Both
+     speed terms below now pass through here, so a slow written
+     anywhere is a slow the player can see. */
+  function speedScale(inst) {
+    if (!inst || !(inst.slowUntil > clock)) return 1;
+    return clamp(Number(inst.slowFactor) || 1, 0.05, 1);
+  }
+
+  function walkSpeed(inst) {
+    return (inst.spec?.speed?.walk || 0) * speedScale(inst);
+  }
+
   function chargeSpeed(inst) {
     const base = inst.spec?.speed?.charge || 0;
-    return inst.key === "thresher" ? base * (tier().thresherSpeed || 1) : base;
+    const tiered = inst.key === "thresher" ? base * (tier().thresherSpeed || 1) : base;
+    return tiered * speedScale(inst);
   }
 
   function reserveImpact(baseWindup) {

@@ -961,6 +961,67 @@ export function buildSummitCommand(ctx, player, options = {}) {
     return key;
   }
 
+  /* ------------------------------------------------------------
+     THE ARROW CODE.
+
+     The wheel is the primary input, but the campaign also drives
+     commands by direction code (`main.js` turns a held stratagem key
+     and arrow presses into `beginEntry` / `pushDirection`). That path
+     resolves against `mission.js`'s OWN catalog, so an operative
+     whose wheel this module supplies would find the code entry
+     silently dead - it can only ever produce Vesper's three keys, and
+     this module answers to none of them.
+
+     Same state machine, same contract, over this operative's own
+     specs. Every Kenosis spec already carries a `code`.
+     ------------------------------------------------------------ */
+  const entry = { active: false, keys: [], since: 0 };
+
+  function beginEntry() {
+    if (ctx.combat?.player?.dead) return false;
+    entry.active = true;
+    entry.keys = [];
+    entry.since = 0;
+    return true;
+  }
+
+  function cancelEntry() {
+    entry.active = false;
+    entry.keys = [];
+    entry.since = 0;
+    return true;
+  }
+
+  function pushDirection(dir) {
+    if (!entry.active || ctx.combat?.player?.dead) return null;
+    entry.keys.push(dir);
+    entry.since = 0;
+    /* Any command still matching this prefix keeps the entry alive. */
+    let alive = 0;
+    for (const key of wheelOrder) {
+      const code = STRATAGEMS[key]?.code;
+      if (!Array.isArray(code) || entry.keys.length > code.length) continue;
+      let ok = true;
+      for (let i = 0; i < entry.keys.length; i += 1) {
+        if (entry.keys[i] !== code[i]) { ok = false; break; }
+      }
+      if (!ok) continue;
+      alive += 1;
+      if (entry.keys.length === code.length) {
+        cancelEntry();
+        return call(key);
+      }
+    }
+    if (alive === 0) {
+      cancelEntry();
+      say("CODE REJECTED", 1.4);
+      bus.emit("code", { ok: false });
+    } else {
+      bus.emit("code", { ok: true });
+    }
+    return null;
+  }
+
   /* ============================================================
      RESOLVING
      ============================================================ */
@@ -1140,6 +1201,7 @@ export function buildSummitCommand(ctx, player, options = {}) {
     const step = Math.min(0.1, Math.max(0, dt));
     beaconTime.value += step;
     if (announceFor > 0) announceFor = Math.max(0, announceFor - step);
+    if (entry.active) entry.since += step;
 
     for (const key of wheelOrder) {
       if (cooldowns[key] > 0) cooldowns[key] = Math.max(0, cooldowns[key] - step);
@@ -1322,6 +1384,27 @@ export function buildSummitCommand(ctx, player, options = {}) {
     boon: boonRecord,
     grantBoon,
     blocksEnemyProjectile,
+    /* Save round-trip. The campaign's snapshot validator walks
+       `ctx.mission.stratagems` and requires a finite cooldown for
+       every key it finds, so an operative whose wheel this module
+       supplies must get its cooldowns INTO the mission snapshot -
+       otherwise every save is rejected the moment the wheel changes
+       hands. See `main.js`, where the two are stitched together. */
+    captureCooldowns: () => ({ ...cooldowns }),
+    restoreCooldowns(saved) {
+      if (!saved || typeof saved !== "object") return false;
+      for (const key of wheelOrder) {
+        const spec = STRATAGEMS[key];
+        const v = Number(saved[key]);
+        cooldowns[key] = Number.isFinite(v)
+          ? clamp(v, 0, Math.max(0, spec?.cooldown || 0)) : 0;
+      }
+      return true;
+    },
+    entry,
+    beginEntry,
+    cancelEntry,
+    pushDirection,
     update,
     reset,
     releaseCollision,

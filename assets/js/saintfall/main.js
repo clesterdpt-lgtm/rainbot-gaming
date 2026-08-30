@@ -59,6 +59,10 @@ import { buildDropIntro } from "saintfall/intro.js";
 import { buildSummitLoadout } from "saintfall/summit-loadout.js";
 import { buildSummitDischarge } from "saintfall/summit-discharge.js";
 import { buildKenosisKit } from "saintfall/summit-kenosis.js";
+import { buildSummitDoctrine } from "saintfall/summit-doctrine.js";
+import { buildSummitCommand } from "saintfall/summit-command.js";
+import { kenosisTreeFor } from "saintfall/summit-doctrine-config.js";
+import { kenosisCallsFor } from "saintfall/summit-command.js";
 import { buildSaveSystem } from "saintfall/save.js";
 import { buildGameUi, readStoredSettings } from "saintfall/ui.js";
 import { buildDifficulty } from "saintfall/difficulty.js";
@@ -268,6 +272,77 @@ export async function start({ boot, build } = {}) {
   ctx.combat = combat;
   const mission = buildMission(ctx);
   ctx.mission = mission;
+
+  /* THIS OPERATIVE'S OWN CALL ACTIONS.
+   *
+   * A White Vigil on the campaign was calling Orbital Lance and
+   * Cluster Salvo - Vesper's ordnance - while her own Mirror Choir
+   * and Crescent Rain existed only on a level nobody can reach. The
+   * kits came across in m111 and the doctrines below; the wheel
+   * follows here.
+   *
+   * MERGED ONTO the mission rather than replacing it. `mission.js`
+   * is the campaign's phase machine as well as its command layer -
+   * relays, bosses, extraction, the boon, the save schema - and none
+   * of that changes. What changes is the four fields the wheel and
+   * the code entry actually read, plus the two the pack and combat
+   * read for the blessing, so a Kenosis operative's Gilding Rite is
+   * the one their own module granted.
+   *
+   * Vesper takes this branch never: `kenosisCallsFor` returns null
+   * and the mission object is untouched, field for field. */
+  if (kenosisCallsFor(ctx.playerCharacter?.id)) {
+    ctx.command = buildSummitCommand(ctx, player, {
+      characterId: ctx.playerCharacter?.id,
+    });
+  }
+  if (ctx.command) {
+    mission.wheelOrder = ctx.command.wheelOrder;
+    mission.stratagems = ctx.command.stratagems;
+    mission.cooldowns = ctx.command.cooldowns;
+    mission.call = ctx.command.call;
+    mission.boon = ctx.command.boon;
+    mission.grantBoon = ctx.command.grantBoon;
+    mission.blocksEnemyProjectile = ctx.command.blocksEnemyProjectile;
+    mission.pending = ctx.command.pending;
+    mission.activeFields = ctx.command.activeFields;
+    /* The arrow code too, or that input path resolves against a
+       catalog this operative does not carry and quietly does nothing. */
+    mission.entry = ctx.command.entry;
+    mission.beginEntry = ctx.command.beginEntry;
+    mission.cancelEntry = ctx.command.cancelEntry;
+    mission.pushDirection = ctx.command.pushDirection;
+
+    /* AND THE SAVE HAS TO CARRY THEM.
+     *
+     * `save.js`'s snapshot validator walks `ctx.mission.stratagems`
+     * and demands a finite cooldown for every key it finds. Swapping
+     * the catalog above without this makes EVERY campaign save fail
+     * validation for these operatives - the wheel offers
+     * `mirrorchoir`, the mission's own snapshot has never heard of
+     * it, and `isFiniteNumber(undefined)` is false. Caught by
+     * `saintfall-operative-kit-carryover-probe.mjs` going 11/11 to
+     * 9/11 on exactly the two field-restore checks.
+     *
+     * Wrapped rather than replaced: the mission's snapshot is still
+     * the mission's - phases, relays, bosses, the lot - with this
+     * operative's cooldowns merged over the top, and handed back on
+     * restore. */
+    const baseSnapshot = mission.snapshot;
+    const baseRestore = mission.restore;
+    mission.snapshot = () => {
+      const snap = baseSnapshot.call(mission);
+      if (snap && typeof snap === "object") {
+        snap.cooldowns = { ...(snap.cooldowns || {}), ...ctx.command.captureCooldowns() };
+      }
+      return snap;
+    };
+    mission.restore = (saved) => {
+      const ok = baseRestore.call(mission, saved);
+      if (ok && saved && saved.cooldowns) ctx.command.restoreCooldowns(saved.cooldowns);
+      return ok;
+    };
+  }
   const breaches = buildBreaches(ctx);
   ctx.breaches = breaches;
   let shield = buildShield(ctx, player);
@@ -403,8 +478,41 @@ export async function start({ boot, build } = {}) {
      observe. Constructing progression here lets it subscribe to authoritative
      combat/mission events while every lower-level mechanic can still query
      `ctx.progression` lazily without creating import cycles. */
-  const progression = buildProgression(ctx);
+  /* WHICH DOCTRINE THIS OPERATIVE CARRIES.
+   *
+   * The kits came into the campaign in m111 and the trees follow here:
+   * a White Vigil holding blink, the stoop and paired crescents was
+   * still being handed Vesper's Censer/Procession/Wing/Halo/Edict
+   * rites, which improve a furnace lance and a polearm she does not
+   * carry. `progression.js` cannot serve both - it imports
+   * `DOCTRINE_ORDERS` at module scope and `buildProgression(ctx)`
+   * takes no tree argument (see m108) - so the operative picks the
+   * runtime, and both answer the same contract `save.js`, `ui.js`'s
+   * board and `audio.js` read.
+   *
+   * Vesper is untouched: no tree, no change, the same object as
+   * before. */
+  const kenosisTree = kenosisTreeFor(ctx.playerCharacter?.id);
+  const progression = kenosisTree
+    ? buildSummitDoctrine(ctx, player)
+    : buildProgression(ctx);
   ctx.progression = progression;
+  ctx.doctrine = progression;
+  if (kenosisTree) {
+    /* PUBLISH THIS OPERATIVE'S ORDERS INTO THE VFX VOCABULARY, or
+       every rite this tree fires is rejected by `doctrineCue` and
+       draws nothing at all - silently, because an unknown Order is
+       dropped rather than thrown.
+       The style `id` claims one of the five doctrine mote channels
+       and repoints it at the Order's colour. Only one operative is
+       deployed at a time, so a Vigil on the campaign never shows
+       Vesper's Orders and nothing is taken from anyone. */
+    const styles = {};
+    kenosisTree.orders.forEach((order, index) => {
+      styles[order.id] = { ...order.art, id: 6 + index, family: "kenosis" };
+    });
+    ctx.vfx?.registerDoctrineOrders?.(styles);
+  }
 
   /* The campaign score observes the completed mission after progression, so
      the victory XP and any resulting Field Rank are part of the debrief. It
@@ -1299,6 +1407,10 @@ export async function start({ boot, build } = {}) {
     guardReadability.update(d);
     breaches.update(d);
     mission.update(d);
+    /* BEFORE the enemies read their lures and after the mission's own
+       tick: a beacon's lure and a lingering field are written onto
+       creatures and consumed by combat in the same frame. */
+    ctx.command?.update?.(d);
     /* Every movement owner has now taken its turn: ordinary pursuit in
        combat, encounter-owned bosses above, and event spawns in mission.
        Resolve their shared body space once, here, so no controller can undo

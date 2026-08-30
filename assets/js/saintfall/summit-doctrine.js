@@ -1122,6 +1122,77 @@ export function buildSummitDoctrine(ctx, player) {
     kit,
     verb,
     interceptLethal,
+    /* ============================================================
+       THE CAMPAIGN CONTRACT
+
+       m112 carries these trees into `games/saintfall.html`, where
+       `save.js` and `main.js` talk to whatever sits on
+       `ctx.progression`. Every one of those calls is `?.`-guarded, so
+       a missing method is a silent no-op rather than a crash - which
+       is exactly why the gaps have to be filled deliberately instead
+       of discovered later as progression that quietly fails to save.
+
+       THIS RUNTIME DECLINES THE CAREER ENVELOPE, ON PURPOSE. The
+       campaign keeps ONE career record per account ("Career
+       progression belongs to the account envelope, not any single
+       slot" - save.js), and three operatives with three different
+       trees would fight over it: a Vigil's `captureCareer` would
+       overwrite Vesper's 25-talent career, and Vesper's would then be
+       handed back to the Vigil as a record full of node ids its tree
+       has never heard of.
+
+       So `captureCareer` returns null and the envelope is left
+       untouched. Nothing is lost by it: this runtime has owned its
+       own per-tree localStorage store since m108 and still does, so a
+       Kenosis doctrine persists across sessions on the campaign
+       exactly as it does on the summit - it simply persists beside
+       Vesper's career instead of on top of it.
+
+       `validateCareer` is deliberately NOT provided either.
+       `save.js`'s `normalizeCareer` falls back to cloning the value
+       when the runtime has no validator, so an existing Vesper career
+       passes through this operative untouched; supplying a validator
+       here would reject it as INVALID_CAREER and raise a conflict
+       over a record we do not own.
+       ============================================================ */
+    captureCareer: () => null,
+    restoreCareer: (value, options = {}) => ({
+      ok: true, ignored: true, source: options.source || "runtime",
+      reason: "kenosis-doctrine-owns-its-own-store",
+    }),
+    /* Cleared directly rather than through `respec()`: a new game must
+       always succeed, and `respec()` refuses while editing is locked
+       (mid-fight, or with a Vow sealed). `state()` derives everything
+       from `record`, so there is nothing else to recompute. */
+    resetCareer(options = {}) {
+      record.totalXp = 0;
+      record.allocations = {};
+      record.activeCapstones = [null, null];
+      persist();
+      notify();
+      return { ok: true, source: options.source || "runtime" };
+    },
+    /* No career/field split - see the m108 milestone. A null field
+       layer is explicitly valid to `save.js` (`validFieldProgression`
+       returns true for null), so the campaign simply records that
+       this operative brought no field loadout. */
+    captureField: () => null,
+    restoreField: () => true,
+    validateField: () => true,
+    validateFieldState: () => true,
+    restoreFieldForQA: () => true,
+    clearFieldLoadout: () => true,
+    /* This runtime persists itself; the campaign's persistence
+       service has nothing to attach to. */
+    attachPersistence: () => false,
+    doctrineSnapshot: () => ({
+      tree: tree.id,
+      totalXp: record.totalXp,
+      allocations: { ...record.allocations },
+      activeCapstones: [...record.activeCapstones],
+    }),
+    status: () => state(),
+    fieldRank: () => state().rank,
     /* Diagnostics for the audit harness. */
     procCounts: () => ({ ...procCounts }),
     dispose() {

@@ -48,7 +48,13 @@ import { GUARD_TYPES, normalizeGuardDetail } from "saintfall/guard-rules.js";
    trials ground plays at campaign weight. */
 const KITS = {
   "white-vigil": {
-    doctrine: "Doctrine of the Wing",
+    /* The operative's OWN tree, not Vesper's. These read "Doctrine
+       of the Wing" and "of the Censer" while the kits borrowed her
+       doctrine; m108 gave each operative a tree and m112 carried it
+       into the campaign, so the label was left describing rites
+       neither of them can buy. Titles match
+       `summit-doctrine-config.js`. */
+    doctrine: "The Kenotic Rite",
     melee: {
       /* Read by player.meleeSwing and combat.meleeStrike in place of
          a weapons-module spec. Reach is a blade in each fist, not a
@@ -89,7 +95,7 @@ const KITS = {
     },
   },
   "bastion-penitent": {
-    doctrine: "Doctrine of the Censer",
+    doctrine: "The Iron Liturgy",
     /* The reliquary is the biggest thing anyone swings on this
        mountain, and its crescent has to say so: half again the
        lance's sweep. */

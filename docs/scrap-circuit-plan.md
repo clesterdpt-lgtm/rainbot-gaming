@@ -59,6 +59,7 @@ Current implementation status:
 
 - Initial build (2026-07-03): all of the slice above implemented — six arenas with per-arena palettes/fog/hazards/ramps, ten vehicles with specials, nine pickup weapon types, four AI archetypes, PS1 renderer (480x270 internal target, vertex snap, Bayer dither, per-arena fog), container-query HUD, twin-stick touch, synth SFX + jingle stingers, The Adjuster bark feed, Sponsor Drop rewarded loop, Salvage high score, site cards + README row.
 - Circuit Mode (2026-07-03): added a full six-arena run alongside single-match. A mode picker (Single Match / Full Circuit) on the menu; the circuit runs the fixed arena order (suburb → junkyard → interchange → boardwalk → rooftop → cemetery) with **chassis HP carrying between rounds**. Between rounds The Adjuster's repair-estimate shop spends Salvage: Full Repair (3 Salvage/HP), Patch Job (+30 HP for 60), Premium Coverage (next-round 6s shield for 120). Losing a round shows a **write-off**: pay a growing fee (300 + 200 per prior write-off) to revive at 55% HP, or cash out and bank your Salvage. Bots escalate per round (+6% HP, +10% special rate). Completing all six pays a +750 finish bonus. Circuit runs post to a separate high score `scrap-circuit-full` (single matches stay on `scrap-circuit`). Repairs-cost-Salvage makes the economy satire the difficulty curve, answering the tournament-mode open question below.
+- Visual overhaul (2026-08-05): environments, vehicles and VFX rebuilt to the standard of the 1995-era games the format parodies, verified by blind comparison rather than by eye. Full write-up in `docs/milestones/78-scrap-circuit-visual-overhaul.md`. Headlines: (1) **texel density** — every texture was stretched 1:1 across whole surfaces, so a 190 m ground plane showed one 128 px tile; UVs are now rewritten per primitive from world size and a per-material metres-per-tile hint. (2) **`assets/js/scrap-circuit/procedural.js`**, a canvas texture bakery for the structured surfaces the AI art cannot cover (window grids, storefronts, sound walls, sidewalks, chain-link, car paint and glass, sky gradients, explosion sprite sheets), routed through the same manifest registry so a dropped-in PNG still wins. (3) **scale and enclosure** — a storey is 3.6 m, arenas are closed by real geometry backed by a hazed skyline and a camera-following sky dome, with per-arena landmarks. (4) **light pools** under every lamp and sign. (5) **vehicles** gained arches, bumpers, grilles, lamps, mirrors and spoked rims; three wrong-art body textures were retired to `manifest.retired`. (6) **VFX** moved to billboarded sprite fireballs with lingering smoke, hot tracers, and damage/tyre smoke. Three real bugs surfaced: `block()` ignored its own rotation when building colliders, spawn points could sit inside geometry (now auto-cleared), and the chase camera reversed into walls (now stops short and climbs). Worst-case frame time 2.5 ms of a 16.6 ms budget.
 - Ramps, weapons & pickup clarity (2026-07-04): (1) **Fixed elevated-level access.** Cars got stuck climbing to higher decks — the interchange put guardrails on the *inner* straight edges where the infield ramps connect (walling them off), the suburb roof-ramp house's solid collider blocked its own roof, and a slow ground-follow lerp left the car sunk below ramp surfaces so it never reached deck height. Fixes: guardrails moved to outer/fall-off edges only; the roof-house is now visual body + side-wall colliders with open ramp ends; the car snaps to ground height instead of lerping; and `collideStatics` gained a crest tolerance (`c.top <= car.y + STEP`) so an elevated car mounts a deck while a ground-level car still bounces off tall walls. All six arenas' ramps drive-tested to full deck height. (2) **Machine-gun baseline.** Every vehicle now always has an infinite-ammo machine gun (`BASE_WEAPON`); pickups are upgrades (homing missile, freeze, fire, remote, mine, ricochet) with finite ammo that revert to the machine gun when spent. Bots share the baseline with a tighter engagement range so five of them don't hose the player. (3) **Readable pickups + HUD icon.** Each pickup is now a distinct low-poly 3D model on a glowing halo ring (rocket / ice crystal / flame / bomb / spiky mine / faceted orb / dome shield / boost chevrons / wrench / battery) instead of a colored cube, and the HUD shows a boxed emoji "picture" of the currently held weapon (🔫 baseline, highlighted when carrying an upgrade) with its ammo (∞ / xN). A toast names each pickup on grab.
 
 ## Circuit Mode (economy = difficulty)
@@ -182,7 +183,11 @@ Insurance-adjuster hype-man. Bark lines are HUD text stingers with synth horn hi
 
 ## Visual Direction
 
-- Authentic PS1: 480x270 internal target with hard-pixel upscale, vertex wobble, flat-shaded Lambert with vertex-color AO, per-arena heavy fog, Bayer dither, short draw distance as an aesthetic.
+- Authentic PS1: 480x270 internal target with hard-pixel upscale, vertex wobble, flat-shaded Lambert with vertex-color AO, per-arena fog, Bayer dither.
+- **Texel density is not optional.** Materials are shared across dozens of meshes, so `texture.repeat` cannot work — tiling lives in each geometry's UVs, driven by a metres-per-tile hint on the material (`M(key, colour, tile)`), and every kit primitive must route through the `uv*` helpers. A surface that skips this shows one stretched tile and reads as untextured no matter how good the art is.
+- **Scale reference: a storey is 3.6 m and a car is 4.5 m.** Buildings are 2–9 storeys. Anything shorter reads as a model kit.
+- **Every arena is enclosed by real geometry**, backed by a two-ring hazed skyline and a camera-following sky dome. A world that visibly ends is the fastest way to break the illusion.
+- **Light pools under every lamp, sign and neon.** Bright puddles with near-dark between them is the era's signature; evenly lit ground is not.
 - Every arena owns a palette and fog color; silhouettes and proportion carry all vehicle identity (no textures required to tell anyone apart).
 - Specials are the loud moment: particle bursts, screen flash, chunky sprite explosions — visually loud even at PS1 budgets.
 - HUD: Press Start 2P numerals, hard drop shadows, CSS scanline + vignette overlay on the wrap.
@@ -193,6 +198,7 @@ Insurance-adjuster hype-man. Bark lines are HUD text stingers with synth horn hi
 - `games/scrap-circuit.html` — page, HUD markup, touch layer.
 - `assets/js/scrap-circuit/ps1.js` — Ps1Renderer (render target, dither blit, vertex snap patch).
 - `assets/js/scrap-circuit/textures.js` — manifest loader + material registry.
+- `assets/js/scrap-circuit/procedural.js` — canvas texture bakery (structured surfaces, car paint/glass, FX sprite sheets). Manifest art always overrides it.
 - `assets/js/scrap-circuit/vehicles.js` — roster data + 10 mesh factories.
 - `assets/js/scrap-circuit/arenas.js` — shared kit + 6 arena factories.
 - `assets/js/scrap-circuit/main.js` — simulation, combat, AI, HUD, input, loop.
@@ -225,6 +231,26 @@ Remaining arenas with palettes, fog, hazards, destructibles, verticality.
 ### Milestone 6: Site Release
 
 HUD polish, touch controls, announcer, synth audio, dither pass, cards, README, browser playtest desktop + mobile viewport.
+
+## QA harnesses
+
+`?qa=1` exposes `window.__scrapQA`: free camera, deterministic sim stepping,
+player input override, bot parking, effect firing, and a synchronous
+drawing-buffer grab (Playwright's screenshot API composites at ~1 fps headless
+and hands back stale frames).
+
+```bash
+node scripts/scrap-shots.mjs          # arena poses + image metrics
+node scripts/scrap-vehicle-shots.mjs  # per-chassis turntables
+node scripts/scrap-vfx-probe.mjs      # explosion frames on a stopped clock
+node scripts/scrap-action-shots.mjs   # live-match chase-cam frames
+node scripts/scrap-verify.mjs         # frame time, spawns, ramp climbs
+node scripts/scrap-blind-compare.mjs  # blind A/B against era references
+```
+
+`scrap-verify.mjs` is the regression gate — it catches the failures screenshots
+cannot show: spawns wedged inside geometry, ramps that stopped being climbable,
+and frame-time blowouts.
 
 ## Open Questions
 

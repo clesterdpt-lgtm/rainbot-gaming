@@ -140,6 +140,11 @@
     }
 
     render(scene, camera) {
+      // Sky domes ride with the camera so the far plane can never slice
+      // them; the arena registers itself here when it builds one.
+      if (this.sky) {
+        this.sky.group.position.set(camera.position.x, this.sky.baseY, camera.position.z);
+      }
       this.renderer.setRenderTarget(this.target);
       this.renderer.render(scene, camera);
       this.renderer.setRenderTarget(null);

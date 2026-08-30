@@ -20,6 +20,9 @@ import { makeKit } from "saintfall/structures.js";
 import { paintByHeight, PALETTE, patchMaterial } from "saintfall/art.js";
 import { makeRamp } from "saintfall/core.js";
 import { initIk, solveTwoJoint } from "saintfall/ik.js";
+import {
+  keybindCodes, keybindDown, keybindMatches, onKeybindsChange,
+} from "saintfall/keybinds.js";
 
 /* ============================================================
    THE FIGURE
@@ -1408,7 +1411,10 @@ function buildProceduralTrooper(ctx) {
    skinned mesh and named humanoid bones.
    ============================================================ */
 
-async function buildVesperTrooper(ctx) {
+/* Public only as a FIGURE factory. Encounter modules may borrow the same
+   authored Reliquary silhouette without constructing a second player
+   controller (and therefore without installing another input/camera stack). */
+export async function buildVesperTrooper(ctx) {
   const { THREE, atmos } = ctx;
   const { GLTFLoader } = await import("three/addons/loaders/GLTFLoader.js");
   const loader = new GLTFLoader();
@@ -1797,6 +1803,10 @@ async function buildVesperTrooper(ctx) {
     weaponBindQuaternion: weaponMount.quaternion.clone(),
     armAxis: new THREE.Vector3(0, 1, 0),
     legAxis: new THREE.Vector3(0, 1, 0),
+    /* The imported gauntlet's visible palm plane leads its hand bone
+       slightly toward figure-forward. Counter-roll the two relaxed
+       wrists symmetrically so the palms settle toward the thighs. */
+    freeHandPalmTurn: THREE.MathUtils.degToRad(35),
   };
 }
 
@@ -1813,17 +1823,53 @@ async function buildTrooper(ctx) {
   }
 }
 
+/* A parallel world may supply a different playable BODY without
+   changing the Reliquary factory used by Vesper encounters. The
+   controller contract stays identical, and a failed planet-specific
+   asset still degrades to the proven procedural figure rather than
+   booting the level with no player at all. */
+async function buildPlayerTrooper(ctx) {
+  if (typeof ctx.playerFigureFactory !== "function") return buildTrooper(ctx);
+  try {
+    return await ctx.playerFigureFactory(ctx);
+  } catch (error) {
+    const label = ctx.playerFigureName || "custom";
+    console.warn(`[saintfall] ${label} player asset failed; using procedural fallback`, error);
+    const fallback = buildProceduralTrooper(ctx);
+    fallback.imported = false;
+    fallback.assetSource = "procedural-fallback";
+    fallback.baseScale = fallback.root.scale.clone();
+    return fallback;
+  }
+}
+
+/* Encounter-safe public figure factory. Unlike `createPlayer`, this installs
+   no input, camera, movement or targeting systems; unlike the raw GLB helper,
+   it preserves the procedural fallback that keeps the game playable when the
+   authored asset cannot be fetched. */
+export async function buildReliquaryFigure(ctx) {
+  return buildTrooper(ctx);
+}
+
 /* ============================================================
    INPUT
    ============================================================ */
 
-function makeInput(canvas) {
+function makeInput(canvas, captureMeleeAim = null) {
   const keys = new Set();
   const state = {
     clock: 0,
     move: { x: 0, y: 0 },
     look: { x: 0, y: 0 },
+    /* `sprint` survives only as the TOUCH stick's full-tilt flag. On
+       the keyboard there is no sprint any more: the trooper travels
+       at what used to be sprint speed all the time, and Shift became
+       the boost. A separate speed for holding a key was a tax on
+       crossing two kilometres of open basin. */
     sprint: false,
+    boostHeld: false,
+    meleeHeld: false,
+    furnaceHeld: false,
     jump: false,
     jumpPressed: false,
     jetpack: false,
@@ -1841,15 +1887,18 @@ function makeInput(canvas) {
        difference between an orbital lance and "CODE REJECTED". */
     events: [],
   };
-  const mouse = { firing: false, ads: false };
+  const mouse = { firing: false, ads: false, furnace: false };
   const touch = {
     moveActive: false,
     move: { x: 0, y: 0 },
     sprint: false,
+    boostHeld: false,
+    melee: false,
     crouch: false,
     jetpack: false,
     block: false,
     firing: false,
+    furnace: false,
     ads: false,
   };
 
@@ -1879,7 +1928,12 @@ function makeInput(canvas) {
       state.jumpPressed = true;
       return true;
     }
-    state.events.push({ type, ...detail });
+    if (type === "melee" && !Number.isFinite(detail.aimYaw)) {
+      const aimYaw = captureMeleeAim?.();
+      state.events.push({ type, ...detail, aimYaw });
+    } else {
+      state.events.push({ type, ...detail });
+    }
     return true;
   }
 
@@ -1888,12 +1942,14 @@ function makeInput(canvas) {
     touch.move.x = 0;
     touch.move.y = 0;
     touch.sprint = false;
-    touch.crouch = false;
+    touch.melee = false;
     touch.jetpack = false;
     touch.block = false;
     touch.firing = false;
+    touch.furnace = false;
     touch.ads = false;
     state.firing = mouse.firing;
+    state.furnaceHeld = mouse.furnace;
     state.ads = mouse.ads;
   }
 
@@ -1905,12 +1961,16 @@ function makeInput(canvas) {
     keys.clear();
     mouse.firing = false;
     mouse.ads = false;
+    mouse.furnace = false;
     state.injected = null;
     state.move.x = 0;
     state.move.y = 0;
     state.look.x = 0;
     state.look.y = 0;
     state.sprint = false;
+    state.boostHeld = false;
+    state.meleeHeld = false;
+    state.furnaceHeld = false;
     state.jump = false;
     state.jumpPressed = false;
     state.jetpack = false;
@@ -1923,49 +1983,65 @@ function makeInput(canvas) {
     clearTouch();
   }
 
-  /* Holding the stratagem key turns the direction pad into a code
-     pad. WASD keeps driving movement, so the arrows do double duty:
-     free look while walking, code entry while called. */
-  const DIRS = {
-    ArrowUp: "up", ArrowDown: "down", ArrowLeft: "left", ArrowRight: "right",
-  };
-
+  const ownsKeyboard = () => state.locked || document.activeElement === canvas
+    || document.documentElement.classList.contains("sf-maximised");
+  const isInteractiveKeyTarget = (target) => target instanceof Element
+    && !!target.closest("button, a, input, select, textarea, [contenteditable='true'],"
+      + " [role='button'], [role='menuitem'], [role='tab']");
   const onKey = (e, down) => {
     const k = e.code;
     const held = keys.has(k);
+    /* The game lives inside a larger, keyboard-navigable page. Only claim
+       gameplay keys after the canvas owns interaction or in max-screen mode.
+       Keyup still clears a key captured earlier, even if ownership was lost. */
+    if (down && (!ownsKeyboard() || e.defaultPrevented || isInteractiveKeyTarget(e.target))) return;
     if (down) keys.add(k); else keys.delete(k);
-    if (["KeyW", "KeyA", "KeyS", "KeyD", "Space", "ShiftLeft", "ShiftRight", "ControlLeft",
-      "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "KeyR",
-      "KeyQ", "KeyV", "KeyE", "KeyX"].includes(k)) e.preventDefault();
+    /* A keyup that belongs to a focused control must retain the browser's
+       native Space/Enter click. We still deleted a previously held gameplay
+       key above, but only claimed keyup when that key was actually ours. */
+    if (!down && (!held || e.defaultPrevented || isInteractiveKeyTarget(e.target))) return;
+    if (!down && !ownsKeyboard()) return;
+    /* Swallow the page's own use of anything the player has BOUND,
+       not a frozen literal list: a scheme that moves Vault onto "/"
+       must not also scroll the article behind the canvas. Arrow keys
+       stay here unconditionally - they scroll whether or not they are
+       currently a movement key. */
+    if (boundCodes.has(k) || k.startsWith("Arrow")) e.preventDefault();
     if (!down || held) return;                 // key REPEATS are not presses
     /* MELEE IS AN ACTION, NOT A MODE.
-       This was KeyX = "swap", which toggled the lance between its
-       ranged and melee rites and left you in whichever one you last
-       chose - so a melee needed two presses and a mental note about
-       which mode you were in, and forgetting cost you the fight.
        One key, one swing: main.js takes the rite over for the length
-       of the animation and hands it back.
-
-       Q, and the stratagem pad moved to V to free it. Melee is the
-       panic button - it is what you hit with something already on
-       top of you - so it belongs under the finger that is nearest
-       WASD, and stratagems are the deliberate one you have time to
-       reach for. */
-    if (k === "KeyQ") state.events.push({ type: "melee" });
-    else if (k === "KeyV") state.events.push({ type: "stratOpen" });
-    else if (k === "KeyR") state.events.push({ type: "vent" });
-    else if (k === "KeyE") state.events.push({ type: "boost" });
-    else if (k === "Space") state.jumpPressed = true;
-    else if (DIRS[k] && keys.has("KeyV")) {
-      state.events.push({ type: "dir", dir: DIRS[k] });
+       of the animation and hands it back. */
+    if (keybindMatches("melee", k)) {
+      /* Bind the swing to the reticle that existed at keydown. The
+         event is drained after player.update(), so sampling there
+         would let mouse-look during the same frame silently redirect
+         an attack the player already committed. */
+      state.events.push({ type: "melee", aimYaw: captureMeleeAim?.() });
     }
+    else if (keybindMatches("stratagems", k)) state.events.push({ type: "stratOpen" });
+    else if (keybindMatches("vent", k)) state.events.push({ type: "vent" });
+    /* BOOST IS ONE KEY. Tapped it is a burst, held it is a glide, and
+       held with Vault it is the jetpack - which is the whole reason it
+       can also be the burst. The command wheel is owned by ui.js, so
+       this file only swallows that key. */
+    else if (keybindMatches("boost", k)) {
+      state.events.push({ type: "boost" });
+    }
+    else if (keybindMatches("jump", k)) state.jumpPressed = true;
   };
+  /* Cached because onKey runs on every keystroke the page sees, most
+     of which are not ours. Rebuilt whenever the Controls page writes. */
+  let boundCodes = keybindCodes();
+  onKeybindsChange(() => { boundCodes = keybindCodes(); });
   window.addEventListener("keydown", (e) => onKey(e, true));
   window.addEventListener("keyup", (e) => onKey(e, false));
   window.addEventListener("blur", () => {
     keys.clear();
     state.jumpPressed = false;
     state.jetpack = false;
+    state.boostHeld = false;
+    state.meleeHeld = false;
+    state.furnaceHeld = false;
     clearTouch();
   });
   document.addEventListener("visibilitychange", () => {
@@ -1973,7 +2049,12 @@ function makeInput(canvas) {
   });
 
   canvas.addEventListener("click", () => {
-    if (!state.locked && canvas.requestPointerLock) canvas.requestPointerLock();
+    if (!state.locked && canvas.requestPointerLock) {
+      try {
+        const lock = canvas.requestPointerLock();
+        lock?.catch?.(() => false);
+      } catch (_) { /* pointer-lock policy is browser-owned */ }
+    }
   });
   document.addEventListener("pointerlockchange", () => {
     state.locked = document.pointerLockElement === canvas;
@@ -1984,13 +2065,18 @@ function makeInput(canvas) {
     state.look.y += e.movementY;
   });
   window.addEventListener("mousedown", (e) => {
-    if (!state.locked) return;
+    if (!state.locked || e.defaultPrevented) return;
     if (e.button === 0) { mouse.firing = true; state.firing = true; }
+    if (e.button === 1) { e.preventDefault(); mouse.furnace = true; state.furnaceHeld = true; }
     if (e.button === 2) { mouse.ads = true; state.ads = true; }
   });
   window.addEventListener("mouseup", (e) => {
     if (e.button === 0) { mouse.firing = false; state.firing = touch.firing; }
+    if (e.button === 1) { e.preventDefault(); mouse.furnace = false; state.furnaceHeld = touch.furnace; }
     if (e.button === 2) { mouse.ads = false; state.ads = touch.ads; }
+  });
+  window.addEventListener("auxclick", (e) => {
+    if (state.locked && e.button === 1) e.preventDefault();
   });
   window.addEventListener("contextmenu", (e) => {
     if (state.locked) e.preventDefault();
@@ -1998,7 +2084,9 @@ function makeInput(canvas) {
   window.addEventListener("blur", () => {
     mouse.firing = false;
     mouse.ads = false;
+    mouse.furnace = false;
     state.firing = false;
+    state.furnaceHeld = false;
     state.ads = false;
   });
 
@@ -2013,20 +2101,22 @@ function makeInput(canvas) {
         state.move.x = touch.move.x;
         state.move.y = touch.move.y;
       } else {
-        state.move.x = (keys.has("KeyD") || keys.has("ArrowRight") ? 1 : 0)
-          - (keys.has("KeyA") || keys.has("ArrowLeft") ? 1 : 0);
-        state.move.y = (keys.has("KeyS") || keys.has("ArrowDown") ? 1 : 0)
-          - (keys.has("KeyW") || keys.has("ArrowUp") ? 1 : 0);
+        state.move.x = (keybindDown(keys, "moveRight") ? 1 : 0)
+          - (keybindDown(keys, "moveLeft") ? 1 : 0);
+        state.move.y = (keybindDown(keys, "moveBack") ? 1 : 0)
+          - (keybindDown(keys, "moveForward") ? 1 : 0);
       }
-      // Arrow keys drive the code pad while the stratagem key is
-      // held, so they must not also walk the trooper.
-      if (keys.has("KeyV")) { state.move.x = 0; state.move.y = 0; }
-      state.sprint = keys.has("ShiftLeft") || keys.has("ShiftRight") || touch.sprint;
-      state.crouch = keys.has("ControlLeft") || keys.has("KeyC") || touch.crouch;
-      state.jump = keys.has("Space");
-      state.jetpack = (state.jump && (keys.has("ShiftLeft") || keys.has("ShiftRight")))
-        || touch.jetpack;
-      state.block = keys.has("KeyX") || touch.block;
+      const boostHeld = keybindDown(keys, "boost");
+      const meleeHeld = keybindDown(keys, "melee");
+      const furnaceHeld = keybindDown(keys, "furnace") || mouse.furnace;
+      state.sprint = touch.sprint;
+      state.boostHeld = boostHeld || touch.boostHeld;
+      state.meleeHeld = meleeHeld || touch.melee;
+      state.furnaceHeld = furnaceHeld || touch.furnace;
+      state.crouch = false;
+      state.jump = keybindDown(keys, "jump");
+      state.jetpack = (state.jump && boostHeld) || touch.jetpack;
+      state.block = keybindDown(keys, "block") || touch.block;
       const lx = state.look.x;
       const ly = state.look.y;
       const jumpPressed = state.jumpPressed;
@@ -2058,10 +2148,114 @@ function makeInput(canvas) {
 
 export async function createPlayer(ctx, canvas) {
   const { THREE, scene, terrain } = ctx;
-  const figure = await buildTrooper(ctx);
+  const figure = await buildPlayerTrooper(ctx);
   scene.add(figure.root);
 
-  const input = makeInput(canvas);
+  /* THE HEART LAMP RIDES THE SCENE, NOT THE RIG. The drop cinematic
+     hides the whole figure until the egress beat, and three collects
+     lights with traverseVisible - so a lamp inside the hidden rig is
+     missing from every program the boot warm-up compiles, and the
+     frame that reveals the trooper changes the scene's visible light
+     count and re-keys EVERY lit material in the level. On
+     Windows/ANGLE that recompile is a multi-second freeze - and it
+     silently invalidates the warm-up for everything still hidden, so
+     each boss paid it again on its own reveal frame. Same pattern as
+     the Aegis lamps, the Apostate's authored lights and the
+     undercroft lamps: the light itself is scene-parented and
+     permanently counted, a socket keeps the authored position on the
+     rig, and the pose driver pins the lamp to the socket every frame
+     (and drives it dark whenever the figure itself is hidden - free
+     camera, first person - where the old rig-parented lamp simply
+     vanished with the body). */
+  let heartSocket = null;
+  if (figure.heartLight && figure.heartLight.parent) {
+    const source = figure.heartLight;
+    heartSocket = new THREE.Object3D();
+    heartSocket.name = "vesper-heart-socket";
+    heartSocket.position.copy(source.position);
+    heartSocket.quaternion.copy(source.quaternion);
+    source.parent.add(heartSocket);
+    source.parent.remove(source);
+    scene.add(source);
+  }
+
+  /* Doctrine owns one additive presentation channel on the figure.
+     It deliberately borrows the reliquary light and the emissive
+     materials that are already updated below: no extra point lights,
+     no transient meshes and, most importantly, no transforms that can
+     fight locomotion, IK, recoil or authored action poses.
+
+     Colours follow the five Orders' menu accents, but are pulled back
+     from full neon so a proc reads as the same lamp changing character,
+     rather than as a different effect pasted over the trooper. */
+  const doctrineColours = {
+    censer: new THREE.Color(0xf0b84c),
+    procession: new THREE.Color(0xdf8542),
+    wing: new THREE.Color(0x58b8c9),
+    halo: new THREE.Color(0x7898d5),
+    edict: new THREE.Color(0x76ad78),
+    /* The Kenosis Orders. Muted the same way the five above are -
+       these are the lamp CHANGING CHARACTER, not a neon overlay, so
+       each is its Order's hue pulled well back from full. */
+    quicksilver: new THREE.Color(0x8fd8c8),
+    crescent: new THREE.Color(0xe6cf92),
+    stoop: new THREE.Color(0x84bccb),
+    vigil: new THREE.Color(0xbcc9da),
+    antiphon: new THREE.Color(0xa892cc),
+    bulwark: new THREE.Color(0xdf8b45),
+    cast: new THREE.Color(0xe0b053),
+    forge: new THREE.Color(0xd9633a),
+    anvil: new THREE.Color(0xcb5442),
+    tocsin: new THREE.Color(0x64b79b),
+  };
+  const doctrineGlow = {
+    colour: new THREE.Color(0xf0b84c),
+    level: 0,
+    peak: 0,
+    attackRemaining: 0,
+    decayRate: 12,
+    reducedMotion: false,
+  };
+  const doctrineHeartBase = figure.heartLight?.color?.clone() || null;
+  const doctrineEyeBase = figure.eyeGlow?.material?.emissive?.clone() || null;
+  const doctrineReadabilityBase = figure.readabilityMaterials
+    ? figure.readabilityMaterials.map((material) => material.emissive?.clone() || null)
+    : [];
+  const systemReducedMotion = typeof window !== "undefined"
+    && !!window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+
+  /**
+   * Briefly key the trooper's existing emissive rig to a Doctrine Order.
+   * `duration` controls the visible decay rather than gameplay timing.
+   * Returns false for an unknown Order or a zero-strength request.
+   */
+  function pulseDoctrine(order, strength = 0.7, duration = 0.42) {
+    if (!Object.hasOwn(doctrineColours, order)) return false;
+    const colour = doctrineColours[order];
+    const numericStrength = Number.isFinite(strength) ? strength : 0;
+    const numericDuration = Number.isFinite(duration) ? duration : 0.42;
+    if (!Number.isFinite(numericStrength) || numericStrength <= 0) return false;
+
+    const reducedMotion = systemReducedMotion
+      || (typeof document !== "undefined"
+        && !!document.body?.classList?.contains("sf-reduced-motion"));
+    const safeDuration = clamp(
+      numericDuration,
+      0.12,
+      1.2
+    );
+    const requestedPeak = clamp(numericStrength, 0, 1);
+    const accessiblePeak = reducedMotion ? requestedPeak * 0.32 : requestedPeak;
+
+    doctrineGlow.colour.copy(colour);
+    doctrineGlow.peak = Math.max(doctrineGlow.level, accessiblePeak);
+    doctrineGlow.attackRemaining = reducedMotion
+      ? Math.min(0.14, safeDuration * 0.32)
+      : Math.min(0.07, safeDuration * 0.18);
+    doctrineGlow.decayRate = (reducedMotion ? 3.2 : 5.5) / safeDuration;
+    doctrineGlow.reducedMotion = reducedMotion;
+    return true;
+  }
 
   const state = {
     clock: 0,
@@ -2080,10 +2274,69 @@ export async function createPlayer(ctx, canvas) {
     // Recoil shake amplitude, 0..1, and its oscillator phase.
     punch: 0,
     punchPhase: 0,
+    /* A SECOND shake channel, deliberately not the recoil one.
+       Recoil is a 47 rad/s buzz because that is what a shoulder-fired
+       weapon does to a helmet. A rite landing is the opposite event: a
+       single heavy shove that the body rides out over a quarter of a
+       second. Feeding doctrine through `punch` made a capstone feel
+       like an extra round going off, so it gets its own amplitude,
+       its own slow oscillator and its own decay. */
+    heave: 0,
+    heavePhase: 0,
+    heaveFreq: 16,
+    heaveDecay: 6.5,
+    // A hazard's ground-speed multiplier and how long it has left to
+    // run - see `applySlow` below.
+    slowFactor: 1,
+    slowFor: 0,
+    /* Held fast - see `applyRoot`. While this runs the feet do not
+       move at all: no ground travel, no jump, no boost or ignition.
+       Aim, fire, swing and Aegis are untouched, and something else
+       (a line, a haul - see `drag`) may still move the body. */
+    rootFor: 0,
+    /* PUT ON THE FLOOR - see `applyStun`, and it is a strictly bigger
+       thing than the root above. A root takes the feet; a stun takes
+       the whole trooper: no travel, no jump, no boost, no pack, and no
+       attack of any kind (main.js drops the input and refuses the
+       trigger while it runs). Reserved for the heaviest impacts in the
+       game, because taking a player's hands away is the most
+       expensive thing an attack can do to them. */
+    stunFor: 0,
+    // QA/diagnostic count for collision-safe flight-slam handoffs.
+    slamLandingCorrections: 0,
     camPitch: -0.10,
     camDist: 5.2,
+    firstPerson: 0,
+    cameraObstructed: false,
+    cameraObstructionReach: 1,
+    cameraBlocker: null,
+    /* Dying, and how far through the fall. `deathPose` is read by the
+       camera here and by the harness; nothing else in the file needs
+       to know, because the pose itself is carried by the `death`
+       action on the ordinary timeline. */
+    dying: false,
+    deathPose: 0,
     grounded: true,
     speed: 0,
+    /* Actual horizontal travel, which may differ from body facing
+       while melee commits the shoulders to the reticle. Footfall
+       prediction reads these so a sideways/backward swing cannot
+       plant both feet along the attack bearing. */
+    travelYaw: Math.PI,
+    travelSpeed: 0,
+    /* Signed grade of the ground actually travelled downhill this
+       frame, plus the presentation state it drives. A steep descent
+       remains GROUNDED physics; this is not a fall, boost or jetpack
+       mode, and borrowing any of those would also borrow their fuel,
+       collision and action rules. */
+    downhillGrade: 0,
+    /* Signed grade along the way the body is FACING, + uphill.
+       `downhillGrade` cannot stand in for it: that one is gated on
+       actually travelling down a continuous face, and is zero for
+       every climb. */
+    slopeGrade: 0,
+    downhillSliding: false,
+    downhillPose: 0,
     bob: 0,
     stride: 0,
     gait: 0,
@@ -2114,6 +2367,10 @@ export async function createPlayer(ctx, canvas) {
     aimHold: 0,
   };
 
+  const input = makeInput(canvas, () => Number.isFinite(state.aimViewYaw)
+    ? state.aimViewYaw
+    : state.camYaw);
+
   const EYE = 1.62;
   const CAMERA_AIM_BIAS = Math.atan2(0.35, state.camDist);
   /* Carried at chest height, forward of the breastplate. Follows
@@ -2135,10 +2392,53 @@ export async function createPlayer(ctx, canvas) {
   let sway = 0;
   let swayVel = 0;
   let lastYaw = 0;
-  /* Heavy does not mean slow.  The knight retains a fast 8.6m/s
-     sprint, but takes longer to build and shed that momentum. */
-  const WALK = 4.4;
-  const SPRINT = 8.6;
+  /* Figure-authored locomotion. Vesper and White Vigil keep the
+     established values through these defaults; physically broader
+     rigs can carry a slower, wider, more deliberate gait without
+     forking the controller or changing collision semantics. */
+  const locomotionProfile = figure.locomotionProfile || {};
+  const locomotionValue = (key, fallback) => Number.isFinite(locomotionProfile[key])
+    ? locomotionProfile[key]
+    : fallback;
+  const WALK = locomotionValue("walkSpeed", 4.4);
+  const SPRINT = locomotionValue("sprintSpeed", 8.6);
+  const GROUND_ACCEL_RESPONSE = locomotionValue("groundAcceleration", 3.4);
+  const GROUND_DECEL_RESPONSE = locomotionValue("groundDeceleration", 5.4);
+  const TURN_RESPONSE_SCALE = locomotionValue("turnResponseScale", 1);
+  const FLIGHT_SPEED_SCALE = locomotionValue("flightSpeedScale", 1);
+  const STRIDE_SCALE = locomotionValue("strideScale", 1);
+  const STANCE_BIAS = locomotionValue("stanceBias", 0);
+  const STEP_LIFT_SCALE = locomotionValue("stepLiftScale", 1);
+  const BODY_DROP_SCALE = locomotionValue("bodyDropScale", 1);
+  const IMPACT_SCALE = locomotionValue("impactScale", 1);
+  const PASSING_RISE_SCALE = locomotionValue("passingRiseScale", 1);
+  const WEIGHT_SWAY_M = locomotionValue("weightSwayM", 0);
+  const WEIGHT_ROLL = locomotionValue("weightRoll", 0);
+  /* HOW FAR THE BODY TIPS INTO ITS OWN TRAVEL, split the same way the
+     lean is applied further down: the first pair tilts the figure
+     root about the soles, the second is what the spine keeps. See the
+     long note at the lean itself for why it is split at all.
+
+     These were literals, and a literal is a claim that every figure
+     in this game carries its mass the same way. A heavier body leans
+     further at the same pace - that is most of what "heavy" looks
+     like from the side - and there is no way to say so with a
+     multiplier, because scaling one number that already spans 5.7 to
+     16 degrees either does nothing to the walk or throws the sprint
+     into a dive. Four independent radians, defaulting to exactly the
+     values that were hard-coded here. */
+  const LEAN_WALK = locomotionValue("leanWalk", 0.045);
+  const LEAN_SPRINT = locomotionValue("leanSprint", 0.155);
+  const SPINE_LEAN_WALK = locomotionValue("spineLeanWalk", 0.055);
+  const SPINE_LEAN_SPRINT = locomotionValue("spineLeanSprint", 0.025);
+  /* Below this the body is no longer travelling far enough per frame
+     to carry the gait, so the swing borrows a clock. Deliberately
+     well under WALK: a genuine slow amble already advances the cycle
+     faster than the floor does, so this only ever applies to a body
+     that is stopping. */
+  const GAIT_SETTLE_SPEED = locomotionValue("gaitSettleSpeed", Math.min(1.7, WALK * 0.55));
+  const GAIT_SETTLE_CADENCE = locomotionValue("gaitSettleCadence", 1.5);
+  const MELEE_THRUST_SPEED = 12.8;
   /* Fraction of the ordinary speed kept while sighted, and the field
      of view the camera pulls to. 0.46 of a walk is a deliberate
      shuffle; 40 degrees against a 62-degree hip view is a 1.55x zoom,
@@ -2155,13 +2455,81 @@ export async function createPlayer(ctx, canvas) {
      the leg geometry exactly, and is also what a leaning runner
      does - the feet land under the mass, not behind it. */
   let leanFootShift = 0;
-  const CROUCH = 2.4;
   /* How far the breastplate may lead the hips. 54 degrees is about
      what a person in a cuirass can hold with a weapon up; past it the
      legs have to come round, which is the whole point. It is also the
      clamp that stops the shoulders spinning a half-turn on stationary
      hips when the camera orbits. */
   const MAX_CHEST_TWIST = 0.95;
+  /* A melee press is a commitment to the reticle bearing captured on
+     that press. Locomotion normally owns body yaw, but letting it win
+     during the wind-up can turn a thrust 90-180 degrees away before
+     its hit window opens. This response leaves the turn visible and
+     keeps yawRate/foot prediction informed, while settling even a
+     full about-face before melee1 connects. */
+  /* Measured with `saintfall-melee-arc-probe.mjs`, reticle 180 degrees
+     behind: at 20 the body covered 114 of those degrees in the first
+     THREE FRAMES, which is not a turn - it is a teleport with an
+     animation playing over it.
+
+     The floor is set by a contract, not by taste. The blow must land
+     on what the reticle was pointing at when the key went down, and
+     `saintfall-melee-reticle-probe.mjs` holds the body to within
+     AIM_TOLERANCE_DEG (3 degrees) of that captured bearing by the time
+     the hit window opens at 0.317s. From a 120-degree offset the
+     residual is 120*exp(-R*0.317): R=12 leaves 3.3 degrees and fails
+     it, R=15 leaves 1.0 and passes with margin while still spreading
+     the pivot over twice as many frames as R=20 did. */
+  const MELEE_TURN_RESPONSE = 15;
+  /* From a quarter turn out, even that response reads as input lag: the
+     thrust wind-up plays while the legs are still coming round, and the
+     press feels like it went somewhere else. At and past 90 degrees the
+     press therefore becomes `meleeTurn` - a low horizontal cut in which
+     THE SPIN IS THE SWING. The root sweeps the whole signed offset on
+     the clip's own authored window (spec.turn, a smoothstep - an
+     exponential damp front-loads the turn into a teleport, which is
+     exactly what the R=20 measurement above showed), and the strike arc
+     widens to the angle actually swept, so the target ahead AND
+     anything the blade carved through on the way are honest hits. */
+  const TURN_SLASH_MIN = Math.PI / 2 - 1e-4;
+  /* Coverage past the swept angle itself - roughly the crescent the
+     extended blade subtends on each side of its path. */
+  const TURN_SLASH_ARC_PAD = 1.5;
+  /* Peak root speed of the authored lunge drive. Faster than the old
+     hold-W thrust jog (12.8) because it is a BURST with its own clip,
+     not a locomotion target: the profile in ACTIONS.meleeLunge.drive
+     ramps it in, holds it through the closing dash and fades it during
+     recovery, so it never becomes a sustained sprint. */
+  const MELEE_LUNGE_SPEED = 16.5;
+  /* Peak speed of the jetpack-powered piercing thrust. Explodes at
+     over double the standard lunge speed to pierce through entire lines. */
+  const MELEE_PIERCE_SPEED = 34.0;
+  /* Walking and flight-to-ground handoff must agree about what terrain
+     the trooper can occupy. Keeping these gates in one classifier avoids
+     a middle band where a slope is freely walkable but a descending
+     jetpack capsule mistakes its uphill rim for a roof. */
+  const WALK_SLOPE_LOOK = 1.6;
+  const WALK_SLOPE_NEAR = 0.45;
+  const WALK_SLOPE_LIMIT = 1.7;
+  const WALK_MAX_STEP_UP = 1.05;
+  const GROUNDED_SETTLE_DOWN_SPEED = 1.5;
+  /* The authored dune slip faces sit near the sand's angle of repose.
+     Walk normally below that band; once the directed descent reaches
+     about 36 degrees, brace and skid. Separate entry/exit grades keep
+     triangle-to-triangle noise from flickering the animation. */
+  const DOWNHILL_SLIDE_ENTER_GRADE = 0.72;
+  const DOWNHILL_SLIDE_EXIT_GRADE = 0.52;
+  /* Sand can support a visually continuous slide well beyond the
+     uphill walking limit. Past about 69 degrees it reads as a wall or
+     ledge, so gravity takes over. Fixed sub-samples below make this
+     classification stable on throttled frames. */
+  const DOWNHILL_MAX_CONTINUOUS_GRADE = 2.6;
+  /* Small contour changes stay glued to the sand. A real ledge does
+     not: once the whole capsule footprint is this far below the soles,
+     gravity owns the body immediately. Without this handoff a fast
+     ground boost could carry the grounded gait several metres over a
+     drop while `y` eased down at walking-slope speed. */
+  const GROUNDED_SUPPORT_SKIN = 0.20;
 
   const tmp = new THREE.Vector3();
   const camOffset = new THREE.Vector3();
@@ -2180,6 +2548,44 @@ export async function createPlayer(ctx, canvas) {
   initIk(THREE);
   const ARM_AXIS = figure.armAxis || new THREE.Vector3(0, -1, 0);
   const LEG_AXIS = figure.legAxis || new THREE.Vector3(0, -1, 0);
+  /* Imported figures do not necessarily share Vesper's shoulder
+     height or arm proportions. Keep the proven Vesper values as the
+     defaults, while allowing a figure adapter to author the free-arm
+     envelope that its own skeleton can actually reach. */
+  const freeArmPose = figure.freeArmPose || {};
+  const freeArmValue = (key, fallback) => Number.isFinite(freeArmPose[key])
+    ? freeArmPose[key]
+    : fallback;
+  /* The value below is the orientation of the FOOT BONE, not a
+     universal boot angle. Imported meshes may author their sole plane
+     at a different rotation around that bone, so let the figure
+     adapter supply the measured flat-contact pitch. */
+  const footPose = figure.footPose || {};
+  const REST_FOOT_PITCH = Number.isFinite(footPose.restPitch)
+    ? footPose.restPitch
+    : 0.55;
+  /* WHERE THE ANKLE SITS WHEN NOTHING IS HOLDING THE FOOT UP.
+     A deviation from the ankle's own neutral, positive toes-up, NOT
+     a world pitch - which is the whole repair below. Legs trailing
+     under a jetpack hang from relaxed ankles with the toes following
+     the shin; the old absolute pitch pointed both sabatons at the
+     horizon while the shins ran backwards, which is a 90-degree
+     ankle break and reads exactly as the reported "feet pointing
+     up". Being a deviation, one number now suits both playable rigs,
+     whose foot bones disagree by 26 degrees about where "flat" is. */
+  const FLIGHT_ANKLE_DEV = Number.isFinite(footPose.flightDev)
+    ? footPose.flightDev
+    : -0.34;
+  /* WHAT AN ANKLE CAN DO. Roughly 55 degrees pointed and 26 pulled
+     up, which is the human range plus a little for armour. This is
+     the last thing applied to every foot in every mode, so no
+     solver below - gait, climb, skid, boost or flight - can hand the
+     rig a joint angle a leg does not have. */
+  const ANKLE_DEV_MIN = -0.96;
+  const ANKLE_DEV_MAX = 0.46;
+  /* The sole may roll this far across a hill before the boot simply
+     rides the slope's edge, matching a real subtalar joint. */
+  const ANKLE_ROLL_LIMIT = 0.38;
   const chestOffset = new THREE.Quaternion();
   const headOffset = new THREE.Quaternion();
   const chestWorldQuaternion = new THREE.Quaternion();
@@ -2205,6 +2611,279 @@ export async function createPlayer(ctx, canvas) {
   const footBasis = new THREE.Matrix4();
   const footWorldQuaternion = new THREE.Quaternion();
   const footParentQuaternion = new THREE.Quaternion();
+  const footRollQuaternion = new THREE.Quaternion();
+  const footFwd = new THREE.Vector3();
+  const shinDir = new THREE.Vector3();
+  const jointWorld = new THREE.Vector3();
+  const hipWorld = new THREE.Vector3();
+  const reachTmp = new THREE.Vector3();
+  const groundTilt = { pitch: 0, roll: 0 };
+  /** Clamped smoothstep. The gait channels below are all "ease this
+   *  fraction of a phase", and an un-clamped one runs away past its
+   *  own window. */
+  const smoothstep01 = (v) => {
+    const x = clamp01(v);
+    return x * x * (3 - 2 * x);
+  };
+
+  /* ============================================================
+     THE ANKLE
+
+     Foot bones do not participate in two-joint IK. Left alone they
+     inherit every shin rotation and point up, inward or backward, so
+     they get an authored world basis instead - X across the body, Y
+     along the bone to the toe, Z completing the frame.
+
+     THE FRAME IS THE POINT, AND IT WAS THE BUG. A boot planted on
+     the ground is held by the GROUND: its sole owns a world angle
+     and the shin swings over it. A boot in the air is held by the
+     ANKLE: it hangs off the shin and has no opinion about the
+     horizon at all. The old code only ever built the first kind, so
+     every pose where the shin left vertical - a folded swing knee, a
+     leg trailing under the jetpack, a stride up a hill - took the
+     entire difference out of the ankle joint. Measured on a flat
+     walk that was 114 degrees of dorsiflexion at mid-swing; hovering
+     it was 98 on Vesper and 111 on White Vigil, held for as long as
+     the player kept flying.
+
+     So `orientFoot` takes the pose as an ANKLE DEVIATION - toes-up
+     from neutral, zero being a sole flat under a vertical shin - and
+     a `follow` weight saying which of the two frames owns it. It
+     ends by clamping the deviation the rig actually receives into
+     the range an ankle has, whatever the caller asked for.
+     ============================================================ */
+  function ankleAnglesFrom(i, facing) {
+    /* The shin's angle in the vertical plane through `facing`,
+       measured from forward toward up: -PI/2 is straight down,
+       past -PI is folded back and up under the thigh.
+       ...
+       AND THAT IS WHY IT IS UNWRAPPED AGAINST LAST FRAME. `atan2`
+       returns (-PI, PI], so a knee folding past horizontal steps
+       from -179 to +174 degrees in one frame - a 353-degree jump in
+       the quantity the whole ankle pose is measured against. It
+       snapped the sabaton through a right angle for a single frame,
+       twice per stride, at exactly the moment the leg was moving
+       fastest: individually invisible, collectively the reported
+       "glitchy" leg.
+
+       A fixed branch cut does not fix it, it only moves it. A shin
+       at +95 degrees is a knee lifted with the foot forward and a
+       shin at +174 is a heel folded back over the calf, and no
+       threshold tells those apart - the first attempt here read the
+       forward one as folded 265 degrees backward and put 23 degrees
+       of that straight into the ankle. Continuity does tell them
+       apart, because the leg cannot get from one to the other
+       without passing through everything between. */
+    footFwd.set(Math.sin(facing), 0, Math.cos(facing));
+    figure.kneePivots[i].getWorldPosition(jointWorld);
+    figure.footPivots[i].getWorldPosition(reachTmp);
+    shinDir.copy(reachTmp).sub(jointWorld);
+    const leg = legs[i];
+    if (shinDir.lengthSq() < 1e-10) return leg.shinPhi;
+    shinDir.normalize();
+    let phi = Math.atan2(shinDir.y, shinDir.x * footFwd.x + shinDir.z * footFwd.z);
+    const prev = leg.shinPhi;
+    while (phi - prev > Math.PI) phi -= Math.PI * 2;
+    while (prev - phi > Math.PI) phi += Math.PI * 2;
+    /* Bounded so a teleport, a respawn or a cutscene cannot leave a
+       leg carrying an accumulated multiple of a turn. A real gait
+       oscillates about straight down and never approaches this. */
+    if (phi < -Math.PI * 2.5 || phi > Math.PI * 1.5) {
+      phi = Math.atan2(shinDir.y, shinDir.x * footFwd.x + shinDir.z * footFwd.z);
+    }
+    leg.shinPhi = phi;
+    return phi;
+  }
+
+  function orientFoot(i, facing, dev, follow = 0, roll = 0) {
+    const foot = figure.footPivots && figure.footPivots[i];
+    if (!foot || !foot.parent) return;
+    const shinPhi = ankleAnglesFrom(i, facing);
+    /* Where the toe points, as an angle in the same plane. The
+       world frame answers "flat, tilted by `dev`"; the shin frame
+       answers "wherever the shin went, plus the same `dev`". They
+       agree exactly when the shin is vertical, which is what keeps
+       the blend continuous through touchdown. */
+    const worldPhi = dev - REST_FOOT_PITCH;
+    /* Wide on purpose: any value this clamps is a value the achieved
+       ankle angle is WRONG by, so the real bound is the deviation
+       clamp below and this is only a NaN/runaway guard. */
+    const shinPhi0 = clamp(shinPhi, -5.5, 1.7);
+    const toePhi = worldPhi + clamp01(follow) * (shinPhi0 + Math.PI / 2);
+    // The one guarantee: a joint angle a leg can hold.
+    const held = clamp(
+      toePhi - shinPhi0 - Math.PI / 2 + REST_FOOT_PITCH,
+      ANKLE_DEV_MIN, ANKLE_DEV_MAX
+    );
+    const pitch = -(shinPhi0 + Math.PI / 2 + held - REST_FOOT_PITCH);
+
+    const cp = Math.cos(pitch);
+    const sp = Math.sin(pitch);
+    footX.set(Math.cos(facing), 0, -Math.sin(facing));
+    footY.set(Math.sin(facing) * cp, -sp, Math.cos(facing) * cp);
+    footZ.crossVectors(footX, footY).normalize();
+    footBasis.makeBasis(footX, footY, footZ);
+    footWorldQuaternion.setFromRotationMatrix(footBasis);
+    /* AND NOW THE SAME BOUND AGAIN, IN THREE DIMENSIONS.
+     *
+     * Everything above works in the vertical plane through `facing`,
+     * which is where a leg belongs and where all of the authored
+     * pose lives. A leg that has wandered OUT of that plane - the
+     * body sliding along masonry leaves a stance foot two thirds of
+     * a metre off the midline - has a shin with a large lateral
+     * component, and the in-plane angle then understates the real
+     * joint angle by everything the projection dropped: measured 40
+     * degrees of dorsiflexion where the planar clamp believed it had
+     * allowed 26. Correcting it here rather than in the plane leaves
+     * the pose exactly as authored whenever the leg is where it
+     * should be, and bounds it exactly when it is not. */
+    const ankle3d = Math.acos(clamp(shinDir.dot(footY), -1, 1));
+    const neutral3d = Math.PI / 2 - REST_FOOT_PITCH;
+    const want3d = clamp(ankle3d, neutral3d + ANKLE_DEV_MIN, neutral3d + ANKLE_DEV_MAX);
+    if (Math.abs(want3d - ankle3d) > 1e-4) {
+      footZ.crossVectors(shinDir, footY);
+      if (footZ.lengthSq() > 1e-8) {
+        footZ.normalize();
+        footRollQuaternion.setFromAxisAngle(footZ, want3d - ankle3d);
+        footWorldQuaternion.premultiply(footRollQuaternion);
+        footY.applyQuaternion(footRollQuaternion);
+      }
+    }
+    if (roll) {
+      /* ROLLED ABOUT THE BOOT'S OWN LONG AXIS - which is the toe
+         direction, and NOT the body's forward. Those are the same
+         line only when the sole is level, and everywhere else
+         rolling about forward drags the toe out of the plane the
+         flexion was just solved in: on a cross-slope climb it added
+         a further 22 degrees to an ankle already at its limit, which
+         is the whole thing this function exists to prevent. About
+         the toe, the joint angle is untouched and only the sole
+         turns, which is what an ankle's inversion actually is. */
+      footRollQuaternion.setFromAxisAngle(
+        footY, clamp(roll, -ANKLE_ROLL_LIMIT, ANKLE_ROLL_LIMIT)
+      );
+      footWorldQuaternion.premultiply(footRollQuaternion);
+    }
+    foot.parent.getWorldQuaternion(footParentQuaternion).invert();
+    foot.quaternion.copy(footParentQuaternion).multiply(footWorldQuaternion);
+    foot.updateWorldMatrix(false, true);
+  }
+
+  /**
+   * The ground's pitch and roll under a point, in the frame of a body
+   * facing `facing`. Written into `groundTilt`.
+   *
+   * A sole held flat while the hill is not is the difference between
+   * a boot standing on Kenosis and a boot standing THROUGH it, and
+   * no amount of correct leg IK hides it: the contact patch is the
+   * one part of a walk a player looks straight at.
+   */
+  /* The same question, per leg, memoised on where it was asked.
+   *
+   * Four height samples a foot a frame is not free - it measured
+   * about 0.2ms of sim on its own - and most of them are repeats: a
+   * standing trooper asks about the same square metre forever, and a
+   * swing's landing point barely moves until the last few frames
+   * before touchdown. 4cm is well inside the 22cm the tilt is
+   * measured over, so a hit is the same answer. */
+  const legTilt = [0, 1].map(() => ({
+    x: NaN, z: NaN, yaw: 0, at: -1, pitch: 0, roll: 0,
+  }));
+  const FLAT_TILT = { pitch: 0, roll: 0 };
+  function legGroundTilt(i, x, z, facing) {
+    const cache = legTilt[i];
+    /* Expires on TIME as well as on distance, because the ground is
+       not a constant: the Ossuary's pit is carved into the height
+       field and animated, and a boot standing still over moving
+       terrain would otherwise hold its opening tilt for as long as
+       the player did not step. */
+    if (state.clock - cache.at < 0.2
+      && Math.abs(cache.x - x) < 0.04 && Math.abs(cache.z - z) < 0.04
+      && Math.abs(cache.yaw - facing) < 0.05) return cache;
+    const tilt = readGroundTilt(x, z, facing);
+    cache.x = x;
+    cache.z = z;
+    cache.yaw = facing;
+    cache.at = state.clock;
+    cache.pitch = tilt.pitch;
+    cache.roll = tilt.roll;
+    return cache;
+  }
+
+  function readGroundTilt(x, z, facing) {
+    const s = 0.22;
+    const fx = Math.sin(facing);
+    const fz = Math.cos(facing);
+    const rise = groundY(x + fx * s, z + fz * s) - groundY(x - fx * s, z - fz * s);
+    const lift = groundY(x + fz * s, z - fx * s) - groundY(x - fz * s, z + fx * s);
+    groundTilt.pitch = Number.isFinite(rise) ? Math.atan2(rise, s * 2) : 0;
+    groundTilt.roll = Number.isFinite(lift) ? Math.atan2(lift, s * 2) : 0;
+    return groundTilt;
+  }
+
+  /**
+   * Pull a foot target inside the leg's own reach.
+   *
+   * The two-joint solver CLAMPS rather than stretching, which is the
+   * right call - but it clamps silently, and what the player sees is
+   * a locked-straight leg with the sabaton hanging somewhere the gait
+   * still believes it planted. Climbing a 1.4 grade the trailing
+   * ankle finished 1.39m from its target; that is not a stiff pose,
+   * it is a boot that has come off the leg.
+   *
+   * Moving the TARGET instead keeps the ankle attached to the shin
+   * and the whole limb inside a pose it can hold. The foot ends up
+   * higher off the hill than the gait asked for, which is exactly
+   * what a person climbing does with the trailing leg.
+   */
+  function clampReach(i, target) {
+    figure.legPivots[i].updateWorldMatrix(true, false);
+    hipWorld.setFromMatrixPosition(figure.legPivots[i].matrixWorld);
+    const lengths = figure.legLengths ? figure.legLengths[i] : figure.limb;
+    const chain = lengths.thigh + lengths.shin;
+    const max = chain * 0.985;
+    /* And the NEAR limit, which the solver does not have. Its own
+       floor is |thigh - shin|, a couple of millimetres on a human
+       leg, so a target close to the hip folds the knee through 178
+       degrees - the shin doubled back onto the thigh. 0.28 of the
+       chain is a 147-degree fold: heel to buttock, and the end of
+       what a knee does. Climbing a 1.4 grade reached 178 every
+       stride. */
+    const min = chain * 0.28;
+    /* AND A CEILING, WHICH IS WHAT ACTUALLY ENFORCES THE FOLD.
+     *
+     * An ankle does not go above its own hip while walking, and
+     * saying so as a plain clamp on height does the near limit's job
+     * for it: with the ankle at least `min` BELOW the hip, the
+     * hip-to-ankle distance is at least `min` whatever the foot is
+     * doing horizontally, so the knee cannot fold past its limit and
+     * the near branch below becomes a guard rather than a mechanism.
+     *
+     * That matters because the near branch cannot be made smooth.
+     * Every version of it replaces the target wholesale, so a target
+     * DRIFTING across the limit sphere jumps when it crosses -
+     * sprinting up a 41-degree slope, the boot sat pinned just under
+     * the hip for several frames and then snapped 0.8m in one. A
+     * ceiling has no far side to cross. */
+    reachTmp.copy(target).sub(hipWorld);
+    const ceiling = hipWorld.y - min;
+    if (target.y > ceiling) {
+      target.y = ceiling;
+      reachTmp.y = -min;
+    }
+    const d = reachTmp.length();
+    if (d < 1e-6) return 0;
+    if (d > max) {
+      target.copy(hipWorld).addScaledVector(reachTmp, max / d);
+      return d - max;
+    }
+    if (d < min) {
+      const horiz = Math.hypot(reachTmp.x, reachTmp.z);
+      target.y = hipWorld.y - Math.sqrt(Math.max(0, min * min - horiz * horiz));
+      return d - min;
+    }
+    return 0;
+  }
   const handWrist = new THREE.Vector3();
   const handX = new THREE.Vector3();
   const handY = new THREE.Vector3();
@@ -2244,6 +2923,15 @@ export async function createPlayer(ctx, canvas) {
     strideLen: 1, stance: 0.5, landing: 0.24, lift: 0.12, bodyDrop: 0,
   };
 
+  /** How completely locomotion is retreating from the aimed body.
+   *  Only committed aim can create a true backpedal; ordinary S turns
+   *  the trooper around and remains the full running gait. */
+  function backpedalWeight() {
+    if (state.aimCommit <= 0.002 || state.travelSpeed <= 0.35) return 0;
+    const travelDot = Math.cos(angleDelta(state.yaw, state.travelYaw));
+    return clamp01((-travelDot - 0.20) / 0.80) * state.aimCommit;
+  }
+
   function readGaitSpec() {
     const walkN = clamp01(state.speed / WALK);
     const sprintN = clamp01((state.speed - WALK) / Math.max(0.1, SPRINT - WALK));
@@ -2261,12 +2949,40 @@ export async function createPlayer(ctx, canvas) {
        time. */
     const turnN = clamp01(Math.abs(state.yawRate) / 2.2);
     const chop = 1 - 0.42 * turnN;
-    gaitSpec.strideLen = (lerp(0.78, 2.05, walkN) + 1.55 * sprintN) * chop;
-    gaitSpec.stance = lerp(0.52, 0.34, walkN) - 0.14 * sprintN + 0.10 * turnN;
+    /* AND YOU CANNOT TAKE A FULL STRIDE UP A HILL EITHER. The
+       landing foot has to reach the ground a stride ahead, which on
+       a 1.4 grade is most of a metre higher than the one behind it:
+       the front leg folds to the end of a knee and the back one is
+       asked for ground a leg-length and a half below the hip. Both
+       are then rescued by clamps, and a clamp is a pose nobody
+       authored. Chopping the stride is what a person climbing does
+       and it keeps the whole cycle inside the leg. */
+    const climbN = clamp01(Math.max(0, state.slopeGrade) / 1.25);
+    gaitSpec.strideLen = (lerp(0.78, 2.05, walkN) + 1.55 * sprintN)
+      * chop * lerp(1, 0.55, climbN) * STRIDE_SCALE;
+    const backpedal = backpedalWeight();
+    const forwardStance = lerp(0.52, 0.34, walkN) - 0.14 * sprintN + 0.10 * turnN;
+    /* A forward run deliberately has a flight phase. A firing
+       backpedal is a braced retreat: one sabaton must always own the
+       ground while the other reaches backward, with a short double-
+       support handoff rather than both legs cycling in the air. */
+    gaitSpec.stance = clamp(lerp(forwardStance, 0.56, backpedal) + STANCE_BIAS, 0.16, 0.68);
     const stanceTravel = gaitSpec.strideLen * gaitSpec.stance;
     gaitSpec.landing = clamp(stanceTravel * 0.46, 0.18, 0.33);
-    gaitSpec.lift = lerp(0.09, 0.17, walkN) + 0.07 * sprintN;
-    gaitSpec.bodyDrop = lerp(0, 0.095, walkN) + 0.060 * sprintN;
+    gaitSpec.lift = lerp(
+      lerp(0.09, 0.17, walkN) + 0.07 * sprintN,
+      0.13,
+      backpedal
+    ) * STEP_LIFT_SCALE;
+    gaitSpec.bodyDrop = lerp(
+      lerp(0, 0.095, walkN) + 0.060 * sprintN,
+      0.055,
+      backpedal
+    ) * BODY_DROP_SCALE;
+    /* The track narrows as the body picks up its own walk. The
+       planted-foot guard does NOT follow it - see `TRACK_GUARD`. */
+    trackHalf = lerp(HIP_HALF, HIP_HALF_MOVING,
+      clamp01(state.speed / Math.max(0.5, WALK)));
     return gaitSpec;
   }
 
@@ -2279,7 +2995,20 @@ export async function createPlayer(ctx, canvas) {
     swinging: false,
     side: i === 0 ? -1 : 1,
     planted: false,
-    footPitch: 0.55,
+    /* ANKLE DEVIATION, toes-up positive, zero being a sole flat
+       under a vertical shin. Deliberately not a world pitch: see
+       `orientFoot`. */
+    footDev: 0,
+    /* How much the sabaton rides the shin rather than the ground.
+       A planted boot is held by the hill; a free one hangs off the
+       ankle, and the handoff has to be continuous or the foot snaps
+       through 90 degrees at every touchdown. */
+    footFollow: 0,
+    footRoll: 0,
+    /* Last frame's shin angle, kept ONLY so the next one can be
+       unwrapped against it - see `ankleAnglesFrom`. */
+    shinPhi: -Math.PI / 2,
+    settling: false,
   }));
 
   /* ============================================================
@@ -2309,6 +3038,94 @@ export async function createPlayer(ctx, canvas) {
     linear: (t) => t,
   };
 
+  /* ============================================================
+     C1 CLIP SAMPLING - opt-in, per figure.
+
+     The easing table above is applied PER SEGMENT, which makes every
+     channel continuous in value and discontinuous in VELOCITY: a
+     `load` segment arrives at a key with one speed and the `strike`
+     segment leaves it with another, and the difference is a jolt
+     delivered to the chest, the pelvis and therefore to the shoulder
+     carrying the weapon.
+
+     Vesper and the White Vigil absorb it because their hands are
+     fast and their weapons are short. The Bastion does not: it runs
+     at 0.78x tempo with a hammer head 0.83m past the fist, so the
+     same discontinuity is both slower on screen and multiplied by a
+     long lever. Measured with `saintfall-kenosis-swing-probe.mjs`:
+     the hammer tip ran a smooth ramp to 20 m/s and then covered
+     0.83m in a single frame - 77 m/s for one sample - with no key
+     crossing in any arm or wrist track to explain it.
+
+     This is the same clamped cubic Hermite the Kenosis arm tracks
+     use: it passes through every authored key, its velocity is
+     continuous across all of them, and its end tangents are zero so
+     a clip still leaves and arrives at rest. Tangents use real key
+     TIMES because melee keys are deliberately unevenly spaced.
+
+     OPT-IN, and the default is the old path exactly: a figure that
+     declares nothing samples through EASE as before, so the
+     campaign's clips are bit-identical. */
+  const MELEE_SMOOTH = figure?.meleeProfile?.smooth === true;
+
+  function hermiteChannel(k, i, col, tt) {
+    const k1 = k[i];
+    const k2 = k[i + 1];
+    const h = Math.max(1e-4, k2[0] - k1[0]);
+    const u = clamp01((tt - k1[0]) / h);
+    const v1 = chan(k1, col);
+    const v2 = chan(k2, col);
+    const m1 = i === 0 ? 0
+      : (v2 - chan(k[i - 1], col)) / Math.max(1e-4, k2[0] - k[i - 1][0]);
+    const m2 = i + 2 > k.length - 1 ? 0
+      : (chan(k[i + 2], col) - v1) / Math.max(1e-4, k[i + 2][0] - k1[0]);
+    const u2 = u * u;
+    const u3 = u2 * u;
+    return (2 * u3 - 3 * u2 + 1) * v1
+      + (u3 - 2 * u2 + u) * h * m1
+      + (-2 * u3 + 3 * u2) * v2
+      + (u3 - u2) * h * m2;
+  }
+
+  /** Write every pose channel for `time`, by whichever rule the
+   *  figure asked for. One place, so the two samplers below cannot
+   *  drift apart. */
+  function writeActionPose(k, i, a, b, time) {
+    if (MELEE_SMOOTH) {
+      actionPose.x = hermiteChannel(k, i, 1, time);
+      actionPose.y = hermiteChannel(k, i, 2, time);
+      actionPose.z = hermiteChannel(k, i, 3, time);
+      actionPose.pitch = hermiteChannel(k, i, 4, time);
+      actionPose.yaw = hermiteChannel(k, i, 5, time);
+      actionPose.roll = hermiteChannel(k, i, 6, time);
+      actionPose.chestYaw = hermiteChannel(k, i, 7, time);
+      actionPose.chestPitch = hermiteChannel(k, i, 8, time);
+      actionPose.pelvisYaw = hermiteChannel(k, i, 9, time);
+      actionPose.drop = hermiteChannel(k, i, 10, time);
+      actionPose.stanceZ = hermiteChannel(k, i, 11, time);
+      actionPose.stanceSpread = hermiteChannel(k, i, 12, time);
+      actionPose.slide = hermiteChannel(k, i, 13, time);
+      actionPose.lean = hermiteChannel(k, i, 14, time);
+      return;
+    }
+    const span = Math.max(1e-4, b[0] - a[0]);
+    const u = (EASE[b[b.length - 1]] || EASE.linear)(clamp01((time - a[0]) / span));
+    actionPose.x = lerp(a[1], b[1], u);
+    actionPose.y = lerp(a[2], b[2], u);
+    actionPose.z = lerp(a[3], b[3], u);
+    actionPose.pitch = lerp(a[4], b[4], u);
+    actionPose.yaw = lerp(a[5], b[5], u);
+    actionPose.roll = lerp(a[6], b[6], u);
+    actionPose.chestYaw = lerp(chan(a, 7), chan(b, 7), u);
+    actionPose.chestPitch = lerp(chan(a, 8), chan(b, 8), u);
+    actionPose.pelvisYaw = lerp(chan(a, 9), chan(b, 9), u);
+    actionPose.drop = lerp(chan(a, 10), chan(b, 10), u);
+    actionPose.stanceZ = lerp(chan(a, 11), chan(b, 11), u);
+    actionPose.stanceSpread = lerp(chan(a, 12), chan(b, 12), u);
+    actionPose.slide = lerp(chan(a, 13), chan(b, 13), u);
+    actionPose.lean = lerp(chan(a, 14), chan(b, 14), u);
+  }
+
   /* Keys are [time, x, y, z, pitch, yaw, roll], in weapon-mount
      space. Offsets are metres and radians off the carry pose. */
   /* Keyframe TRANSLATIONS are small; the arc comes from rotation.
@@ -2319,61 +3136,63 @@ export async function createPlayer(ctx, canvas) {
      has no arms" without isolating why. Rotation swings the blade
      through metres without moving the hands at all, which is the
      whole point of holding a lever. */
+  /* How long the fall takes to reach the ground, as distinct from how
+     long the clip is held for. The camera eases out over this and the
+     clip then sits on its last pose until a respawn clears it. */
+  const DEATH_FALL_SECONDS = 1.55;
+  /* Time after a completed strike in which the next press keeps the chain.
+     Melee players need enough room to guard, sidestep, or reacquire a target
+     between committed animations without losing the entire procession. */
+  const MELEE_COMBO_GRACE_SECONDS = 1.35;
+  /* Per-figure melee tempo (see sampleAction). A light dual-wield
+     operative runs its swings above 1; a two-tonne bulwark below it.
+     Clamped so no author can make a hit window shorter than an input
+     frame or a swing slower than the combo grace can survive. */
+  const MELEE_TIME_SCALE = (() => {
+    const v = Number(figure?.meleeProfile?.timeScale);
+    return Number.isFinite(v) ? clamp(v, 0.55, 1.75) : 1;
+  })();
+
   const ACTIONS = {
-    /* THRUST - the opener, and the one attack a polearm is actually
-       for. It was a horizontal sweep, which is what every other
-       weapon in the genre already does and what melee2 does two
-       presses later; a lance that never points at anything is a
-       heavy stick.
-
-       A thrust cannot be built the way the sweeps are. They swing
-       the tip through metres on rotation alone, which is free -
-       the hands barely move. A point driven forward has to come
-       from translation, and translation runs into the reach
-       constraint at about 12cm. So the forward travel is pooled
-       from four places at once: the mount slides out, the chest
-       uncoils from pitched-back to pitched-into-it, the hips
-       square up, and the front foot lands (`stanceZ`). Measured on
-       the rig, that is 0.74m of forward tip travel out of 0.84m
-       total - the rest is the point settling down onto the line -
-       against 0.18m for the mount slide by itself.
-
-       `arc` is 0.85 rad rather than the sweeps' 2.3-2.6: a thrust
-       hits what it is pointed at. `lunge` pays that back as 1.34x
-       reach, so it is the attack that opens on something still out
-       of range rather than a strictly worse melee1. */
+    /* CLEAVING LUNGE - the opener has to read on the first press.
+       The old thrust travelled forward but occupied very little of
+       the screen, so increasing its collision cone made the attack
+       stronger without making the weapon look stronger. This clip
+       now coils across the rear shoulder and cuts through the reticle
+       while the front foot lands. The lunge keeps the polearm's depth
+       advantage; the authored yaw/roll gives it an unmistakable arc. */
+    /* THE SWEEP IS THE READ, AND IT IS MEASURED.
+       `scripts/saintfall-melee-arc-probe.mjs` samples the real
+       `weapon-tip` anchor through each clip and reports the envelope
+       it traces in the body frame. These keys are authored against
+       that readout, not against taste: the blade has to cover ground
+       the eye can follow, and the slash ribbon in vfx.js is keyed to
+       the SAME measured numbers (`MELEE_SWEEPS`), so widening a swing
+       here means re-running the probe and moving those with it. */
     melee1: {
-      /* The hit window OPENS at 0.33, not at the start of the drive.
-         `hitDone` latches on the first frame inside it, so a window
-         that opens early resolves the strike while the point is
-         still travelling - the lunge scores its 1.34x reach from a
-         pose that has not reached it yet. Full extension is 0.36. */
-      dur: 0.70, hit: [0.33, 0.46], damage: 1.25, arc: 0.85, lunge: 1.34,
+      /* The hit window opens as the blade crosses centre rather than
+         on the wind-up. Full extension is near 0.36 of the clip. */
+      dur: 0.76, hit: [0.31, 0.49], damage: 1.25, arc: 1.42, lunge: 1.34,
       keys: [
         [0.00, 0.0, 0.0, 0.0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, "load"],
-        // Cocked: weight back, point up and outboard, chest coiled,
-        // hands gathered a little forward on the haft.
-        [0.24, -0.135, 0.045, 0.030, 0.14, 0.34, 0.34, 0.40, 0.30, 0.20, 0.030, -0.16, 0.05, -0.030, "strike"],
-        /* Full extension: on the line, front foot planted, and the
-           shaft run 22cm out through both hands. 28cm was tried and
-           returned 2cm of extra point - past about 22cm the reach
-           constraint has moved on to binding somewhere else, and all
-           the extra buys is hands further down a haft. */
-        [0.36, 0.265, -0.030, -0.060, -0.08, -0.10, -0.14, -0.36, -0.40, -0.18, -0.090, 0.38, 0.15, 0.220, "settle"],
-        [0.70, 0.0, 0.0, 0.0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, "settle"],
+        // Rear-shoulder load: blade wide left, hips resisting the chest.
+        [0.25, -0.075, 0.070, -0.085, 0.15, -0.92, -0.34, -0.70, 0.24, 0.32, 0.030, -0.17, 0.10, 0.060, "strike"],
+        // Full cut: blade crosses the reticle as the front foot drives in.
+        [0.42, 0.105, -0.035, 0.190, -0.12, 1.02, 0.38, 0.86, -0.32, -0.40, -0.065, 0.34, 0.18, 0.260, "settle"],
+        [0.76, 0.0, 0.0, 0.0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, "settle"],
       ],
     },
     melee2: {          // rising diagonal, low left to high right
-      dur: 0.78, hit: [0.28, 0.48], damage: 1.15, arc: 2.3,
+      dur: 0.78, hit: [0.28, 0.48], damage: 1.15, arc: 2.72,
       keys: [
         [0.00, 0.0, 0.0, 0.0, 0, 0, 0, "load"],
-        [0.26, 0.0252, -0.088, -0.030, 0.85, -0.95, 0.40, -0.36, 0.26, -0.16, -0.070, 0.13, 0.06, "strike"],
-        [0.50, -0.0252, 0.1764, 0.1092, -1.15, 0.85, -0.50, 0.48, -0.30, 0.22, 0.030, 0.28, 0.12, "settle"],
+        [0.26, 0.055, -0.140, -0.095, 1.02, -1.74, 0.66, -0.74, 0.36, -0.32, -0.085, 0.12, 0.10, 0.055, "strike"],
+        [0.50, -0.065, 0.245, 0.225, -1.36, 1.68, -0.78, 0.92, -0.42, 0.40, 0.042, 0.33, 0.17, 0.255, "settle"],
         [0.78, 0.0, 0.0, 0.0, 0, 0, 0, "settle"],
       ],
     },
     melee3: {          // overhead slam, the combo finisher
-      dur: 0.96, hit: [0.34, 0.52], damage: 1.9, arc: 1.7, slam: true,
+      dur: 0.96, hit: [0.34, 0.52], damage: 1.9, arc: 2.05, slam: true,
       keys: [
         [0.00, 0.0, 0.0, 0.0, 0, 0, 0, "load"],
         /* The loaded Vesper silhouette is much broader through the
@@ -2383,9 +3202,145 @@ export async function createPlayer(ctx, canvas) {
            the opposite direction.  It reads as a knight driving a
            heavy reliquary into the ground, not a mannequin moving a
            staff with its wrists. */
-        [0.32, -0.042, 0.2184, -0.1428, -1.45, 0.20, 0.10, 0.42, -0.42, 0.18, 0.055, -0.07, 0.03, "strike"],
-        [0.54, 0.0672, -0.1428, 0.1932, 1.30, -0.10, -0.06, -0.58, 0.52, -0.24, -0.100, 0.29, 0.14, "settle"],
+        [0.32, -0.042, 0.2810, -0.1720, -1.74, 0.24, 0.12, 0.50, -0.52, 0.22, 0.055, -0.07, 0.03, 0.050, "strike"],
+        [0.54, 0.075, -0.205, 0.300, 1.70, -0.24, -0.12, -0.80, 0.72, -0.34, -0.110, 0.32, 0.17, 0.240, "settle"],
         [0.96, 0.0, 0.0, 0.0, 0, 0, 0, "settle"],
+      ],
+    },
+    /* THE TURN SLASH - what a press becomes when the reticle is a
+       quarter turn or more off the body (see TURN_SLASH_MIN).
+
+       The root itself does the travelling: the facing solve reads
+       `turn` below and sweeps `state.yaw` through the captured offset
+       on that window, so the clip's only job is the silhouette that
+       makes the pivot read as an attack - blade levelled and carried
+       wide on a lowered, widened base, then gathered back in. `arc`
+       here is only the fallback; the live swing computes its own
+       strike arc from the angle actually swept (`action.strikeArc`).
+
+       The hit fires MID-SPIN (0.20s - half the wait of melee1's
+       0.31s), which is the responsiveness the whole feature buys:
+       from a full about-face the blade connects sooner than the old
+       pirouette-then-thrust even began to.
+
+       Direction: authored for a positive (leftward) sweep; the
+       mirrored copy for the other way is generated below, so the
+       blade leads the spin whichever way it runs. */
+    meleeTurn: {
+      dur: 0.68, hit: [0.20, 0.36], damage: 1.1, arc: 3.9, sweep: 4,
+      turn: [0.08, 0.34],
+      keys: [
+        [0.00, 0.0, 0.0, 0.0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, "load"],
+        // Gather: shaft levelled, blade drawn across, weight sinking.
+        [0.10, -0.040, 0.060, -0.050, -0.22, -0.35, -0.15, -0.30, 0.06, -0.10, -0.070, -0.04, 0.10, 0.060, "load"],
+        // Full carry: blade at extension riding the root's own spin.
+        [0.30, 0.100, -0.030, 0.180, -0.16, 0.95, 0.30, 0.40, -0.18, 0.12, -0.100, 0.10, 0.14, 0.280, "strike"],
+        // Carve-through: momentum spent, base still wide.
+        [0.44, 0.040, 0.0, 0.060, -0.06, 0.40, 0.12, 0.15, -0.08, 0.05, -0.050, 0.05, 0.10, 0.100, "settle"],
+        [0.68, 0.0, 0.0, 0.0, 0, 0, 0, "settle"],
+      ],
+    },
+    /* THE LUNGE - what the opener becomes when forward is held at the
+       press (see meleeSwing). The old behaviour was a locomotion
+       speed bump under the ordinary swing: the trooper jogged at 12.8
+       with the run gait playing, which read as "running while
+       swinging" because that is literally what it was. This is a
+       committed dash instead: `drive` below is a speed profile the
+       update owns directly (ramp in, hold through the closing burst,
+       fade through recovery), travel locked to the captured bearing,
+       while the clip coils the blade high off the rear shoulder and
+       rams it out level as the body drops into a deep front split.
+       Depth over width: almost no arc, the longest reach in the kit,
+       and the hit lands at full extension as the dash crests. */
+    meleeLunge: {
+      dur: 0.82, hit: [0.30, 0.46], damage: 1.45, arc: 1.05, lunge: 1.5,
+      sweep: 5,
+      drive: { start: 0.05, ramp: 0.11, end: 0.30, fade: 0.20 },
+      keys: [
+        [0.00, 0.0, 0.0, 0.0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, "load"],
+        // Coil: blade cocked high by the rear shoulder, weight back.
+        [0.18, -0.055, 0.065, -0.095, 0.20, -0.60, -0.24, -0.52, 0.16, -0.16, -0.045, -0.08, 0.07, -0.060, -0.05, "load"],
+        // The ram: level thrust at full slide, body low in a deep split.
+        [0.36, 0.085, -0.045, 0.215, -0.15, 0.30, 0.12, 0.55, -0.30, 0.10, -0.130, 0.30, 0.13, 0.320, 0.24, "strike"],
+        // Riding the follow-through out: blade still forward, rising.
+        [0.58, 0.045, -0.020, 0.120, -0.08, 0.18, 0.06, 0.28, -0.14, 0.05, -0.060, 0.16, 0.09, 0.160, 0.10, "settle"],
+        [0.82, 0.0, 0.0, 0.0, 0, 0, 0, "settle"],
+      ],
+    },
+    /* THE PIERCE - the Executioner's Thrust jetpack-powered piercing charge.
+       Coils low and drives forward in an explosive vector burst that cuts
+       cleanly through multiple ranks of enemies. */
+    meleePierce: {
+      dur: 0.74, hit: [0.06, 0.44], damage: 2.4, arc: 0.85, lunge: 2.8,
+      sweep: 6,
+      drive: { start: 0.02, ramp: 0.06, end: 0.36, fade: 0.22 },
+      keys: [
+        [0.00, 0.0, 0.0, 0.0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, "load"],
+        // Coil forward into a streamlined spear thrust, lance dead ahead
+        [0.12, 0.10, -0.04, 0.26, -0.04, 0.02, 0.0, 0.60, -0.32, 0.08, -0.14, 0.38, 0.14, 0.35, 0.30, "strike"],
+        // Piercing penetration at full rocket speed
+        [0.36, 0.14, -0.03, 0.30, -0.02, 0.01, 0.0, 0.66, -0.36, 0.06, -0.16, 0.42, 0.15, 0.40, 0.36, "strike"],
+        // Settle & recover
+        [0.56, 0.05, -0.01, 0.12, -0.03, 0.0, 0.0, 0.28, -0.14, 0.04, -0.07, 0.20, 0.09, 0.18, 0.14, "settle"],
+        [0.74, 0.0, 0.0, 0.0, 0, 0, 0, "settle"],
+      ],
+    },
+    /* ------------------------------------------------------------
+       THE FALL.
+
+       Player death was a full stop: the trooper stood upright and
+       perfectly rigid for the whole 3.4-second respawn timer, holding
+       the lance at the ready, while the HUD said they were dead. It
+       is the one animation in the game every player is guaranteed to
+       see, and it did not exist.
+
+       Authored on the same timeline as the swings because it needs
+       exactly what they need - the weapon has to come out of line,
+       the stance has to give, the body has to go down - plus the one
+       channel none of them did: `lean` tips the figure root, and the
+       root is at the soles, so the trooper topples about their own
+       feet like a felled tree rather than sinking through the floor.
+
+       Held rather than ended. `dur` outlasts the respawn timer and
+       `spawn()` clears the pose, so the body stays down until the
+       moment the player is actually back on their feet - an action
+       that expired on its own would stand the corpse up mid-timer.
+
+       Channels:  x  y  z  |  pitch yaw roll |  chestYaw chestPitch
+                  pelvisYaw  drop  stanceZ  stanceSpread  slide  lean
+       ------------------------------------------------------------ */
+    death: {
+      dur: 9,   // held; see DEATH_FALL_SECONDS and spawn()
+      keys: [
+        [0.00, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, "strike"],
+        /* The hit. A short recoil BACKWARD before anything gives -
+           without it the collapse starts from a neutral pose and
+           reads as the trooper deciding to lie down. */
+        [0.16, -0.02, 0.03, -0.05, 0.16, -0.10, 0.12, 0.10, -0.12, 0.06,
+          0.02, 0, 0.05, 0, -0.10, "settle"],
+        /* The knees go. The body drops before it tips, because that
+           is the order legs fail in - but only just: the ROOT PIVOTS
+           AT THE SOLES, so the topple itself takes the head from
+           1.65m to about a third of a metre, and a `drop` sized as if
+           it had to do that work put the whole trooper half a metre
+           under the road with only the lance still showing. */
+        [0.52, -0.05, -0.10, -0.08, 0.55, -0.22, 0.30, 0.16, 0.22, 0.12,
+          -0.20, -0.10, 0.15, 0.02, 0.42, "linear"],
+        /* Over. The lance leads the body down - a two-handed weapon
+           carried across the chest is the first thing to reach the
+           ground - and the pelvis turns so the trooper lands on a
+           shoulder rather than flat on their face, which is both more
+           readable in silhouette and far kinder to the leg solver
+           than a dead-square topple. */
+        [1.05, -0.14, -0.30, -0.14, 1.05, -0.34, 0.58, 0.22, 0.30, 0.26,
+          -0.19, -0.24, 0.24, 0.05, 1.02, "settle"],
+        // The last of it, with a little slump past the resting angle.
+        [1.55, -0.18, -0.38, -0.16, 1.24, -0.38, 0.66, 0.24, 0.34, 0.30,
+          -0.24, -0.28, 0.26, 0.06, 1.28, "settle"],
+        [2.10, -0.18, -0.38, -0.16, 1.22, -0.38, 0.64, 0.23, 0.33, 0.30,
+          -0.21, -0.28, 0.26, 0.06, 1.22, "settle"],
+        [9.00, -0.18, -0.38, -0.16, 1.22, -0.38, 0.64, 0.23, 0.33, 0.30,
+          -0.21, -0.28, 0.26, 0.06, 1.22, "linear"],
       ],
     },
     reload: {
@@ -2446,9 +3401,103 @@ export async function createPlayer(ctx, canvas) {
         [0.62, 0.0, 0.0, 0.0, 0, 0, 0, "settle"],
       ],
     },
+    /* THE HAMMER CAST - the Bastion Penitent's ranged rite. Body
+       channels only (7..14): the Kenosis levels have no ctx.weapons,
+       so the weapon-mount channels 1-6 are never applied there, and
+       the arm itself is swung by the operative kit through the
+       loadout hooks. No `hit` window - the damage is the thrown
+       reliquary's, resolved by the kit's own flight sweep. The kit
+       reads `throwAt` off this spec to time the release: the coil
+       peaks at 0.34 and the hammer leaves the hand as the chest
+       unwinds through centre. */
+    hammerThrow: {
+      dur: 0.92, throwAt: 0.40,
+      keys: [
+        [0.00, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, "load"],
+        // Coil: chest wound onto the hammer shoulder, weight back.
+        [0.34, 0, 0, 0, 0, 0, 0, -0.78, 0.30, -0.34, 0.045, -0.14, 0.11, 0, -0.070, "strike"],
+        // Release: everything unwinds forward through the reticle.
+        [0.50, 0, 0, 0, 0, 0, 0, 0.92, -0.36, 0.44, -0.035, 0.32, 0.16, 0, 0.240, "settle"],
+        [0.92, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, "settle"],
+      ],
+    },
+    /* THE CATCH - the return beat when the reliquary slaps back into
+       the Bastion's fist. Short, heavy, and again body-only: a brace
+       through the knees and a half-turn of the chest toward the
+       incoming hammer, so the catch reads as weight received rather
+       than an object vanishing into a static glove. */
+    hammerCatch: {
+      dur: 0.42,
+      keys: [
+        [0.00, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, "load"],
+        [0.10, 0, 0, 0, 0, 0, 0, -0.34, 0.10, -0.16, 0.055, -0.06, 0.09, 0, -0.045, "strike"],
+        [0.42, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, "settle"],
+      ],
+    },
   };
 
-  const action = { name: null, t: 0, spec: null, hitDone: false, queued: null, combo: 0, comboAt: -9 };
+  /* PER-FIGURE CLIP OVERRIDES.
+   *
+   * `meleeProfile.timeScale` says how fast a figure swings and
+   * `meleeProfile.smooth` says how its keys are sampled, but neither
+   * can change what a blow IS. A two-handed reliquary and a pair of
+   * wrist blades do not want the same opener: the shared melee1
+   * carries the chest through 1.56 radians of counter-rotation, which
+   * on a hammer reads as the body twisting mid-swing.
+   *
+   * A figure may therefore replace whole clips. Merged rather than
+   * mutated, once, at build - so the table every other figure sees is
+   * untouched and a figure that declares nothing is bit-identical. */
+  if (figure?.meleeProfile?.clips) {
+    for (const [name, spec] of Object.entries(figure.meleeProfile.clips)) {
+      if (spec && Array.isArray(spec.keys) && spec.keys.length >= 2) {
+        ACTIONS[name] = { ...(ACTIONS[name] || {}), ...spec };
+      }
+    }
+  }
+
+  /* The spin can run either way, and a blade that TRAILS its own turn
+     reads as being dragged rather than swung. `meleeTurn` is authored
+     for a positive sweep; this builds the clockwise copy once by
+     negating only the side-picking channels - lateral offset (x),
+     mount yaw/roll, chest and pelvis lead. Heights, pitches, drops,
+     stance depth/width and the grip slide are symmetric and keep their
+     sign. Rows are variable-length (short rows end early and read as
+     zero), so the map only touches indices that exist. */
+  ACTIONS.meleeTurnCw = (() => {
+    const src = ACTIONS.meleeTurn;
+    const MIRROR = new Set([1, 5, 6, 7, 9]);
+    return {
+      ...src,
+      keys: src.keys.map((row) => row.map(
+        (v, i) => (MIRROR.has(i) && typeof v === "number" ? -v : v)
+      )),
+    };
+  })();
+
+  const action = {
+    name: null,
+    t: 0,
+    spec: null,
+    hitDone: false,
+    queued: null,
+    /* Horizontal reticle bearing captured for the live swing. A
+       buffered combo gets its own press-time bearing rather than
+       inheriting the first blow or sampling the camera later. */
+    aimYaw: null,
+    queuedAimYaw: null,
+    combo: 0,
+    comboAt: -9,
+    /* The turn slash's live spin: the body yaw it started from, the
+       signed offset it sweeps, which way (for the mirrored VFX), and
+       the strike arc computed from that sweep. Null/0 for every other
+       action - beginAction resets them so a stale spin can never
+       drive a later swing's facing. */
+    turnFrom: null,
+    turnSweep: null,
+    turnDir: 0,
+    strikeArc: null,
+  };
   const actionPose = {
     x: 0, y: 0, z: 0, pitch: 0, yaw: 0, roll: 0,
     // Body channels. A clip that leaves these at zero animates the
@@ -2462,6 +3511,13 @@ export async function createPlayer(ctx, canvas) {
        by translation alone stops dead there. Running the shaft
        through the grip is also simply how a spear is thrust. */
     slide: 0,
+    /* THE ONE CHANNEL THAT TIPS THE WHOLE TROOPER.
+       Everything else an action can do bends something: the weapon
+       moves, the chest turns, the stance widens. `lean` is added to
+       `bodyLean`, which rotates the figure root - and the root sits at
+       the soles - so a clip can pivot the entire body about its feet.
+       Nothing needed that until something had to fall over. */
+    lean: 0,
   };
   /* Body channels are optional so a clip that does not use them keeps
      its original 8-element keys. The ease token is read from the END
@@ -2489,49 +3545,188 @@ export async function createPlayer(ctx, canvas) {
     const k = action.spec.keys;
     let i = 0;
     while (i < k.length - 2 && time >= k[i + 1][0]) i += 1;
-    const a = k[i];
-    const b = k[Math.min(k.length - 1, i + 1)];
-    const span = Math.max(1e-4, b[0] - a[0]);
-    const u = (EASE[b[b.length - 1]] || EASE.linear)(clamp01((time - a[0]) / span));
-    actionPose.x = lerp(a[1], b[1], u);
-    actionPose.y = lerp(a[2], b[2], u);
-    actionPose.z = lerp(a[3], b[3], u);
-    actionPose.pitch = lerp(a[4], b[4], u);
-    actionPose.yaw = lerp(a[5], b[5], u);
-    actionPose.roll = lerp(a[6], b[6], u);
-    actionPose.chestYaw = lerp(chan(a, 7), chan(b, 7), u);
-    actionPose.chestPitch = lerp(chan(a, 8), chan(b, 8), u);
-    actionPose.pelvisYaw = lerp(chan(a, 9), chan(b, 9), u);
-    actionPose.drop = lerp(chan(a, 10), chan(b, 10), u);
-    actionPose.stanceZ = lerp(chan(a, 11), chan(b, 11), u);
-    actionPose.stanceSpread = lerp(chan(a, 12), chan(b, 12), u);
-    actionPose.slide = lerp(chan(a, 13), chan(b, 13), u);
+    writeActionPose(k, i, k[i], k[Math.min(k.length - 1, i + 1)], time);
   }
 
-  function beginAction(name) {
+  function beginAction(name, aimYaw = null) {
     const spec = ACTIONS[name];
     if (!spec) return false;
     action.name = name;
     action.spec = spec;
     action.t = 0;
     action.hitDone = false;
+    action.turnFrom = null;
+    action.turnSweep = null;
+    action.turnDir = 0;
+    action.strikeArc = null;
+    action.aimYaw = name.startsWith("melee") && Number.isFinite(aimYaw)
+      ? Math.atan2(Math.sin(aimYaw), Math.cos(aimYaw))
+      : null;
     return true;
   }
 
-  /** Next attack in the three-hit chain, or the first if it lapsed. */
-  function meleeSwing() {
+  /**
+   * Killed.
+   *
+   * Idempotent, because the same frame can deliver a bite, a venom
+   * tick and a fall: whichever arrives first owns the fall, and the
+   * others must not restart it from the top.
+   */
+  function die() {
+    if (state.dying) return false;
+    /* A death during a reveal hold must give the camera back. Leaving
+       `free` set is what made several intros look frozen: the body
+       was already dead and the lens was still staring at the boss. */
+    if (state.free) state.free = false;
+    state.dying = true;
+    action.queued = false;
+    action.queuedAimYaw = null;
+    action.combo = 0;
+    return beginAction("death");
+  }
+
+  /** Next attack in the three-hit chain, or the first if it lapsed.
+   *
+   *  The armed check has two doors. The campaign door is unchanged:
+   *  `ctx.weapons.current` must be a melee-mode pattern. The Kenosis
+   *  door opens where the selected operative owns the weapon even if
+   *  the campaign keeps a dormant compatibility weapons module for
+   *  old field saves. Those bodies carry their blades through `ctx.loadout`, and the loadout
+   *  publishes a `meleeSpec` (melee/reach/damage) for the operative's
+   *  held props. Gating the fallback on the explicit operative flag means a
+   *  campaign lance in ranged mode still refuses exactly as before. */
+  function meleeSwing(capturedAimYaw = null) {
     const w = ctx.weapons && ctx.weapons.current;
-    if (!w || !w.spec.melee) return false;
+    const kitSpec = (ctx.operativeKitActive || !ctx.weapons)
+      && ctx.loadout?.meleeSpec?.melee
+      ? ctx.loadout.meleeSpec : null;
+    if ((!w || !w.spec.melee) && !kitSpec) return false;
+    const aimYaw = Number.isFinite(capturedAimYaw)
+      ? capturedAimYaw
+      : Number.isFinite(state.aimViewYaw) ? state.aimViewYaw : state.camYaw;
     if (action.name && action.name.startsWith("melee")) {
-      // Buffered: pressing during the recovery chains, which is what
-      // makes a combo feel responsive rather than dropped.
-      if (action.t > action.spec.dur * 0.42) action.queued = true;
+      /* Buffered: pressing during the swing chains, which is what
+         makes a combo feel responsive rather than dropped.
+
+         The gate was 0.42 of the clip - a third of a second in which
+         a press did NOTHING, not even queue, which is the window a
+         player actually presses in when they are reacting to
+         something. It only has to be late enough that the press
+         cannot be the same one that started this swing; the
+         wind-up is 0.25s and 0.18 of the shortest clip is 0.14s, so
+         one input cannot register twice.
+
+         The queued yaw is re-captured on every press inside the
+         window, so the chained blow faces wherever the reticle
+         ENDED UP rather than where it was on the first press. */
+      if (action.t > action.spec.dur * 0.18) {
+        action.queued = true;
+        action.queuedAimYaw = aimYaw;
+      }
       return false;
     }
-    if (state.clock - action.comboAt > 1.15) action.combo = 0;
+    if (state.clock - action.comboAt > MELEE_COMBO_GRACE_SECONDS) action.combo = 0;
+    action.queuedAimYaw = null;
+    /* THE QUARTER-TURN GATE. `offset` is the shortest signed turn from
+       where the body IS to where the press pointed. At 90 degrees or
+       more the ordinary opener would spend its whole wind-up
+       pirouetting, so the press becomes the turn slash instead: the
+       spin sweeps that offset itself and the strike covers the angle
+       swept (plus the blade's own crescent each side). It counts as
+       the first blow of the procession - spinning onto a new target
+       restarts the chain - so a follow-up press still climbs to
+       melee2/melee3. This outranks the lunge below: you cannot drive
+       forward through a bearing the body has not reached yet. */
+    const offset = angleDelta(state.yaw, aimYaw);
+    if (Math.abs(offset) >= TURN_SLASH_MIN) {
+      action.combo = 1;
+      action.comboAt = state.clock;
+      if (!beginAction(offset >= 0 ? "meleeTurn" : "meleeTurnCw", aimYaw)) {
+        return false;
+      }
+      action.turnFrom = state.yaw;
+      action.turnSweep = offset;
+      action.turnDir = offset >= 0 ? 1 : -1;
+      action.strikeArc = Math.min(TAU, Math.abs(offset) + TURN_SLASH_ARC_PAD);
+      return true;
+    }
     action.combo = (action.combo % 3) + 1;
     action.comboAt = state.clock;
-    return beginAction(`melee${action.combo}`);
+    /* HOLDING FORWARD turns the opener into the committed lunge. Only
+       the opener: the follow-up blows are close-range procession steps
+       and re-dashing inside them would carry the combo straight
+       through its own target. `move.y` is -1 for a held W (and for a
+       forward-tilted touch stick), read at the moment the swing
+       actually begins so a buffered chain re-evaluates it. */
+    if (action.combo === 1 && input.state.move.y < -0.25) {
+      return beginAction("meleeLunge", aimYaw);
+    }
+    return beginAction(`melee${action.combo}`, aimYaw);
+  }
+
+  /** Jetpack-powered piercing thrust: straight-line rocket dash that penetrates all enemies.
+   *  The longer the melee key was held (up to 3.0s), the higher the chargeRatio (0.15 to 1.0),
+   *  which scales dash speed (18 to 48-58 m/s), travel distance/duration (lunge 1.6 to 7.0-9.0),
+   *  and damage proportionally. */
+  function meleePierce(capturedAimYaw = null, chargeRatio = 1.0) {
+    const w = ctx.weapons && ctx.weapons.current;
+    if (!w || !w.spec.melee) return false;
+    const aimYaw = Number.isFinite(capturedAimYaw)
+      ? capturedAimYaw
+      : Number.isFinite(state.aimViewYaw) ? state.aimViewYaw : state.camYaw;
+    action.combo = 1;
+    action.comboAt = state.clock;
+    action.queuedAimYaw = null;
+    const rank = ctx.progression?.rank?.("procession_executioners_measure") || 1;
+    const ratio = clamp(chargeRatio ?? 1.0, 0.15, 1.0);
+    const baseDamage = rank >= 2 ? 4.5 : 3.0;
+    const maxLunge = rank >= 2 ? 9.5 : 7.5;
+    const minLunge = 2.0;
+    const maxSpeed = rank >= 2 ? 58.0 : 48.0;
+    const minSpeed = 18.0;
+
+    action.pierceSpeed = lerp(minSpeed, maxSpeed, ratio);
+    const spec = ACTIONS.meleePierce;
+    spec.damage = baseDamage * lerp(0.5, 1.0, ratio);
+    spec.lunge = lerp(minLunge, maxLunge, ratio);
+    spec.dur = lerp(0.55, 1.25, ratio);
+    spec.hit = [0.04, lerp(0.35, 1.05, ratio)];
+    spec.drive = {
+      start: 0.02,
+      ramp: 0.06,
+      end: lerp(0.22, 0.85, ratio),
+      fade: lerp(0.18, 0.32, ratio),
+    };
+    const dur = spec.dur;
+    spec.keys = [
+      [0.00, 0.0, 0.0, 0.0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, "load"],
+      [dur * 0.12, 0.10, -0.04, 0.26, -0.04, 0.02, 0.0, 0.60, -0.32, 0.08, -0.14, 0.38, 0.14, 0.35, 0.30, "strike"],
+      [dur * 0.55, 0.14, -0.03, 0.30, -0.02, 0.01, 0.0, 0.66, -0.36, 0.06, -0.16, 0.42, 0.15, 0.40, 0.36, "strike"],
+      [dur * 0.82, 0.05, -0.01, 0.12, -0.03, 0.0, 0.0, 0.28, -0.14, 0.04, -0.07, 0.20, 0.09, 0.18, 0.14, "settle"],
+      [dur, 0.0, 0.0, 0.0, 0, 0, 0, "settle"],
+    ];
+    return beginAction("meleePierce", aimYaw);
+  }
+
+  /* Save/load and other hard handoffs must never resume a half-applied hit
+     window at a new world position. Input clearing stops the next action;
+     this clears the action that is already on the authored timeline. */
+  function cancelTransientActions() {
+    action.name = null;
+    action.t = 0;
+    action.spec = null;
+    action.hitDone = false;
+    action.queued = null;
+    action.aimYaw = null;
+    action.queuedAimYaw = null;
+    action.combo = 0;
+    action.comboAt = -9;
+    action.turnFrom = null;
+    action.turnSweep = null;
+    action.turnDir = 0;
+    action.strikeArc = null;
+    sampleAction(0);
+    return true;
   }
 
   function sampleAction(dt) {
@@ -2541,52 +3736,209 @@ export async function createPlayer(ctx, canvas) {
       actionPose.chestYaw = 0; actionPose.chestPitch = 0;
       actionPose.pelvisYaw = 0; actionPose.drop = 0;
       actionPose.stanceZ = 0; actionPose.stanceSpread = 0;
-      actionPose.slide = 0;
+      actionPose.slide = 0; actionPose.lean = 0;
       return;
     }
-    action.t += dt;
+    /* Per-figure melee tempo. A figure may declare
+       `meleeProfile.timeScale` (>1 = faster hands): the clock of every
+       melee* clip runs at that rate so the hit window, drive profile
+       and turn window all keep their authored relationship to the
+       clip. Non-melee clips (death, reload, throws) are never scaled,
+       and a figure that declares nothing plays at exactly 1 - Vesper
+       and White Vigil's Vesper-tempo baseline are bit-identical. */
+    action.t += dt * (action.name && action.name.startsWith("melee")
+      ? MELEE_TIME_SCALE : 1);
     const k = action.spec.keys;
     let i = 0;
     while (i < k.length - 2 && action.t >= k[i + 1][0]) i += 1;
-    const a = k[i];
-    const b = k[Math.min(k.length - 1, i + 1)];
-    const span = Math.max(1e-4, b[0] - a[0]);
-    const u = (EASE[b[b.length - 1]] || EASE.linear)(clamp01((action.t - a[0]) / span));
-    actionPose.x = lerp(a[1], b[1], u);
-    actionPose.y = lerp(a[2], b[2], u);
-    actionPose.z = lerp(a[3], b[3], u);
-    actionPose.pitch = lerp(a[4], b[4], u);
-    actionPose.yaw = lerp(a[5], b[5], u);
-    actionPose.roll = lerp(a[6], b[6], u);
-    actionPose.chestYaw = lerp(chan(a, 7), chan(b, 7), u);
-    actionPose.chestPitch = lerp(chan(a, 8), chan(b, 8), u);
-    actionPose.pelvisYaw = lerp(chan(a, 9), chan(b, 9), u);
-    actionPose.drop = lerp(chan(a, 10), chan(b, 10), u);
-    actionPose.stanceZ = lerp(chan(a, 11), chan(b, 11), u);
-    actionPose.stanceSpread = lerp(chan(a, 12), chan(b, 12), u);
-    actionPose.slide = lerp(chan(a, 13), chan(b, 13), u);
+    writeActionPose(k, i, k[i], k[Math.min(k.length - 1, i + 1)], action.t);
 
     // The hit window: one connect per swing, in the middle of it.
     const hitWin = action.spec.hit;
     if (hitWin && !action.hitDone && action.t >= hitWin[0] && action.t <= hitWin[1]) {
       action.hitDone = true;
       if (ctx.combat && ctx.combat.meleeStrike) {
-        ctx.combat.meleeStrike(action.spec.damage, action.spec.arc,
-          !!action.spec.slam, action.spec.lunge || 1);
+        /* `strikeArc` is the turn slash's per-swing widening; every
+           other action uses its authored arc. The sweep id is the VFX
+           shape (4 spin, 5 lunge, 0 = draw by combo step), signed by
+           the spin direction so a clockwise spin draws a clockwise
+           crescent. `combo` stays 1-3 for progression - the spin and
+           the lunge ARE the procession's first blow. */
+        /* A loadout may name the sweep for a clip, because which WAY a
+           blow travels is the kit's business, not the clip's: a
+           dual-wield procession alternates hands, and the hand that
+           swings decides which way the crescent must reveal (a
+           negative id draws it mirrored). Optional and defaulted, so
+           every level without a loadout keeps the clip's own sweep. */
+        const kitSweep = ctx.loadout?.meleeSweep?.(action.name, action.combo);
+        const sweep = Number.isFinite(kitSweep) ? kitSweep : (action.spec.sweep || 0);
+        ctx.combat.meleeStrike(action.spec.damage,
+          action.strikeArc || action.spec.arc,
+          !!action.spec.slam, action.spec.lunge || 1, action.combo,
+          sweep * (action.turnDir || 1));
       }
     }
 
     if (action.t >= action.spec.dur) {
       const chain = action.queued;
+      const chainAimYaw = action.queuedAimYaw;
+      const finishedMelee = !!action.name && action.name.startsWith("melee");
       action.queued = false;
+      action.queuedAimYaw = null;
       action.name = null;
       action.spec = null;
-      if (chain) meleeSwing();
+      action.aimYaw = null;
+      /* The grace period begins after recovery, not at the first wind-up.
+         Starting it when the strike began consumed most of the nominal
+         window inside the authored animation and left only a few tenths for
+         an actual defensive decision. */
+      if (finishedMelee) action.comboAt = state.clock;
+      if (chain) meleeSwing(chainAimYaw);
     }
   }
 
   function groundY(x, z) {
     return ctx.collide ? ctx.collide.groundHeight(x, z) : terrain.heightAt(x, z);
+  }
+
+  /** Update only the steep-DOWNHILL presentation latch.
+   *
+   * `rawGrade` comes from the ground delta along the displacement that
+   * collision actually allowed. It therefore cannot trigger because a
+   * hill happens to be nearby, because the body is merely facing down
+   * one, or while walking along a contour. */
+  function updateDownhill(rawGrade, eligible, dt) {
+    const targetGrade = eligible ? Math.max(0, rawGrade) : 0;
+    state.downhillGrade = damp(
+      state.downhillGrade,
+      targetGrade,
+      targetGrade > state.downhillGrade ? 20 : 8,
+      dt
+    );
+    const wasSliding = state.downhillSliding;
+    if (wasSliding) {
+      state.downhillSliding = eligible
+        && state.downhillGrade > DOWNHILL_SLIDE_EXIT_GRADE;
+    } else {
+      state.downhillSliding = eligible
+        && state.downhillGrade >= DOWNHILL_SLIDE_ENTER_GRADE;
+    }
+    if (state.downhillSliding !== wasSliding) {
+      /* A planted walk foot is fixed in world space. A skid foot rides
+         with the body. Clear the old ownership at both boundaries so
+         neither solver drags a target inherited from the other. */
+      for (const leg of legs) {
+        leg.planted = false;
+        leg.swinging = false;
+      }
+    }
+    state.downhillPose = damp(
+      state.downhillPose,
+      state.downhillSliding ? 1 : 0,
+      state.downhillSliding ? 11 : 8,
+      dt
+    );
+  }
+
+  function walkableFrom(fromX, fromZ, dx, dz) {
+    const len = Math.hypot(dx, dz);
+    if (len < 1e-6) return true;
+    const ux = dx / len;
+    const uz = dz / len;
+    const here = groundY(fromX, fromZ);
+    if (groundY(
+      fromX + ux * WALK_SLOPE_NEAR,
+      fromZ + uz * WALK_SLOPE_NEAR
+    ) - here > WALK_MAX_STEP_UP) return false;
+    const rise = groundY(
+      fromX + ux * WALK_SLOPE_LOOK,
+      fromZ + uz * WALK_SLOPE_LOOK
+    ) - here;
+    return rise / WALK_SLOPE_LOOK < WALK_SLOPE_LIMIT;
+  }
+
+  function boostWalkableFrom(fromX, fromZ, dx, dz) {
+    const len = Math.hypot(dx, dz);
+    if (len < 1e-6) return true;
+    const destX = fromX + dx;
+    const destZ = fromZ + dz;
+    const here = groundY(fromX, fromZ);
+    const dest = groundY(destX, destZ);
+    if (ctx.collide?.blocked?.(destX, destZ, dest)) return false;
+    const grade = Math.abs(dest - here) / len;
+    return grade < 3.8;
+  }
+
+  /** Directed downhill grade and the sharpest local descent along an
+   *  already collision-resolved move. Sampling every 18cm prevents a
+   *  low-FPS frame from averaging a real ledge into a legal hill. */
+  function downhillAlong(fromX, fromZ, toX, toZ) {
+    const dx = toX - fromX;
+    const dz = toZ - fromZ;
+    const distance = Math.hypot(dx, dz);
+    if (distance < 1e-6) return { grade: 0, maxGrade: 0, groundDelta: 0 };
+    const steps = Math.max(1, Math.ceil(distance / 0.18));
+    const segment = distance / steps;
+    let previous = groundY(fromX, fromZ);
+    let maxGrade = 0;
+    for (let i = 1; i <= steps; i += 1) {
+      const t = i / steps;
+      const next = groundY(fromX + dx * t, fromZ + dz * t);
+      maxGrade = Math.max(maxGrade, (previous - next) / segment);
+      previous = next;
+    }
+    const groundDelta = previous - groundY(fromX, fromZ);
+    return {
+      grade: Math.max(0, -groundDelta / distance),
+      maxGrade: Math.max(0, maxGrade),
+      groundDelta,
+    };
+  }
+
+  const safeAnchor = { x: state.x, y: state.y, z: state.z, yaw: state.yaw };
+  let safeAnchorTimer = 0;
+  let stuckClock = 0;
+
+  function unstuck(reason = "auto") {
+    const curX = state.x;
+    const curY = state.y;
+    const curZ = state.z;
+    const curGy = groundY(curX, curZ);
+
+    let open = null;
+    if (ctx.collide?.findOpen) {
+      open = ctx.collide.findOpen(curX, curZ, curGy, 48, 10.0, ctx.collide.radius, undefined, (tx, tz) => {
+        const tgy = groundY(tx, tz);
+        return !ctx.collide.blocked(tx, tz, tgy) && (walkableFrom ? walkableFrom(tx, tz, 0.1, 0.1) : true);
+      });
+    }
+
+    if (!open && ctx.collide?.findFlightLanding) {
+      open = ctx.collide.findFlightLanding(curX, curZ, curY, 12.0);
+    }
+
+    let targetX, targetZ, targetYaw;
+    if (open && Number.isFinite(open[0]) && Number.isFinite(open[1])) {
+      targetX = open[0];
+      targetZ = open[1];
+      targetYaw = state.yaw;
+    } else if (safeAnchor && Number.isFinite(safeAnchor.x) && Number.isFinite(safeAnchor.z)
+      && Math.hypot(safeAnchor.x - curX, safeAnchor.z - curZ) < 120.0) {
+      targetX = safeAnchor.x;
+      targetZ = safeAnchor.z;
+      targetYaw = safeAnchor.yaw;
+    } else {
+      targetX = clamp(curX, -1000, 1000);
+      targetZ = clamp(curZ, -1000, 1000);
+      targetYaw = state.yaw;
+    }
+
+    spawn(targetX, targetZ, targetYaw);
+    stuckClock = 0;
+
+    try { ctx.audio?.chord?.([262, 330, 392, 523], 0.28, 0.12); } catch (_) {}
+    try { ctx.gameUi?.announce?.("Position recovered"); } catch (_) {}
+    return { x: targetX, y: state.y, z: targetZ, reason };
   }
 
   function spawn(x, z, yaw) {
@@ -2597,6 +3949,11 @@ export async function createPlayer(ctx, canvas) {
     state.grounded = true;
     state.speed = 0;
     if (yaw !== undefined) { state.yaw = yaw; state.camYaw = yaw; }
+    state.travelYaw = state.yaw;
+    state.travelSpeed = 0;
+    state.downhillGrade = 0;
+    state.downhillSliding = false;
+    state.downhillPose = 0;
     state.stride = 0;
     state.gait = 0;
     camAnchorReady = false;
@@ -2623,6 +3980,22 @@ export async function createPlayer(ctx, canvas) {
     ctx.jetpack?.reset?.(true);
     ctx.boost?.reset?.(true);
     ctx.shield?.reset?.(true);
+    /* Back on their feet. The fall is held rather than expiring, so
+       this is the only thing that ends it - and it has to run after
+       the position reset, or the pose is cleared on a body that is
+       still lying where it died. */
+    state.dying = false;
+    state.deathPose = 0;
+    /* AND THE HAZARDS GO WITH THE BODY. All three self-decay, so a
+       lingering slow was only ever a second of wrongness - but a stun
+       is different in kind: it takes the trigger as well as the feet,
+       and a trooper who respawns unable to shoot has no way of
+       knowing why. Nothing that was done to the previous body applies
+       to this one. */
+    clearSlow();
+    clearRoot();
+    clearStun();
+    if (action.name === "death") cancelTransientActions();
   }
   spawn(state.x, state.z);
 
@@ -2637,6 +4010,18 @@ export async function createPlayer(ctx, canvas) {
    * subject looks like rather than a broken one. Same failure as the
    * weapon harness photographing an empty road.
    */
+  /** Flight gear is not the only way the feet can leave the ground.
+   *  A vault, fall or ledge departure uses the same tucked-leg family
+   *  without pretending the jetpack itself is active. */
+  function airbornePose() {
+    const equipment = Math.max(
+      clamp01(ctx.jetpack?.state?.pose || 0),
+      clamp01(ctx.slam?.state?.pose || 0)
+    );
+    if (state.grounded) return equipment;
+    return Math.max(equipment, clamp01(0.62 + Math.abs(state.vy) * 0.045));
+  }
+
   function applyFigurePose(dt) {
     /* Where the body IS, not just what it is doing.
        This lived below the free-camera return with the rest of the
@@ -2646,12 +4031,31 @@ export async function createPlayer(ctx, canvas) {
        silhouette metric reported 0% coverage, which is what an
        absent subject looks like. Position, facing, legs and crouch
        are body state; only the camera belongs to the camera. */
+    /* Read once a frame, before anything asks for the gait: the
+       stride length depends on it and the sole angle is measured
+       against it. Damped, because a single height sample under a
+       moving body crosses every pebble on the level and a stride
+       that changed length per pebble would be its own defect. */
+    const slopeAhead = (groundY(
+      state.x + Math.sin(state.yaw) * 1.4,
+      state.z + Math.cos(state.yaw) * 1.4
+    ) - groundY(state.x, state.z)) / 1.4;
+    state.slopeGrade = damp(
+      state.slopeGrade,
+      Number.isFinite(slopeAhead) ? clamp(slopeAhead, -2, 2) : 0,
+      7, dt
+    );
     const gait = readGaitSpec();
     const jetPose = clamp01(ctx.jetpack?.state?.pose || 0);
     const boostPose = clamp01(ctx.boost?.state?.pose || 0);
-    const groundedMotion = 1 - jetPose;
-    const movingWeight = clamp01(state.speed / WALK) * groundedMotion;
-    const walkLeanN = clamp01(state.speed / WALK) * groundedMotion;
+    const groundedMotion = state.grounded ? 1 - jetPose : 0;
+    const downhillPose = clamp01(state.downhillPose) * groundedMotion;
+    /* A skid translates without stepping. Fade the cadence-derived
+       compression and run lean as the brace pose takes ownership, or
+       the body continues bobbing like it is walking above fixed feet. */
+    const gaitMotion = groundedMotion * (1 - downhillPose);
+    const movingWeight = clamp01(state.speed / WALK) * gaitMotion;
+    const walkLeanN = clamp01(state.speed / WALK);
     const sprintLeanN = clamp01(
       (state.speed - WALK) / Math.max(0.1, SPRINT - WALK)
     );
@@ -2673,17 +4077,41 @@ export async function createPlayer(ctx, canvas) {
        walking, and now 16deg at a sprint rather than 13.2 - which
        matters because every arm pole, grip seat and hand basis in
        this file was tuned against that shoulder angle and none of
-       them needs to move.
+       them needs to move. Those two figures are the DEFAULTS of the
+       four lean constants above; a figure may author its own, and a
+       heavy one should.
 
        The legs absorb it: their IK targets are world-space foot
        plants, so tipping the hips forward is a reach they solve
        against rather than a pose that drags the feet. */
-    const bodyLean = (0.045 * walkLeanN + 0.155 * sprintLeanN) * groundedMotion
+    /* The fall's own attitude, added on top: back over the raised
+       lance while it charges, then thrown forward so the lance leads
+       the body down. The root pivots at the soles, so this tips the
+       whole trooper the way a diver tips rather than folding a spine. */
+    const slamLean = ctx.slam?.state?.lean || 0;
+    const backpedalPose = backpedalWeight();
+    const ordinaryLocomotionLean = (LEAN_WALK * walkLeanN + LEAN_SPRINT * sprintLeanN)
+      * gaitMotion * lerp(1, 0.42, backpedalPose);
+    /* Counter-lean uphill while the boots run downhill. The root is
+       pitched from the soles, so a modest negative angle puts the
+       hips behind the planted-looking brace without folding the
+       breastplate or breaking the two-handed weapon solve. */
+    const locomotionLean = ordinaryLocomotionLean
+      - downhillPose * 0.14
       + boostPose * 0.075;
-    const travelLean = (0.055 * walkLeanN + 0.025 * sprintLeanN) * groundedMotion
+    const bodyLean = locomotionLean + slamLean
+      + (Number.isFinite(actionPose.lean) ? actionPose.lean : 0);
+    const travelLean = (SPINE_LEAN_WALK * walkLeanN + SPINE_LEAN_SPRINT * sprintLeanN)
+      * gaitMotion
+      * lerp(1, 0.55, backpedalPose)
+      - downhillPose * 0.035
       + 0.37 * jetPose;
     // Hip height is the leg, and the root sits at the sole.
-    leanFootShift = Math.sin(bodyLean)
+    /* Only the LOCOMOTION lean tracks the hips forward. That
+       compensation exists so a running trooper's feet stay under the
+       mass; applied to a dive it would drag the body a metre out of
+       its own collision capsule. */
+    leanFootShift = Math.sin(locomotionLean)
       * (figure.limb.thigh + figure.limb.shin + figure.limb.ankle);
     /* Turn the breastplate toward the right-side handhold.  This is
        a torso stance, not a whole-character yaw: the hips continue
@@ -2742,25 +4170,40 @@ export async function createPlayer(ctx, canvas) {
     state.carryAimPitch = carryAimPitch;
     const stepPhase = ((state.gait * 2) % 1 + 1) % 1;
     /* Plate mass settles the pelvis into the legs, rises through the
-       passing phase, then compresses sharply at contact.  The top
-       speed stays high; this delayed vertical response is what makes
-       the motion feel armoured instead of weightless. */
+       passing phase, then compresses sharply at contact. Locomotion
+       speed stays profile-owned; this delayed vertical response is
+       what makes the motion feel armoured instead of weightless. */
     const contactCompression = movingWeight * (0.028 + gait.bodyDrop * 0.14)
-      * Math.exp(-stepPhase * 8.5);
-    const passingRise = movingWeight * 0.014 * Math.sin(stepPhase * Math.PI);
+      * Math.exp(-stepPhase * 8.5) * IMPACT_SCALE;
+    const passingRise = movingWeight * 0.014 * Math.sin(stepPhase * Math.PI)
+      * PASSING_RISE_SCALE;
+    /* Heavy figures do not glide straight through their stride. Their
+       mass crosses onto the planted leg, then rolls back through the
+       passing phase. This is presentation-only and deliberately small:
+       collision remains centred while the plate visibly carries weight. */
+    const weightPhase = Math.sin(state.gait * TAU);
+    const weightSway = weightPhase * movingWeight * WEIGHT_SWAY_M;
+    const weightRightX = Math.cos(state.yaw);
+    const weightRightZ = -Math.sin(state.yaw);
     figure.root.position.set(
-      state.x,
+      state.x + weightRightX * weightSway,
       state.y - (gait.bodyDrop + contactCompression - passingRise) * groundedMotion
         - (ctx.jetpack?.state?.landPulse || 0) * 0.07
-        - boostPose * 0.13,
-      state.z
+        - boostPose * 0.13
+        - downhillPose * (0.13 + Math.sin(state.clock * 10.5) * 0.008),
+      state.z + weightRightZ * weightSway
     );
     /* YXZ so the pitch is taken about the body's OWN right, after the
        yaw. In the default XYZ order the pitch would be applied about
        world X and the trooper would lean north-east whatever
        direction they were running in. */
     figure.root.rotation.order = "YXZ";
-    figure.root.rotation.set(bodyLean, state.yaw + actionPose.pelvisYaw, 0);
+    figure.root.rotation.set(
+      bodyLean,
+      state.yaw + actionPose.pelvisYaw,
+      Math.sin(state.clock * 7.5) * downhillPose * 0.014
+        - weightPhase * movingWeight * WEIGHT_ROLL
+    );
     figure.root.position.y += actionPose.drop;
     solveLegs(dt);
     // The arms are NOT posed here. They are solved onto the weapon
@@ -2768,13 +4211,13 @@ export async function createPlayer(ctx, canvas) {
     // frame - posing them here would be overwritten, and posing
     // them instead of solving them is what made the hands miss the
     // grips by 15cm in every frame.
-    const crouchDrop = state.grounded && !ctx.jetpack?.state?.inFlight
-      ? Math.max(input.state.crouch ? 0.34 : 0, boostPose * 0.30)
+    const groundPoseDrop = state.grounded && !ctx.jetpack?.state?.inFlight
+      ? Math.max(boostPose * 0.30, downhillPose * 0.40)
       : 0;
     const baseScale = figure.baseScale || { x: 1, y: 1, z: 1 };
     figure.root.scale.set(
       baseScale.x,
-      baseScale.y * (1 - crouchDrop * 0.28),
+      baseScale.y * (1 - groundPoseDrop * 0.28),
       baseScale.z
     );
 
@@ -2938,14 +4381,33 @@ export async function createPlayer(ctx, canvas) {
 
   function update(dt, camera) {
     state.clock += dt;
+    const gaitAtFrameStart = state.gait;
     sampleAction(dt);
+    /* How far through the fall, for the camera. Read off the action's
+       own clock rather than tracked separately, so there is exactly one
+       timeline and it is the one that poses the body. */
+    state.deathPose = action.name === "death"
+      ? clamp01(action.t / DEATH_FALL_SECONDS) : 0;
     const { lx, ly, jumpPressed } = input.poll();
     const shieldState = ctx.shield?.beginFrame?.(dt, state, input.state) || null;
     const shieldMode = !!shieldState?.active;
+    /* The fall resolves BEFORE the pack, because committing to it
+       cuts the pack: a slam that has to wait a frame for the jetpack
+       to notice spends that frame still climbing. */
+    const slamState = ctx.slam?.beginFrame?.(dt, state, input.state) || null;
+    const slamMode = !!slamState?.active;
+    /* SPACE BEATS THE GLIDE.
+       Shift ignites the glide now, so the jetpack chord - Shift held,
+       Space pressed - always arrives with a glide already running,
+       and the pack refuses to light while one is. Cutting the glide
+       here, before the pack reads its own gate, is what keeps "hold
+       Shift and press Space" meaning exactly what it always meant.
+       No cooldown: taking off is not a failed boost. */
+    if (input.state.jetpack && ctx.boost?.state?.active) ctx.boost.stop("jetpack");
     const jetState = ctx.jetpack?.beginFrame?.(dt, state, input.state) || null;
     const flightMode = !!jetState?.inFlight;
     const boostState = ctx.boost?.beginFrame?.(dt, state, input.state) || null;
-    const boostMode = !!boostState?.active && !flightMode;
+    const boostMode = !!boostState?.active && !flightMode && !slamMode;
     if (boostState?.justEnded) state.speed = Math.min(state.speed, SPRINT);
 
     /* The figure is hidden in free-camera mode by default, because
@@ -2957,17 +4419,49 @@ export async function createPlayer(ctx, canvas) {
        and the weapon review harness spent a round photographing an
        empty road: the tool was suppressing the exact object it was
        pointed at. */
-    const showFigure = state.figureOverride !== null
+    const showFigure = (state.figureOverride !== null
       ? state.figureOverride
-      : !state.free;
+      : !state.free) && ((state.firstPerson || 0) < 0.65);
 
     // Posed before the camera branch, so a free camera watches a
     // living figure instead of a statue.
     applyFigurePose(dt);
+    const duskLight = clamp01(ctx.atmos.duskFactor || 0);
+    const nightLight = clamp01(ctx.atmos.nightFactor || 0);
+    const doctrineAttacking = doctrineGlow.attackRemaining > 0;
+    if (doctrineAttacking) {
+      doctrineGlow.attackRemaining = Math.max(0, doctrineGlow.attackRemaining - dt);
+    }
+    const doctrineTarget = doctrineAttacking ? doctrineGlow.peak : 0;
+    const doctrineResponse = doctrineAttacking
+      ? (doctrineGlow.reducedMotion ? 14 : 36)
+      : doctrineGlow.decayRate;
+    doctrineGlow.level = damp(doctrineGlow.level, doctrineTarget, doctrineResponse, dt);
+    if (!doctrineAttacking && doctrineGlow.level < 0.001) {
+      doctrineGlow.level = 0;
+      doctrineGlow.peak = 0;
+    }
+    const doctrineLevel = doctrineGlow.level;
     if (figure.heartLight) {
-      const time = ctx.atmos.time;
-      const targetHeart = time === "dusk" ? 0.48 : (time === "night" ? 0.40 : 0.16);
-      figure.heartLight.intensity = damp(figure.heartLight.intensity, targetHeart, 8, dt);
+      /* Dark when the figure is - the lamp used to vanish with the
+         rig it was parented to; now that it is scene-parented (see
+         the hoist in createPlayer) hiding has to be an intensity,
+         never a visibility flip, or the light count changes and the
+         whole level recompiles. */
+      const heartScale = figure.heartLight.userData.sfIntensityScale ?? 1;
+      const targetHeart = showFigure
+        ? 0.16 + duskLight * 0.32 + nightLight * 0.24 + doctrineLevel * 0.92
+        : 0;
+      figure.heartLight.intensity = damp(
+        figure.heartLight.intensity, targetHeart * heartScale, 8, dt);
+      if (doctrineHeartBase) {
+        figure.heartLight.color.copy(doctrineHeartBase)
+          .lerp(doctrineGlow.colour, doctrineLevel * 0.68);
+      }
+      if (heartSocket) {
+        heartSocket.updateWorldMatrix(true, false);
+        figure.heartLight.position.setFromMatrixPosition(heartSocket.matrixWorld);
+      }
     }
     /* The eyes ride the same time-of-day curve as the reliquary, so
        the two read as one lamp burning inside one suit. The night
@@ -2975,17 +4469,27 @@ export async function createPlayer(ctx, canvas) {
        has almost no lit value left, so the glow has to climb or the
        head goes dark while the chest is still lit. */
     if (figure.eyeGlow) {
-      const time = ctx.atmos.time;
-      const targetEye = time === "dusk" ? 5.6 : (time === "night" ? 6.6 : 4.2);
+      const targetEye = 4.2 + duskLight * 1.4 + nightLight * 2.4
+        + doctrineLevel * 2.1;
       figure.eyeGlow.material.emissiveIntensity =
         damp(figure.eyeGlow.material.emissiveIntensity, targetEye, 8, dt);
+      if (doctrineEyeBase) {
+        figure.eyeGlow.material.emissive.copy(doctrineEyeBase)
+          .lerp(doctrineGlow.colour, doctrineLevel * 0.54);
+      }
     }
     if (figure.readabilityMaterials) {
-      const time = ctx.atmos.time;
-      const factor = time === "dusk" ? 1.0 : (time === "night" ? 1.12 : 0.12);
-      for (const material of figure.readabilityMaterials) {
-        const target = (material.userData.vesperReadability || 0.14) * factor;
+      const factor = 0.12 + duskLight * 0.88 + nightLight;
+      for (let i = 0; i < figure.readabilityMaterials.length; i += 1) {
+        const material = figure.readabilityMaterials[i];
+        const target = (material.userData.vesperReadability || 0.14) * factor
+          + doctrineLevel * 0.18;
         material.emissiveIntensity = damp(material.emissiveIntensity, target, 8, dt);
+        const baseEmissive = doctrineReadabilityBase[i];
+        if (baseEmissive && material.emissive) {
+          material.emissive.copy(baseEmissive)
+            .lerp(doctrineGlow.colour, doctrineLevel * 0.34);
+        }
       }
     }
 
@@ -3041,13 +4545,23 @@ export async function createPlayer(ctx, canvas) {
     state.sighted = damp(state.sighted, sightWant,
       sightWant > state.sighted ? 11 : 8, dt);
 
+    const isMeleeAction = !!(action.name && action.name.startsWith("melee"));
+    /* Actions with their own drive profile (the lunge) are excluded:
+       the profile owns their speed below, and letting the thrust jog
+       target fight it would re-accelerate the recovery. */
+    const isForwardMelee = isMeleeAction && mz < -0.1 && !action.spec?.drive;
+
     const target = boostMode
       ? boostState.speed
       : shieldMode
-        ? ctx.shield.config.moveSpeed
+        ? (Number.isFinite(shieldState?.moveSpeed)
+          ? shieldState.moveSpeed : ctx.shield.config.moveSpeed)
         : flightMode
           ? (jetState.active ? ctx.jetpack.config.cruiseSpeed : ctx.jetpack.config.glideSpeed)
-          : (input.state.crouch ? CROUCH : (input.state.sprint ? SPRINT : WALK));
+            * FLIGHT_SPEED_SCALE
+          : isForwardMelee
+            ? MELEE_THRUST_SPEED
+            : (action.name ? WALK : SPRINT);
     /* Sighted movement is a walk at best. The multiplier is applied to
        the TARGET rather than gating sprint, so it also removes the
        sprint option by arithmetic: 8.6 * 0.46 is below the 4.4 walk,
@@ -3061,9 +4575,58 @@ export async function createPlayer(ctx, canvas) {
        half-tilted thumbstick produce a half-speed walk instead of
        snapping straight to full speed. Boost owns its own envelope. */
     const inputAmount = boostMode ? 1 : clamp01(mag);
-    const wanted = (mag > 0.01 || boostMode)
-      ? target * lerp(1, ADS_SPEED, sighted) * inputAmount : 0;
-    if (boostMode) {
+    /* A hazard's own ground-speed penalty, decaying on its own clock
+       rather than trusting whatever set it to clear it again - a
+       boss that dies mid-effect must not leave the player permanently
+       at quarter speed because nothing was left to call clearSlow(). */
+    if (state.slowFor > 0) {
+      state.slowFor = Math.max(0, state.slowFor - dt);
+      if (state.slowFor <= 0) state.slowFactor = 1;
+    }
+    /* Held fast. Same self-decaying clock as the slow, for the same
+       reason: whatever pinned the trooper may not be there to let go. */
+    if (state.rootFor > 0) state.rootFor = Math.max(0, state.rootFor - dt);
+    /* And flattened, on its own clock for the same reason again. A
+       stun implies a root everywhere below, so the two only ever need
+       to be read as one flag from here on. */
+    if (state.stunFor > 0) state.stunFor = Math.max(0, state.stunFor - dt);
+    const rooted = state.rootFor > 0 || state.stunFor > 0;
+    /* THE LUNGE DRIVE. A trapezoid over the clip's own timeline: ramp
+       in, hold through the closing dash, fade through recovery. It is
+       a FLOOR under the damped speed rather than a target, so the
+       dash is ballistic - releasing W mid-lunge does not abort it, and
+       the ordinary damp takes over seamlessly as the profile fades.
+       Zeroed by everything that pins the trooper (web, stun) and by
+       every mode that owns speed outright. */
+    let lungeDrive = 0;
+    const driveSpec = action.spec?.drive;
+    if (driveSpec && !rooted && !flightMode && !boostMode && !shieldMode
+      && !slamMode && !movementLocked) {
+      const dt0 = action.t;
+      if (dt0 <= driveSpec.start) lungeDrive = 0;
+      else if (dt0 < driveSpec.ramp) {
+        lungeDrive = clamp01((dt0 - driveSpec.start)
+          / Math.max(1e-4, driveSpec.ramp - driveSpec.start));
+      } else if (dt0 <= driveSpec.end) lungeDrive = 1;
+      else lungeDrive = clamp01(1 - (dt0 - driveSpec.end) / Math.max(1e-4, driveSpec.fade));
+    }
+    /* The leap's sustained horizontal (leap-mode packs only). Read
+       once here because it gates the travel below as well as the
+       speed: with the stick centred the solver drives `wanted` to
+       zero AND closes the movement gate, so a floor alone would have
+       produced a fast trooper who never moved. */
+    const jetDrive = rooted || slamMode ? null : (ctx.jetpack?.driveState?.() || null);
+    const wanted = rooted || slamMode || (shieldMode && shieldState?.movementLocked) ? 0
+      : (mag > 0.01 || boostMode)
+        ? target * lerp(1, ADS_SPEED, sighted) * inputAmount * state.slowFactor : 0;
+    if (shieldMode && shieldState?.movementLocked) {
+      state.speed = 0;
+    } else if (rooted && !flightMode) {
+      // Pinned mid-stride stops dead. The skid a damped stop would
+      // allow is a metre and a half at a sprint, and a web that lets
+      // you jog a metre and a half is not a web.
+      state.speed = 0;
+    } else if (boostMode) {
       state.speed = wanted;
     } else if (flightMode) {
       const rate = wanted > state.speed
@@ -3072,9 +4635,24 @@ export async function createPlayer(ctx, canvas) {
       state.speed += clamp(wanted - state.speed, -rate * dt, rate * dt);
     } else {
       const speedResponse = wanted > state.speed
-        ? (shieldMode ? 7.5 : (input.state.sprint ? 3.2 : 4.2))
-        : 5.4;
+        ? (isForwardMelee ? 18.0 : (shieldMode ? 7.5 : GROUND_ACCEL_RESPONSE))
+        : GROUND_DECEL_RESPONSE;
       state.speed = damp(state.speed, wanted, speedResponse, dt);
+      if (lungeDrive > 0) {
+        const driveMax = action.name === "meleePierce"
+          ? (action.pierceSpeed || MELEE_PIERCE_SPEED)
+          : MELEE_LUNGE_SPEED;
+        state.speed = Math.max(state.speed,
+          driveMax * lungeDrive * state.slowFactor);
+      }
+      /* A LEAPING PACK CARRIES ITS OWN HORIZONTAL, on exactly the
+         terms the lunge does: a floor under the damped speed rather
+         than a target, so releasing the stick cannot abort a leap
+         that is already in the air. Null for every pack that does
+         not leap - which is every pack but the Censer. */
+      if (jetDrive && jetDrive.speed > 0) {
+        state.speed = Math.max(state.speed, jetDrive.speed * state.slowFactor);
+      }
     }
     if (flightMode) jetState.horizontalSpeed = state.speed;
 
@@ -3096,7 +4674,14 @@ export async function createPlayer(ctx, canvas) {
        photograph the low-ready pose in every aimed shot. Commitment
        should follow the state of the game, not the state of a
        button. */
-    const committing = !state.free && !flightMode && !boostMode && !shieldMode && (
+    /* Firing commits the shoulders WHEREVER the trooper is. Flight
+       and the glide used to be excluded, which was correct while
+       neither could shoot; now that both can, excluding them would
+       leave the lance pointing down the body's line of travel while
+       the bolt left along the reticle - the exact disagreement the
+       aim solve exists to prevent. The slam keeps its exclusion: the
+       lance is overhead and committed for the whole of it. */
+    const committing = !state.free && !slamMode && !shieldMode && (
       input.state.firing
       || input.state.ads
       || (ctx.weapons?.carry?.ads || 0) > 0.5
@@ -3146,21 +4731,58 @@ export async function createPlayer(ctx, canvas) {
          axis. */
       wantYaw = state.camYaw + Math.atan2(-mx, -mz);
     }
-    if (state.aimCommit > 0.002 && !state.free) {
+    const meleeFacing = action.name && action.name.startsWith("melee")
+      && Number.isFinite(action.aimYaw);
+    /* The turn slash's spin is AUTHORED, not damped: a smoothstep over
+       the clip's `turn` window spreads the pivot evenly instead of
+       front-loading it the way an exponential response does, and once
+       the window ends the profile holds the captured bearing exactly
+       for the rest of the swing. Driven off `action.t`, so a throttled
+       frame turns further rather than falling behind its own strike. */
+    const turnDrive = meleeFacing && Array.isArray(action.spec?.turn)
+      && Number.isFinite(action.turnFrom);
+    if (turnDrive) {
+      const tw = action.spec.turn;
+      const u = clamp01((action.t - tw[0]) / Math.max(1e-4, tw[1] - tw[0]));
+      const eased = u * u * (3 - 2 * u);
+      wantYaw = action.turnFrom + action.turnSweep * eased;
+    } else if (meleeFacing) {
+      /* Keep the animation and combat arc on one body frame for the
+         whole blow. Translation remains camera-relative below, so
+         turning the shoulders cannot reverse a held movement key. */
+      wantYaw = action.aimYaw;
+    } else if (state.aimCommit > 0.002 && !state.free) {
       const aimYaw = state.aimViewYaw ?? state.camYaw;
-      const over = Math.abs(angleDelta(wantYaw, aimYaw)) - MAX_CHEST_TWIST;
-      if (over > 0) {
-        wantYaw += Math.sign(angleDelta(wantYaw, aimYaw)) * over * state.aimCommit;
+      const backpedalling = mz > 0.2 && Math.abs(mx) < 0.35;
+      if (backpedalling) {
+        /* A firing reverse is a backpedal, not a turn-and-run. Keep
+           the hips under the reticle so the knees can cycle straight
+           backward beneath a stable combat stance. Leaving the body
+           at the edge of the chest-twist limit made pure S a 126deg
+           crab step; even with correct translation, the feet had to
+           cross the pelvis to keep up. */
+        wantYaw = aimYaw;
+      } else {
+        const over = Math.abs(angleDelta(wantYaw, aimYaw)) - MAX_CHEST_TWIST;
+        if (over > 0) {
+          wantYaw += Math.sign(angleDelta(wantYaw, aimYaw)) * over * state.aimCommit;
+        }
       }
     }
-    const turnResponse = boostMode ? 24
+    const turnResponse = meleeFacing ? MELEE_TURN_RESPONSE
+      : boostMode ? 24
       : shieldMode ? 20
         : lerp(
           lerp(10.0, 6.4, clamp01(state.speed / SPRINT)),
           12.0,
           state.aimCommit
-        );
-    state.yaw = dampAngle(state.yaw, wantYaw, turnResponse, dt);
+        ) * TURN_RESPONSE_SCALE;
+    if (turnDrive) {
+      // The profile IS the trajectory; damping it would lag the strike.
+      state.yaw = Math.atan2(Math.sin(wantYaw), Math.cos(wantYaw));
+    } else {
+      state.yaw = dampAngle(state.yaw, wantYaw, turnResponse, dt);
+    }
     /* Measure the turn rate that ACTUALLY happened rather than the
        one that was asked for; the damping above means those differ
        by a factor of three at the start of a hard turn, and the leg
@@ -3182,10 +4804,32 @@ export async function createPlayer(ctx, canvas) {
     let flightWantZ = state.z;
     const motionStartX = state.x;
     const motionStartZ = state.z;
-    if (mag > 0.01 || boostMode) {
+    let downhillUpdated = false;
+    if ((mag > 0.01 || boostMode || lungeDrive > 0 || !!jetDrive) && !slamMode) {
       const step = state.speed * dt;
+      /* Melee and ranged aim commitment can own the BODY bearing, but
+         neither may steal the movement stick. Preserve the same
+         camera-relative travel the pressed WASD direction requested;
+         otherwise S can become forward movement toward the target and
+         A/D gain a forward component as the body turns to aim. The
+         existing gait already supports body-relative strafing during
+         aim commitment.
+
+         The LUNGE is the one exception, and deliberately: it is a
+         committed dash along the bearing captured at the press. The
+         stick cannot steer it mid-flight and releasing W does not
+         stop it - which is what separates a lunge from a jog that
+         happens to be swinging. */
+      /* A leap with the stick centred travels the bearing it was
+         launched along; a leap being steered belongs to the stick,
+         because air control over a jump is what makes it a verb
+         rather than a cutscene. */
       const moveYaw = boostMode ? boostState.yaw
-        : shieldMode ? state.camYaw + Math.atan2(-mx, -mz) : state.yaw;
+        : lungeDrive > 0 && Number.isFinite(action.aimYaw) ? action.aimYaw
+        : (jetDrive && mag <= 0.01) ? jetDrive.yaw
+        : (shieldMode || meleeFacing || state.aimCommit > 0.002)
+          ? state.camYaw + Math.atan2(-mx, -mz)
+          : state.yaw;
       const nx = state.x + Math.sin(moveYaw) * step;
       const nz = state.z + Math.cos(moveYaw) * step;
 
@@ -3233,21 +4877,9 @@ export async function createPlayer(ctx, canvas) {
          while a crater wall stays steep for the whole probe and still
          stops them. The near check is what keeps that from becoming
          a licence to walk through a vertical face. */
-      const LOOK = 1.6;
-      const NEAR = 0.45;
-      const SLOPE = 1.7;
-      const MAX_STEP_UP = 1.05;
-      const walkableFrom = (fromX, fromZ, dx, dz) => {
-        const len = Math.hypot(dx, dz);
-        if (len < 1e-6) return true;
-        const ux = dx / len;
-        const uz = dz / len;
-        const here = groundY(fromX, fromZ);
-        if (groundY(fromX + ux * NEAR, fromZ + uz * NEAR) - here > MAX_STEP_UP) return false;
-        const rise = groundY(fromX + ux * LOOK, fromZ + uz * LOOK) - here;
-        return rise / LOOK < SLOPE;
-      };
-      const walkable = (dx, dz) => walkableFrom(state.x, state.z, dx, dz);
+      const walkable = (dx, dz) => (boostMode
+        ? boostWalkableFrom(state.x, state.z, dx, dz)
+        : walkableFrom(state.x, state.z, dx, dz));
       let mx2 = nx;
       let mz2 = nz;
       if (!walkable(nx - state.x, nz - state.z)) {
@@ -3304,7 +4936,9 @@ export async function createPlayer(ctx, canvas) {
             for (let i = 0; i < count; i += 1) {
               const out = ctx.collide.slide(
                 bx, bz, bx + sx, bz + sz, null, undefined,
-                (tx, tz) => walkableFrom(bx, bz, tx - bx, tz - bz)
+                (tx, tz) => (boostMode
+                  ? boostWalkableFrom(bx, bz, tx - bx, tz - bz)
+                  : walkableFrom(bx, bz, tx - bx, tz - bz))
               );
               const moved = Math.hypot(out[0] - bx, out[1] - bz);
               bx = out[0];
@@ -3330,10 +4964,45 @@ export async function createPlayer(ctx, canvas) {
         // the distance asked for. Walking into a wall must not keep
         // driving the gait, or the legs stroll on the spot.
         const travelled = Math.hypot(px - state.x, pz - state.z);
-        /* A boost is a slide, not a six-metre sprint compressed into
-           four frames. Keep the planted-foot clock nearly still while
-           the crouched body skims over it; normal gait resumes on exit. */
-        const gaitTravel = boostMode ? travelled * 0.08 : travelled;
+        const descent = downhillAlong(state.x, state.z, px, pz);
+        const groundDelta = descent.groundDelta;
+        const descentGrade = descent.grade;
+        /* Carry a grounded body by the continuous surface delta BEFORE
+           asking whether support was lost. Previously XZ advanced
+           first while Y could descend only 1.5m/s; at full speed even
+           a ten-degree hill outran that settle, opened a 20cm gap, and
+           changed an ordinary walk into a fall.
+
+           Preserve a real ledge: an abrupt drop steeper than the
+           continuous-dune classifier is not ground transport, so the
+           existing support test below hands it to gravity. Any
+           pre-existing landing offset is preserved. */
+        if (state.grounded && groundDelta < 0
+          && descent.maxGrade <= DOWNHILL_MAX_CONTINUOUS_GRADE) {
+          state.y += groundDelta;
+        }
+        if (boostMode) {
+          const hereGy = groundY(px, pz);
+          state.y = Math.max(state.y, hereGy);
+        }
+        const slideEligible = state.grounded
+          && travelled > 1e-4
+          && descentGrade > 0
+          && descent.maxGrade <= DOWNHILL_MAX_CONTINUOUS_GRADE
+          && !boostMode && !flightMode && !shieldMode && !slamMode;
+        updateDownhill(descentGrade, slideEligible, dt);
+        downhillUpdated = true;
+        /* A boost is a committed lunge, not a six-metre sprint
+           compressed into four frames. Its dedicated body-relative
+           leg solve below owns the boots, so the walking clock freezes
+           until normal locomotion resumes.
+           A steep downhill skid uses the same visual truth: the boots
+           move WITH the body instead of taking full walking strides. */
+        const isPierceThrust = action.name === "meleePierce";
+        const gaitTravel = !state.grounded
+          ? 0
+          : (boostMode || isPierceThrust) ? 0
+            : travelled * lerp(1, 0.04, state.downhillPose);
         state.stride += gaitTravel;
         state.gait += gaitTravel / Math.max(0.55, readGaitSpec().strideLen);
         state.x = px;
@@ -3341,34 +5010,101 @@ export async function createPlayer(ctx, canvas) {
       }
       }
     }
+    if (!downhillUpdated) updateDownhill(0, false, dt);
+    /* THE STEP THE BODY STARTED HAS TO FINISH.
+     *
+     * The gait is integrated from DISTANCE TRAVELLED, which is the
+     * whole reason a planted foot never slides - and it means a body
+     * that stops advancing stops the cycle wherever it is. Braking
+     * out of a sprint, that is a boot parked at knee height for the
+     * half-second the trooper takes to shed 8m/s, and then a hurried
+     * settle when the walk finally drops below its own threshold.
+     * It is the third of the reported leg faults and the only one
+     * that is neither an angle nor a snap: it is a leg that has
+     * simply stopped animating while you watch it.
+     *
+     * So a swing - and ONLY a swing, never a planted foot - is given
+     * a cadence floor that grows as the shortfall between the body's
+     * speed and a walk grows. A stance foot is untouched, so distance
+     * still owns the plant and the no-slip claim is unchanged. */
+    if (state.grounded && !boostMode && !flightMode
+      && (legs[0].swinging || legs[1].swinging)) {
+      const shortfall = clamp01((GAIT_SETTLE_SPEED - state.speed) / GAIT_SETTLE_SPEED);
+      const floor = dt * GAIT_SETTLE_CADENCE * shortfall;
+      const advanced = state.gait - gaitAtFrameStart;
+      if (floor > advanced) state.gait += floor - advanced;
+    }
     if (boostMode) {
       ctx.boost?.noteMotion?.(motionStartX, motionStartZ, state.x, state.z, dt);
     }
 
     /* --- vertical --- */
     const gy = groundY(flightMode ? flightWantX : state.x, flightMode ? flightWantZ : state.z);
-    if (!flightMode && !shieldMode && state.grounded && jumpPressed && !input.state.jetpack) {
-      state.vy = 6.4;
+    if (!flightMode && state.grounded && state.y > gy + GROUNDED_SUPPORT_SKIN) {
+      /* Ask the whole capsule footprint whether it is still supported.
+         Center-only ground is wrong at a ridge: one sabaton can still
+         be on the lip even when the pelvis has crossed it. Conversely,
+         when the complete footprint is below the soles, keeping the
+         grounded flag alive is literally walking on air. */
+      const support = ctx.collide?.flightGroundHeight
+        ? ctx.collide.flightGroundHeight(state.x, state.z, ctx.collide.radius)
+        : gy;
+      if (state.y > support + GROUNDED_SUPPORT_SKIN) {
+        state.grounded = false;
+        state.vy = Math.min(0, state.vy);
+        for (const leg of legs) leg.planted = false;
+      }
+    }
+    if (!flightMode && !shieldMode && state.grounded && jumpPressed && !input.state.jetpack
+      && !rooted) {
+      state.vy = 9.6;
       state.grounded = false;
     }
     if (flightMode) {
       const cfg = ctx.jetpack.config;
       const agl = state.y - gy;
-      const ceiling = Math.min(gy + cfg.maxAltitude, jetState.takeoffGround + cfg.maxRiseFromLaunch);
+      const ceiling = gy + cfg.maxAltitude;
       if (jetState.active) {
+        // Lookahead along flight path to detect rising terrain / steep hills
+        const speed = Math.max(15, state.speed);
+        const lookDist = Math.max(3.0, speed * 0.45);
+        const lookYaw = (Math.abs(mx) > 0.01 || Math.abs(mz) > 0.01)
+          ? (state.camYaw + Math.atan2(-mx, -mz))
+          : state.yaw;
+        const lookX = clamp(state.x + Math.sin(lookYaw) * lookDist, -1010, 1010);
+        const lookZ = clamp(state.z + Math.cos(lookYaw) * lookDist, -1010, 1010);
+        const lookGy = groundY(lookX, lookZ);
+        const aheadRise = Math.max(0, lookGy - gy);
+        const effGround = Math.max(gy, lookGy);
+        const effAgl = state.y - effGround;
+
         let targetVy;
-        if (input.state.crouch) targetVy = -cfg.descendSpeed;
-        else if (state.y >= ceiling - 0.12 || agl >= cfg.softAltitude) {
-          targetVy = clamp((cfg.softAltitude - agl) * 2.4, -cfg.descendSpeed, 0);
+        if (state.y >= ceiling - 0.12 || (state.y - gy) >= cfg.softAltitude) {
+          targetVy = clamp((cfg.softAltitude - (state.y - gy)) * 2.4, -cfg.descendSpeed, 0);
         } else {
-          targetVy = clamp((cfg.cruiseAltitude - agl) * 2.4, -3.5, cfg.climbSpeed);
+          const altitudeNeed = clamp((cfg.cruiseAltitude - effAgl) * 3.5, -3.5, 24.0);
+          const terrainNeed = aheadRise > 0 ? (aheadRise / 0.40) : 0;
+          targetVy = Math.max(altitudeNeed, clamp(terrainNeed + 3.0, 0, 24.0));
         }
-        state.vy = damp(state.vy, targetVy, 5.2, dt);
+        state.vy = damp(state.vy, targetVy, 9.0, dt);
+      } else if (slamMode) {
+        /* THE FALL OWNS THE AXIS, EVEN OUT OF A FLIGHT.
+           Committing to the slam cuts the pack, but the pack stays
+           `inFlight` until it lands - so the whole descent is still
+           resolved here, by the capsule sweep, with the pack's gravity
+           and terminal-fall clamp. Left alone that turned the fastest
+           attack in the game into an ordinary drop that never struck
+           anything. The fall replaces the velocity outright rather
+           than accelerating from whatever the flight left behind. */
+        state.vy = slamState.verticalSpeed;
       } else {
         state.vy = Math.max(-cfg.terminalFall, state.vy - cfg.gravity * dt);
       }
 
       let nextY = state.y + state.vy * dt;
+      if (jetState.active) {
+        nextY = Math.max(nextY, gy + 0.35);
+      }
       /* A terrain drop can move the local ceiling far below the
          current body in one horizontal frame. Max altitude limits
          ascent; it must never teleport an already-airborne player
@@ -3380,6 +5116,7 @@ export async function createPlayer(ctx, canvas) {
       }
       let landingImpactSpeed = Math.max(0, -state.vy);
       let verticalHit = false;
+      let terrainLandingContact = false;
       if (ctx.collide?.sweepFlightCapsule) {
         const attemptedVy = state.vy;
         landingImpactSpeed = Math.max(landingImpactSpeed, -attemptedVy);
@@ -3398,11 +5135,39 @@ export async function createPlayer(ctx, canvas) {
           state.x, state.z, state.y, ctx.collide.radius, 2.35
         )) jetState.takeoffClearing = false;
         verticalHit = out.hitY;
+        if (out.hitY && ctx.collide.flightGroundHeight) {
+          const footprintSupport = ctx.collide.flightGroundHeight(
+            state.x, state.z, ctx.collide.radius
+          );
+          const centerSupport = groundY(state.x, state.z);
+          /* A terrain sweep resolves within the 2cm contact skin;
+             roofs remain metres above this support footprint. Carry
+             that source distinction into the landing handoff instead
+             of guessing from center ground height. */
+          terrainLandingContact = Number.isFinite(footprintSupport)
+            && state.y <= footprintSupport + 0.04
+            /* Reuse the grounded controller's actual step and sustained-
+               slope gates. A fixed sub-step cutoff left fully walkable
+               40-60cm rim rises hovering forever, while a multi-metre
+               Fosse face still fails both the shared walkability test
+               and the authoritative near-step cap. The full capsule
+               footprint already spans the grounded controller's 0.45m
+               near probe, while `blocked` verifies the center is a
+               legal standing column without rejecting a valid contour
+               landing just because one far direction climbs sharply. */
+            && footprintSupport - centerSupport <= WALK_MAX_STEP_UP
+            && !ctx.collide.blocked(state.x, state.z, centerSupport);
+        }
         if (out.hitX || out.hitZ) {
-          // Bleed speed on contact instead of continuing to drive the
-          // pose and camera at 30m/s while pressed into a wall.
-          state.speed = Math.min(state.speed, Math.max(2.5, travelled / Math.max(dt, 1e-4)));
-          jetState.horizontalSpeed = state.speed;
+          const localGround = groundY(state.x, state.z);
+          const isTerrainContact = state.y <= localGround + 1.2;
+          if (isTerrainContact && jetState.active) {
+            state.y = Math.max(state.y, localGround + 0.35);
+            state.vy = Math.max(state.vy, 10.0);
+          } else {
+            state.speed = Math.min(state.speed, Math.max(2.5, travelled / Math.max(dt, 1e-4)));
+            jetState.horizontalSpeed = state.speed;
+          }
         }
         ctx.jetpack.noteMotion(travelled, out.hitX || out.hitZ);
         if (out.hitY) {
@@ -3412,7 +5177,8 @@ export async function createPlayer(ctx, canvas) {
              drift toward the nearest column that reaches authored
              ground instead of hovering forever on an ungroundable
              surface. The drift itself is swept, bounded and slow. */
-          if (!jetState.active && attemptedVy < 0 && state.y > gy + 0.12
+          if (!terrainLandingContact && !jetState.active
+            && attemptedVy < 0 && state.y > gy + 0.12
             && ctx.collide.findFlightLanding) {
             /* Landing-site search is the expensive part of the roof
                escape. Cache the validated static-world target across
@@ -3487,48 +5253,243 @@ export async function createPlayer(ctx, canvas) {
         state.y = nextY;
       }
 
-      const support = groundY(state.x, state.z);
-      if (state.vy <= 0 && state.y <= support + 0.10) {
+      let support = groundY(state.x, state.z);
+      const slamContact = slamMode && (verticalHit || state.y <= support + 0.10 || terrainLandingContact);
+      /* A flight slam may reach terrain on the same sweep that its
+         horizontal capsule brushes a Scar shard or vein. Handing that
+         overlapping column to the grounded controller completes the
+         slam inside static geometry: the attack fires, but every later
+         movement frame is blocked. Reconcile only committed slam
+         landings, and keep the correction local to the contact point. */
+      if (slamContact && ctx.collide) {
+        const radius = ctx.collide.radius || 0.45;
+        if (terrainLandingContact || state.y <= support + 0.10) {
+          const staticBlocked = ctx.collide.blocked(state.x, state.z, support, radius)
+            || ctx.collide.flightBlocked?.(state.x, state.z, support,
+              radius, 2.35, true);
+          if (staticBlocked) {
+            state.slamLandingCorrections += 1;
+            const safe = ctx.collide.findOpen?.(state.x, state.z, support,
+              96, 8, radius, groundY, (tx, tz) => {
+                const ty = groundY(tx, tz);
+                return !ctx.collide.flightBlocked?.(tx, tz, ty, radius, 2.35, true);
+              });
+            if (safe) {
+              state.x = safe[0];
+              state.z = safe[1];
+              support = groundY(state.x, state.z);
+              state.y = support;
+              terrainLandingContact = true;
+            } else {
+              unstuck("slam-landing");
+              support = groundY(state.x, state.z);
+              terrainLandingContact = true;
+            }
+          }
+        } else if (verticalHit) {
+          // Elevated mesh contact (roof, bridge, arch, rock ledge) during a flight slam plunge
+          state.slamLandingCorrections += 1;
+          const safeLanding = ctx.collide.findFlightLanding?.(state.x, state.z, state.y, 8);
+          if (safeLanding) {
+            state.x = safeLanding[0];
+            state.z = safeLanding[1];
+            support = groundY(state.x, state.z);
+            state.y = support;
+            terrainLandingContact = true;
+          } else {
+            const safeOpen = ctx.collide.findOpen?.(state.x, state.z, support,
+              96, 8, radius, groundY, (tx, tz) => {
+                const ty = groundY(tx, tz);
+                return !ctx.collide.flightBlocked?.(tx, tz, ty, radius, 2.35, true);
+              });
+            if (safeOpen) {
+              state.x = safeOpen[0];
+              state.z = safeOpen[1];
+              support = groundY(state.x, state.z);
+              state.y = support;
+              terrainLandingContact = true;
+            } else {
+              unstuck("slam-landing-elevated");
+              support = groundY(state.x, state.z);
+              terrainLandingContact = true;
+            }
+          }
+        }
+      }
+      /* Terrain contact hands the capsule back to the walking support
+         even on a steep but legal slope. The center fallback preserves
+         the old flat-ground behavior when a collision implementation
+         does not expose footprint metadata. */
+      if (slamContact || (state.vy <= 0 && (terrainLandingContact || state.y <= support + 0.10))) {
         /* sweepFlightCapsule zeroes vertical velocity on contact, so
            use the pre-contact descent captured above for landing
            animation/audio intensity. */
         const impact = landingImpactSpeed;
-        state.y = support;
+        /* Do not turn a valid rim contact into a center teleport.
+           Preserve the collision-resolved height on the handoff
+           frame; ordinary grounded easing can settle the body toward
+           its walking support afterward without an under-hill pop. */
+        state.y = terrainLandingContact
+          ? Math.max(support, state.y)
+          : support;
         state.vy = 0;
         state.grounded = true;
         state.speed = Math.min(state.speed, SPRINT);
-        ctx.jetpack.land(state, impact);
+        /* The pack still books its own landing - it is what clears
+           `inFlight` and arms the recharge - but the slam's own strike
+           is the louder event, so the pack lands silently under it. */
+        ctx.jetpack.land(state, slamMode ? 0 : impact);
         for (const leg of legs) leg.planted = false;
+        if (slamMode) ctx.slam.impact();
       } else {
         state.grounded = false;
         if (verticalHit && state.y < support) state.y = support;
       }
     } else if (!state.grounded) {
-      state.vy -= 19.6 * dt;
-      state.y += state.vy * dt;
-      if (state.y <= gy) { state.y = gy; state.vy = 0; state.grounded = true; }
+      /* A committed fall replaces gravity outright rather than adding
+         to it. Accelerating a plunge from whatever vertical velocity
+         the jump happened to leave behind makes the same input take a
+         different amount of time depending on how it was entered,
+         which is the one thing a telegraphed attack must not do. */
+      if (slamMode) {
+        state.vy = slamState.verticalSpeed;
+        state.y += state.vy * dt;
+        if (state.y <= gy) {
+          state.y = gy;
+          state.vy = 0;
+          state.grounded = true;
+          for (const leg of legs) leg.planted = false;
+          ctx.slam.impact();
+        }
+      } else if (boostMode) {
+        // Skimming / airborne glide: smooth gravity while thrusters maintain forward propulsion over terrain
+        state.vy = Math.max(-12, state.vy - 14.0 * dt);
+        state.y += state.vy * dt;
+        if (state.y <= gy) {
+          state.y = gy;
+          state.vy = 0;
+          state.grounded = true;
+          for (const leg of legs) leg.planted = false;
+        }
+      } else {
+        state.vy -= 19.6 * dt;
+        state.y += state.vy * dt;
+        if (state.y <= gy) {
+          state.y = gy;
+          state.vy = 0;
+          state.grounded = true;
+          for (const leg of legs) leg.planted = false;
+        }
+      }
     } else {
-      state.y = damp(state.y, gy, 22, dt);
+      /* A collision-resolved landing can begin above center support on
+         a legal slope. Exponential damping alone drops almost the full
+         gap in one throttled 100ms frame; cap only the downward settle
+         so touchdown cannot visibly pop under the hill at low FPS. */
+      const easedGroundY = damp(state.y, gy, 22, dt);
+      state.y = boostMode
+        ? Math.max(state.y, gy)
+        : (state.y > gy
+          ? Math.max(gy, state.y - GROUNDED_SETTLE_DOWN_SPEED * dt, easedGroundY)
+          : easedGroundY);
+    }
+
+    const travelX = state.x - motionStartX;
+    const travelZ = state.z - motionStartZ;
+    const travelDistance = Math.hypot(travelX, travelZ);
+    if (travelDistance > 1e-5) state.travelYaw = Math.atan2(travelX, travelZ);
+    const measuredTravelSpeed = dt > 1e-5 ? travelDistance / dt : 0;
+    state.travelSpeed = damp(state.travelSpeed, measuredTravelSpeed, 18, dt);
+
+    /* --- Stuck detection & auto-recovery --- */
+    const isGameplayActive = ctx.runtime?.phase === "playing"
+      && !ctx.runtime?.paused
+      && !ctx.intro?.isBlocking?.()
+      && !ctx.combat?.player?.dead
+      && !state.free
+      && !state.dying;
+
+    if (isGameplayActive) {
+      const curGround = groundY(state.x, state.z);
+      /* Walking and flight deliberately use different collision rules.
+         The flight capsule samples the complete terrain footprint and
+         cannot apply the grounded controller's step allowance. Asking it
+         to validate a grounded pose therefore marks legal slopes, paving
+         relief and the landing-site approach as overlaps. The auto-recovery
+         clock then calls `spawn` every 2.5 seconds, zeroing speed and gait
+         even though grounded movement is legal.
+
+         Detect penetration with the controller that currently owns the
+         body. Grounded poses use the same walking support height as
+         `slide`; airborne poses keep the full-height flight capsule. */
+      const isOverlapping = state.grounded
+        ? !!ctx.collide?.blocked?.(state.x, state.z, curGround, ctx.collide.radius)
+        : !!ctx.collide?.flightBlocked?.(
+          state.x, state.z, state.y, ctx.collide.radius, 2.0
+        );
+      const isTryingToMove = (mag > 0.05 || boostMode || input.state.move.x !== 0 || input.state.move.y !== 0) && !rooted;
+      const isMotionless = travelDistance < 0.02 && state.travelSpeed < 0.05;
+
+      // Floating/caught on an ungroundable structure/roof without active flight
+      const isUngroundablePerch = !state.grounded && !flightMode && Math.abs(state.vy) < 0.25 && state.y > curGround + 0.15;
+
+      // Legitimate safe grounded location
+      const isLegitimatelySafe = state.grounded
+        && !isOverlapping
+        && state.y <= curGround + 0.10
+        && Math.abs(state.vy) < 0.01;
+
+      if (isLegitimatelySafe) {
+        safeAnchorTimer += dt;
+        if (safeAnchorTimer >= 0.8) {
+          safeAnchorTimer = 0;
+          safeAnchor.x = state.x;
+          safeAnchor.y = state.y;
+          safeAnchor.z = state.z;
+          safeAnchor.yaw = state.yaw;
+        }
+      }
+
+      const isStuck = isOverlapping
+        || isUngroundablePerch
+        || (isTryingToMove && isMotionless && (!state.grounded || isOverlapping));
+
+      if (isStuck) {
+        stuckClock += dt;
+        if (stuckClock >= 2.5) { // 2.5s stuck in an object
+          unstuck("auto");
+        }
+      } else {
+        stuckClock = Math.max(0, stuckClock - dt * 2.0);
+      }
+    } else {
+      stuckClock = 0;
     }
 
     applyFigurePose(dt);
 
     /* --- camera --- */
     const jetPose = clamp01(ctx.jetpack?.state?.pose || 0);
-    const crouched = input.state.crouch && state.grounded && !flightMode;
+    /* THE DEATH CAMERA. Eased, not cut.
+       A third-person camera that keeps its standing anchor while the
+       body falls out from under it ends up looking at empty sand with
+       the trooper somewhere below frame - which is exactly what a
+       player does not want to be shown at the moment they most want
+       to know what happened. The boom lengthens a little and the
+       anchor comes down with the body. */
+    const dyingPose = clamp01(state.deathPose);
     const dist = state.camDist
-      * lerp(input.state.sprint ? 1.14 : 1, 1.27, jetPose)
-      * (crouched ? 0.86 : 1);
+      * lerp(1.14, 1.27, jetPose)
+      * (1 + dyingPose * 0.34);
     camOffset.set(
       Math.sin(state.camYaw) * Math.cos(state.camPitch),
       -Math.sin(state.camPitch),
       Math.cos(state.camYaw) * Math.cos(state.camPitch)
     ).multiplyScalar(-dist);
 
-    // The camera's own crouch drop; the figure's lives in
-    // applyFigurePose with the rest of the body state.
-    const camCrouch = crouched ? 0.34 : 0;
-    tmp.set(state.x, state.y + EYE - camCrouch * 0.5 + jetPose * 0.24, state.z);
+    tmp.set(state.x,
+      state.y + EYE + jetPose * 0.24 - dyingPose * (EYE - 0.75),
+      state.z);
     const want = tmp.clone().add(camOffset);
     /* Keep the camera out of the ground by SHORTENING THE BOOM, not
        by lifting it.
@@ -3567,11 +5528,34 @@ export async function createPlayer(ctx, canvas) {
       const pz = lerp(tmp.z, want.z, t);
       if (py < groundY(px, pz) + 0.45) { reach = (i - 1) / STEPS; break; }
     }
-    /* Never all the way in. At zero the camera sits exactly on the
-       look-at target, `lookAt` gets a zero-length vector and the view
-       matrix goes non-finite. 0.16 of a 5.2m boom is 0.83m - behind
-       the helm rather than inside it. */
-    if (reach < 1) want.lerpVectors(tmp, want, Math.max(0.16, reach));
+    const enemyBoom = ctx.enemies?.cameraBoomReach?.(tmp, want, 0.24) || null;
+    const enemyReach = clamp01(Number(enemyBoom?.reach ?? 1));
+    const enemyObstructed = enemyReach < reach;
+    if (enemyObstructed) reach = enemyReach;
+    state.cameraObstructed = reach < 0.999;
+    state.cameraObstructionReach = reach;
+    state.cameraBlocker = enemyObstructed ? enemyBoom.blocker : null;
+    /* --- first-person mode on steep upward look angles ---
+       When looking up steeply (e.g. aiming at Gleaners on ridges,
+       flying bosses, or aerial threats), the third-person boom pulls
+       down and behind the helmet, causing the heavy armor/pauldrons
+       to obstruct the view. Seamlessly transition to a clean
+       first-person camera directly at eye level. */
+    const upAngle = -state.camPitch;
+    const aimFpTarget = clamp01((upAngle - 0.35) / 0.22);
+    /* A very short enemy-clamped boom leaves the player's own armour
+       occupying the view even though the hostile body is no longer inside
+       the lens. Blend into the existing clean first-person presentation for
+       that last interval, then let the same damper restore third person. */
+    const obstructionFpTarget = enemyObstructed
+      ? clamp01((0.62 - reach) / 0.22) : 0;
+    const fpTarget = Math.max(aimFpTarget, obstructionFpTarget);
+    state.firstPerson = damp(state.firstPerson || 0, fpTarget, 16, dt);
+    const fpWeight = state.firstPerson;
+
+    if (reach < 1) want.lerpVectors(tmp, want, Math.max(0.12, reach));
+    if (fpWeight > 0.001) want.lerp(tmp, fpWeight);
+
     /* The chase spring runs on its own anchor, and the camera is a
        COPY of it. The recoil shake below moves camera.position, and
        `lookAt` aims from wherever the camera stands at a target fixed
@@ -3583,12 +5567,35 @@ export async function createPlayer(ctx, canvas) {
       camAnchor.copy(want);
       camAnchorReady = true;
     } else {
-      camAnchor.lerp(want, 1 - Math.exp(-14 * dt));
+      /* Snap toward newly discovered cover so the smoothing spring cannot
+         carry the camera through a creature for several frames. Returning
+         to the full boom remains eased, which prevents camera pops as an
+         enemy crosses behind the player. */
+      const desiredDistance = camAnchor.distanceTo(tmp);
+      const nextDistance = want.distanceTo(tmp);
+      const response = state.cameraObstructed && nextDistance < desiredDistance
+        ? 42 : 14;
+      camAnchor.lerp(want, 1 - Math.exp(-response * dt));
     }
     camera.position.copy(camAnchor);
-    // Look slightly above the figure's head, which puts the horizon
-    // where a third-person shooter puts it.
-    camera.lookAt(tmp.x, tmp.y + 0.35, tmp.z);
+
+    const viewDirX = Math.sin(state.camYaw) * Math.cos(state.camPitch);
+    const viewDirY = -Math.sin(state.camPitch);
+    const viewDirZ = Math.cos(state.camYaw) * Math.cos(state.camPitch);
+
+    const tpTargetX = tmp.x;
+    const tpTargetY = tmp.y + 0.35;
+    const tpTargetZ = tmp.z;
+
+    const fpTargetX = tmp.x + viewDirX * 100;
+    const fpTargetY = tmp.y + viewDirY * 100;
+    const fpTargetZ = tmp.z + viewDirZ * 100;
+
+    const lookTargetX = lerp(tpTargetX, fpTargetX, fpWeight);
+    const lookTargetY = lerp(tpTargetY, fpTargetY, fpWeight);
+    const lookTargetZ = lerp(tpTargetZ, fpTargetZ, fpWeight);
+
+    camera.lookAt(lookTargetX, lookTargetY, lookTargetZ);
     /* Terrain clearance and chase smoothing can change the optical ray
        substantially from the requested camYaw/camPitch.  Feed the
        actual reticle direction back into next frame's shoulder follow;
@@ -3631,6 +5638,23 @@ export async function createPlayer(ctx, canvas) {
       camera.rotateZ(s * a * 0.021);
     }
 
+    /* The rite shove. Same construction rule as the recoil above: it
+       may translate the camera and roll it about its own Z, and it may
+       not touch yaw or pitch, because those two are read by the aim
+       solve and the torso follow. */
+    state.heave = damp(state.heave, 0, state.heaveDecay, dt);
+    if (state.heave > 0.0015) {
+      state.heavePhase = (state.heavePhase + dt * state.heaveFreq) % TAU;
+      const a = state.heave;
+      const s = Math.sin(state.heavePhase);
+      const c = Math.cos(state.heavePhase * 0.63);
+      camShakeAxis.set(1, 0, 0).applyQuaternion(camera.quaternion);
+      camera.position.addScaledVector(camShakeAxis, s * a * 0.075);
+      camShakeAxis.set(0, 1, 0).applyQuaternion(camera.quaternion);
+      camera.position.addScaledVector(camShakeAxis, c * a * 0.096);
+      camera.rotateZ(c * a * 0.030);
+    }
+
     /* The zoom rides the EASED sight value, so it is the same curve
        the weapon comes up on. Recoil is added after the zoom rather
        than before it, because a punch is an absolute kick in degrees
@@ -3638,6 +5662,9 @@ export async function createPlayer(ctx, canvas) {
        sights shove the view less than the same shot from the hip. */
     const targetFov = lerp(lerp(62, 69, jetPose), ADS_FOV, state.sighted)
       + state.punch * 1.6
+      // A rite breathes the lens out. Small, but it is the difference
+      // between the world reacting and a decal being drawn on it.
+      + state.heave * 2.4
       + clamp01(ctx.boost?.state?.pose || 0) * 4.5;
     if (Math.abs(camera.fov - targetFov) > 0.01) {
       camera.fov = targetFov;
@@ -3655,12 +5682,46 @@ export async function createPlayer(ctx, canvas) {
      pointed the sabatons inward beneath the tabard. It is also the
      centreline guard below: a foot is never allowed nearer the
      midline than this, whatever the turn is doing. */
-  const HIP_HALF = 0.115;
+  const HIP_HALF = locomotionValue("hipHalf", 0.115);
   /* The line a PLANTED foot may not cross. Deliberately inboard of
      HIP_HALF: a planted foot is not allowed to move without a
      reason, so the guard has to be somewhere a correct plant never
      reaches. Ankles this close are already touching. */
-  const STANCE_GUARD = 0.085;
+  const STANCE_GUARD = locomotionValue("stanceGuard", Math.max(0.055, HIP_HALF - 0.030));
+  /* HOW WIDE THE WALKING TRACK IS, which is not the same question as
+     how wide the STANDING stance is.
+
+     A figure at rest owns its ground with the sabatons apart, and a
+     broad rig should. A figure WALKING puts each boot down nearer the
+     line it is travelling along, because the mass has to pass over
+     the planted foot and a wide plant makes the body roll sideways to
+     do it. Holding one width for both is exactly what makes a broad
+     figure waddle: the Bastion planted its ankles 46cm apart at every
+     speed, which is wider than its own hip bones.
+
+     `hipHalfMoving` defaults to `hipHalf`, so a figure that does not
+     author it keeps precisely the gait it had. */
+  const HIP_HALF_MOVING = locomotionValue("hipHalfMoving", HIP_HALF);
+  /* Rewritten by `readGaitSpec` every frame; this is the standing
+     value a spawn's first foot placement uses. */
+  let trackHalf = HIP_HALF;
+  /* THE PLANTED-FOOT GUARD IS A CONSTANT, and it has to be, even
+     though the track it guards is not.
+
+     A planted foot is only ever MOVED when it is inboard of this
+     line, so a guard that follows the live track breaks the whole
+     no-slip claim from the other end: brake out of a walk and the
+     track widens back toward the standing stance, the guard widens
+     with it, and every foot planted at the narrow width is suddenly
+     "crossing" and gets pivoted outward - a foot moving under a body
+     that is trying to stop, which is precisely the artefact the
+     guard exists to prevent. Sized off the NARROWEST width the gait
+     can plant at, so it sits inboard of every legal plant at every
+     speed and a foot that never drifts never moves at all. */
+  const TRACK_GUARD = Math.min(
+    STANCE_GUARD,
+    Math.max(0.045, Math.min(HIP_HALF, HIP_HALF_MOVING) - 0.030)
+  );
 
   /**
    * Where a foot wants to stand for a body standing at
@@ -3682,7 +5743,7 @@ export async function createPlayer(ctx, canvas) {
     const spread = Number.isFinite(actionPose.stanceSpread) ? actionPose.stanceSpread : 0;
     const push = Number.isFinite(actionPose.stanceZ) ? actionPose.stanceZ : 0;
     const REACH_XZ = 0.30;
-    const lateral = leg.side * (HIP_HALF + clamp(spread, -0.16, 0.16));
+    const lateral = leg.side * (trackHalf + clamp(spread, -0.16, 0.16));
     fore += lead * clamp(push, -REACH_XZ, REACH_XZ);
     // Track the hips forward under the body lean - see leanFootShift.
     fore += leanFootShift;
@@ -3701,12 +5762,31 @@ export async function createPlayer(ctx, canvas) {
    * Writes into `predictBody` as {x, z, yaw}. `tau` is seconds ahead.
    */
   const predictBody = { x: 0, z: 0, yaw: 0 };
+  function aimDetachedTravel() {
+    return (action.name && action.name.startsWith("melee")
+      && Number.isFinite(action.aimYaw)) || state.aimCommit > 0.002;
+  }
+
   function predictBodyAt(tau) {
     /* Cap the look-ahead. A stalled or very slow gait can ask for
        most of a second, and a second of a hard turn is 90 degrees -
        far past where a constant-rate assumption is honest. */
     const t = clamp(tau, 0, 0.42);
     const w = clamp(state.yawRate, -3.2, 3.2);
+    if (aimDetachedTravel()) {
+      /* An attack can face independently of WASD. This was originally
+         limited to melee, but ranged aim commitment has the same split:
+         the body turns toward the reticle while A/D/S remain camera-
+         relative. Predict pelvis translation along the motion actually
+         resolved this frame, while still predicting the body's committed
+         turn for stance orientation. Otherwise a firing backpedal slides
+         backward while both boots reach toward aimed-body forward. */
+      const v = state.travelSpeed;
+      predictBody.x = state.x + Math.sin(state.travelYaw) * v * t;
+      predictBody.z = state.z + Math.cos(state.travelYaw) * v * t;
+      predictBody.yaw = state.yaw + w * t;
+      return predictBody;
+    }
     const v = state.speed;
     const sin = Math.sin(state.yaw);
     const cos = Math.cos(state.yaw);
@@ -3770,7 +5850,7 @@ export async function createPlayer(ctx, canvas) {
    * actually does. `blend` is how much of the violation to take out
    * this frame.
    */
-  function uncross(leg, point, bx, bz, byaw, blend, guard = HIP_HALF) {
+  function uncross(leg, point, bx, bz, byaw, blend, guard = trackHalf) {
     const dx = point.x - bx;
     const dz = point.z - bz;
     const sin = Math.sin(byaw);
@@ -3821,36 +5901,253 @@ export async function createPlayer(ctx, canvas) {
         figure.legPivots[i].updateWorldMatrix(true, true);
       }
       kneePole.set(leg.side * 0.10, -0.08, 1).normalize().applyQuaternion(rootQuat);
+      clampReach(i, footTmp);
       const lengths = figure.legLengths ? figure.legLengths[i] : figure.limb;
       solveTwoJoint(
         figure.legPivots[i], figure.kneePivots[i],
         footTmp, kneePole, lengths.thigh, lengths.shin, LEG_AXIS
       );
 
-      const foot = figure.footPivots && figure.footPivots[i];
-      if (foot && foot.parent) {
-        const pitch = lerp(0.55, 0.22, pose);
-        const cp = Math.cos(pitch);
-        const sp = Math.sin(pitch);
-        footX.set(Math.cos(facing), 0, -Math.sin(facing));
-        footY.set(Math.sin(facing) * cp, -sp, Math.cos(facing) * cp);
-        footZ.crossVectors(footX, footY).normalize();
-        footBasis.makeBasis(footX, footY, footZ);
-        footWorldQuaternion.setFromRotationMatrix(footBasis);
-        foot.parent.getWorldQuaternion(footParentQuaternion).invert();
-        foot.quaternion.copy(footParentQuaternion).multiply(footWorldQuaternion);
-        foot.updateWorldMatrix(false, true);
-      }
+      /* NOTHING IS HOLDING THIS FOOT UP. The shin trails backwards
+         and slightly above the horizontal here, so a sole aimed at
+         the horizon - which is what an absolute pitch produces - is
+         an ankle folded through more than a right angle. Hand it to
+         the shin instead and let it hang. */
+      leg.footDev = damp(leg.footDev, lerp(0, FLIGHT_ANKLE_DEV, pose), 12, dt);
+      leg.footFollow = pose;
+      leg.footRoll = 0;
+      orientFoot(i, facing, leg.footDev, pose, 0);
+      /* The gait's own record of where this boot is. Left stale
+         through a flight it holds the launch position, so a landing
+         starts from a target a whole flight path away - and any
+         harness reading `leg.foot` measures the ground the trooper
+         took off from. */
+      leg.foot.copy(footTmp);
+      leg.plant.copy(footTmp);
       leg.swinging = false;
       leg.planted = false;
     }
-    void dt;
+  }
+
+  /** Ground boost lunge: one boot attacks the travel line while the
+   *  other braces behind it, and both ride with the translating body.
+   *
+   * The ordinary gait deliberately leaves a stance foot planted in
+   * world space. At 19-27m/s that makes the pelvis travel past its own
+   * foot in one or two frames, so the leg stretches behind the player
+   * before snapping forward. A boost is propulsion, not a run cycle:
+   * rebuild both targets from the boost's authoritative direction on
+   * every frame and keep the stride itself frozen until the boost ends. */
+  function solveBoostLegs(dt, pose) {
+    const boost = ctx.boost?.state;
+    let dx = Number(boost?.directionX);
+    let dz = Number(boost?.directionZ);
+    const directionLength = Math.hypot(dx, dz);
+    if (!(directionLength > 1e-5)) {
+      const facing = Number.isFinite(state.travelYaw) ? state.travelYaw : state.yaw;
+      dx = Math.sin(facing);
+      dz = Math.cos(facing);
+    } else {
+      dx /= directionLength;
+      dz /= directionLength;
+    }
+    const facing = Math.atan2(dx, dz);
+    const rightX = dz;
+    const rightZ = -dx;
+    const slope = (
+      groundY(state.x + dx * 0.18, state.z + dz * 0.18)
+      - groundY(state.x - dx * 0.18, state.z - dz * 0.18)
+    ) / 0.36;
+    /* Toes up into an uphill line, down into a downhill one, but
+       only as far as an ankle goes - the global clamp in
+       `orientFoot` is the backstop, this is the pose. */
+    const groundDev = clamp(Math.atan(slope) * 0.68, -0.35, 0.42);
+    figure.root.updateMatrixWorld(true);
+
+    for (let i = 0; i < 2; i += 1) {
+      const leg = legs[i];
+      const lead = leg.side === LEAD_SIDE;
+      /* The blend makes ignition and release continuous while the
+         targets remain body-relative throughout. The lead sabaton is
+         visibly committed downrange; the trail leg is the long brace
+         that sells the thrust without ever being left behind. */
+      const fore = lead
+        ? lerp(0.10, 0.42, pose)
+        : lerp(-0.08, -0.34, pose);
+      const lateral = leg.side * lerp(HIP_HALF, HIP_HALF + 0.065, pose);
+      const x = state.x + dx * fore + rightX * lateral;
+      const z = state.z + dz * fore + rightZ * lateral;
+      const gy = groundY(x, z);
+      leg.foot.set(x, gy + figure.limb.ankle, z);
+      leg.plant.copy(leg.foot);
+      leg.swinging = false;
+      leg.planted = false;
+      const tilt = legGroundTilt(i, x, z, facing);
+      leg.footDev = damp(leg.footDev, groundDev, 18, dt);
+      leg.footFollow = damp(leg.footFollow, 0, 18, dt);
+      leg.footRoll = damp(leg.footRoll, tilt.roll, 14, dt);
+
+      if (figure.legBindQuaternions && figure.kneeBindQuaternions) {
+        figure.legPivots[i].quaternion.copy(figure.legBindQuaternions[i]);
+        figure.kneePivots[i].quaternion.copy(figure.kneeBindQuaternions[i]);
+        figure.legPivots[i].updateWorldMatrix(true, true);
+      }
+      kneePole.set(
+        dx + rightX * leg.side * 0.18,
+        -0.30,
+        dz + rightZ * leg.side * 0.18
+      ).normalize();
+      clampReach(i, leg.foot);
+      leg.plant.copy(leg.foot);
+      const lengths = figure.legLengths ? figure.legLengths[i] : figure.limb;
+      solveTwoJoint(
+        figure.legPivots[i], figure.kneePivots[i],
+        leg.foot, kneePole, lengths.thigh, lengths.shin, LEG_AXIS
+      );
+      orientFoot(i, facing, leg.footDev, leg.footFollow, leg.footRoll);
+    }
+  }
+
+  /** A grounded skid: wide, asymmetric boots that ride with the body.
+   *
+   * Ordinary locomotion deliberately plants each foot in world space;
+   * doing that here would make a sliding body walk past its own boots.
+   * These targets are rebuilt from the resolved travel frame instead,
+   * so the sabatons stay braced against the slope while visibly moving
+   * downhill with the hips. */
+  function solveDownhillLegs(dt, pose) {
+    const facing = Number.isFinite(state.travelYaw) ? state.travelYaw : state.yaw;
+    const sin = Math.sin(facing);
+    const cos = Math.cos(facing);
+    figure.root.updateMatrixWorld(true);
+    /* Toes DOWN into the fall line: the brace is the ball of the
+       boot, not the heel. */
+    const slopeDev = clamp(-Math.atan(Math.max(0, state.downhillGrade)) * 0.68, -0.65, 0);
+
+    for (let i = 0; i < 2; i += 1) {
+      const leg = legs[i];
+      const lead = leg.side === LEAD_SIDE;
+      /* One boot searches ahead for purchase, the other trails as a
+         brake. Widen both beyond the walking stance so the silhouette
+         reads as balance rather than a paused mid-stride. */
+      const fore = lead ? 0.25 : -0.19;
+      const lateral = leg.side * (HIP_HALF + 0.055);
+      const x = state.x + sin * fore + cos * lateral;
+      const z = state.z + cos * fore - sin * lateral;
+      const gy = groundY(x, z);
+      footTmp.set(x, gy + figure.limb.ankle, z);
+      const follow = 1 - Math.exp(-lerp(12, 22, pose) * dt);
+      leg.foot.lerp(footTmp, follow);
+      leg.plant.copy(leg.foot);
+      leg.swinging = false;
+      leg.planted = false;
+      const tilt = legGroundTilt(i, x, z, facing);
+      leg.footDev = damp(leg.footDev, slopeDev, 14, dt);
+      leg.footFollow = damp(leg.footFollow, 0, 16, dt);
+      leg.footRoll = damp(leg.footRoll, tilt.roll, 12, dt);
+
+      if (figure.legBindQuaternions && figure.kneeBindQuaternions) {
+        figure.legPivots[i].quaternion.copy(figure.legBindQuaternions[i]);
+        figure.kneePivots[i].quaternion.copy(figure.kneeBindQuaternions[i]);
+        figure.legPivots[i].updateWorldMatrix(true, true);
+      }
+      kneePole.set(
+        sin + cos * leg.side * 0.13,
+        -0.24,
+        cos - sin * leg.side * 0.13
+      ).normalize();
+      clampReach(i, leg.foot);
+      leg.plant.copy(leg.foot);
+      const lengths = figure.legLengths ? figure.legLengths[i] : figure.limb;
+      solveTwoJoint(
+        figure.legPivots[i], figure.kneePivots[i],
+        leg.foot, kneePole, lengths.thigh, lengths.shin, LEG_AXIS
+      );
+      orientFoot(i, facing, leg.footDev, leg.footFollow, leg.footRoll);
+    }
+  }
+
+  /** Executioner's Thrust: jetpack-propelled ground charge.
+   *  Both sabatons stay planted in an aerodynamic, tandem ski-glide
+   *  stance with the lead foot lunging forward and the trail leg braced
+   *  behind, riding smoothly with the translating body. */
+  function solvePierceLegs(dt) {
+    const facing = Number.isFinite(state.aimViewYaw)
+      ? state.aimViewYaw
+      : (Number.isFinite(action.aimYaw)
+        ? action.aimYaw
+        : (Number.isFinite(state.travelYaw) ? state.travelYaw : state.yaw));
+    const dx = Math.sin(facing);
+    const dz = Math.cos(facing);
+    const rightX = dz;
+    const rightZ = -dx;
+    const slope = (
+      groundY(state.x + dx * 0.20, state.z + dz * 0.20)
+      - groundY(state.x - dx * 0.20, state.z - dz * 0.20)
+    ) / 0.40;
+    const groundDev = clamp(Math.atan(slope) * 0.68, -0.40, 0.45);
+    figure.root.updateMatrixWorld(true);
+
+    for (let i = 0; i < 2; i += 1) {
+      const leg = legs[i];
+      const lead = leg.side === LEAD_SIDE;
+      // Tandem planted stance: lead leg forward, trail leg braced back
+      const fore = lead ? 0.38 : -0.32;
+      const lateral = leg.side * (HIP_HALF + 0.065);
+      const x = state.x + dx * fore + rightX * lateral;
+      const z = state.z + dz * fore + rightZ * lateral;
+      const gy = groundY(x, z);
+      leg.foot.set(x, gy + figure.limb.ankle, z);
+      leg.plant.copy(leg.foot);
+      leg.swinging = false;
+      leg.planted = false;
+      const tilt = legGroundTilt(i, x, z, facing);
+      leg.footDev = damp(leg.footDev, groundDev, 20, dt);
+      leg.footFollow = damp(leg.footFollow, 0, 20, dt);
+      leg.footRoll = damp(leg.footRoll, tilt.roll, 16, dt);
+
+      if (figure.legBindQuaternions && figure.kneeBindQuaternions) {
+        figure.legPivots[i].quaternion.copy(figure.legBindQuaternions[i]);
+        figure.kneePivots[i].quaternion.copy(figure.kneeBindQuaternions[i]);
+        figure.legPivots[i].updateWorldMatrix(true, true);
+      }
+      kneePole.set(
+        dx + rightX * leg.side * 0.16,
+        -0.28,
+        dz + rightZ * leg.side * 0.16
+      ).normalize();
+      clampReach(i, leg.foot);
+      leg.plant.copy(leg.foot);
+      const lengths = figure.legLengths ? figure.legLengths[i] : figure.limb;
+      solveTwoJoint(
+        figure.legPivots[i], figure.kneePivots[i],
+        leg.foot, kneePole, lengths.thigh, lengths.shin, LEG_AXIS
+      );
+      orientFoot(i, facing, leg.footDev, leg.footFollow, leg.footRoll);
+    }
   }
 
   function solveLegs(dt) {
-    const jetPose = clamp01(ctx.jetpack?.state?.pose || 0);
+    /* Every unsupported body borrows the pack's airborne legs. A vault,
+       a ledge fall and the Penitent's Fall must not advance a grounded
+       walk cycle merely because the pack itself is dark. */
+    const jetPose = airbornePose();
     if (jetPose > 0.001) {
       solveJetLegs(dt, jetPose);
+      return;
+    }
+    if (state.grounded && action.name === "meleePierce") {
+      solvePierceLegs(dt);
+      return;
+    }
+    const boostPose = clamp01(ctx.boost?.state?.pose || 0);
+    if (state.grounded && boostPose > 0.025) {
+      solveBoostLegs(dt, boostPose);
+      return;
+    }
+    const downhillPose = clamp01(state.downhillPose);
+    if (downhillPose > 0.025) {
+      solveDownhillLegs(dt, downhillPose);
       return;
     }
     const moving = state.speed > 0.35;
@@ -3866,13 +6163,38 @@ export async function createPlayer(ctx, canvas) {
       }
 
       if (!moving) {
+        /* THE BRAKE. `leg.plant` is the last TOUCHDOWN, and a leg
+           caught mid-swing has not had one for most of a stride - so
+           adopting it here teleported the boot backward by up to
+           1.29m in a single frame, which is the reported "legs warp
+           when you stop". Take the pose the foot is actually in and
+           ease that under the hips instead; on a leg that was
+           already planted this is a no-op, because plant and foot
+           are the same point. */
+        if (leg.swinging) {
+          leg.plant.copy(leg.foot);
+          leg.swinging = false;
+          /* A boot caught in the air owes the ground a step, and it
+             is the only foot here that does. An already-planted one
+             is merely tidying its stance and must keep the slow ease
+             or a standing trooper's feet fidget. */
+          leg.settling = true;
+        }
         // Standing: ease both feet back under the hips rather than
         // leaving them wherever the last step finished.
         footRest(leg, 0, footTmp);
-        leg.plant.lerp(footTmp, 1 - Math.exp(-9 * dt));
+        if (leg.settling && leg.plant.distanceToSquared(footTmp) < 0.0016) {
+          leg.settling = false;
+        }
+        leg.plant.lerp(footTmp, 1 - Math.exp(-(leg.settling ? 17 : 9) * dt));
         leg.foot.copy(leg.plant);
-        leg.swinging = false;
-        leg.footPitch = 0.55;
+        const tilt = legGroundTilt(i, leg.foot.x, leg.foot.z, state.yaw);
+        /* Damped, not assigned. A snap here put the whole of a
+           toe-off or heel-strike angle into one frame at exactly the
+           moment the rest of the body was settling. */
+        leg.footDev = damp(leg.footDev, clamp(tilt.pitch, -0.55, 0.42), 10, dt);
+        leg.footFollow = damp(leg.footFollow, 0, 12, dt);
+        leg.footRoll = damp(leg.footRoll, tilt.roll, 10, dt);
       } else {
         const u = (cycle + leg.phase) % 1;
         if (u >= gait.stance) {
@@ -3913,7 +6235,24 @@ export async function createPlayer(ctx, canvas) {
           const remaining = swingTravel * (1 - t);
           const tau = remaining / Math.max(0.6, state.speed);
           const body = predictBodyAt(tau);
-          footPlaceAt(leg, body.x, body.z, body.yaw, gait.landing, footTmp);
+          if (aimDetachedTravel()) {
+            /* Keep the stance under the aimed pelvis, but lead the
+               landing along actual travel. A firing trooper can face
+               the reticle while backing up or strafing, so putting
+               `landing` on body-forward makes the boot reach against
+               its own motion. The body prediction already follows the
+               measured path; this last step gives the ankle a real
+               backpedal target while the sabaton and knee remain
+               oriented with the combat stance. */
+            footPlaceAt(leg, body.x, body.z, body.yaw, 0, footTmp);
+            footTmp.x += Math.sin(state.travelYaw) * gait.landing;
+            footTmp.z += Math.cos(state.travelYaw) * gait.landing;
+            const landingGround = groundY(footTmp.x, footTmp.z);
+            footTmp.y = (Number.isFinite(landingGround) ? landingGround : state.y)
+              + figure.limb.ankle;
+          } else {
+            footPlaceAt(leg, body.x, body.z, body.yaw, gait.landing, footTmp);
+          }
           /* A reversal can still aim across the midline, because the
              predicted heading is a heading the body has not reached
              and the stick may reverse again inside the swing. */
@@ -3935,14 +6274,60 @@ export async function createPlayer(ctx, canvas) {
              midline on the way. It is a foot in the air, so it may
              be moved freely - and the correction is zero at
              touchdown, where the predicted frame has become the real
-             one, so this cannot fight the landing point. */
-          uncross(leg, leg.foot, state.x, state.z, state.yaw, 1);
-          // Toe clears first, then the whole sabaton settles flat.
-          leg.footPitch = lerp(0.28, 0.55, e) - Math.sin(t * Math.PI) * 0.10;
+             one, so this cannot fight the landing point.
+
+             RAMPED IN, not applied whole on the first swing frame.
+             A body that slides relative to its own facing - deflected
+             along a wall, or turning over a planted foot - leaves the
+             stance boot inboard of the guard, and taking all of that
+             out at once rotated the foot 0.32m about the pelvis in a
+             single frame at exactly the moment it left the ground.
+             It is a snap on the flat, with nothing steep or fast
+             about it, and it was the largest one left. The ramp is
+             finished long before mid-swing, so the guarantee this
+             exists for is unchanged. */
+          uncross(leg, leg.foot, state.x, state.z, state.yaw,
+            smoothstep01(t / 0.16));
+          /* THE SWING FOOT HANGS OFF THE SHIN. Held to a world angle
+             instead - which is what this did - a knee folded 140
+             degrees under the pelvis took every degree of that out
+             of the ankle, and the trooper ran with both sabatons
+             pulled 114 degrees past what an ankle reaches. It rides
+             the shin for the whole swing and hands ownership back to
+             the ground over the last fifth, so the sole arrives
+             flat. Toe-off hands over the other way: `toeEase` in the
+             stance branch is 1 exactly here, so the two meet. */
+          leg.footFollow = 1 - smoothstep01((t - 0.78) / 0.22);
+          /* The ankle's own trajectory through a stride, which is
+             not a settle from one pose to another: pointed off the
+             push, pulled up to clear the ground, and dropped back
+             toward flat to meet it. */
+          const toeUp = smoothstep01(t / 0.32);
+          const reach = smoothstep01((t - 0.55) / 0.45);
+          /* Weightless for most of the swing - the boot is riding
+             the shin, not the hill - so do not go and read the hill. */
+          const landTilt = leg.footFollow < 0.985
+            ? legGroundTilt(i, leg.target.x, leg.target.z, state.yaw)
+            : FLAT_TILT;
+          /* Ends on the same value the stance branch opens with, so
+             touchdown is a handoff and not a step change. */
+          const strike = lerp(0.14, -0.30, clamp01(
+            (state.speed - WALK) / Math.max(0.1, SPRINT - WALK)
+          ));
+          leg.footDev = lerp(-0.34, 0.22, toeUp) + (strike - 0.22) * reach
+            + clamp(landTilt.pitch, -0.55, 0.42) * (1 - leg.footFollow);
+          leg.footRoll = damp(leg.footRoll, landTilt.roll * (1 - leg.footFollow), 12, dt);
         } else {
           if (leg.swinging) {
             leg.swinging = false;
             leg.plant.copy(leg.target);
+            /* Touchdown, and the only frame that is one. Driving the
+               print off accumulated stride instead - the way the
+               footstep audio does - puts it under the PELVIS, half a
+               stride from either boot, and on a turn it walks a line
+               the trooper never took. */
+            ctx.vfx?.footprint?.(leg.plant.x, leg.plant.z, state.travelYaw,
+              leg.side, clamp01(state.speed / SPRINT));
           }
           /* PLANTED: the body moves over it, and on a straight line
              it is not touched at all - which is the claim
@@ -3965,16 +6350,16 @@ export async function createPlayer(ctx, canvas) {
              scuffs round exactly as hard as the turn requires. */
           const pivotRate = 6 + 9 * Math.abs(state.yawRate);
           /* Guarded INSIDE the placement line, not on it. A foot is
-             put down at exactly HIP_HALF, so a guard at HIP_HALF sits
-             on top of every fresh plant and the trig that recovers
-             the lateral offset does not return the placement value to
-             the last bit - which had a correctly planted foot
-             creeping outward a tenth of a millimetre per frame
-             forever, on a straight line, for no reason. STANCE_GUARD
-             is a real near-crossing, so a plant that never drifts
-             never moves at all. */
+             put down at exactly `trackHalf`, so a guard at the same
+             width sits on top of every fresh plant and the trig that
+             recovers the lateral offset does not return the placement
+             value to the last bit - which had a correctly planted
+             foot creeping outward a tenth of a millimetre per frame
+             forever, on a straight line, for no reason. `TRACK_GUARD`
+             is inboard of the narrowest width this gait ever plants
+             at, so a plant that never drifts never moves at all. */
           if (uncross(leg, leg.plant, state.x, state.z, state.yaw,
-            1 - Math.exp(-pivotRate * dt), STANCE_GUARD)) {
+            1 - Math.exp(-pivotRate * dt), TRACK_GUARD)) {
             // A pivoted foot has moved across the ground, so it has
             // to re-read its height or it hangs off the last one.
             const pg = groundY(leg.plant.x, leg.plant.z);
@@ -3986,7 +6371,31 @@ export async function createPlayer(ctx, canvas) {
           const toeOff = clamp01((stanceT - 0.72) / 0.28);
           const toeEase = toeOff * toeOff * (3 - 2 * toeOff);
           leg.foot.y += toeEase * lerp(0.065, 0.115, clamp01(state.speed / SPRINT));
-          leg.footPitch = lerp(0.34, 0.55, heelSettle) + toeEase * 0.30;
+          /* Heel strike, roll through, drive off the ball - and lie
+             along the hill while doing it. Without the terrain term
+             a boot planted on a 30-degree slope is held flat and
+             cuts straight through it, which no amount of correct leg
+             IK above hides. */
+          const tilt = toeEase < 0.985
+            ? legGroundTilt(i, leg.plant.x, leg.plant.z, state.yaw)
+            : FLAT_TILT;
+          /* Planted: the GROUND owns this sole - until the heel comes
+             off it. `toeEase` is the heel lift, so it is also exactly
+             how much of the boot the ankle has taken back, and it
+             reaches 1 at toe-off where the swing collects it. */
+          leg.footFollow = toeEase;
+          /* HOW THE FOOT MEETS THE GROUND depends on how fast it is
+             arriving. A march lands heel first; a sprint lands on
+             the ball of the boot, which is not a stylisation - it is
+             what the leg does at speed, and asking for a flat sole
+             at 8.6m/s wrote a request the ankle then had to be
+             clamped out of. */
+          const strike = lerp(0.14, -0.30, clamp01(
+            (state.speed - WALK) / Math.max(0.1, SPRINT - WALK)
+          ));
+          leg.footDev = lerp(strike, 0, heelSettle) - toeEase * 0.34
+            + clamp(tilt.pitch, -0.55, 0.42) * (1 - toeEase);
+          leg.footRoll = damp(leg.footRoll, tilt.roll * (1 - toeEase), 14, dt);
         }
       }
 
@@ -4008,32 +6417,26 @@ export async function createPlayer(ctx, canvas) {
         -0.15,
         cos - sin * leg.side * 0.10
       ).normalize();
+      /* Inside the leg's own reach BEFORE the solver clamps it
+         silently. On a hillside the trailing ankle asks for ground
+         more than a leg-length below the hip, and a clamped solve
+         leaves the sabaton floating off a straight leg. */
+      /* The CONTACT RECORD is deliberately not touched. `leg.plant`
+         is where this boot came down and what the slip check holds
+         still; `leg.foot` is where the ankle is drawn, toe lift and
+         reach clamp included. Copying one into the other would let
+         a clamped stance creep the plant uphill a little every
+         frame. */
+      clampReach(i, leg.foot);
       const lengths = figure.legLengths ? figure.legLengths[i] : figure.limb;
       solveTwoJoint(
         figure.legPivots[i], figure.kneePivots[i],
         leg.foot, kneePole, lengths.thigh, lengths.shin, LEG_AXIS
       );
-
-      /* Foot bones do not participate in two-joint IK.  Left alone,
-         they inherit every shin rotation and point up, inward, or
-         backward.  Meshy's foot-to-toe axis is local +Y, so author a
-         full world basis: X across the body, Y forward and down to
-         the sole, Z completing the frame.  This fixes both yaw and
-         roll rather than merely chasing the toe with another aim. */
-      const foot = figure.footPivots && figure.footPivots[i];
-      if (foot && foot.parent) {
-        const facing = state.yaw + actionPose.pelvisYaw;
-        const cp = Math.cos(leg.footPitch);
-        const sp = Math.sin(leg.footPitch);
-        footX.set(Math.cos(facing), 0, -Math.sin(facing));
-        footY.set(Math.sin(facing) * cp, -sp, Math.cos(facing) * cp);
-        footZ.crossVectors(footX, footY).normalize();
-        footBasis.makeBasis(footX, footY, footZ);
-        footWorldQuaternion.setFromRotationMatrix(footBasis);
-        foot.parent.getWorldQuaternion(footParentQuaternion).invert();
-        foot.quaternion.copy(footParentQuaternion).multiply(footWorldQuaternion);
-        foot.updateWorldMatrix(false, true);
-      }
+      orientFoot(
+        i, state.yaw + actionPose.pelvisYaw,
+        leg.footDev, leg.footFollow, leg.footRoll
+      );
     }
   }
 
@@ -4061,6 +6464,13 @@ export async function createPlayer(ctx, canvas) {
      with the back of its hand. +1 means the palm looks along local
      +Z. */
   const HAND_PALM_LOCAL_Z = 1;
+  /* Relaxed-hand correction around the finger/forearm axis. This is
+     figure-authored because a skinned mesh's visible palm plane does
+     not necessarily line up exactly with its hand bone. Weapon grips
+     use their separate PALM_ROLL path below and are unaffected. */
+  let FREE_HAND_PALM_TURN = Number.isFinite(figure.freeHandPalmTurn)
+    ? figure.freeHandPalmTurn
+    : 0;
 
   const restHand = new THREE.Vector3();
   const restElbowPole = new THREE.Vector3();
@@ -4247,13 +6657,15 @@ export async function createPlayer(ctx, canvas) {
    * needs no phase offset.
    */
   const restSwing = { fore: 0, lift: 0 };
+  const loadoutArm = new THREE.Vector3();
   function restArmTarget(i, out) {
     const side = i === 0 ? 1 : -1;
-    const jetPose = clamp01(ctx.jetpack?.state?.pose || 0);
+    const jetPose = airbornePose();
     const walkN = clamp01(state.speed / WALK);
     const sprintN = clamp01((state.speed - WALK) / Math.max(0.1, SPRINT - WALK));
     // Standing still is a hang, not a swing: amplitude starts at zero.
-    const amp = 0.180 * walkN + 0.080 * sprintN;
+    const amp = freeArmValue("walkSwing", 0.180) * walkN
+      + freeArmValue("sprintSwing", 0.080) * sprintN;
     const phase = i === 0 ? 0 : Math.PI;
     const sw = Math.sin(state.gait * TAU + phase);
     restSwing.fore = sw * amp;
@@ -4261,27 +6673,83 @@ export async function createPlayer(ctx, canvas) {
        from the hip on the forward stroke and tucks back on the
        return, and the hand rises as it comes forward - without that
        the arm reads as a pendulum bolted to a shoulder. */
-    restSwing.lift = Math.abs(sw) * amp * 0.38;
-    const restX = side * (0.205 + 0.015 * walkN + 0.008 * sprintN);
-    const restY = 0.84 - 0.01 * walkN + 0.11 * sprintN + restSwing.lift * 0.50;
-    const restZ = 0.060 + restSwing.fore;
+    /* A CARRIED WEAPON DAMPS THE STROKE IT RIDES ON, and by how much
+       depends on what it is. A hammer wants its swing; a braced tower
+       shield is held still in front of the body and does not travel
+       47cm across it twice a stride. Optional-chained, so a level
+       without a loadout - which is every level but Kenosis - keeps
+       exactly the arms it had. */
+    const carried = ctx.loadout?.armSwing?.(i);
+    if (Number.isFinite(carried)) restSwing.fore *= carried;
+    restSwing.lift = Math.abs(sw) * amp * freeArmValue("swingLift", 0.38);
+    const restX = side * (freeArmValue("idleX", 0.205)
+      + freeArmValue("walkX", 0.015) * walkN
+      + freeArmValue("sprintX", 0.008) * sprintN);
+    /* AND AN ARM SWINGING FORWARD FOLDS.
+       `swingLift` above is symmetric - it raises the hand at both
+       ends of the stroke - so on its own the elbow holds one angle
+       and the whole arm hinges at the shoulder. That is a pendulum,
+       and it is what "the arms are too stiff" looks like from the
+       side however wide the swing is.
+
+       The elbow is not authored anywhere: it falls out of how far
+       this target sits from the shoulder against the arm's own
+       length, so the only way to make it work through the cycle is to
+       move the hand nearer the shoulder on the way forward and let it
+       hang back out on the return. Signed by the stroke, so it is one
+       smooth sinusoid with no crease at the crossing, and zero by
+       default - a figure that does not ask for it swings exactly as
+       it did. */
+    const restY = freeArmValue("idleY", 0.84)
+      + freeArmValue("walkY", -0.01) * walkN
+      + freeArmValue("sprintY", 0.11) * sprintN
+      + restSwing.lift * freeArmValue("liftY", 0.50)
+      + restSwing.fore * freeArmValue("swingFoldY", 0);
+    const restZ = freeArmValue("idleZ", 0.060) + restSwing.fore;
+    /* WHERE A CARRIED HAND WANTS TO BE.
+       The free-hand pose is a hand with nothing in it. A shield arm
+       is braced - bent, and forward of the hip - and no amount of
+       damping the swing will put it there. Additive, in figure-root
+       space, before the flight blend. */
+    if (ctx.loadout?.armPose) {
+      loadoutArm.set(restX, restY, restZ);
+      ctx.loadout.armPose(i, loadoutArm, { side, walkN, sprintN, jetPose });
+      return out.set(
+        lerp(loadoutArm.x, side * freeArmValue("flightX", 0.205), jetPose),
+        lerp(loadoutArm.y, freeArmValue("flightY", 0.985), jetPose),
+        lerp(loadoutArm.z, freeArmValue("flightZ", -0.17), jetPose)
+      ).applyMatrix4(figure.root.matrixWorld);
+    }
     return out.set(
-      lerp(restX, side * 0.205, jetPose),
+      lerp(restX, side * freeArmValue("flightX", 0.205), jetPose),
       /* Long, relaxed walking arms; a sprint raises the hands and
          closes the elbows into the compact armoured-running shape. */
-      lerp(restY, 0.985, jetPose),
-      lerp(restZ, -0.17, jetPose)
+      lerp(restY, freeArmValue("flightY", 0.985), jetPose),
+      lerp(restZ, freeArmValue("flightZ", -0.17), jetPose)
     ).applyMatrix4(figure.root.matrixWorld);
   }
 
   function restArmPole(i, out) {
     const side = i === 0 ? 1 : -1;
-    const jetPose = clamp01(ctx.jetpack?.state?.pose || 0);
+    const jetPose = airbornePose();
     const sprintN = clamp01((state.speed - WALK) / Math.max(0.1, SPRINT - WALK));
     return out.set(
-      lerp(side * (0.22 + 0.06 * sprintN), side * 0.25, jetPose),
-      lerp(-0.60, -0.52, jetPose),
-      lerp(-0.78 - restSwing.fore * 0.35, -0.92, jetPose)
+      lerp(
+        side * (freeArmValue("poleX", 0.22)
+          + freeArmValue("poleSprintX", 0.06) * sprintN),
+        side * freeArmValue("flightPoleX", 0.25),
+        jetPose
+      ),
+      lerp(
+        freeArmValue("poleY", -0.60),
+        freeArmValue("flightPoleY", -0.52),
+        jetPose
+      ),
+      lerp(
+        freeArmValue("poleZ", -0.78) - restSwing.fore * 0.35,
+        freeArmValue("flightPoleZ", -0.92),
+        jetPose
+      )
     ).normalize().applyQuaternion(figure.root.quaternion);
   }
 
@@ -4311,6 +6779,39 @@ export async function createPlayer(ctx, canvas) {
     freeHandZ.addScaledVector(freeHandY, -freeHandZ.dot(freeHandY));
     if (freeHandZ.lengthSq() < 1e-8) freeHandZ.set(0, 0, 1);
     freeHandZ.normalize();
+    /* Both wrists need the same anatomical turn but opposite signed
+       bone rotations. The side factor removes the forward component
+       from each authored palm and turns it toward the body. */
+    if (Math.abs(FREE_HAND_PALM_TURN) > 1e-6) {
+      freeHandZ.applyAxisAngle(freeHandY, side * FREE_HAND_PALM_TURN);
+    }
+    /* AND A HAND HOLDING SOMETHING FACES IT.
+       These gauntlets have no finger bones - the rig carries a single
+       `Hand` - so a fist cannot close on a haft. What CAN be done is
+       roll the wrist until the palm is presented to the thing it is
+       carrying, which is most of what reads as a grip: a shield's
+       enarme and a maul's haft do not want the same wrist, so this is
+       per hand. Radians about the forearm, optional-chained. */
+    const carriedTurn = ctx.loadout?.handTurn?.(i);
+    if (Number.isFinite(carriedTurn) && Math.abs(carriedTurn) > 1e-6) {
+      freeHandZ.applyAxisAngle(freeHandY, carriedTurn);
+    }
+    /* AND A HAND THAT AIMS NEEDS MORE THAN A ROLL.
+       `handTurn` only spins the palm about the forearm, which is
+       enough to present a palm to a haft and not enough to point
+       anything: a weapon welded into the fist can only be aimed by
+       moving the WRIST. So a loadout may rewrite the whole basis -
+       both vectors, in world space - and the pair is re-squared
+       afterwards because whatever it hands back is a wish, not
+       necessarily an orthonormal one. */
+    if (ctx.loadout?.handBasis) {
+      ctx.loadout.handBasis(i, freeHandY, freeHandZ);
+      if (freeHandY.lengthSq() < 1e-8) freeHandY.set(0, -1, 0);
+      freeHandY.normalize();
+      freeHandZ.addScaledVector(freeHandY, -freeHandZ.dot(freeHandY));
+      if (freeHandZ.lengthSq() < 1e-8) freeHandZ.set(0, 0, 1);
+      freeHandZ.normalize();
+    }
     freeHandX.crossVectors(freeHandY, freeHandZ).normalize();
     freeHandBasis.makeBasis(freeHandX, freeHandY, freeHandZ);
     freeHandWorld.setFromRotationMatrix(freeHandBasis);
@@ -4321,6 +6822,50 @@ export async function createPlayer(ctx, canvas) {
   function handTurnStep(dt) {
     const frameDt = Number.isFinite(dt) && dt > 0 ? dt : 1 / 60;
     return 18 * clamp(frameDt, 1 / 240, 1 / 30);
+  }
+
+  /* THE FLIP CEILING.
+   *
+   * A grip quaternion built from a basis can change which shortest
+   * arc it represents between one frame and the next, and the result
+   * is the gauntlet - and everything welded into it - rolling through
+   * a large angle in a single frame. The transition path below
+   * already rate-limits for exactly this reason, but it is armed only
+   * while a hand is RELEASING, so a hand that simply carries
+   * something through a swing copies the raw quaternion and takes the
+   * flip at full size.
+   *
+   * Measured on the Bastion (`saintfall-kenosis-swing-probe.mjs`,
+   * sampled at the real 60Hz): the hammer palm turned 2.05 RADIANS in
+   * one frame at 40% through melee1, carrying a head 0.83m past the
+   * fist about a metre sideways between two frames. It is present on
+   * Vesper and the White Vigil too, just smaller and over faster - it
+   * is the single biggest contributor to a swing reading as
+   * mechanical rather than heavy.
+   *
+   * This ceiling is deliberately far above any authored motion: 40
+   * rad/s is roughly five times the fastest wrist roll in the kit, so
+   * nothing that was ever meant to happen is slowed by it. It exists
+   * only to turn a discontinuity into two or three frames of very
+   * fast rotation, which is what the eye reads as a whip instead of a
+   * snap. */
+  const HAND_FLIP_RATE = 40;
+  /* Counted, because "this guard is inert on the campaign" is a claim
+     and not an argument. `flipStats` is read by qa.js. */
+  const flipStats = { clamped: 0, frames: 0, worst: 0 };
+  function settleHand(hand, target, dt) {
+    const step = HAND_FLIP_RATE * clamp(
+      Number.isFinite(dt) && dt > 0 ? dt : 1 / 60, 1 / 240, 1 / 30);
+    const want = hand.quaternion.angleTo(target);
+    flipStats.frames += 1;
+    if (want > flipStats.worst) flipStats.worst = want;
+    if (want > step) {
+      flipStats.clamped += 1;
+      hand.quaternion.rotateTowards(target, step);
+      return true;
+    }
+    hand.quaternion.copy(target);
+    return false;
   }
 
   function solveRestArm(i, dt) {
@@ -4356,7 +6901,7 @@ export async function createPlayer(ctx, canvas) {
         handOrientationTransition[i] = false;
       }
     } else {
-      hand.quaternion.copy(handRestTarget);
+      settleHand(hand, handRestTarget, dt);
     }
     hand.updateWorldMatrix(false, true);
   }
@@ -4775,7 +7320,7 @@ export async function createPlayer(ctx, canvas) {
           handOrientationTransition[i] = false;
         }
       } else {
-        hand.quaternion.copy(handRestQuaternion);
+        settleHand(hand, handRestQuaternion, dt);
       }
       hand.updateWorldMatrix(false, true);
     }
@@ -4793,9 +7338,144 @@ export async function createPlayer(ctx, canvas) {
     state.punch = Math.min(1, state.punch + 0.42 * amount);
   }
 
+  /**
+   * Shove the view because a rite landed. `weight` runs 0..1 from a
+   * light proc to a capstone and picks the CHARACTER of the shake, not
+   * just its size: a heavy event rings slowly and hangs, a light one
+   * is a single quick tick. Returns false when motion is reduced or
+   * the request is empty, so callers can stay silent.
+   */
+  function doctrineKick(strength = 0.5, weight = 0) {
+    const amount = Number.isFinite(strength) ? clamp(strength, 0, 1.4) : 0;
+    if (amount <= 0.001) return false;
+    const reduced = systemReducedMotion
+      || (typeof document !== "undefined"
+        && !!document.body?.classList?.contains("sf-reduced-motion"));
+    // Not zero: a reduced-motion player still needs to know the rite
+    // fired, and a tenth of the shove is under the threshold that
+    // causes trouble while staying above the one that reads.
+    const scaled = amount * (reduced ? 0.12 : 1);
+    const w = clamp(Number.isFinite(weight) ? weight : 0, 0, 1);
+    state.heave = Math.min(1, state.heave + scaled * lerp(0.30, 0.62, w));
+    state.heaveFreq = lerp(23, 11, w);
+    state.heaveDecay = lerp(9.0, 4.4, w);
+    return true;
+  }
+
+  /**
+   * A ground-speed penalty from a hazard - webbing, in practice, but
+   * written against nothing more specific than "how slow" and "how
+   * long" so a second hazard can reuse it rather than growing a
+   * second multiplier field.
+   *
+   * Stacks toward whichever is stronger and refreshes toward whichever
+   * timer is longer, rather than overwriting either - a second web
+   * landing while one is already active must not read as a reprieve.
+   */
+  function applySlow(factor, seconds) {
+    const f = Number.isFinite(factor) ? clamp(factor, 0.05, 1) : 1;
+    const s = Math.max(0, Number(seconds) || 0);
+    if (s <= 0) return false;
+    state.slowFactor = state.slowFor > 0 ? Math.min(state.slowFactor, f) : f;
+    state.slowFor = Math.max(state.slowFor, s);
+    return true;
+  }
+
+  function clearSlow() {
+    state.slowFactor = 1;
+    state.slowFor = 0;
+  }
+
+  /**
+   * Hold the trooper where they stand for `seconds`. The web's own
+   * verb, written as generically as the slow: no ground travel, no
+   * jump, no boost or ignition (those two ask `state.rootFor`
+   * themselves), while aiming, firing, swinging and Aegis go on as
+   * normal. Refreshes toward the LONGER hold, so a second pin on a
+   * held trooper extends the first rather than shortening it.
+   */
+  function applyRoot(seconds) {
+    const s = Math.max(0, Number(seconds) || 0);
+    if (s <= 0) return false;
+    state.rootFor = Math.max(state.rootFor, s);
+    return true;
+  }
+
+  function clearRoot() {
+    state.rootFor = 0;
+  }
+
+  /**
+   * Flattened. Everything `applyRoot` takes, plus the hands: no shot,
+   * no swing, no slam, no boost and no pack for `seconds`, and the
+   * attack side of that is enforced in main.js's input dispatch
+   * because that is where the game decides what a press means.
+   *
+   * A swing already in the air is CUT rather than allowed to finish.
+   * The alternative - letting the clip run while the input is refused
+   * - is a trooper who lands a hit they have already been knocked
+   * flat out of, and a player who cannot tell whether the stun
+   * applied.
+   *
+   * Refreshes toward the longer stun, like the root and the slow.
+   */
+  function applyStun(seconds) {
+    const s = Math.max(0, Number(seconds) || 0);
+    if (s <= 0) return false;
+    state.stunFor = Math.max(state.stunFor, s);
+    if (action.name && action.name.startsWith("melee")) cancelTransientActions();
+    return true;
+  }
+
+  function clearStun() {
+    state.stunFor = 0;
+  }
+
+  /**
+   * External displacement - something hauling the trooper. Goes
+   * through the same masonry slide and slope gates as a step, so a
+   * line cannot drag a body through a wall or up a face it could not
+   * walk; a wall simply stops the haul. Returns the distance actually
+   * moved so the caller can tell "pinned against something" from
+   * "landing". Vertical settles on its own: the grounded branch of
+   * `update` eases `state.y` onto whatever ground the body is now over.
+   */
+  function drag(dx, dz) {
+    if (state.free || !Number.isFinite(dx) || !Number.isFinite(dz)) return 0;
+    const nx = clamp(state.x + dx, -1010, 1010);
+    const nz = clamp(state.z + dz, -1010, 1010);
+    let px = nx;
+    let pz = nz;
+    if (ctx.collide) {
+      const out = ctx.collide.slide(
+        state.x, state.z, nx, nz,
+        state.grounded ? null : state.y,
+        undefined,
+        state.grounded
+          ? (tx, tz) => walkableFrom(state.x, state.z, tx - state.x, tz - state.z)
+          : null
+      );
+      px = out[0];
+      pz = out[1];
+    }
+    const moved = Math.hypot(px - state.x, pz - state.z);
+    state.x = px;
+    state.z = pz;
+    return moved;
+  }
+
   return {
     state,
     punch,
+    pulseDoctrine,
+    doctrineKick,
+    applySlow,
+    clearSlow,
+    applyRoot,
+    clearRoot,
+    applyStun,
+    clearStun,
+    drag,
     carryElbowPole(i) { return CARRY_ELBOW_POLE[i]; },
     /* The palm roll, readable and writable, because it is the one
        part of the hold no metric can grade - see PALM_ROLL. */
@@ -4804,18 +7484,81 @@ export async function createPlayer(ctx, canvas) {
       PALM_ROLL[0] = support;
       PALM_ROLL[1] = trigger;
     },
+    /* QA-tunable because the last few degrees depend on the visible
+       skinned palm surface, not only the abstract hand bone. */
+    freeHandPalmTurn() { return FREE_HAND_PALM_TURN; },
+    setFreeHandPalmTurn(radians) {
+      if (Number.isFinite(radians)) FREE_HAND_PALM_TURN = radians;
+      return FREE_HAND_PALM_TURN;
+    },
     input,
     figure,
+    locomotionProfile: () => ({
+      walkSpeed: WALK,
+      sprintSpeed: SPRINT,
+      groundAcceleration: GROUND_ACCEL_RESPONSE,
+      groundDeceleration: GROUND_DECEL_RESPONSE,
+      turnResponseScale: TURN_RESPONSE_SCALE,
+      flightSpeedScale: FLIGHT_SPEED_SCALE,
+      hipHalf: HIP_HALF,
+      hipHalfMoving: HIP_HALF_MOVING,
+      strideScale: STRIDE_SCALE,
+      stanceBias: STANCE_BIAS,
+      bodyDropScale: BODY_DROP_SCALE,
+      impactScale: IMPACT_SCALE,
+      weightSwayM: WEIGHT_SWAY_M,
+      weightRoll: WEIGHT_ROLL,
+      leanWalk: LEAN_WALK,
+      leanSprint: LEAN_SPRINT,
+      spineLeanWalk: SPINE_LEAN_WALK,
+      spineLeanSprint: SPINE_LEAN_SPRINT,
+      /* Live, not authored: the width the gait is actually running
+         at this instant, so a probe can tell a narrowing track from
+         a figure that never narrows. */
+      trackHalf,
+      trackGuard: TRACK_GUARD,
+    }),
+    /* The leg solver's RESOLVED constants, for the review harness.
+       `footPose` is figure-authored with defaults filled in here, so a
+       probe that reads the figure sees only half the answer and one
+       that hard-codes 0.55 measures its own copy of a number this
+       file is free to move. */
+    legRig: () => ({
+      restPitch: REST_FOOT_PITCH,
+      flightDev: FLIGHT_ANKLE_DEV,
+      devLimit: [ANKLE_DEV_MIN, ANKLE_DEV_MAX],
+      hipHalf: HIP_HALF,
+      stanceGuard: STANCE_GUARD,
+      trackHalf,
+      trackGuard: TRACK_GUARD,
+      ankle: figure.limb.ankle,
+      reach: figure.legLengths
+        ? figure.legLengths.map((l) => l.thigh + l.shin)
+        : [figure.limb.thigh + figure.limb.shin, figure.limb.thigh + figure.limb.shin],
+    }),
     beginAction,
     sampleActionAt,
+    handFlipStats: () => ({ ...flipStats }),
+    resetHandFlipStats: () => { flipStats.clamped = 0; flipStats.frames = 0; flipStats.worst = 0; },
     meleeSwing,
+    meleePierce,
+    die,
+    cancelTransientActions,
     listActions: () => Object.keys(ACTIONS),
     actionSpec: (n) => ACTIONS[n] || null,
     get action() { return action.name; },
+    /* The live action RECORD - name, clock, spec, combo, turn state.
+       `action` above answers only the name (and most callers only ask
+       "is one running"); the Kenosis kit drives arm overlays and the
+       hammer release off the clip's own clock, which needs the record
+       itself. Read-only by convention: writes belong to beginAction
+       and sampleAction. */
+    get actionState() { return action; },
     update,
     postUpdate,
     legs,
     spawn,
+    unstuck,
     setFree(on, pos, target, fov) {
       state.free = !!on;
       if (pos) state.freePos.set(pos[0], pos[1], pos[2]);

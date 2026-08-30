@@ -7,7 +7,7 @@
 (() => {
   "use strict";
 
-  const BUILD = "20260811-9";
+  const BUILD = "20260830-cast-aim-1";
   const THREE_VERSION = "0.180.0";
   const CDN_BASES = [
     `https://cdn.jsdelivr.net/npm/three@${THREE_VERSION}/`,
@@ -26,15 +26,33 @@
   const tipEl = document.getElementById("sf-boot-tip");
   let hidePromise = null;
 
-  const TIPS = [
-    "The Saint fell here in 811.M2. Nobody has ever found the rest of it.",
-    "Vesper-IX turns once every ninety hours. The sun barely moves.",
-    "The halo still holds orbit. Its shadow crosses the basin twice a day.",
-    "Sand carries sound further than you expect. So does the Choir.",
-    "The Ossuary is not a graveyard. It is one animal.",
-    "Do not drink from the Glass Scar. It is not water.",
-    "The Concord marks its dead with a pole and a ribbon. Count the ribbons.",
-  ];
+  /* WHICH POOL. The tips are level-specific flavour and the desert's
+     read as nonsense on a page about an ocean world, so the pool is
+     chosen from the same `data-sf-entry` attribute the entry module
+     comes from. Vesper's is the default, so saintfall.html needs no
+     change. */
+  const TIP_POOLS = {
+    default: [
+      "The Saint fell here in 811.M2. Nobody has ever found the rest of it.",
+      "Vesper-IX turns once every ninety hours. The sun barely moves.",
+      "The halo still holds orbit. Its shadow crosses the basin twice a day.",
+      "Sand carries sound further than you expect. So does the Choir.",
+      "The Ossuary is not a graveyard. It is one animal.",
+      "Do not drink from the Glass Scar. It is not water.",
+      "The Concord marks its dead with a pole and a ribbon. Count the ribbons.",
+    ],
+    "atoll-main": [
+      "The Antiphon carried one thing. It is still in the cradle.",
+      "Forty years of trade wind. Every palm on this ring leans west.",
+      "The lagoon is eight metres deep. The Spine is how you cross it.",
+      "The reef breaks at the crest. Past it there is nothing for nine hundred kilometres.",
+      "The drive section came in through the pass. The pass was narrower then.",
+      "Coral grows a centimetre a year. Look at what has grown on the hull.",
+      "The tide moves 1.35 metres. It is the only clock here.",
+    ],
+  };
+  const TIPS = TIP_POOLS[(document.body && document.body.dataset
+    && document.body.dataset.sfEntry) || "default"] || TIP_POOLS.default;
 
   const boot = {
     progress(value, message) {
@@ -99,10 +117,47 @@
   // keeps serving whatever terrain.js it already had - which makes a
   // shipped fix look like it did not work.
   const MODULES = [
-    "core", "art", "sky", "terrain", "structures", "world", "collide",
-    "vfx", "render", "player", "jetpack", "boost", "shield", "enemies", "weapons", "ik", "combat",
-    "mission", "breaches", "audio", "hud", "touch", "intro", "qa", "main",
+    "core", "keybinds", "art", "sky", "terrain", "structures", "world", "collide", "intro-models",
+    "vfx", "render", "player", "characters", "jetpack", "jetpack-kit", "jetpacks", "boost", "slam", "shield", "boss-surface", "enemies", "weapons", "ik", "combat", "difficulty", "reveal-camera", "guard-rules", "guard-readability", "campaign-score",
+    "mission", "breaches", "abbess", "coulter", "distaff", "garner", "matriarch", "stylite", "winnower", "district-bosses", "apostate", "undercroft", "progression-config", "progression", "audio", "hud", "touch", "tutorial", "intro", "pod", "save", "ui", "qa", "main",
+    /* THE SECOND WORLD. Kenosis - "The White Vigil" - is a parallel
+       content pack rather than a fork: it reuses render, player,
+       collide, vfx, art, core and structures unchanged and supplies
+       its own atmosphere, height field, props, weather and entry
+       point. Listing them here is not optional. Every module needs
+       its own exact-specifier key or the browser serves it with no
+       cache key at all - see the block comment below. */
+    "summit-art", "summit-terrain", "summit-structures", "summit-weather",
+    "summit-sky", "summit-world", "summit-hud", "summit-lights", "summit-player", "summit-characters", "summit-loadout", "summit-discharge", "summit-kenosis", "summit-trials", "summit-doctrine-config", "summit-doctrine", "summit-command", "summit-qa", "summit-main",
+    /* THE THIRD WORLD. Meridian-IV - "The Green Antiphon" - is the
+       same arrangement again: a parallel content pack reusing
+       render, player, collide, vfx, art, core, ui, qa, touch,
+       difficulty and jetpack unchanged, supplying its own
+       atmosphere, height field, sea, flora, architecture, weather,
+       sky and entry point.
+
+       It is the first world with a SEA in it, so it carries one
+       module neither of the others has - atoll-water - and that
+       module is drawn into the scene rather than into world.group,
+       because collide.js rasterises world.group once and a sea
+       plane in the collider is a solid floor at y=0 over the whole
+       map. See atoll-main.js's construction note 5. */
+    "atoll-art", "atoll-terrain", "atoll-water", "atoll-flora",
+    "atoll-structures", "atoll-world", "atoll-weather", "atoll-sky",
+    "atoll-hud", "atoll-qa", "atoll-main",
   ];
+
+  /* WHICH ENTRY POINT. A level page declares its own with
+     `data-sf-entry` on <body>; absent that it is Vesper-IX, so
+     saintfall.html needs no change at all. boot.js is loaded at the
+     END of <body>, so document.body is always available here. */
+  function entryModule() {
+    const name = document.body && document.body.dataset
+      ? String(document.body.dataset.sfEntry || "").trim()
+      : "";
+    // Allowlist, not interpolation: this string becomes an import URL.
+    return MODULES.includes(name) ? name : "main";
+  }
 
   function installImportMap(base) {
     if (document.querySelector('script[type="importmap"][data-sf]')) return;
@@ -140,12 +195,24 @@
     else document.head.appendChild(el);
   }
 
-  function supportsWebGL2() {
+  function probeWebGL2() {
     try {
       const probeCanvas = document.createElement("canvas");
-      return Boolean(probeCanvas.getContext("webgl2"));
+      const gl = probeCanvas.getContext("webgl2", { powerPreference: "high-performance" });
+      if (!gl) return { ok: false, gpu: "", software: false };
+      let gpu = "";
+      try {
+        const dbg = gl.getExtension("WEBGL_debug_renderer_info");
+        gpu = String(gl.getParameter(dbg ? dbg.UNMASKED_RENDERER_WEBGL : gl.RENDERER) || "");
+      } catch (error) { gpu = ""; }
+      // SwiftShader and friends are CPU rasterisers: the browser lost
+      // (or was denied) the real GPU. The game will run, badly, and
+      // nothing anywhere says why - so say why, here, where the player
+      // is already reading a progress line.
+      const software = /swiftshader|llvmpipe|softpipe|software\s*(rasterizer|renderer|adapter)|microsoft basic render/i.test(gpu);
+      return { ok: true, gpu, software };
     } catch (error) {
-      return false;
+      return { ok: false, gpu: "", software: false };
     }
   }
 
@@ -176,13 +243,26 @@
       return;
     }
 
-    if (!supportsWebGL2()) {
+    const gpuProbe = probeWebGL2();
+    if (!gpuProbe.ok) {
       boot.fail(
         "This game needs WebGL2.",
         "Your browser or GPU driver did not provide a WebGL2 context. Try updating your "
         + "browser, or enable hardware acceleration in its settings."
       );
       return;
+    }
+    if (gpuProbe.gpu) console.info(`[saintfall] GPU: ${gpuProbe.gpu}`);
+    if (gpuProbe.software) {
+      console.warn("[saintfall] The browser is rendering WITHOUT the graphics card "
+        + `(${gpuProbe.gpu}). Expect very low frame rates. Enable hardware acceleration `
+        + "in the browser settings (and update the GPU driver), then restart the browser.");
+      if (tipEl) {
+        tipEl.textContent = "Your browser is not using the graphics card - the game is "
+          + "drawing on the CPU and will run slowly. Enable hardware acceleration in the "
+          + "browser's settings, then restart the browser.";
+        tipEl.style.color = "#ffb347";
+      }
     }
 
     boot.progress(0.09, "Locating renderer");
@@ -191,7 +271,7 @@
 
     boot.progress(0.14, "Loading engine");
     try {
-      const main = await import(`${MODULE_ROOT}main.js?v=${BUILD}`);
+      const main = await import(`${MODULE_ROOT}${entryModule()}.js?v=${BUILD}`);
       await main.start({ boot, moduleRoot: MODULE_ROOT, threeBase: base, build: BUILD });
     } catch (error) {
       const detail = (error && (error.stack || error.message)) || String(error);

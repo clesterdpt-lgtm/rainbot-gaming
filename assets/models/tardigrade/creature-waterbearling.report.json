@@ -1,0 +1,406 @@
+{
+  "generatedAt": "2026-07-22T02:32:02.688292+00:00",
+  "pipeline": "Meshy textured low-poly master -> Blender 4.5 cleanup, custom rig/animation, and standard GLB",
+  "blenderVersion": "4.5.11 LTS",
+  "asset": "creature-waterbearling",
+  "profile": "waterbearling",
+  "source": {
+    "file": "/Volumes/External SSD/Projects/RainbotGaming/assets/models/tardigrade/source/creature-waterbearling-master.glb",
+    "sha256": "8e0900922f2e38e0d03240588289f2e8b9337276f6073d5917c62eae01a18ba0",
+    "fileBytes": 5743816,
+    "counts": {
+      "objects": 1,
+      "meshes": 1,
+      "materials": 1
+    },
+    "triangles": 18168,
+    "bounds": {
+      "min": [
+        -0.55773,
+        -0.953033,
+        -0.455969
+      ],
+      "max": [
+        0.55773,
+        0.953033,
+        0.455969
+      ]
+    }
+  },
+  "output": {
+    "file": "creature-waterbearling.glb",
+    "path": "/Volumes/External SSD/Projects/RainbotGaming/assets/models/tardigrade/creature-waterbearling.glb",
+    "report": "/Volumes/External SSD/Projects/RainbotGaming/assets/models/tardigrade/creature-waterbearling.report.json",
+    "workingBlend": null,
+    "targetTriangles": 10000,
+    "textureMaxSize": 512,
+    "blenderBounds": {
+      "min": [
+        -0.715736,
+        -1.225,
+        0.0
+      ],
+      "max": [
+        0.715736,
+        1.225,
+        1.171964
+      ]
+    },
+    "runtimeBounds": {
+      "min": [
+        -0.715736,
+        0.0,
+        -1.225
+      ],
+      "max": [
+        0.715736,
+        1.171964,
+        1.225
+      ]
+    },
+    "triangles": 9850,
+    "materials": 1,
+    "textures": 3,
+    "skins": 1,
+    "clips": [
+      "idle",
+      "locomotion",
+      "startled"
+    ],
+    "fileBytes": 1138296,
+    "sha256": "4b6305f67933867e47ecf99e22e457c23b179577fec03ed967e7362982a9700a"
+  },
+  "geometry": {
+    "repair": {
+      "verticesBeforeWeld": 10870,
+      "verticesAfterWeld": 9087,
+      "facesBefore": 18168,
+      "facesAfter": 18168,
+      "weldDistance": 1e-06,
+      "flatShaded": false
+    },
+    "budget": {
+      "sourceTriangles": 18168,
+      "finalTriangles": 9850,
+      "passes": [
+        {
+          "pass": 1,
+          "ratio": 0.5421620431527961,
+          "before": 18168,
+          "after": 9850
+        }
+      ]
+    }
+  },
+  "normalization": {
+    "sourceBounds": {
+      "min": [
+        -0.557045,
+        -0.953033,
+        -0.455956
+      ],
+      "max": [
+        0.557045,
+        0.953759,
+        0.456163
+      ]
+    },
+    "orientedBounds": {
+      "min": [
+        -0.557045,
+        -0.953759,
+        -0.455956
+      ],
+      "max": [
+        0.557045,
+        0.953033,
+        0.456163
+      ]
+    },
+    "blenderBounds": {
+      "min": [
+        -0.715736,
+        -1.225,
+        0.0
+      ],
+      "max": [
+        0.715736,
+        1.225,
+        1.171964
+      ]
+    },
+    "runtimeBounds": {
+      "min": [
+        -0.715736,
+        0.0,
+        -1.225
+      ],
+      "max": [
+        0.715736,
+        1.171964,
+        1.225
+      ]
+    },
+    "orientationStrategy": "-Y to Blender +Y / glTF -Z",
+    "sourceFrontAxis": "-Y",
+    "forward": "-Z",
+    "up": "+Y",
+    "fitDimension": "length",
+    "targetDimension": 2.45,
+    "uniformScale": 1.2848803032184262,
+    "grounded": true,
+    "centeredXZ": true
+  },
+  "materials": {
+    "names": [
+      "creature-waterbearling_Material_01"
+    ],
+    "count": 1,
+    "removedTextureNodes": [],
+    "semanticFaceCounts": {}
+  },
+  "images": [
+    {
+      "name": "Image_0",
+      "sourceSize": [
+        2048,
+        2048
+      ],
+      "runtimeSize": [
+        512,
+        512
+      ],
+      "packed": true
+    },
+    {
+      "name": "Image_1",
+      "sourceSize": [
+        2048,
+        2048
+      ],
+      "runtimeSize": [
+        512,
+        512
+      ],
+      "packed": true
+    },
+    {
+      "name": "Image_2",
+      "sourceSize": [
+        2048,
+        2048
+      ],
+      "runtimeSize": [
+        512,
+        512
+      ],
+      "packed": true
+    },
+    {
+      "name": "Image_3",
+      "sourceSize": [
+        2048,
+        2048
+      ],
+      "runtimeSize": [
+        512,
+        512
+      ],
+      "packed": true
+    }
+  ],
+  "rig": {
+    "armatures": 1,
+    "skins": 1,
+    "bones": 22,
+    "deformBones": [
+      "Body_01",
+      "Body_02",
+      "Body_03",
+      "Body_04",
+      "Head",
+      "Leg_L4_Upper",
+      "Leg_L4_Lower",
+      "Leg_R4_Upper",
+      "Leg_R4_Lower",
+      "Leg_L3_Upper",
+      "Leg_L3_Lower",
+      "Leg_R3_Upper",
+      "Leg_R3_Lower",
+      "Leg_L2_Upper",
+      "Leg_L2_Lower",
+      "Leg_R2_Upper",
+      "Leg_R2_Lower",
+      "Leg_L1_Upper",
+      "Leg_L1_Lower",
+      "Leg_R1_Upper",
+      "Leg_R1_Lower"
+    ],
+    "bodyBones": [
+      "Body_01",
+      "Body_02",
+      "Body_03",
+      "Body_04",
+      "Head"
+    ],
+    "appendageBones": [
+      "Leg_L1_Upper",
+      "Leg_L1_Lower",
+      "Leg_R1_Upper",
+      "Leg_R1_Lower",
+      "Leg_L2_Upper",
+      "Leg_L2_Lower",
+      "Leg_R2_Upper",
+      "Leg_R2_Lower",
+      "Leg_L3_Upper",
+      "Leg_L3_Lower",
+      "Leg_R3_Upper",
+      "Leg_R3_Lower",
+      "Leg_L4_Upper",
+      "Leg_L4_Lower",
+      "Leg_R4_Upper",
+      "Leg_R4_Lower"
+    ],
+    "sockets": [],
+    "weights": {
+      "vertices": 4928,
+      "influencedVertices": 4928,
+      "maximumInfluences": 4,
+      "groups": [
+        "Body_01",
+        "Body_02",
+        "Body_03",
+        "Body_04",
+        "Head",
+        "Leg_L1_Lower",
+        "Leg_L1_Upper",
+        "Leg_L2_Lower",
+        "Leg_L2_Upper",
+        "Leg_L3_Lower",
+        "Leg_L3_Upper",
+        "Leg_L4_Lower",
+        "Leg_L4_Upper",
+        "Leg_R1_Lower",
+        "Leg_R1_Upper",
+        "Leg_R2_Lower",
+        "Leg_R2_Upper",
+        "Leg_R3_Lower",
+        "Leg_R3_Upper",
+        "Leg_R4_Lower",
+        "Leg_R4_Upper"
+      ]
+    },
+    "worldRootTranslation": false
+  },
+  "clips": [
+    {
+      "name": "idle",
+      "frameStart": 1,
+      "frameEnd": 25,
+      "frames": 5,
+      "fps": 24,
+      "durationSeconds": 1.0,
+      "channels": 21,
+      "periodic": true,
+      "loopEndpointsExact": true,
+      "worldRootTranslation": false
+    },
+    {
+      "name": "locomotion",
+      "frameStart": 1,
+      "frameEnd": 25,
+      "frames": 5,
+      "fps": 24,
+      "durationSeconds": 1.0,
+      "channels": 21,
+      "periodic": true,
+      "loopEndpointsExact": true,
+      "worldRootTranslation": false
+    },
+    {
+      "name": "startled",
+      "frameStart": 1,
+      "frameEnd": 17,
+      "frames": 5,
+      "fps": 24,
+      "durationSeconds": 0.666667,
+      "channels": 21,
+      "periodic": false,
+      "loopEndpointsExact": false,
+      "worldRootTranslation": false
+    }
+  ],
+  "features": {
+    "animated": true,
+    "skin": true,
+    "worldRootTranslation": false,
+    "forward": "-Z",
+    "up": "+Y",
+    "draco": false,
+    "meshopt": false,
+    "ktx2": false,
+    "webpTextures": false,
+    "validatedFor": "Three.js r128 GLTFLoader"
+  },
+  "validation": {
+    "format": "GLB 2.0",
+    "fileBytes": 1138296,
+    "sha256": "4b6305f67933867e47ecf99e22e457c23b179577fec03ed967e7362982a9700a",
+    "meshes": 1,
+    "triangles": 9850,
+    "materials": 1,
+    "materialNames": [
+      "creature-waterbearling_Material_01"
+    ],
+    "textures": 3,
+    "imageDimensions": [
+      {
+        "name": "Image_2",
+        "mimeType": "image/png",
+        "width": 512,
+        "height": 512
+      },
+      {
+        "name": "Image_0",
+        "mimeType": "image/png",
+        "width": 512,
+        "height": 512
+      },
+      {
+        "name": "Image_1",
+        "mimeType": "image/png",
+        "width": 512,
+        "height": 512
+      }
+    ],
+    "periodicAnimationEndpoints": {
+      "idle": {
+        "samples": 5,
+        "startSeconds": 0.041667,
+        "endSeconds": 1.041667,
+        "endpointValueMaxDelta": 0.0,
+        "endpointTangentMaxDelta": 0.0
+      },
+      "locomotion": {
+        "samples": 5,
+        "startSeconds": 0.041667,
+        "endSeconds": 1.041667,
+        "endpointValueMaxDelta": 0.0,
+        "endpointTangentMaxDelta": 0.0
+      }
+    },
+    "skins": 1,
+    "animations": [
+      "idle",
+      "locomotion",
+      "startled"
+    ],
+    "nodes": 24,
+    "extensionsUsed": [],
+    "compression": "none",
+    "rootTranslationChannels": [],
+    "requiredSockets": [
+      "Head"
+    ]
+  }
+}

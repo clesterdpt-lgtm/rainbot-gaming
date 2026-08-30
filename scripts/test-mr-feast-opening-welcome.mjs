@@ -45,9 +45,16 @@ async function diagnostics(page) {
 async function startWelcome(page) {
   await page.goto(gameUrl, { waitUntil: "domcontentloaded" });
   await page.waitForFunction(() => window.MrFeastFresh?.state?.ready, null, { timeout: 120000 });
+  await page.waitForFunction(() => !document.getElementById("mansion-enter")?.disabled, null, { timeout: 120000 });
+  await page.evaluate(() => window.MrFeastFresh.startOptionalCharacterLoadsForQA());
   await page.waitForFunction(() => window.MrFeastFresh.getMrFeastState?.()?.loaded, null, { timeout: 120000 });
-  await page.locator("#mansion-enter").click();
+  await page.evaluate(() => document.getElementById("mansion-enter").click());
   await page.waitForFunction(() => JSON.parse(window.render_game_to_text()).openingWelcome?.active, null, { timeout: 8000 });
+  await page.evaluate(() => window.MrFeastFresh.advanceOpeningWelcomeForQA(2));
+  await page.waitForFunction(() => {
+    const opening = JSON.parse(window.render_game_to_text()).openingWelcome;
+    return opening?.phase === "speaking" && opening.lineIndex === 0;
+  }, null, { timeout: 8000 });
 }
 
 async function advanceToLine(page, targetIndex) {
@@ -101,6 +108,9 @@ async function run() {
   assert(/class MrFeastOpeningWelcome/.test(runtimeSource), "runtime is missing the opening welcome state machine");
   assert(/openingWelcome:\s*openingWelcomeSystem\?\.getDiagnostics/.test(runtimeSource), "render_game_to_text must expose opening welcome progress");
   assert(/advanceOpeningWelcomeForQA/.test(runtimeSource), "runtime is missing deterministic opening welcome timing controls");
+  assert(pageSource.includes('id="mansion-speech-skip"'), "the shared speech bubble still keeps a skip control slot for non-welcome speech");
+  assert(/manualAdvanceAfterSeconds:\s*0/.test(runtimeSource), "opening welcome must expose E/tap skip immediately with no reading hold");
+  assert(!/skipLabel:\s*"Skip intro"/.test(runtimeSource), "opening welcome must not attach a full-intro Skip button to the speech bubble");
   assert(!/A previous contestant left a trail somewhere inside the estate\./.test(pageSource), "the entry card still spoils the hidden Contestant 13 trail");
 
   let server = null;
@@ -113,6 +123,45 @@ async function run() {
     await waitForServer();
     await mkdir(artifactDir, { recursive: true });
     browser = await chromium.launch({ headless: true });
+
+    // --- Immediate per-line E/tap skip -------------------------------------
+    const skipPage = await browser.newPage({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+    const skipErrors = [];
+    watchErrors(skipPage, skipErrors);
+    await startWelcome(skipPage);
+    await skipPage.waitForFunction(() => JSON.parse(window.render_game_to_text()).openingWelcome?.phase === "speaking", null, { timeout: 4500 });
+    const skipButton = skipPage.locator("#mansion-speech-skip");
+    assert(!(await skipButton.isVisible()), "opening welcome must not show a full-intro Skip button on the speech bubble");
+    const beforeSkip = await diagnostics(skipPage);
+    assert(!beforeSkip.speech.skippable && beforeSkip.speech.skipLabel == null, `opening speech must not be bubble-skippable; got ${JSON.stringify(beforeSkip.speech)}`);
+    assert(beforeSkip.openingWelcome.canAdvance && beforeSkip.openingWelcome.manualAdvanceAfterSeconds === 0, `E/tap skip must be available instantly on the first line; got ${JSON.stringify(beforeSkip.openingWelcome)}`);
+    const promptVisible = await skipPage.evaluate(() => {
+      const prompt = document.getElementById("mansion-prompt");
+      const text = document.getElementById("mansion-prompt-text")?.textContent || "";
+      return { hidden: prompt?.hidden, text };
+    });
+    assert(!promptVisible.hidden && /skip/i.test(promptVisible.text), `mobile E prompt must advertise Skip instantly; got ${JSON.stringify(promptVisible)}`);
+    await skipPage.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "opening-skip-mobile.png") });
+    const rushed = await skipPage.evaluate(() => {
+      for (let guard = 0; guard < 80; guard += 1) {
+        const opening = window.MrFeastFresh.getOpeningWelcomeState();
+        if (!opening?.active) break;
+        if (opening.phase === "speaking" && opening.canAdvance) {
+          window.MrFeastFresh.continueOpeningWelcomeForQA();
+        } else if (opening.phase === "gap") {
+          window.MrFeastFresh.advanceOpeningWelcomeForQA(Math.max(0.05, Number(opening.phaseRemaining) || 0.1));
+        } else {
+          window.MrFeastFresh.advanceOpeningWelcomeForQA(0.1);
+        }
+      }
+      return JSON.parse(window.render_game_to_text());
+    });
+    assert(!rushed.openingWelcome.active && rushed.openingWelcome.completed, `mashing E/tap must finish the welcome quickly; got ${JSON.stringify(rushed.openingWelcome)}`);
+    assert(rushed.openingWelcome.acceptedAdvances >= 7, `every line should accept an immediate E advance; got ${JSON.stringify(rushed.openingWelcome)}`);
+    assert(!rushed.speech.visible && rushed.mrFeast.wanderingEnabled, `rushing dialogue must dismiss speech and resume Mr. Feast patrol; got ${JSON.stringify({ speech: rushed.speech, mrFeast: rushed.mrFeast })}`);
+    assert(!rushed.contestant13.bookRead && rushed.inventory.items.length === 0 && rushed.security.alarm.count === 0, `rushing dialogue must not mutate story, inventory, or security state; got ${JSON.stringify(rushed)}`);
+    assert(skipErrors.length === 0, `opening skip page console errors: ${skipErrors.join(" | ")}`);
+    await skipPage.close();
 
     const desktop = await browser.newPage({ viewport: { width: 1280, height: 820 } });
     const desktopErrors = [];
@@ -146,7 +195,7 @@ async function run() {
     const openingContract = state.openingWelcome;
     assert(openingContract.lineCount === 7, `opening should contain seven lines; got ${openingContract.lineCount}`);
     assert(openingContract.minimumLineSeconds >= 6 && openingContract.maximumLineSeconds <= 10.5, `opening reading window drifted; got ${JSON.stringify(openingContract)}`);
-    assert(openingContract.manualAdvanceAfterSeconds >= 2, `manual advance hold is too short; got ${openingContract.manualAdvanceAfterSeconds}s`);
+    assert(openingContract.manualAdvanceAfterSeconds === 0, `manual advance must be instant; got ${openingContract.manualAdvanceAfterSeconds}s`);
     assert(openingContract.totalPlannedSeconds >= 45, `the complete welcome is too fast; got ${openingContract.totalPlannedSeconds}s`);
     const transcript = openingContract.authoredLines.join(" ");
     assert(/reality show/i.test(transcript) && /compet/i.test(transcript), `briefing does not establish a reality-show competition: ${transcript}`);
@@ -172,17 +221,17 @@ async function run() {
       }
       const before = window.MrFeastFresh.getOpeningWelcomeState();
       const advance = window.MrFeastFresh.continueOpeningWelcomeForQA();
-      return { before, advance };
+      const after = window.MrFeastFresh.getOpeningWelcomeState();
+      return { before, advance, after };
     });
-    assert(earlyProbe.before.phase === "speaking", `QA pacing probe did not begin a fresh line; got ${JSON.stringify(earlyProbe.before)}`);
-    assert(earlyProbe.advance.accepted === false && earlyProbe.advance.reason === "reading-hold", `a fresh line advanced before its reading hold; got ${JSON.stringify(earlyProbe.advance)}`);
-
-    const firstLineIndex = earlyProbe.before.lineIndex;
-    await desktop.evaluate(() => window.MrFeastFresh.advanceOpeningWelcomeForQA(5.75));
-    state = await diagnostics(desktop);
-    assert(state.openingWelcome.lineIndex === firstLineIndex, `the fresh line skipped before six seconds; got ${JSON.stringify(state.openingWelcome)}`);
-    const acceptedAdvance = await desktop.evaluate(() => window.MrFeastFresh.continueOpeningWelcomeForQA());
-    assert(acceptedAdvance.accepted === true, `E/tap continuation should work after the reading hold; got ${JSON.stringify(acceptedAdvance)}`);
+    assert(earlyProbe.before.phase === "speaking" && earlyProbe.before.canAdvance, `QA pacing probe did not begin a fresh advanceable line; got ${JSON.stringify(earlyProbe.before)}`);
+    assert(earlyProbe.advance.accepted === true, `a fresh line should accept E/tap skip instantly; got ${JSON.stringify(earlyProbe.advance)}`);
+    assert(
+      earlyProbe.after.phase === "gap"
+        || (earlyProbe.after.phase === "speaking" && earlyProbe.after.lineIndex > earlyProbe.before.lineIndex)
+        || !earlyProbe.after.active,
+      `instant E/tap skip should leave the current line; got ${JSON.stringify(earlyProbe.after)}`,
+    );
 
     await advanceToLine(desktop, 5);
     state = await diagnostics(desktop);
@@ -232,9 +281,9 @@ async function run() {
     const mobileLayout = await bubbleLayout(mobile);
     assert(!mobileLayout.bubbleHidden && !mobileLayout.promptHidden, `mobile welcome bubble/prompt is missing; got ${JSON.stringify(mobileLayout)}`);
     assert(mobileLayout.fontPx >= 12, `mobile welcome text is too small at ${mobileLayout.fontPx}px`);
-    assert(/continue/i.test(mobileLayout.promptText), `mobile E control should advertise Continue; got ${mobileLayout.promptText}`);
+    assert(/skip/i.test(mobileLayout.promptText), `mobile E control should advertise Skip; got ${mobileLayout.promptText}`);
     assertInside(mobileLayout.bubble, mobileLayout.stage, "mobile welcome bubble");
-    assertInside(mobileLayout.prompt, mobileLayout.stage, "mobile Continue prompt");
+    assertInside(mobileLayout.prompt, mobileLayout.stage, "mobile Skip prompt");
     await mobile.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "front-door-welcome-mobile.png") });
     assert(mobileErrors.length === 0, `mobile console errors: ${mobileErrors.join(" | ")}`);
     await mobile.close();

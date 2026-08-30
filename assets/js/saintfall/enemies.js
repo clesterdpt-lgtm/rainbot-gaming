@@ -20,6 +20,14 @@
 
 import { TAU, clamp, clamp01, lerp, damp, makeRng } from "saintfall/core.js";
 import { patchMaterial } from "saintfall/art.js";
+import { applySurface } from "saintfall/boss-surface.js";
+import { DROP_SITE } from "saintfall/terrain.js";
+
+/* A fresh Martyr field can legitimately contain more than eight hundred
+   durable enemies before a breach begins. Keep one shared ceiling for save
+   validation and restore so a valid high-tier field is neither rejected nor
+   silently truncated. This remains a bounded payload, not an open-ended one. */
+export const MAX_SAVED_ENEMIES = 1024;
 
 /* Which bones the IK solver owns. Must agree with the `--leg-bones`
    pattern the model optimiser strips channels against; if these two
@@ -107,6 +115,56 @@ export const BESTIARY = {
     kneePole: { up: 1.8, out: 0.85, fwd: 0 },
   },
 
+  /* The Choir Spires' district guardian uses the same authored mantis
+     anatomy as a Thresher, but it is a separate species contract so its
+     boss scale, health and hit volumes never leak into the roaming caste.
+     At 1.55 against the ordinary Thresher's 0.62 this silhouette is exactly
+     two and a half times taller and wider, which reads as an individual
+     guardian rather than a randomly enlarged wave member. */
+  precentor: {
+    url: "assets/models/saintfall/thresher.glb",
+    faction: "bloom",
+    health: 3200,
+    scale: 1.55,
+    speed: { walk: 1.35, charge: 4.25 },
+    material: { roughness: 0.46, metalness: 0.10, rim: 1.35, bio: 2.2 },
+    legs: 3,
+    stance: 1.35,
+    stepHeight: 0.68,
+    collisionRadius: 1.9,
+    cullRange: 620,
+    ikRange: 300,
+    animRange: 440,
+    poseRange: 620,
+    shadowRange: 150,
+    clips: ["idle", "alert", "strike", "flinch", "death"],
+    kneePole: { up: 1.8, out: 0.85, fwd: 0 },
+  },
+
+  /* The iron servitor-engine already had an authored model and animation
+     set but no runtime role. It now guards the Gilded Reach: a ranged,
+     armoured district boss whose Concord palette distinguishes that hunt
+     from the five insect encounters. */
+  cantor: {
+    url: "assets/models/saintfall/cantor.glb",
+    faction: "concord",
+    health: 3000,
+    scale: 1.28,
+    speed: { walk: 1.55, charge: 2.8 },
+    material: { roughness: 0.48, metalness: 0.34, rim: 1.2, bio: 0.25 },
+    legs: 1,
+    stance: 0.92,
+    stepHeight: 0.44,
+    collisionRadius: 1.15,
+    cullRange: 620,
+    ikRange: 260,
+    animRange: 400,
+    poseRange: 620,
+    shadowRange: 150,
+    clips: ["idle", "alert", "fire", "flinch", "death"],
+    kneePole: { up: 2.0, out: 0.25, fwd: 1.35 },
+  },
+
   harrow: {
     url: "assets/models/saintfall/harrow.glb",
     faction: "bloom",
@@ -129,8 +187,12 @@ export const BESTIARY = {
   matriarch: {
     url: "assets/models/saintfall/matriarch.glb",
     faction: "bloom",
-    health: 3600,
-    /* Shipped at 1:1: 5.05m tall, 6.93m wide and 10.93m long. There
+    /* A district boss, not a heavy caste with a longer bar. The exposed
+       gaster still rewards a clean weak-point sequence, but 9000 gives
+       its pursuit, Tremor Rite and new grab-slam enough room to form a
+       complete fight instead of ending inside the first rotation. */
+    health: 15000,
+    /* Shipped at 1:1: 5.05m tall, 6.93m wide and 11.13m long. There
        is exactly one of these on the map, so the usual argument for
        tuning scale in engine - that proportion is read against the
        trooper standing next to it - is replaced by a different one:
@@ -139,10 +201,9 @@ export const BESTIARY = {
        what makes walking into the Fallen Saint feel like arriving
        somewhere rather than like entering a bigger arena. */
     scale: 1.0,
-    /* Slower than everything it commands. A boss that can run you
-       down removes the one thing this fight is about, which is
-       getting behind it - so it is beaten to a flank every time and
-       has to turn, and turning nine metres of animal is the window. */
+    /* Fallback locomotion only; matriarch.js owns the live pursuit pace.
+       Kept conservative so a newly spawned instance cannot jump before
+       the encounter module adopts it on the same frame. */
     speed: { walk: 1.15, charge: 3.9 },
     material: { roughness: 0.42, metalness: 0.14, rim: 1.3, bio: 2.1 },
     legs: 4,                 // pairs - nothing else in the brood has 8
@@ -164,11 +225,442 @@ export const BESTIARY = {
        the count legible instead of a thicket. */
     kneePole: { up: 1.35, out: 1.55, fwd: 0 },
   },
+
+  /* ------------------------------------------------------------------
+     THE COULTER. The fifth silhouette, and the first that is not a
+     walker - so almost everything the four entries above tune does not
+     apply to it and the two fields that replace them are new.
+
+     `spine` puts it on the OTHER procedural solver in this file. The
+     walkers keep a body the clips pose and legs the IK owns; this one
+     is the reverse - the clips own its mouth and nothing else, and its
+     entire body is laid along a trail of the points its head has
+     already travelled through. That is the only model that makes a
+     burrower work: when the head dives, the body follows it down
+     through the same hole, because the hole is literally where the
+     head was.
+
+     `burrows` is the flag every system that assumes an enemy is
+     standing on the ground checks. It is deliberately a capability
+     rather than a species test - `key === "coulter"` scattered through
+     four modules is how the next burrower becomes a rewrite.
+     ------------------------------------------------------------------ */
+  coulter: {
+    url: "assets/models/saintfall/coulter.glb",
+    faction: "bloom",
+    /* Half again the Matriarch's, and the number is a consequence of
+       the fight's shape rather than a difficulty knob. It is only
+       hittable while it is out of the sand, which is about a third of
+       the cycle, so raw health has to be read as "health per surfacing"
+       - and at 5200 with the maw multiplier it takes four good
+       surfacings to kill, which is long enough for the player to have
+       to survive the venom rather than out-damage it. */
+    health: 5200,
+    /* The Coulter is the penultimate boss beneath the Fallen Saint. It is
+       four times the former Ossuary silhouette in every dimension; because
+       the spine arc is measured from the scaled rig, this also turns its
+       twenty-five-metre body into a roughly hundred-metre sand leviathan. */
+    scale: 4.64,
+    bodyHitScale: 4,
+    bodyScale: 4,
+    /* `walk` is what it makes when surfaced and anchored - it barely
+       moves, because a reared worm is a tower and not a chase. `charge`
+       is the BURROWING speed, and it is the fastest thing in the game
+       by four metres a second: under the sand it is untouchable, so the
+       only cost it can be given for crossing ground is time, and it
+       should not be much. */
+    speed: { walk: 2.2, charge: 13.5 },
+    material: { roughness: 0.50, metalness: 0.08, rim: 1.20, bio: 1.95 },
+    legs: 0,
+    spine: 13,
+    burrows: true,
+    stance: 0,
+    stepHeight: 0,
+    /* The mesosoma is 2.7m across at the swell. This is deliberately
+       under that: it is what keeps the animal out of masonry when it
+       surfaces, and a radius sized to the widest ring would refuse
+       every courtyard on the map. */
+    collisionRadius: 7.5,
+    /* The longest in the game. It is 25m of animal that rears eight
+       metres out of open sand, and a player who watches it dive on one
+       side of the basin has to be able to see the wake coming back. */
+    cullRange: 700,
+    /* Its own tiers, because the defaults were written for creatures a
+       tenth of its length: an animal culled for animation at 190m
+       would freeze mid-arc in plain sight. */
+    ikRange: 300,
+    animRange: 420,
+    poseRange: 700,
+    shadowRange: 150,
+    clips: ["idle", "alert", "spew", "strike", "flinch", "death"],
+  },
+
+  /* ------------------------------------------------------------------
+     THE DISTAFF. Not a sixth silhouette in this brood - it is not the
+     Bloom at all, and its BESTIARY entry only carries the fields
+     every walker already has. `legs: 4` is the same eight-leg rig the
+     Matriarch proved; what makes it a different fight lives in
+     combat.js's per-leg hit table and in distaff.js, not here.
+     ------------------------------------------------------------------ */
+  distaff: {
+    url: "assets/models/saintfall/distaff.glb",
+    faction: "scar",
+    /* Its health is earned through repeated one-leg knockdowns: only
+       one limb keeps damage at a time and every rise restores the other
+       intact legs, so 11000 supports several readable body windows
+       without asking the player to grind eight simultaneous pools. */
+    health: 11000,
+    /* Driven entirely by distaff.js, the same reason the Coulter opts
+       out via `spine`/`burrows` - combat.js's generic stepEnemy has no
+       SPEC entry for this key and would fall back to a Thresher's
+       sight/hearing/aggro numbers while trying to walk a body the leg
+       solver expects to hold still underneath it. */
+    selfDriven: true,
+    /* Each leg's own pool - 340 is two to three solid hits from a
+       decent weapon. Distaff owns the one-injured-leg rule while
+       combat.js still pays the ordinary break bonus into this pool. */
+    legHealth: 340,
+    scale: 1.0,
+    /* It does not chase. A stationary guardian that can run the
+       player down removes the one thing breaking a leg buys - room to
+       stand clear of it - so it plants and reaches instead. */
+    speed: { walk: 0.85, charge: 2.4 },
+    material: { roughness: 0.38, metalness: 0.10, rim: 1.30, bio: 2.4 },
+    legs: 4,                 // pairs - eight, the Matriarch's own rig
+    /* Long, high strides for a body carried nine metres up on them. A
+       stance tuned for anything else in the bestiary would have this
+       replanting a twelve-metre leg every few centimetres, which
+       reads as a shiver on something this size rather than a walk. */
+    stance: 2.35,
+    stepHeight: 1.15,
+    collisionRadius: 3.5,
+    /* A landmark from across the crater, and it has to be: this is
+       the one thing standing in the Glass Scar taller than its own
+       fulgurite spires. */
+    cullRange: 780,
+    ikRange: 340,
+    animRange: 500,
+    poseRange: 780,
+    shadowRange: 180,
+    clips: ["idle", "alert", "slam", "webCast", "collapse", "bite",
+      "recover", "flinch", "death"],
+    /* Flared hard outward and barely lifted - the tarantula stance,
+       and the opposite bend from every insect knee in the bestiary.
+       This is what puts the knees over its own back instead of tucked
+       beneath it, which is the entire silhouette. */
+    kneePole: { up: 0.85, out: 2.1, fwd: 0 },
+    /* `collapse`/`recover` bend the leg bones directly, the same
+       trick `death` uses everywhere else - see `solveLegs`. Both are
+       exported with those channels; the model pipeline's hard gate
+       fails the build if any OTHER clip leaks a leg channel. */
+    legOwnedStates: ["collapse", "recover"],
+  },
+
+  /* ------------------------------------------------------------------
+     THE WINNOWER. The first thing in the bestiary that leaves the
+     ground, and the only entry here whose `y` is not a terrain sample.
+
+     `flies` is a capability rather than a species test, for the same
+     reason `burrows` is: the moment a second flyer exists, every
+     system that assumes a creature stands on something needs one flag
+     to ask rather than a growing list of keys to compare against.
+     ------------------------------------------------------------------ */
+  winnower: {
+    url: "assets/models/saintfall/winnower.glb",
+    faction: "censer",
+    /* Lower than the Distaff's, and it should be: this one cannot be
+       cornered. 7800 survives long enough for its growing bombard to
+       become visible without turning each landed window into a token. */
+    health: 7800,
+    scale: 1.0,
+    /* `walk` is its cruise on a thermal; `charge` is the dive. It is
+       the fastest thing in the game across open ground because it
+       does not touch any. */
+    speed: { walk: 8.5, charge: 22.0 },
+    material: { roughness: 0.54, metalness: 0.12, rim: 1.45, bio: 2.2 },
+    flies: true,
+    /* Driven by winnower.js. Same opt-out the Distaff takes and for
+       the same reason - there is no SPEC entry for this key, and the
+       generic walker would try to path a flying creature across
+       terrain it never touches. */
+    selfDriven: true,
+    /* How much punishment the heat sacs can absorb before the animal
+       cannot hold altitude. Four hits' worth at the sac multiplier -
+       enough that draining it is a deliberate investment of fire, and
+       little enough that it is a real alternative to waiting out the
+       timer. */
+    liftPool: 4,
+    legs: 0,
+    stance: 0,
+    stepHeight: 0,
+    /* Sized to the BODY, not the span. A radius cut to twenty-six
+       metres of wing would refuse every gap in the refinery and shove
+       the animal out of its own district the moment it landed. */
+    collisionRadius: 1.8,
+    /* The longest sightline in the game after the Coulter's, and for
+       the opposite reason: this one is usually ABOVE the horizon, so
+       it is visible from anywhere in the basin that can see sky. */
+    cullRange: 820,
+    animRange: 560,
+    poseRange: 820,
+    shadowRange: 200,
+    /* "sweep" was authored into the model and played by winnower.js
+       but missing from this list for one build - and this list is
+       what decides which clips get actions at all, so the grounded
+       attack animated NOTHING and the miss was silent. The fight
+       harness now asserts the module's own attack clips exist. */
+    clips: ["idle", "alert", "bombard", "strain", "land", "stoke",
+      "launch", "sweep", "sprawl", "flinch", "death"],
+  },
+
+  /* ------------------------------------------------------------------
+     THE GARNER. The Ossuary's own animal, and the first entry here with
+     no .glb behind it at all.
+
+     `procedural` is why. Every other creature in this bestiary is a
+     skinned mesh with authored clips, which is the right pipeline for
+     anything with a skeleton and a walk cycle - and the wrong one for
+     this. The Garner is a mouth in the ground with six tentacles, and
+     both halves of that are things a baked rig cannot do: the pit has
+     to OPEN, which is per-vertex motion on seventy-eight separate
+     plates, and a tentacle has to whip, miss, fall limp across the sand
+     and drag itself home, which is a chain solved against live terrain
+     rather than a clip that was correct on the day it was exported.
+
+     So the species loads as an empty root and garner.js builds and
+     poses everything inside it. Declared as a capability rather than
+     tested by key for the same reason `flies`, `burrows` and
+     `selfDriven` are: this file should never learn what a tentacle is.
+     ------------------------------------------------------------------ */
+  garner: {
+    procedural: true,
+    faction: "bloom",
+    /* Between the Distaff's and the Winnower's, and the shape of the
+       fight is why it sits there rather than higher. Six tentacles
+       guard it, each with its own pool, and every one that breaks pays
+       into this - so the number the player actually chews through is
+       half again this figure. */
+    health: 7400,
+    scale: 1.0,
+    /* One pool per tentacle. Deliberately softer than a Distaff leg:
+       a tentacle is only reachable while it is DOWN, and that window
+       is about five seconds long, so a limb that took three of them to
+       cut would make the whole melee mechanic theoretical. */
+    legHealth: 260,
+    /* It does not go anywhere. Speed is here because the shared systems
+       read it, not because anything uses it. */
+    speed: { walk: 0, charge: 0 },
+    material: { roughness: 0.62, metalness: 0.04, rim: 1.15, bio: 2.2 },
+    selfDriven: true,
+    /* The tentacles live in `inst.legs` so that combat.js's existing
+       per-limb hit table, melee reach gate and break bonus all apply
+       unchanged - see HITBOX.garner. They are NOT legs, though, and the
+       walking solver must never touch them: it would replant six
+       fifteen-metre limbs onto the terrain as feet. */
+    legs: 0,
+    selfPosedLegs: true,
+    stance: 0,
+    stepHeight: 0,
+    /* The maw's own bulk. Nothing should be able to walk through the
+       mouth, and this is what keeps spawned brood out of it. */
+    collisionRadius: 7.0,
+    /* A landmark inside the ribcage, and it has to draw from the rim of
+       the pan - the whole point of the district is that you can see
+       what is waiting in the middle of it. */
+    cullRange: 700,
+    ikRange: 320,
+    animRange: 480,
+    poseRange: 700,
+    shadowRange: 180,
+    clips: [],
+  },
+
+  /* ------------------------------------------------------------------
+     THE STYLITE. The Choir Spires' tenant, and the third procedural
+     entry - by now the established path for a creature whose whole
+     read is motion rather than surface.
+
+     What moves: two hind springs that compress to a quarter of their
+     length and unload in a frame. That is a hinge problem, not a
+     deformation one, so unlike the Garner's tentacles and the Abbess's
+     sac this module poses a HIERARCHY of groups rather than rewriting
+     vertices - see the note in stylite.js. It is still procedural
+     because the alternative is a .glb whose only content is six
+     rotations.
+
+     `perches` is the capability flag: it is not a flyer, but like one
+     it spends most of the fight out of a polearm's reach, and every
+     system that asks "can I melee this" needs one thing to check.
+     ------------------------------------------------------------------ */
+  stylite: {
+    procedural: true,
+    faction: "bloom",
+    /* It is not meant to be out-damaged, it is meant to be brought DOWN.
+       Most damage still lands in the stunned melee window, while 7000
+       gives its expanded barrages more than one chance to matter. */
+    health: 7000,
+    scale: 1.0,
+    speed: { walk: 0, charge: 0 },
+    material: { roughness: 0.58, metalness: 0.06, rim: 0.42, bio: 1.5 },
+    selfDriven: true,
+    /* Out of reach unless it is on the ground - the same gate the
+       Winnower's `flies` opens, for a creature that never flies. */
+    perches: true,
+    legs: 0,
+    stance: 0,
+    stepHeight: 0,
+    collisionRadius: 1.6,
+    /* It lives on the crowns of hundred-metre needles and is a
+       silhouette against open sky from anywhere in the district. */
+    cullRange: 700,
+    ikRange: 320,
+    animRange: 520,
+    poseRange: 700,
+    shadowRange: 160,
+    clips: [],
+  },
+
+  /* ------------------------------------------------------------------
+     THE ABBESS. The Bloom's queen, and the second entry here with no
+     .glb - the Garner having established that a creature whose whole
+     surface deforms is better served by a module than by a rig.
+
+     What deforms: twenty metres of egg sac that breathes at rest, runs
+     a peristaltic wave down its length every time she lays, and heaves
+     bodily off the chamber floor to slam. Three superimposed radial and
+     axial deformations, which a skeleton can only approximate with
+     enough bones to cost more than the mesh does.
+
+     She also has no `legs` and no `spine`: she does not walk and she
+     has no chain to follow. What she publishes instead is
+     `inst.sacSpine`, read by combat.js's `queenHit`.
+     ------------------------------------------------------------------ */
+  abbess: {
+    procedural: true,
+    faction: "bloom",
+    /* The largest pool in the game after the Distaff's, and for a
+       reason that is the opposite of the Distaff's: hers is not guarded
+       by sub-targets, it is REFILLED. Every child that walks home feeds
+       her, so the number the player has to out-damage depends on how
+       well they hold the room rather than on how well they aim. At 12000
+       a fight that ignores the brood entirely does not converge. */
+    health: 12000,
+    scale: 1.0,
+    speed: { walk: 0, charge: 0 },
+    material: { roughness: 0.44, metalness: 0.02, rim: 1.05, bio: 1.35 },
+    selfDriven: true,
+    legs: 0,
+    stance: 0,
+    stepHeight: 0,
+    /* Sized to the THORAX, not the animal. A radius cut to twenty-six
+       metres of queen would refuse her own chamber and shove every
+       Thresher she lays out through the spire ring. */
+    collisionRadius: 3.4,
+    /* She is a landmark inside a walled clearing rather than across the
+       basin, so this is shorter than the Garner's - but her sac is the
+       brightest object in the district at night and has to survive the
+       walk in from the Bloom's edge. */
+    cullRange: 560,
+    ikRange: 300,
+    animRange: 420,
+    poseRange: 560,
+    shadowRange: 170,
+    clips: [],
+  },
 };
+
+/* ============================================================
+   WHAT EACH SPECIES IS MADE OF
+
+   Kept HERE rather than as a `surface:` key inside each BESTIARY
+   entry, for a coordination reason rather than a design one: the
+   bestiary table is where seven other modules' authors go to tune
+   their own boss, and the surface kit is one owner's contract. One
+   table, one edit, no merge fight over a hundred-line species block.
+
+   A boss agent that wants to argue for a different family may still
+   set `material.surface` on its own entry - that wins over this map.
+
+   The Concord's servitor-engine is the only thing in the bestiary
+   that is NOT an animal, and it must not read as one: it gets the
+   corroded-bronze family, which is the whole reason "different parts
+   read as different materials" is a testable claim rather than a
+   slogan. Stand a Cantor next to a Precentor and the machine should
+   look pitted and rubbed where the insect looks pored and wet.
+
+   ONLY THE .glb SPECIES ARE REACHED FROM HERE. The Garner, the
+   Stylite and the Abbess are `procedural: true` - the loader hands
+   their modules an empty root and they build and surface their own
+   materials - so those three opt in with the same one-line call in
+   their own files. They are absent from this map on purpose, so it
+   cannot claim credit for a surface it does not apply.
+   ============================================================ */
+const SPECIES_SURFACE = {
+  thresher: "chitin",
+  gleaner: "chitin",
+  precentor: "chitin",
+  harrow: "chitin",
+  matriarch: "chitin",
+  coulter: "chitin",
+  distaff: "chitin",
+  winnower: "chitin",
+  cantor: "bronze",
+};
+
+function surfaceFamily(key, spec) {
+  return (spec.material && spec.material.surface) || SPECIES_SURFACE[key] || "chitin";
+}
 
 /* ============================================================
    LOADING
    ============================================================ */
+
+/* ============================================================
+   WHERE A CORPSE COMES TO REST
+
+   A death clip only rotates bones - nothing in this bestiary animates
+   root motion - so the body's ORIGIN stays exactly where the creature
+   was standing while the pose underneath it collapses. That is fine
+   for a Thresher, whose legs fold under a body already at ankle
+   height, and badly wrong for a Gleaner: it dies on four three-metre
+   stilts, the stilts fold, and the corpse is left hanging a metre in
+   the air with its legs tucked beneath it.
+
+   Measured rather than hand-tuned, because the number is a property of
+   the CLIP: re-author the death animation and the correction follows
+   it without anybody remembering that a constant exists. The clip is
+   posed once at load on a throwaway clone, and the skinned mesh is
+   asked where it actually ends up.
+
+   The 4th percentile rather than the true minimum. A single claw or
+   antenna tip left pointing straight down would otherwise lift the
+   whole body onto it - a corpse balanced on one spike, which is a
+   worse artefact than the one being fixed.
+   ============================================================ */
+const DEATH_REST_PERCENTILE = 0.04;
+/* And then a little further, so the body BEDS IN. A corpse whose
+   lowest point rests exactly on the surface reads as laid on the sand
+   rather than fallen into it. */
+const DEATH_BED_IN = 0.09;
+
+/* Grounded bodies get one shared positional solve after every controller has
+   moved for the frame. Four passes are enough to open a coincident horde
+   without turning the ordinary update into a physics simulation; the small
+   slop prevents two bodies at rest from trading sub-pixel corrections. */
+const CROWD_SOLVER = Object.freeze({
+  iterations: 4,
+  slop: 0.008,
+  epsilonSq: 1e-8,
+  minCellSize: 16,
+  /* Remote garrisons are already placed collision-safe and are not visible.
+     Re-solving every one of their resting bodies every frame made the cost
+     scale with the whole save rather than the fight on screen. Bodies enter
+     the solver before they can be seen at this range, so an approaching
+     player still gets the same four-pass separation and world-safe slides. */
+  activeRadius: 280,
+  keyOffset: 32768,
+  keyStride: 65536,
+});
 
 export async function buildEnemies(ctx, onProgress) {
   const { THREE, scene, atmos, terrain } = ctx;
@@ -204,9 +696,87 @@ export async function buildEnemies(ctx, onProgress) {
   const species = new Map();
   const names = Object.keys(BESTIARY);
 
+  /**
+   * Pose a throwaway clone at the last frame of its death clip and ask
+   * the skinned mesh where it ended up.
+   *
+   * Returns how far the root must move for the finished pose to rest on
+   * y=0, at scale 1. Positive lifts a body that would otherwise sink;
+   * negative drops one left hanging on folded legs.
+   */
+  function measureDeathRest(source, clip) {
+    if (!source || !clip) return 0;
+    const probe = cloneSkinned(source);
+    probe.position.set(0, 0, 0);
+    probe.rotation.set(0, 0, 0);
+    probe.scale.setScalar(1);
+
+    let mesh = null;
+    probe.traverse((o) => { if (o.isSkinnedMesh && !mesh) mesh = o; });
+    if (!mesh || typeof mesh.getVertexPosition !== "function") return 0;
+
+    const mixer = new THREE.AnimationMixer(probe);
+    const action = mixer.clipAction(clip);
+    action.setLoop(THREE.LoopOnce, 1);
+    action.clampWhenFinished = true;
+    action.play();
+    // The last frame the player will ever see of this creature, minus
+    // an epsilon: exactly `duration` can wrap on a looping binding.
+    mixer.setTime(Math.max(0, clip.duration - 1e-3));
+    probe.updateMatrixWorld(true);
+
+    const v = new THREE.Vector3();
+    const count = mesh.geometry.attributes.position.count;
+    const heights = new Float64Array(count);
+    for (let i = 0; i < count; i += 1) {
+      mesh.getVertexPosition(i, v).applyMatrix4(mesh.matrixWorld);
+      heights[i] = v.y;
+    }
+    heights.sort();
+    const index = Math.min(count - 1,
+      Math.max(0, Math.floor(count * DEATH_REST_PERCENTILE)));
+    mixer.stopAllAction();
+    const rest = heights[index];
+    return Number.isFinite(rest) ? -rest : 0;
+  }
+
   for (let i = 0; i < names.length; i += 1) {
     const key = names[i];
     const spec = BESTIARY[key];
+
+    /* A level may carry only part of the bestiary. `ctx.enemyRoster`
+       is an optional allowlist of species keys: a parallel world that
+       wants three castes for a trials ground should not download and
+       rig ten boss GLBs to get them. The campaign sets no roster and
+       keeps the whole bestiary; `spawn` already answers null for any
+       species that was never registered. */
+    if (Array.isArray(ctx.enemyRoster) && !ctx.enemyRoster.includes(key)) {
+      if (onProgress) onProgress((i + 1) / names.length, `Passing the ${key}`);
+      continue;
+    }
+
+    /* A creature with no .glb behind it. The species is registered as an
+       empty root with no clips, and the module that owns the creature
+       builds its geometry into `inst.root` after spawning it.
+
+       Registered HERE rather than skipped so that everything downstream
+       is unchanged: it gets an id, a health pool, a save entry, a cull
+       range and a place in `enemies.live`, and `spawn` does not grow a
+       second path. An AnimationMixer over an empty group and a `play`
+       that finds no action are both already no-ops, and `kill` already
+       sets the authoritative combat state for a creature with no death
+       clip - see the Apostate, which uses a procedural fall. */
+    if (spec.procedural) {
+      const root = new THREE.Group();
+      root.name = `sf-enemy-${key}`;
+      species.set(key, {
+        key, spec, source: root, clips: new Map(), material: null,
+        deathSettle: 0, deathSeconds: 0,
+      });
+      if (onProgress) onProgress((i + 1) / names.length, `Waking the ${key}`);
+      continue;
+    }
+
     let gltf = null;
     try {
       /* Versioned like every other asset on the site. The .glb was
@@ -240,11 +810,29 @@ export async function buildEnemies(ctx, onProgress) {
        into that channel, so a creature lights its own detail without
        a second material and therefore without a second draw call per
        instance. Above 1 it clears the bloom chain's bright threshold,
-       which is what makes an eye read at night. */
-    patchMaterial(mat, atmos, {
+       which is what makes an eye read at night.
+
+       `applySurface` REPLACES the old `patchMaterial` call rather than
+       sitting next to it - it goes through the same door and takes the
+       same rim and bio, and calling both would trip the patch path's
+       already-patched early return and leave the surface silently off.
+
+       `scale` is what makes the grain world-sized. These models are
+       authored at 1:1 and drawn at whatever `spec.scale` says, so
+       without it a Thresher at 0.62 would wear a grain 60% too fine
+       and a Precentor at 1.55 one half again too coarse - the same
+       animal, in two different materials, standing next to each other.
+
+       `shared: true` because this is ONE material for every instance
+       of the caste. Forty Threshers share it, so it must never take a
+       per-instance damage write; the kit refuses one. A boss that
+       wants a damage response owns its own material. */
+    applySurface(mat, atmos, surfaceFamily(key, spec), {
       rim: spec.material.rim,
       glitter: 0,
       bio: spec.material.bio ?? 0,
+      scale: spec.scale ?? 1,
+      shared: true,
     });
 
     let sourceMesh = null;
@@ -285,7 +873,15 @@ export async function buildEnemies(ctx, onProgress) {
     const clips = new Map();
     for (const clip of gltf.animations) clips.set(clip.name, clip);
 
-    species.set(key, { key, spec, source: gltf.scene, clips, material: mat });
+    const death = clips.get("death");
+    species.set(key, {
+      key, spec, source: gltf.scene, clips, material: mat,
+      /* How far the root has to move for the FINISHED death pose to lie
+         on the sand, and how long the clip takes to get there. Both
+         measured off the model at load - see `measureDeathRest`. */
+      deathSettle: measureDeathRest(gltf.scene, death),
+      deathSeconds: death ? death.duration : 0,
+    });
     if (onProgress) onProgress((i + 1) / names.length, `Waking the ${key}`);
   }
 
@@ -295,6 +891,7 @@ export async function buildEnemies(ctx, onProgress) {
 
   const live = [];
   const rng = makeRng((ctx.seed ^ 0x3e5e17) >>> 0 || 991);
+  let nextId = 1;
   const reducedMotion = typeof window !== "undefined"
     && window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
 
@@ -315,6 +912,19 @@ export async function buildEnemies(ctx, onProgress) {
     flatShading: true,
   });
   patchMaterial(shardMat, atmos, { rim: 0.15, glitter: 0 });
+  /* WARM STUB. makeEmergenceFx builds its meshes on demand, so this
+     shared shard material had no object in the graph at boot - and
+     the boot warm-up compiles the materials OF OBJECTS, so a bare
+     material is invisible to it. Its program therefore compiled on
+     the first emergence of the session, which is always mid-fight.
+     One hidden zero-cost mesh keys it at load instead. */
+  {
+    const warm = new THREE.Mesh(shardGeo, shardMat);
+    warm.name = "sf-emergence-shard-warm";
+    warm.visible = false;
+    warm.frustumCulled = false;
+    group.add(warm);
+  }
 
   function makeEmergenceFx(inst, spec) {
     const fx = new THREE.Group();
@@ -400,7 +1010,7 @@ export async function buildEnemies(ctx, onProgress) {
     inst.alerted = false;
   }
 
-  function updateEmergence(inst, dt) {
+  function updateEmergence(inst, dt, silent = false) {
     const e = inst.emerging;
     if (!e) return false;
     e.elapsed += dt;
@@ -420,7 +1030,10 @@ export async function buildEnemies(ctx, onProgress) {
     const t = clamp01((e.elapsed - e.delay) / Math.max(0.01, e.duration));
     if (e.active && !e.burst) {
       e.burst = true;
-      ctx.vfx?.breach?.(inst.x, inst.y, inst.z, e.radius, inst.key === "matriarch" ? 1.8 : 1);
+      if (!silent) {
+        ctx.vfx?.breach?.(inst.x, inst.y, inst.z, e.radius,
+          inst.key === "matriarch" ? 1.8 : 1);
+      }
     }
 
     if (e.active) {
@@ -482,6 +1095,39 @@ export async function buildEnemies(ctx, onProgress) {
     return false;
   }
 
+  /** A caste's starting health under the live difficulty tier. */
+  function spawnHealth(key, opts = {}) {
+    const base = opts.health ?? species.get(key)?.spec?.health ?? 100;
+    if (opts.exactHealth) return base;
+    const scale = ctx.difficulty?.healthScale?.(key) ?? 1;
+    return Math.max(1, Math.round(base * scale));
+  }
+
+  /**
+   * Re-fit every live pool to a new tier, proportionally. A tier change in
+   * the entry panel or the field menu must not leave the garrison that was
+   * spawned at boot on the old numbers - and a wounded creature stays
+   * wounded by the same fraction.
+   */
+  function rescaleForDifficulty(previousTier, nextTier) {
+    const scaleFor = ctx.difficulty?.healthScale;
+    if (typeof scaleFor !== "function") return 0;
+    let touched = 0;
+    for (const inst of live) {
+      if (inst.state === "death") continue;
+      const before = scaleFor(inst.key, previousTier) || 1;
+      const after = scaleFor(inst.key, nextTier) || 1;
+      if (before === after) continue;
+      const factor = after / before;
+      const maxHealth = Math.max(1, Math.round((inst.maxHealth || 1) * factor));
+      const health = Math.max(1, Math.min(maxHealth, Math.round((inst.health || 1) * factor)));
+      inst.maxHealth = maxHealth;
+      inst.health = health;
+      touched += 1;
+    }
+    return touched;
+  }
+
   function spawn(key, x, z, opts = {}) {
     const sp = species.get(key);
     if (!sp) return null;
@@ -535,24 +1181,82 @@ export async function buildEnemies(ctx, onProgress) {
       }
     }
 
+    /* The other chain: a body, front to back. Gathered by exactly the
+       same name-driven approach as the legs and for the same reason -
+       the solver works on any rig that follows the convention, at any
+       scale, without being told the creature's proportions. */
+    const spine = [];
+    for (let i = 0; i < (sp.spec.spine || 0); i += 1) {
+      const bone = bones.get(`spine${String(i).padStart(2, "0")}`);
+      if (bone) spine.push(bone);
+    }
+
     let skin = null;
     root.traverse((o) => { if (o.isSkinnedMesh && !skin) skin = o; });
 
     const inst = {
-      key, root, mixer, actions, bones, legs, skin,
+      id: typeof opts.id === "string" && opts.id ? opts.id : `sf-enemy-${nextId++}`,
+      key, root, mixer, actions, bones, legs, spine, skin,
       spec: sp.spec,
       x, z,
       y: groundY(x, z),
       yaw: opts.yaw ?? rng() * TAU,
       speed: 0,
       state: "idle",
-      health: opts.health ?? sp.spec.health ?? 100,
-      maxHealth: opts.health ?? sp.spec.health ?? 100,
+      /* Scaled by the live difficulty tier at spawn (see difficulty.js:
+         health is the ranged-side tax). A restore passes `exactHealth`,
+         because a saved pool was scaled when it was first spawned and the
+         tier is restored from the same file. */
+      health: spawnHealth(key, opts),
+      maxHealth: spawnHealth(key, opts),
       damageScale: Number.isFinite(opts.damageScale) ? opts.damageScale : 1,
       eventId: opts.eventId || null,
       eventWave: Number.isFinite(opts.eventWave) ? opts.eventWave : null,
       stride: 0,
       current: null,
+      knockbackX: 0,
+      knockbackZ: 0,
+      knockbackTime: 0,
+      /* Seconds of "on the floor". Honoured by combat's `stepEnemy`,
+         which is where every decision a creature makes lives - set
+         here and read there, so a stunned unit cannot walk, turn,
+         shoot or claw while it runs. */
+      stunTime: 0,
+      /* One HP pool per leg, for a species that declares `legHealth`.
+         `null` for everything else, so combat.js's `box.legs` check is
+         the only place that has to know this exists at all. */
+      legHp: sp.spec.legHealth ? legs.map(() => sp.spec.legHealth) : null,
+      legBroken: sp.spec.legHealth ? legs.map(() => false) : null,
+      legsBroken: 0,
+      /* Whether the body itself is currently a reachable target. Owned
+         by the creature's own boss module (see distaff.js), read
+         generically by combat.js's leg-walker hit tests. */
+      collapsed: false,
+      /* Bank and pitch, for a species that declares `flies`. Zero and
+         unread for everything that walks - a ground creature's root
+         rotation stays yaw-only, which is what keeps its feet on the
+         terrain the IK just solved them against. */
+      pitch: 0,
+      roll: 0,
+      /* How far below its normal ride height the creature is holding
+         itself. The ground-follow subtracts it - see the update loop -
+         and the creature's module animates it (the Distaff's collapse
+         is its one current writer). */
+      bodyDrop: 0,
+      /* The lift pool and its burst sacs, for a species that declares
+         `liftPool`. `grounded` is read by combat.js to decide whether
+         the gut is a target and whether a lance can reach at all; it
+         is owned by the creature's own module. */
+      lift: sp.spec.liftPool || 0,
+      maxLift: sp.spec.liftPool || 0,
+      sacBurst: sp.spec.liftPool ? [false, false] : null,
+      grounded: !sp.spec.flies,
+      /* Where this body will come to rest, and how long its clip takes
+         to fold it. Copied off the species so the settle is one
+         multiply per frame rather than a map lookup. */
+      deathSettle: sp.deathSettle || 0,
+      deathSeconds: sp.deathSeconds || 0,
+      deathElapsed: 0,
     };
 
     root.position.set(inst.x, inst.y, inst.z);
@@ -597,16 +1301,335 @@ export async function buildEnemies(ctx, onProgress) {
       leg.forward.set(0, 0, 1).applyQuaternion(root.quaternion).normalize();
     }
 
+    /* And the body chain's arc lengths, measured the same way off the
+       same bind pose: how far behind the mouth each vertebra's TAIL
+       sits. Those distances are what the trail is sampled at, so they
+       have to come off the model - a hard-coded segment length that
+       disagrees with the .glb by a few centimetres shows up as a body
+       that either concertinas into itself or pulls apart at every
+       joint, thirteen times over. */
+    if (spine.length) {
+      measureSpine(inst);
+      // Laid out straight, underground, aimed the way it was spawned
+      // facing. Anything else starts the animal as a knot at one point.
+      seedBody(inst, inst.x, inst.y - inst.body.depth, inst.z, inst.yaw,
+        inst.body.depth);
+    }
+
     play(inst, "idle", 0);
-    if (opts.emerge) configureEmergence(inst, opts.emerge);
+    /* A burrower does not RISE, it arrives. The fissure-and-shards
+       emergence above is built for something standing up out of a hole
+       it made where it already was, and this animal's entrance is a
+       wake crossing two hundred metres of open sand - so it declines
+       the shared telegraph and starts the fight underground. */
+    if (opts.emerge && !sp.spec.burrows) configureEmergence(inst, opts.emerge);
     live.push(inst);
     return inst;
+  }
+
+  /* ============================================================
+     THE BODY CHAIN
+
+     One function of geometry and one of posing, and the split is the
+     same one the legs use: the runtime owns where the body IS, the
+     clips own what its mouth is doing.
+     ============================================================ */
+
+  const _origin = new THREE.Vector3();
+
+  function measureSpine(inst) {
+    inst.root.updateMatrixWorld(true);
+    _origin.setFromMatrixPosition(inst.root.matrixWorld);
+    const heads = inst.spine.map((bone) => bone.getWorldPosition(new THREE.Vector3()));
+    const arcs = [];
+    for (let i = 1; i < heads.length; i += 1) arcs.push(_origin.distanceTo(heads[i]));
+    /* The last vertebra has no successor to measure against, so its
+       tail is extrapolated by the segment length in front of it. Every
+       other arc is a real measurement. */
+    const lastSeg = heads.length > 1
+      ? heads[heads.length - 1].distanceTo(heads[heads.length - 2])
+      : 1;
+    arcs.push((arcs[arcs.length - 1] ?? 0) + lastSeg);
+    inst.spineArc = arcs;
+    inst.spineLength = arcs[arcs.length - 1];
+    inst.body = {
+      /* The trail: (x, y, z, distance-from-the-front) quadruples, newest
+         first. A ring buffer would save the shifting, but the sampler
+         walks it from the front on every frame anyway and 13 lookups
+         into 96 samples is not what this animal costs. */
+      trail: [],
+      head: new THREE.Vector3(),
+      // Last frame's head, so the encounter module can measure how far
+      // the animal really moved rather than how far it meant to.
+      prev: new THREE.Vector3(),
+      dir: new THREE.Vector3(0, 0, 1),
+      quat: new THREE.Quaternion(),
+      joints: arcs.map(() => new THREE.Vector3()),
+      // Owned by coulter.js from here; declared here so a save can be
+      // written and validated without the encounter module loaded.
+      phase: "burrow",
+      /* Seconds of hunting before it may surface, and it starts full.
+         A burrower that arrives and immediately erupts has skipped the
+         only part of its cycle the player can read. */
+      timer: 6,
+      heading: inst.yaw,
+      pitch: 0,
+      depth: 6,
+      hidden: true,
+      mawOpen: 0,
+      spewsLeft: 0,
+      surfacings: 0,
+    };
+    return inst.body;
+  }
+
+  /**
+   * Lay the whole body out straight behind a head position.
+   *
+   * Used on spawn, on load, and by anything that teleports the animal.
+   * The alternative - letting the trail fill in over the first second
+   * of movement - starts every Coulter as thirteen coincident segments
+   * at one point, which is a ball rather than a worm.
+   */
+  function seedBody(inst, x, y, z, heading = inst.yaw, terrainDepth = null) {
+    const body = inst.body || (inst.spine.length ? measureSpine(inst) : null);
+    if (!body) return null;
+    const sx = Math.sin(heading);
+    const sz = Math.cos(heading);
+    const conform = Number.isFinite(terrainDepth) && terrainDepth > 0;
+    const headY = conform ? groundY(x, z) - terrainDepth : y;
+    body.head.set(x, headY, z);
+    body.prev.set(x, headY, z);
+    body.dir.set(sx, 0, sz);
+    body.heading = heading;
+    body.pitch = 0;
+    body.trail.length = 0;
+    const span = inst.spineLength + 4;
+    // Front to back, so index 0 is the freshest sample.
+    for (let d = 0; d <= span; d += 1.2) {
+      const px = x - sx * d;
+      const pz = z - sz * d;
+      body.trail.push({ x: px, y: conform ? groundY(px, pz) - terrainDepth : y,
+        z: pz, d });
+    }
+    poseBody(inst);
+    return body;
+  }
+
+  /**
+   * Sample the trail at `distance` behind the head.
+   *
+   * THE HEAD IS THE FIRST POINT, and it is not in the list. Samples are
+   * only laid every 0.9m, so between them the newest recorded point is
+   * up to 0.9m stale - and the front of a body sampled from that list
+   * alone lags the mouth by up to a whole segment, which reads as the
+   * neck stretching and snapping back every few frames.
+   *
+   * The alternative that suggests itself - dragging the front sample
+   * along with the head - is worse, and was tried: a sample that moves
+   * with the head has travelled no distance relative to it, so the
+   * threshold that lays the next one is never crossed, the list stops
+   * growing, and the body concertinas into the front ten metres of a
+   * twenty-five metre path.
+   */
+  function trailAt(body, distance, out) {
+    const trail = body.trail;
+    if (!trail.length) return out.copy(body.head);
+    let ax = body.head.x;
+    let ay = body.head.y;
+    let az = body.head.z;
+    let ad = 0;
+    for (let i = 0; i < trail.length; i += 1) {
+      const b = trail[i];
+      if (b.d < distance) {
+        ax = b.x; ay = b.y; az = b.z; ad = b.d;
+        continue;
+      }
+      const span = b.d - ad;
+      const t = span > 1e-5 ? (distance - ad) / span : 0;
+      return out.set(ax + (b.x - ax) * t, ay + (b.y - ay) * t, az + (b.z - az) * t);
+    }
+    const last = trail[trail.length - 1];
+    return out.set(last.x, last.y, last.z);
+  }
+
+  /* How far one vertebra may turn against the one in front of it.
+     Thirteen of these cover the whole animal, so 48 degrees still lets
+     it coil through more than a full circle end to end - far more bend
+     than a hundred-metre worm ever asks for - while being nowhere near
+     enough to let one joint hinge back on itself. */
+  const MAX_BEND = Math.cos(48 * Math.PI / 180);
+  const SIN_BEND = Math.sin(48 * Math.PI / 180);
+
+  /**
+   * Make the target chain RIGID, because the bones are.
+   *
+   * `trailAt` samples the path at each vertebra's arc distance, which
+   * is the right shape and the wrong spacing: the gap between two
+   * consecutive samples is a CHORD, and a chord collapses when the path
+   * doubles back. `aimBone` only rotates - a bone keeps its rest length
+   * whatever its target does - so a 13.7m vertebra handed a target 2.9m
+   * away swings to point at it and overshoots eleven metres past, the
+   * next bone starts from that overshoot, and the neck ties itself in a
+   * knot. Measured on the real animal: consecutive segments meeting at
+   * 151 degrees, which is a body folded back through its own head.
+   *
+   * It is worth being precise about when this happens, because it is
+   * not an edge case: the crest rears the head six metres up and the
+   * bite drives it back down again in a quarter of a second, so the
+   * path over the front vertebra is a hairpin with a radius of about
+   * three metres. A thirteen-metre segment cannot follow a three-metre
+   * hairpin. Nothing is wrong with the trail - it is a faithful record
+   * of where the head went - and nothing is wrong with the clips. The
+   * body simply cannot be BOTH laid along that path and made of rigid
+   * pieces, and the pieces are the part that is real.
+   *
+   * So the sampled points are demoted to DIRECTION HINTS and the chain
+   * is walked out link by link at true bone length, each link limited
+   * to `MAX_BEND` against the one in front. Where the path is gentle -
+   * which is almost always - the hint is already about a bone length
+   * away and this moves the target by centimetres. Where it hairpins,
+   * the body cuts the corner, which is what a rigid chain does and what
+   * the animal should have been doing all along.
+   */
+  function stiffenChain(inst) {
+    const body = inst.body;
+    const arcs = inst.spineArc;
+    const joints = body.joints;
+    if (!arcs || !joints) return;
+    let px = body.head.x;
+    let py = body.head.y;
+    let pz = body.head.z;
+    /* Seeded with the body's own axis pointing BACKWARDS down the
+       animal, so the first link has something to be measured against
+       and a stationary worm keeps the heading it arrived on. */
+    let dx = -body.dir.x;
+    let dy = -body.dir.y;
+    let dz = -body.dir.z;
+    let prevArc = 0;
+    for (let i = 0; i < arcs.length; i += 1) {
+      const seg = arcs[i] - prevArc;
+      prevArc = arcs[i];
+      if (!(seg > 1e-4)) continue;
+      const j = joints[i];
+      let vx = j.x - px;
+      let vy = j.y - py;
+      let vz = j.z - pz;
+      const len = Math.hypot(vx, vy, vz);
+      if (len > 1e-4) {
+        vx /= len; vy /= len; vz /= len;
+      } else {
+        /* The hint landed on top of the last joint - a hairpin tight
+           enough to have no direction left in it at all. Carry on
+           straight rather than picking one at random. */
+        vx = dx; vy = dy; vz = dz;
+      }
+      const cos = vx * dx + vy * dy + vz * dz;
+      if (cos < MAX_BEND) {
+        /* Swing the hint back toward the previous link until it is
+           exactly MAX_BEND off it, keeping the plane the two of them
+           already share. */
+        let ex = vx - dx * cos;
+        let ey = vy - dy * cos;
+        let ez = vz - dz * cos;
+        const el = Math.hypot(ex, ey, ez);
+        if (el > 1e-5) {
+          ex /= el; ey /= el; ez /= el;
+          vx = dx * MAX_BEND + ex * SIN_BEND;
+          vy = dy * MAX_BEND + ey * SIN_BEND;
+          vz = dz * MAX_BEND + ez * SIN_BEND;
+        } else {
+          vx = dx; vy = dy; vz = dz;
+        }
+      }
+      px += vx * seg;
+      py += vy * seg;
+      pz += vz * seg;
+      j.set(px, py, pz);
+      dx = vx; dy = vy; dz = vz;
+    }
+  }
+
+  /** Resolve the trail into this frame's joint targets and root frame. */
+  function poseBody(inst) {
+    const body = inst.body;
+    if (!body) return;
+    for (let i = 0; i < inst.spineArc.length; i += 1) {
+      trailAt(body, inst.spineArc[i], body.joints[i]);
+    }
+    /* THE CORPSE IS EXEMPT, and that is not a special case being
+       carved out to make something pass. A living burrower is driven by
+       its head and the body is dragged after it, which is what the
+       rigid walk below is for. A dead one is driven the other way
+       round: `stepDeath` sinks every TRAIL SAMPLE onto the sand and
+       then snaps the head onto the newest of them, so the path is
+       already smooth, already settling, and has no lunge in it to fold
+       around. Anchoring a rigid chain to that head instead hangs the
+       whole body off a point which is itself falling - measured at
+       seventy metres under the sand six seconds in - and the corpse
+       stays up in the air behind it. */
+    if (body.phase !== "dead") stiffenChain(inst);
+    /* The root carries the head's full orientation, PITCH INCLUDED,
+       which is the one place this differs from every walker in the
+       file. A worm coming out of the sand at fifty degrees is doing the
+       only thing it does that a yaw-only transform cannot express, and
+       it is also the frame the whole encounter is sold on. */
+    /* AND IT IS BUILT FROM YAW AND PITCH, NOT FROM THE DIRECTION
+       VECTOR. `setFromUnitVectors(+Z, dir)` is the shortest arc onto
+       the heading, and the shortest arc onto a heading near -Z is a
+       180-degree rotation about an axis that is only well defined
+       while the pitch is exactly zero: the axis is (-dir.y, dir.x, 0),
+       so a pitched animal travelling north (heading near PI, dir.x
+       near 0) swings that axis off +Y and onto +X and the head rolls
+       right over onto its back. That is the twist - it fired whenever
+       the Coulter craned or dived while heading roughly -Z, and it
+       snapped back as soon as it turned away.
+
+       Yaw-then-pitch has no such degeneracy and no roll term at all,
+       which is the correct answer for an animal that has never banked:
+       Euler(-pitch, heading, 0, "YXZ") maps +Z onto exactly the same
+       direction `dir` carries, and keeps the belly down while it does
+       it. `heading`/`pitch` are what `dir` is written FROM (see the
+       burrower's own move step), so this is the same aim, not a new
+       one - it is only the roll that changes, and only where the roll
+       was arbitrary. */
+    const heading = Number.isFinite(body.heading)
+      ? body.heading
+      : Math.atan2(body.dir.x, body.dir.z);
+    const pitch = Number.isFinite(body.pitch)
+      ? body.pitch
+      : Math.asin(clamp(body.dir.y, -1, 1));
+    _euler.set(-pitch, heading, 0, "YXZ");
+    body.quat.setFromEuler(_euler);
+    /* `dir` is kept in step with the frame that was actually used, so
+       anything reading it downstream (the trail sampler's idea of
+       forward, the mouth muzzle point) agrees with what is drawn. */
+    body.dir.set(Math.sin(heading) * Math.cos(pitch), Math.sin(pitch),
+      Math.cos(heading) * Math.cos(pitch));
+  }
+
+  /**
+   * Aim each vertebra at its own trail point.
+   *
+   * The whole solver, and it is three lines because the rig was
+   * authored for it: every spine bone's rest axis already runs down the
+   * body, so the rotation each one receives is the actual bend and
+   * nothing else. `aimBone` walks the chain in order, so bone i reads
+   * the world position its parent has just given it.
+   */
+  function solveSpine(inst) {
+    const joints = inst.body?.joints;
+    if (!joints) return;
+    for (let i = 0; i < inst.spine.length; i += 1) aimBone(inst.spine[i], joints[i]);
   }
 
   function play(inst, name, fade = 0.22) {
     const next = inst.actions.get(name);
     if (!next || inst.current === next) return;
     next.reset();
+    // A strike may have been time-scaled to its tell (see replay); every
+    // other entry into a clip runs it at authored speed.
+    next.timeScale = 1;
     next.setLoop(
       name === "death" ? THREE.LoopOnce : THREE.LoopRepeat,
       name === "death" ? 1 : Infinity
@@ -633,6 +1656,31 @@ export async function buildEnemies(ctx, onProgress) {
     inst.state = name;
   }
 
+  /**
+   * Restart `name` from its first frame even when it is already the
+   * current clip, and time-scale it so that its `contactAt` second lands
+   * `contactIn` seconds from now.
+   *
+   * `play()` is deliberately a no-op for the clip already playing, which
+   * is right for a walk and wrong for a bite: a creature standing in reach
+   * looped its strike clip unsynchronised with its own timer, so the
+   * animation said nothing about when the damage came. A telegraph needs
+   * the clip to START at the tell and reach its contact frame at the
+   * strike, whatever the authored clip length happens to be. */
+  function replay(inst, name, fade = 0.08, contactAt = 0, contactIn = 0) {
+    const action = inst.actions.get(name);
+    if (!action) return false;
+    if (inst.current !== action) play(inst, name, fade);
+    action.reset();
+    action.enabled = true;
+    action.paused = false;
+    action.timeScale = contactAt > 0 && contactIn > 0 ? contactAt / contactIn : 1;
+    action.play();
+    inst.current = action;
+    inst.state = name;
+    return true;
+  }
+
   /* ============================================================
      PROCEDURAL LEGS
 
@@ -644,6 +1692,7 @@ export async function buildEnemies(ctx, onProgress) {
 
   const _a = new THREE.Vector3();
   const _b = new THREE.Vector3();
+  const _euler = new THREE.Euler();
   const _knee = new THREE.Vector3();
   const _head = new THREE.Vector3();
   const _dir = new THREE.Vector3();
@@ -656,7 +1705,24 @@ export async function buildEnemies(ctx, onProgress) {
   const UP = new THREE.Vector3(0, 1, 0);
 
   function solveLegs(inst, dt) {
-    if (inst.state === "death") return;
+    /* `death` always owns its legs - see the model pipeline. A species
+       may claim additional clips for the same reason: the Distaff's
+       `collapse`/`recover` bend the leg bones directly, because the
+       only way to bring a standing animal's body down is to fold the
+       legs themselves - a foot-planted IK solver given a lower body
+       to serve would simply re-stretch the knee to keep holding it up
+       at exactly the height it was already at. Declared per-species
+       rather than checked by clip name here, so this file does not
+       grow a new hardcoded string every time a boss needs the same
+       trick. */
+    if (inst.state === "death" || inst.spec.legOwnedStates?.includes(inst.state)) return;
+    /* A creature whose limbs are posed by its own module. `inst.legs` is
+       the hit-table contract combat.js reads - three segments and a tip
+       per limb - and a species can satisfy it without those limbs being
+       legs at all. The Garner's six tentacles are the first: handed to
+       this solver they would be replanted as feet on the terrain, at
+       which point the animal is standing on its own tentacles. */
+    if (inst.spec.selfPosedLegs) return;
     const scale = inst.root.scale.x;
     const reach = inst.spec.stance * scale;
     const lift = inst.spec.stepHeight * scale;
@@ -799,6 +1865,10 @@ export async function buildEnemies(ctx, onProgress) {
      an enemy that is being walked toward you by combat.js but whose
      matrices stopped updating is an enemy that slides across the sand
      in its bind pose and then snaps when it crosses the line. */
+  /* These three are the DEFAULTS. Any species may raise its own - see
+     `coulter` in the bestiary - because a tier is really a statement
+     about how many pixels the thing is worth, and a 25m animal is
+     worth more of them at 300m than a Thresher is at 80. */
   const IK_RANGE = 85;
   const ANIM_RANGE = 190;
   const POSE_RANGE = 300;
@@ -818,10 +1888,302 @@ export async function buildEnemies(ctx, onProgress) {
   const dyingOrNear = (inst, d2, range) =>
     inst.state === "death" || d2 < range * range;
 
+  /**
+   * How far to move a body while its death clip folds it.
+   *
+   * Ramped on the CLIP'S OWN PROGRESS rather than applied at the moment
+   * of death: the legs are still holding the creature up on the frame
+   * it dies, and a correction that arrives before they fold is a
+   * corpse that jumps. The full offset lands exactly when the pose
+   * that needs it does.
+   */
+  function deathLift(inst) {
+    const span = Math.max(0.05, inst.deathSeconds || 0);
+    if (!(span > 0.05)) return 0;
+    const t = clamp01((inst.deathElapsed || 0) / span);
+    const eased = t * t * (3 - 2 * t);
+    return ((inst.deathSettle || 0) * inst.root.scale.x - DEATH_BED_IN) * eased;
+  }
+
+  const KNOCKBACK_DRAG = 6.5;
+  const KNOCKBACK_DURATION = 0.55;
+  const KNOCKBACK_MAX_SPEED = 22;
+
+  /** Add a short, collision-aware horizontal impulse. It remains active on
+   *  a dying Thresher so the death clip travels with the hit instead of
+   *  folding in place where the lance found it. */
+  /**
+   * Put a creature on the floor for `seconds`.
+   *
+   * Additive up to the longest pending stun rather than cumulative:
+   * two overlapping slams should not add up to five seconds of a
+   * creature standing still being shot.
+   */
+  function stun(inst, seconds = 1.5) {
+    if (!inst || inst.state === "death") return false;
+    const want = Math.max(0, Number(seconds) || 0);
+    if (want <= 0) return false;
+    inst.stunTime = Math.max(Number(inst.stunTime) || 0, want);
+    play(inst, "flinch", 0.06);
+    return true;
+  }
+
+  function knockback(inst, ux, uz, speed = 10) {
+    if (!inst || inst.emerging?.active) return false;
+    const length = Math.hypot(ux, uz);
+    if (length < 1e-5) return false;
+    const impulse = Math.max(0, Number(speed) || 0);
+    inst.knockbackX = clamp((inst.knockbackX || 0) + (ux / length) * impulse,
+      -KNOCKBACK_MAX_SPEED, KNOCKBACK_MAX_SPEED);
+    inst.knockbackZ = clamp((inst.knockbackZ || 0) + (uz / length) * impulse,
+      -KNOCKBACK_MAX_SPEED, KNOCKBACK_MAX_SPEED);
+    inst.knockbackTime = Math.max(inst.knockbackTime || 0, KNOCKBACK_DURATION);
+    return true;
+  }
+
+  function stepKnockback(inst, dt) {
+    if (!(inst.knockbackTime > 0)) return false;
+    const vx = Number(inst.knockbackX) || 0;
+    const vz = Number(inst.knockbackZ) || 0;
+    if (Math.hypot(vx, vz) < 0.06) {
+      inst.knockbackX = 0;
+      inst.knockbackZ = 0;
+      inst.knockbackTime = 0;
+      return false;
+    }
+    const r = inst.spec?.collisionRadius || 0.62;
+    const out = ctx.collide?.slide
+      ? ctx.collide.slide(inst.x, inst.z,
+        inst.x + vx * dt, inst.z + vz * dt, null, r * 0.8)
+      : [inst.x + vx * dt, inst.z + vz * dt];
+    const moved = Math.hypot(out[0] - inst.x, out[1] - inst.z) > 1e-5;
+    inst.x = out[0];
+    inst.z = out[1];
+    const decay = Math.exp(-KNOCKBACK_DRAG * dt);
+    inst.knockbackX = vx * decay;
+    inst.knockbackZ = vz * decay;
+    inst.knockbackTime = Math.max(0, inst.knockbackTime - dt);
+    return moved;
+  }
+
+  /**
+   * Keep grounded enemies out of one another after every movement owner has
+   * taken its turn. Collision radii are already the bestiary's authoritative
+   * body footprint, so this solver shares that contract instead of inventing
+   * a second set of per-species sizes.
+   *
+   * Pair corrections are weighted by inverse footprint area: a Thresher gives
+   * ground to a Matriarch, while equal castes split the correction. Procedural
+   * self-driven bosses are fixed encounter anchors; if one is involved, the
+   * mobile body takes the whole correction. Every accepted step still passes
+   * through the world collision service, so making room cannot push a creature
+   * through masonry or terrain.
+   */
+  const crowdBodies = [];
+  const crowdRadii = [];
+  const crowdInverseMasses = [];
+  const crowdGrid = new Map();
+  const crowdStats = {
+    eligible: 0,
+    totalGrounded: 0,
+    corrections: 0,
+  };
+  const crowdCellKey = (x, z) => (x + CROWD_SOLVER.keyOffset) * CROWD_SOLVER.keyStride
+    + z + CROWD_SOLVER.keyOffset;
+
+  function moveCrowdBody(index, x, z) {
+    const inst = crowdBodies[index];
+    const out = ctx.collide?.slide
+      ? ctx.collide.slide(inst.x, inst.z, x, z, null, crowdRadii[index])
+      : [x, z];
+    inst.x = out[0];
+    inst.z = out[1];
+  }
+
+  function resolveCrowding(focus = null) {
+    crowdBodies.length = 0;
+    crowdRadii.length = 0;
+    crowdInverseMasses.length = 0;
+    const focusX = Number(focus?.x);
+    const focusZ = Number(focus?.z);
+    const hasFocus = Number.isFinite(focusX) && Number.isFinite(focusZ);
+    const activeRadiusSq = CROWD_SOLVER.activeRadius * CROWD_SOLVER.activeRadius;
+    let maxRadius = 0;
+    let totalGrounded = 0;
+    for (const inst of live) {
+      if (inst.state === "death" || inst.emerging?.active
+        || inst.encounterHidden || inst.encounterLocked
+        || inst.body || inst.grounded === false) continue;
+      const radius = Math.max(0, Number(inst.spec.collisionRadius) || 0);
+      if (radius <= 0) continue;
+      totalGrounded += 1;
+      if (hasFocus
+        && (inst.x - focusX) ** 2 + (inst.z - focusZ) ** 2 > activeRadiusSq) continue;
+      crowdBodies.push(inst);
+      crowdRadii.push(radius);
+      crowdInverseMasses.push(inst.spec.selfDriven ? 0 : 1 / (radius * radius));
+      maxRadius = Math.max(maxRadius, radius);
+    }
+    crowdStats.totalGrounded = totalGrounded;
+    crowdStats.eligible = crowdBodies.length;
+    crowdStats.corrections = 0;
+    if (crowdBodies.length < 2) return 0;
+
+    /* A cell is at least twice the largest participating radius, so any
+       overlapping pair must live in the same cell or one of its eight
+       neighbours. The shipped field currently holds hundreds of enemies;
+       this broad phase keeps a sparse garrison linear instead of asking every
+       body about every other body on every frame. */
+    const cellSize = Math.max(CROWD_SOLVER.minCellSize, maxRadius * 2);
+
+    let corrections = 0;
+    for (let pass = 0; pass < CROWD_SOLVER.iterations; pass += 1) {
+      crowdGrid.clear();
+      let passCorrections = 0;
+      for (let j = 0; j < crowdBodies.length; j += 1) {
+        const b = crowdBodies[j];
+        const cellX = Math.floor(b.x / cellSize);
+        const cellZ = Math.floor(b.z / cellSize);
+        for (let oz = -1; oz <= 1; oz += 1) {
+          for (let ox = -1; ox <= 1; ox += 1) {
+            const bucket = crowdGrid.get(crowdCellKey(cellX + ox, cellZ + oz));
+            if (!bucket) continue;
+            for (const i of bucket) {
+              const a = crowdBodies[i];
+              const minDistance = crowdRadii[i] + crowdRadii[j] - CROWD_SOLVER.slop;
+              const dx = b.x - a.x;
+              const dz = b.z - a.z;
+              const distanceSq = dx * dx + dz * dz;
+              if (distanceSq >= minDistance * minDistance) continue;
+
+              let ux;
+              let uz;
+              let distance;
+              if (distanceSq > CROWD_SOLVER.epsilonSq) {
+                distance = Math.sqrt(distanceSq);
+                ux = dx / distance;
+                uz = dz / distance;
+              } else {
+                /* Coincident spawns have no geometric normal. Derive a stable,
+                   pair-specific bearing so a whole wave at one marker fans out
+                   instead of every pair choosing the same axis. */
+                const seed = (((i + 1) * 73856093) ^ ((j + 1) * 19349663)) >>> 0;
+                const angle = (seed / 4294967296) * TAU;
+                ux = Math.sin(angle);
+                uz = Math.cos(angle);
+                distance = 0;
+              }
+
+              let weightA = crowdInverseMasses[i];
+              let weightB = crowdInverseMasses[j];
+              const weight = weightA + weightB;
+              /* Two encounter anchors should never share a site in authored
+                 play. Preserve both if malformed QA data puts them together. */
+              if (weight <= 0) continue;
+              weightA /= weight;
+              weightB /= weight;
+              const overlap = minDistance - distance;
+
+              if (weightA > 0) {
+                moveCrowdBody(i, a.x - ux * overlap * weightA,
+                  a.z - uz * overlap * weightA);
+              }
+              if (weightB > 0) {
+                moveCrowdBody(j, b.x + ux * overlap * weightB,
+                  b.z + uz * overlap * weightB);
+              }
+              passCorrections += 1;
+            }
+          }
+        }
+        const key = crowdCellKey(Math.floor(b.x / cellSize), Math.floor(b.z / cellSize));
+        const bucket = crowdGrid.get(key);
+        if (bucket) bucket.push(j);
+        else crowdGrid.set(key, [j]);
+      }
+      corrections += passCorrections;
+      if (passCorrections === 0) break;
+    }
+    crowdStats.corrections = corrections;
+    return corrections;
+  }
+
+  /**
+   * Return the earliest clear fraction of a third-person camera boom.
+   *
+   * Rendering geometry is a poor collision contract here: animated skins
+   * move every frame, a Coulter has hundreds of metres of decorative spine,
+   * and raycasting all of it would put the obstruction fix back into the
+   * frame budget it is protecting. The bestiary footprint is authoritative,
+   * so each visible body becomes a conservative vertical capsule. The boom
+   * solves analytically in XZ and intersects that interval with its Y travel.
+   */
+  function cameraBoomReach(from, to, padding = 0.24) {
+    if (!from || !to) return { reach: 1, blocker: null };
+    const dx = to.x - from.x;
+    const dy = to.y - from.y;
+    const dz = to.z - from.z;
+    const horizontalSq = dx * dx + dz * dz;
+    if (horizontalSq < 1e-8) return { reach: 1, blocker: null };
+
+    let reach = 1;
+    let blocker = null;
+    const minX = Math.min(from.x, to.x);
+    const maxX = Math.max(from.x, to.x);
+    const minZ = Math.min(from.z, to.z);
+    const maxZ = Math.max(from.z, to.z);
+    for (const inst of live) {
+      if (!inst || inst.state === "death" || inst.emerging?.active
+        || inst.encounterHidden || inst.encounterLocked || !inst.root?.visible) continue;
+      const authoredScale = Math.max(1e-5, Number(inst.spec.scale) || 1);
+      const liveScale = Math.max(0.1, Number(inst.root.scale.x) || authoredScale);
+      const scale = liveScale / authoredScale;
+      const bodyRadius = Math.max(0.58,
+        Number(inst.spec.cameraRadius)
+          || (Number(inst.spec.collisionRadius) || 0.62) * 1.08) * scale + padding;
+      if (inst.x + bodyRadius < minX || inst.x - bodyRadius > maxX
+        || inst.z + bodyRadius < minZ || inst.z - bodyRadius > maxZ) continue;
+
+      const ox = from.x - inst.x;
+      const oz = from.z - inst.z;
+      const b = 2 * (ox * dx + oz * dz);
+      const c = ox * ox + oz * oz - bodyRadius * bodyRadius;
+      const disc = b * b - 4 * horizontalSq * c;
+      if (disc < 0) continue;
+      const root = Math.sqrt(disc);
+      let enter = Math.max(0, (-b - root) / (2 * horizontalSq));
+      let exit = Math.min(reach, (-b + root) / (2 * horizontalSq));
+      if (exit < enter || enter >= reach) continue;
+
+      const bodyBottom = inst.y - 0.18;
+      const bodyHeight = Math.max(1.35,
+        Number(inst.spec.cameraHeight)
+          || (Number(inst.spec.collisionRadius) || 0.62) * 2.45) * scale;
+      const bodyTop = inst.y + bodyHeight;
+      if (Math.abs(dy) < 1e-8) {
+        if (from.y < bodyBottom || from.y > bodyTop) continue;
+      } else {
+        const y0 = (bodyBottom - from.y) / dy;
+        const y1 = (bodyTop - from.y) / dy;
+        enter = Math.max(enter, Math.min(y0, y1));
+        exit = Math.min(exit, Math.max(y0, y1));
+        if (exit < enter || enter >= reach) continue;
+      }
+
+      /* Leave a small visual gap in front of the body, expressed in boom
+         fraction so it is stable across the death/jetpack boom lengths. */
+      const boomLength = Math.max(0.01, Math.hypot(dx, dy, dz));
+      reach = Math.max(0, enter - 0.18 / boomLength);
+      blocker = inst.id;
+    }
+    return { reach, blocker };
+  }
+
   function update(dt, camera) {
     if (camera) camera.getWorldPosition(_eye);
     for (let i = live.length - 1; i >= 0; i -= 1) {
       const inst = live[i];
+      const knocked = stepKnockback(inst, dt);
       const d2 = camera
         ? (inst.x - _eye.x) ** 2 + (inst.z - _eye.z) ** 2
         : 0;
@@ -838,34 +2200,95 @@ export async function buildEnemies(ctx, onProgress) {
          pixels and a Gleaner at 250m is a recognisable silhouette on a
          ridge, and popping the second one out would be visible. */
       const cull = inst.spec.cullRange || 260;
-      const shown = dyingOrNear(inst, d2, cull);
+      const ikRange = inst.spec.ikRange || IK_RANGE;
+      const animRange = inst.spec.animRange || ANIM_RANGE;
+      const poseRange = inst.spec.poseRange || POSE_RANGE;
+      /* A fully buried Coulter is behind an opaque planet, and a
+         district boss whose arena has not been entered does not exist
+         in the player's picture yet. Both stay spawned for stable
+         save/animation state, but neither pays a skinned draw or leaks
+         its silhouette before its own reveal. */
+      const shown = dyingOrNear(inst, d2, cull)
+        && !inst.body?.hidden && !inst.encounterHidden;
       if (inst.root.visible !== shown) inst.root.visible = shown;
       if (inst.skin) {
-        const wants = shown && d2 < SHADOW_RANGE * SHADOW_RANGE;
+        const wants = shown
+          && d2 < (inst.spec.shadowRange || SHADOW_RANGE) ** 2;
         if (inst.skin.castShadow !== wants) inst.skin.castShadow = wants;
       }
       // Dying units always finish their clip: a corpse frozen
       // mid-collapse because the player walked away is worse than
       // the cost of animating it.
       const dying = inst.state === "death";
-      if (!dying && d2 > POSE_RANGE * POSE_RANGE) continue;
+      if (dying) inst.deathElapsed = (inst.deathElapsed || 0) + dt;
+      if (!dying && d2 > poseRange * poseRange) continue;
 
-      if (dying || d2 < ANIM_RANGE * ANIM_RANGE) inst.mixer.update(dt);
+      if (dying || d2 < animRange * animRange) inst.mixer.update(dt);
 
       const emerging = !dying && updateEmergence(inst, dt);
-      if (inst.state !== "death" && !emerging) {
-        inst.y = damp(inst.y, groundY(inst.x, inst.z), 12, dt);
-        inst.root.position.set(inst.x, inst.y, inst.z);
-        inst.root.rotation.y = inst.yaw;
-      }
-      inst.root.updateMatrixWorld(true);
+      if (inst.body) {
+        /* The body owns its own transform, and the AI that moves it
+           runs after this loop - so what is placed here is last
+           frame's trail. That is the same one-frame contract every
+           other creature in the file already has (combat writes
+           inst.x/z, this reads it next frame) and it is invisible at
+           any speed the animal actually travels. */
+        inst.root.position.copy(inst.body.head);
+        inst.root.quaternion.copy(inst.body.quat);
+        inst.root.updateMatrixWorld(true);
+      } else if (inst.spec.flies && !emerging) {
+        /* A FLYER OWNS ITS OWN ALTITUDE.
+           Every other walker here is damped onto the terrain each
+           frame, which is right for something that stands on it and
+           fatal for something that does not: a flyer handed that
+           treatment is pinned to the sand and its whole encounter
+           stops existing. Its module writes `inst.y` directly - the
+           same contract the burrower's body chain already has, one
+           step simpler because there is no chain to pose.
 
-      /* Legs are solved AFTER `mixer.update()`, deliberately. The
-         mixer writes every bone it has a track for; anything written
-         before it is overwritten. This ordering is what makes "clips
-         own the body, the solver owns the legs" actually true rather
-         than merely intended. */
-      if (!emerging && (dying || d2 < IK_RANGE * IK_RANGE)) solveLegs(inst, dt);
+           Its ROLL is its own too. Yaw alone cannot express a bank,
+           and a twenty-six metre wingspan turning flat reads as a
+           table sliding sideways through the air. */
+        inst.root.position.set(inst.x, inst.y, inst.z);
+        if (!dying) {
+          inst.root.rotation.set(inst.pitch || 0, inst.yaw, inst.roll || 0);
+        }
+      } else if (!emerging) {
+        /* A CORPSE KEEPS FOLLOWING THE GROUND, and it follows it to a
+           different height than a standing creature does.
+
+           This branch used to be skipped entirely for the dead unless
+           a knockback was still pushing them, which froze the body at
+           whatever height it happened to be standing at - and since a
+           death clip only rotates bones, that is the height its LEGS
+           were holding it at. A Gleaner folded four three-metre stilts
+           and stayed exactly where they had put it. */
+        /* `bodyDrop` is the standing counterpart of a corpse's
+           deathLift: a creature holding itself BELOW its own ride
+           height. The Distaff's collapse needs it because a clip can
+           only rotate bones - folding the legs moves the FEET, not
+           the body, so without the root actually sinking the animal
+           "collapses" at exactly the altitude it stood at and the
+           whole read is lost. The creature's module animates the
+           value; the damp below is what makes the sink a settle
+           rather than a snap. */
+        const want = groundY(inst.x, inst.z)
+          + (dying ? deathLift(inst) : -(inst.bodyDrop || 0));
+        inst.y = damp(inst.y, want, 12, dt);
+        inst.root.position.set(inst.x, inst.y, inst.z);
+        if (!dying) inst.root.rotation.y = inst.yaw;
+      }
+      if (!inst.body) inst.root.updateMatrixWorld(true);
+
+      /* Legs and body are solved AFTER `mixer.update()`, deliberately.
+         The mixer writes every bone it has a track for; anything
+         written before it is overwritten. This ordering is what makes
+         "clips own the mouth, the solver owns the body" actually true
+         rather than merely intended. */
+      if (emerging) continue;
+      if (inst.body) {
+        if (dying || d2 < ikRange * ikRange) solveSpine(inst);
+      } else if (dying || d2 < ikRange * ikRange) solveLegs(inst, dt);
     }
   }
 
@@ -902,69 +2325,88 @@ export async function buildEnemies(ctx, onProgress) {
      ground by the same terrain sampler the legs solve against.
      ============================================================ */
   const GARRISONS = [
-    // --- The Bloom: the hive. Nothing sends you here; it is here so
-    //     that the map has a place that is visibly worse than the
-    //     mission, and so the north-west horizon is never empty.
-    { key: "thresher", at: [-655, -655], r: 245, n: 26 },
-    { key: "gleaner", at: [-655, -655], r: 225, n: 7 },
-    { key: "harrow", at: [-655, -655], r: 190, n: 4 },
-    { key: "thresher", at: [-700, -560], r: 105, n: 9 },    // The Throat
+    // --- The Bloom: the hive. The primary stronghold with heavy swarms,
+    //     high-threat ranged sentries, and armored breaker broods.
+    { key: "thresher", at: [-655, -655], r: 255, n: 42 },
+    { key: "gleaner", at: [-655, -655], r: 235, n: 14 },
+    { key: "harrow", at: [-655, -655], r: 195, n: 7 },
+    { key: "thresher", at: [-700, -560], r: 110, n: 16 },    // The Throat
+    { key: "gleaner", at: [-700, -560], r: 110, n: 5 },
+    { key: "harrow", at: [-700, -560], r: 90, n: 3 },
 
-    // --- Relay BETA, the Choir Spires. Spires are cover, so this one
-    //     is weighted toward the ranged caste: the spires give the
-    //     player cover too, and Gleaners are the reason to leave it.
-    { key: "thresher", at: [-820, -95], r: 200, n: 13 },
-    { key: "gleaner", at: [-820, -95], r: 215, n: 7 },
-    { key: "harrow", at: [-820, -95], r: 150, n: 2 },
+    // --- Relay BETA, the Choir Spires. Towering wind-carved needles providing
+    //     cover for snipers and dense ground rover packs.
+    { key: "thresher", at: [-820, -95], r: 210, n: 24 },
+    { key: "gleaner", at: [-820, -95], r: 220, n: 14 },
+    { key: "harrow", at: [-820, -95], r: 160, n: 5 },
 
-    // --- Relay GAMMA, the Vault-Cathedral. Interiors and a nave: the
-    //     Harrows are in here because a heavy in a corridor is a
-    //     different problem from a heavy in the open.
-    { key: "thresher", at: [-95, -725], r: 190, n: 14 },
-    { key: "gleaner", at: [-95, -725], r: 205, n: 6 },
-    { key: "harrow", at: [-95, -725], r: 145, n: 3 },
+    // --- Relay GAMMA, the Vault-Cathedral. Heavy nave guardians, colonnade
+    //     watchers, and wide plaza swarms.
+    { key: "thresher", at: [-95, -725], r: 200, n: 26 },
+    { key: "gleaner", at: [-95, -725], r: 210, n: 12 },
+    { key: "harrow", at: [-95, -725], r: 155, n: 6 },
 
-    // --- Relay ALPHA, the Censer Works. The first relay most players
-    //     walk to, so it is the lightest of the three.
-    { key: "thresher", at: [655, 700], r: 185, n: 12 },
-    { key: "gleaner", at: [655, 700], r: 195, n: 5 },
-    { key: "harrow", at: [655, 700], r: 130, n: 2 },
+    // --- Relay ALPHA, the Censer Works. Sprawling rusted works with
+    //     scavenger swarms, duct snipers, and furnace heavies.
+    { key: "thresher", at: [655, 700], r: 195, n: 22 },
+    { key: "gleaner", at: [655, 700], r: 205, n: 10 },
+    { key: "harrow", at: [655, 700], r: 140, n: 5 },
 
-    // --- The Fallen Saint: extraction. Calling the shuttle re-homes
-    //     the whole map onto this point, so what is standing here at
-    //     the start is only the seed of the last fight.
-    { key: "thresher", at: [0, -20], r: 205, n: 12 },
-    { key: "gleaner", at: [0, -20], r: 190, n: 5 },
-    { key: "harrow", at: [0, -20], r: 150, n: 2 },
+    // --- The Fallen Saint: extraction basin and outer dunes.
+    { key: "thresher", at: [0, -20], r: 215, n: 22 },
+    { key: "gleaner", at: [0, -20], r: 200, n: 10 },
+    { key: "harrow", at: [0, -20], r: 155, n: 5 },
 
-    // --- Off-route districts. No objective sends the player to any of
-    //     these; they are garrisoned because an open-world level whose
-    //     enemies are only where the quest markers are is a corridor
-    //     wearing a map.
-    { key: "thresher", at: [645, -640], r: 205, n: 10 },    // The Ossuary
-    { key: "gleaner", at: [645, -640], r: 195, n: 4 },
-    { key: "harrow", at: [645, -640], r: 140, n: 2 },
-    { key: "thresher", at: [790, 95], r: 195, n: 9 },       // The Glass Scar
-    { key: "gleaner", at: [790, 95], r: 185, n: 4 },
-    { key: "thresher", at: [-600, 545], r: 225, n: 9 },     // The Gilded Reach
-    { key: "gleaner", at: [-600, 545], r: 200, n: 3 },
+    // --- Off-route districts.
+    { key: "thresher", at: [645, -640], r: 210, n: 20 },    // The Ossuary
+    { key: "gleaner", at: [645, -640], r: 200, n: 9 },
+    { key: "harrow", at: [645, -640], r: 150, n: 5 },
+    { key: "thresher", at: [790, 95], r: 205, n: 18 },       // The Glass Scar
+    { key: "gleaner", at: [790, 95], r: 195, n: 8 },
+    { key: "harrow", at: [790, 95], r: 140, n: 4 },
+    { key: "thresher", at: [-600, 545], r: 230, n: 18 },     // The Gilded Reach
+    { key: "gleaner", at: [-600, 545], r: 210, n: 7 },
+    { key: "harrow", at: [-600, 545], r: 150, n: 4 },
 
-    // --- The Pilgrim's Road. Small packs strung along the causeway,
-    //     so the two-kilometre walk between districts is a journey
-    //     through held ground rather than a loading screen you have
-    //     to operate yourself.
-    { key: "thresher", at: [-8, 300], r: 95, n: 5 },
-    { key: "thresher", at: [-24, 40], r: 90, n: 5 },
-    { key: "thresher", at: [-52, -238], r: 100, n: 6 },
-    { key: "gleaner", at: [-66, -382], r: 115, n: 3 },
+    // --- The Pilgrim's Road causeways. Frequent patrol packs along transit routes.
+    { key: "thresher", at: [-8, 300], r: 105, n: 10 },
+    { key: "gleaner", at: [-8, 300], r: 105, n: 3 },
+    { key: "thresher", at: [-24, 40], r: 95, n: 10 },
+    { key: "gleaner", at: [-24, 40], r: 95, n: 4 },
+    { key: "harrow", at: [-24, 40], r: 85, n: 2 },
+    { key: "thresher", at: [-52, -238], r: 110, n: 12 },
+    { key: "gleaner", at: [-52, -238], r: 110, n: 4 },
+    { key: "harrow", at: [-52, -238], r: 90, n: 2 },
+    { key: "thresher", at: [-66, -382], r: 120, n: 10 },
+    { key: "gleaner", at: [-66, -382], r: 120, n: 5 },
 
-    // --- The Threshold. Four, at the far edge of the drop zone: the
-    //     player has to be able to see what is coming before it is a
-    //     problem, once, at the start.
-    { key: "thresher", at: [0, 700], r: 150, n: 4 },
+    // --- The Threshold. Drop zone outer perimeter.
+    { key: "thresher", at: [8, 785], r: 55, n: 8 },
+    { key: "gleaner", at: [8, 710], r: 60, n: 3 },
 
-    // No Matriarch here. The unique boss is raised by the final Bloom
-    // breach, after the player has survived the four lesser surges.
+    // --- Wilderness patrols & intermediate transit crossings.
+    //     Fills the vast desert dunes, mountain passes, and canyon ravines.
+    { key: "thresher", at: [710, 390], r: 140, n: 12 },     // East desert dunes (Censer to Scar)
+    { key: "gleaner", at: [710, 390], r: 130, n: 4 },
+    { key: "harrow", at: [710, 390], r: 100, n: 2 },
+
+    { key: "thresher", at: [690, -270], r: 140, n: 12 },    // Southeast canyon (Scar to Ossuary)
+    { key: "gleaner", at: [690, -270], r: 130, n: 4 },
+    { key: "harrow", at: [690, -270], r: 100, n: 2 },
+
+    { key: "thresher", at: [-710, 230], r: 140, n: 12 },    // West pass (Reach to Choir)
+    { key: "gleaner", at: [-710, 230], r: 130, n: 4 },
+    { key: "harrow", at: [-710, 230], r: 100, n: 2 },
+
+    { key: "thresher", at: [-460, -410], r: 150, n: 14 },   // Southwest wasteland (Cathedral to Choir)
+    { key: "gleaner", at: [-460, -410], r: 140, n: 5 },
+    { key: "harrow", at: [-460, -410], r: 110, n: 3 },
+
+    { key: "thresher", at: [340, 340], r: 130, n: 10 },     // Northeast basin dunes (Saint to Censer)
+    { key: "gleaner", at: [340, 340], r: 120, n: 3 },
+
+    { key: "thresher", at: [-310, 270], r: 130, n: 10 },    // Northwest basin dunes (Saint to Reach)
+    { key: "gleaner", at: [-310, 270], r: 120, n: 3 },
   ];
 
   function garrison() {
@@ -972,7 +2414,11 @@ export async function buildEnemies(ctx, onProgress) {
     let placed = 0;
     for (const g of GARRISONS) {
       if (!species.has(g.key)) continue;
-      for (let i = 0; i < g.n; i += 1) {
+      /* The tier thickens the field itself, not only the breach waves -
+         most of the road is garrison, and a hard tier that left it alone
+         read as no tier at all. */
+      const count = Math.max(1, Math.round(g.n * (ctx.difficulty?.current?.garrison || 1)));
+      for (let i = 0; i < count; i += 1) {
         // Square-rooted radius, or every garrison clumps in its own
         // middle: uniform r over a disc puts most of the area, and
         // so most of the units, near the rim.
@@ -980,6 +2426,14 @@ export async function buildEnemies(ctx, onProgress) {
         const d = Math.sqrt(grng()) * g.r;
         let x = g.at[0] + Math.cos(a) * d;
         let z = g.at[1] + Math.sin(a) * d;
+
+        /* Keep procedural garrisons outside the immediate drop ship crater
+           and landing egress so the opening cinematic and initial landfall
+           are clear of immediate aggro. */
+        const dPod = Math.hypot(x - DROP_SITE.podX, z - DROP_SITE.podZ);
+        const dSpawn = Math.hypot(x - DROP_SITE.x, z - DROP_SITE.z);
+        if (dPod < 68 || dSpawn < 68) continue;
+
         /* Nudged out of masonry. A unit spawned inside a wall is
            permanently blocked by its own collision, so it can never
            close on the player - and from the player's side that
@@ -987,8 +2441,25 @@ export async function buildEnemies(ctx, onProgress) {
            which is far more confusing than one that charges. */
         if (ctx.collide) {
           const radius = BESTIARY[g.key]?.collisionRadius || 0.42;
-          const open = ctx.collide.findOpen(x, z, groundY(x, z), 24, 9, radius);
+          /* Being outside a solid cell is not enough: the old sampler
+             accepted one-cell pockets between Cathedral ribs and Ossuary
+             stacks. Those units spawned legally but had no possible first
+             move. Require one four-metre exit lane at placement time; the
+             runtime planner can handle every larger detour from there. */
+          const hasEgress = (px, pz) => {
+            for (let bearing = 0; bearing < 16; bearing += 1) {
+              const turn = (bearing / 16) * TAU;
+              if (ctx.collide.walkClear(px, pz,
+                px + Math.cos(turn) * 4, pz + Math.sin(turn) * 4, radius)) return true;
+            }
+            return false;
+          };
+          const open = ctx.collide.findOpen(
+            x, z, groundY(x, z), 32, 12, radius, null, hasEgress
+          );
           if (!open) continue;
+          if (Math.hypot(open[0] - DROP_SITE.podX, open[1] - DROP_SITE.podZ) < 68
+            || Math.hypot(open[0] - DROP_SITE.x, open[1] - DROP_SITE.z) < 68) continue;
           x = open[0];
           z = open[1];
         }
@@ -1017,26 +2488,234 @@ export async function buildEnemies(ctx, onProgress) {
     return placed;
   }
 
+  function snapshot() {
+    return {
+      rng: rng.getState?.() || null,
+      nextId,
+      /* Domain-owned figures (the Apostate is the first) carry their own
+         lifecycle snapshot. Persisting them here as well would make restore
+         replace the instance behind their controller's closure. */
+      live: live.filter((inst) => inst && !inst.spec?.durableDomain
+        && inst.state !== "death" && inst.health > 0)
+        .map((inst) => ({
+          id: inst.id,
+          key: inst.key,
+          x: Number(inst.x.toFixed(4)),
+          z: Number(inst.z.toFixed(4)),
+          yaw: Number(inst.yaw.toFixed(5)),
+          /* Emergence animates root.scale; persisting that frame would bake
+             the temporary underground squash into the creature's permanent
+             authored size when configureEmergence runs after load. */
+          scale: Number(((inst.emerging?.baseScale ?? inst.root.scale.x)
+            / Math.max(1e-5, inst.spec.scale)).toFixed(4)),
+          health: Number(inst.health.toFixed(3)),
+          maxHealth: Number(inst.maxHealth.toFixed(3)),
+          damageScale: Number((inst.damageScale || 1).toFixed(4)),
+          eventId: inst.eventId || null,
+          eventWave: Number.isFinite(inst.eventWave) ? inst.eventWave : null,
+          home: inst.home ? { x: Number(inst.home.x.toFixed(4)), z: Number(inst.home.z.toFixed(4)) } : null,
+          suspicion: Number((inst.suspicion || 0).toFixed(4)),
+          alerted: !!inst.alerted,
+          fireTimer: Number((inst.fireTimer || 0).toFixed(4)),
+          burstLeft: Math.max(0, Math.round(inst.burstLeft || 0)),
+          broodTimer: Number.isFinite(inst.broodTimer) ? Number(inst.broodTimer.toFixed(4)) : null,
+          broodIds: (inst.broodKids || [])
+            .filter((kid) => kid?.id && kid.state !== "death" && kid.health > 0)
+            .map((kid) => kid.id),
+          /* A burrower's durable state is its PHASE, not its pose. The
+             trail is thirteen interpolated points behind a head that is
+             about to move anyway, so it is re-seeded straight on load
+             and the first second of travel curves it again; what a save
+             cannot reconstruct is whether the animal was eight metres
+             underground or reared over the player, and that is what is
+             written here. */
+          body: inst.body ? {
+            phase: String(inst.body.phase || "burrow"),
+            timer: Number((inst.body.timer || 0).toFixed(3)),
+            heading: Number((inst.body.heading || 0).toFixed(5)),
+            depth: Number((inst.body.depth || 0).toFixed(3)),
+            surfacings: Math.max(0, Math.round(inst.body.surfacings || 0)),
+            x: Number(inst.body.head.x.toFixed(3)),
+            y: Number(inst.body.head.y.toFixed(3)),
+            z: Number(inst.body.head.z.toFixed(3)),
+          } : null,
+          emergence: inst.emerging ? {
+            active: !!inst.emerging.active,
+            surfaced: !!inst.emerging.surfaced,
+            burst: !!inst.emerging.burst,
+            elapsed: Number((inst.emerging.elapsed || 0).toFixed(4)),
+            delay: Number((inst.emerging.delay || 0).toFixed(4)),
+            duration: Number((inst.emerging.duration || 1.2).toFixed(4)),
+            depth: Number((inst.emerging.depth || 1.3).toFixed(4)),
+            boss: inst.key === "matriarch",
+          } : null,
+        })),
+    };
+  }
+
+  function clearAll() {
+    for (const inst of live) {
+      disposeEmergence(inst);
+      group.remove(inst.root);
+    }
+    live.length = 0;
+  }
+
+  function restore(saved = {}) {
+    const records = Array.isArray(saved.live)
+      ? saved.live.slice(0, MAX_SAVED_ENEMIES) : [];
+    clearAll();
+    const byId = new Map();
+    nextId = Math.max(1, Math.round(Number(saved.nextId) || 1));
+    for (const record of records) {
+      if (!record || !species.has(record.key) || typeof record.id !== "string") continue;
+      const x = clamp(Number(record.x) || 0, -980, 980);
+      const z = clamp(Number(record.z) || 0, -980, 980);
+      /* The 0.72s post-surface dust tail is visual-only. Reconstructing it
+         would run configureEmergence again and shrink an already-surfaced
+         creature to its underground scale with no active update to restore
+         it. Only genuinely active rises survive a field-state load. */
+      const emergenceRecord = record.emergence?.active === true ? record.emergence : null;
+      const emergence = emergenceRecord ? {
+        delay: Math.max(0, Number(emergenceRecord.delay) || 0),
+        duration: Math.max(0.1, Number(emergenceRecord.duration) || 1.2),
+        depth: Math.max(0.7, Number(emergenceRecord.depth) || 1.3),
+        boss: !!emergenceRecord.boss,
+      } : null;
+      const savedMax = Math.max(1, Number(record.maxHealth) || Number(record.health) || 1);
+      const savedHealth = clamp(Number(record.health) || savedMax, 1, savedMax);
+      /* Preserve the wounded fraction for the four pools enlarged in the
+         boss-pressure pass. The allow-list is exact by species and old
+         difficulty-scaled maximum, so arbitrary/custom saved health is
+         still restored byte-for-byte rather than silently retuned. */
+      const legacyBossPools = {
+        matriarch: new Set([3060, 3600, 4320, 6120, 7200, 7650, 9000, 10080, 12600, 15000]),
+        distaff: new Set([7650, 9000, 12600]),
+        winnower: new Set([5270, 6200, 8680]),
+        stylite: new Set([4590, 5400, 7560]),
+      };
+      const tunedMax = spawnHealth(record.key);
+      const migrateBossPool = legacyBossPools[record.key]?.has(savedMax)
+        && savedMax < tunedMax;
+      const restoreMax = migrateBossPool ? tunedMax : savedMax;
+      const restoreHealth = migrateBossPool
+        ? clamp(Math.round(restoreMax * savedHealth / savedMax), 1, restoreMax)
+        : savedHealth;
+      const inst = spawn(record.key, x, z, {
+        id: record.id,
+        yaw: Number(record.yaw) || 0,
+        scale: clamp(Number(record.scale) || 1, 0.7, 1.35),
+        health: restoreMax,
+        exactHealth: true,
+        damageScale: clamp(Number(record.damageScale) || 1, 0.2, 4),
+        eventId: typeof record.eventId === "string" ? record.eventId : null,
+        eventWave: record.eventWave !== null && record.eventWave !== undefined
+          && Number.isFinite(Number(record.eventWave)) ? Number(record.eventWave) : null,
+        emerge: emergence,
+      });
+      if (!inst) continue;
+      inst.health = restoreHealth;
+      if (migrateBossPool) {
+        inst.balanceMigration = {
+          fromMax: savedMax, fromHealth: savedHealth,
+          toMax: restoreMax, toHealth: restoreHealth,
+        };
+      }
+      inst.home = record.home && Number.isFinite(Number(record.home.x))
+        && Number.isFinite(Number(record.home.z))
+        ? { x: Number(record.home.x), z: Number(record.home.z) } : { x, z };
+      inst.suspicion = clamp01(Number(record.suspicion) || 0);
+      inst.alerted = !!record.alerted;
+      inst.fireTimer = Math.max(0, Number(record.fireTimer) || 0);
+      inst.burstLeft = Math.max(0, Math.round(Number(record.burstLeft) || 0));
+      if (record.broodTimer !== null && record.broodTimer !== undefined
+        && Number.isFinite(Number(record.broodTimer))) {
+        inst.broodTimer = Math.max(0, Number(record.broodTimer));
+      }
+      if (inst.body) {
+        const saved = record.body && typeof record.body === "object" ? record.body : {};
+        const heading = Number.isFinite(Number(saved.heading))
+          ? Number(saved.heading) : inst.yaw;
+        const hy = Number.isFinite(Number(saved.y))
+          ? Number(saved.y) : groundY(x, z);
+        const phase = typeof saved.phase === "string" ? saved.phase : "burrow";
+        const depth = clamp(Number(saved.depth) || 0, -20, 20);
+        seedBody(inst, Number.isFinite(Number(saved.x)) ? Number(saved.x) : x,
+          hy, Number.isFinite(Number(saved.z)) ? Number(saved.z) : z, heading,
+          phase === "burrow" && depth > 0 ? depth : null);
+        inst.body.phase = phase;
+        inst.body.timer = Math.max(0, Number(saved.timer) || 0);
+        inst.body.depth = depth;
+        inst.body.surfacings = Math.max(0, Math.round(Number(saved.surfacings) || 0));
+      }
+      if (inst.emerging && emergenceRecord) {
+        inst.emerging.elapsed = Math.max(0, Number(emergenceRecord.elapsed) || 0);
+        inst.emerging.active = true;
+        inst.emerging.surfaced = !!emergenceRecord.surfaced;
+        inst.emerging.burst = !!emergenceRecord.burst;
+        /* The load menu may keep the scene paused for several seconds.
+           Sample the saved rise immediately so the paused background does
+           not show one frame at configureEmergence's initial 0.68 scale. */
+        updateEmergence(inst, 0, true);
+      } else {
+        play(inst, inst.alerted ? "alert" : "idle", 0);
+      }
+      byId.set(inst.id, inst);
+    }
+    for (const record of records) {
+      const inst = byId.get(record.id);
+      if (!inst) continue;
+      inst.broodKids = (Array.isArray(record.broodIds) ? record.broodIds : [])
+        .map((id) => byId.get(id)).filter(Boolean);
+    }
+    rng.setState?.(saved.rng);
+    return { restored: byId.size, byId };
+  }
+
   return {
     group,
     species,
     live,
     garrison,
     spawn,
+    snapshot,
+    restore,
     play,
+    replay,
+    rescaleForDifficulty,
     update,
-    kill(inst) { play(inst, "death", 0.12); },
-    clear() {
-      for (const inst of live) {
-        disposeEmergence(inst);
-        group.remove(inst.root);
-      }
-      live.length = 0;
+    resolveCrowding,
+    cameraBoomReach,
+    /* The body chain's public surface, for the encounter module that
+       drives it. `seedBody` lays a worm out straight, `poseBody`
+       resolves this frame's trail into joint targets, and `trailAt`
+       answers "where was the head N metres ago" - which is what a
+       burrowing wake, a hit capsule and a dive all need. */
+    seedBody,
+    poseBody,
+    trailAt,
+    knockback,
+    stun,
+    kill(inst) {
+      play(inst, "death", 0.12);
+      /* A domain-owned humanoid can use a procedural fall instead of a GLB
+         death clip. The authoritative combat state still has to become dead. */
+      if (inst && inst.health <= 0 && inst.state !== "death") inst.state = "death";
     },
+    remove(inst) {
+      const index = live.indexOf(inst);
+      if (index < 0) return false;
+      disposeEmergence(inst);
+      group.remove(inst.root);
+      live.splice(index, 1);
+      return true;
+    },
+    clear: clearAll,
     stats() {
       return {
         species: species.size,
         live: live.length,
+        crowd: { ...crowdStats },
         clips: [...species.values()].map((s) => `${s.key}:${s.clips.size}`),
       };
     },

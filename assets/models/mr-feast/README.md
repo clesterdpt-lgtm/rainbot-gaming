@@ -7,7 +7,8 @@
 - Meshy auto-rigging produced a 24-bone humanoid plus basic walk and run motions. Custom idle and alert motions were also generated.
 - Blender produced a browser build at exactly 65,000 triangles, one 1024px embedded texture, 1.92m source height, and 4.55MB on disk. The mansion fits it to 2.01m so the 1.84m player camera meets his eye line.
 - The four tuned animation-only GLBs total 183,876 bytes. Each contains 24 rotation channels and one recentered Hips translation, with no scale or limb-translation tracks.
-- The base model and every motion pass glTF validation with no errors or warnings. Three.js r128 browser QA confirms one skinned mesh, 24 bones, stable proportions, and working idle, stalk, alert, and run poses.
+- The active release uses the intact 65,000-triangle, single-skinned-mesh model. The July 2026 parametric face-appliance experiment was visually rejected after its projected surface folded across unrelated source fragments, its separate eyes protruded beyond the sockets, and its overlapping face/lip surfaces produced visible breaks.
+- The experimental 86,546-triangle retopology GLB, reports, and repeatable Blender scripts remain preserved for diagnosis only. They are not selected by the runtime manifest and must not be promoted without a rebuilt neutral face plus visual approval.
 - The character now follows a visual-only 624.95m whole-mansion patrol through 227 waypoints, 30 major room/stair zones, and all three interior levels. He uses the grand and service stairs and automatically opens and safely clears the 21 doors required by the route. Collision, perception, pursuit, and attack behavior remain intentionally absent.
 
 ## Design lock
@@ -21,12 +22,15 @@ Mr. Feast is a tall, lean, fictional adult host whose threat comes from polish a
 - Palette: midnight black, charcoal, dried oxblood, aged ivory, and very small tarnished-gold accents.
 - Avoid: real-person likeness, logos, weapons, food props, gore, hats, capes, glowing eyes, horns, or overt supernatural effects.
 
+The source face is texture-painted polygon soup and remains part of the active release. A deterministic connected-appliance experiment proved that component counts and non-empty morphs are not enough to establish facial quality: its first-hit projection sampled hair, neck, and back-head fragments, while separate overlapping eye/lip pieces created protrusion and seams. A future facial rebuild must validate surface continuity, eye fit, boundary joins, transferred skin weights, and approved neutral/three-quarter renders before activation.
+
 The facial identity, smile, tailoring, and palette are derived from the fictional mansion paintings `The Patron of Empty Plates`, `The Feast of Merit`, and `The Infinite Giveaway`.
 
 ## Browser budget
 
 - Source/master: 100,053 triangles with the original 2K texture, retained for Blender work.
-- Game mesh: 65,000 triangles, one material, and one 1024px texture.
+- Active game model: 65,000 triangles, about 4.55MB, one 1024px embedded texture, one skinned mesh, and 24 bones.
+- Preserved experimental retopology: 86,546 triangles, about 6.46MB, one 1024px projected face atlas, 24 bones, four morph meshes, and 18 semantic bindings; not release-authoritative.
 - Source bounds: 0.9241m wide, 1.9200m high, and 0.4620m deep with feet at Y=0. Mansion fit: approximately 0.9674m × 2.0100m × 0.4837m.
 - Runtime motion: restrained idle, grounded in-place stalk, cleaned alert/search, and cleaned in-place run. Play the stalk at `0.37` for the authored 0.62m/s patrol and scale that rate with actual travel speed.
 - Add a grab/attack clip only when that gameplay is authored; do not infer an attack from the alert motion.
@@ -44,7 +48,7 @@ assets/models/mr-feast/mr-feast-{idle,walk,alert,run}.glb
 The runtime should load these files:
 
 ```text
-assets/models/mr-feast/processed/mr-feast-game-rigged.glb
+assets/models/mr-feast/processed/mr-feast-game-retopo-face-v1.glb
 assets/models/mr-feast/animations/mr-feast-idle-tuned.glb
 assets/models/mr-feast/animations/mr-feast-stalk-tuned.glb
 assets/models/mr-feast/animations/mr-feast-alert-clean.glb
@@ -73,6 +77,32 @@ blender --background \
 ```
 
 This writes the full-detail normalized master, the optimized rigged game model, a machine-readable report, and the working Blender file.
+
+Add the sparse facial shape keys only after that optimization pass:
+
+```bash
+blender --background \
+  --python scripts/blender/add-mr-feast-facial-shapes.py -- \
+  --input-blend assets/models/mr-feast/processed/mr-feast-working.blend \
+  --output assets/models/mr-feast/processed/mr-feast-game-faced.glb \
+  --report assets/models/mr-feast/processed/mr-feast-facial-report.json \
+  --preview-dir output/blender/mr-feast-face \
+  --force
+```
+
+The sparse facial pass and parametric retopology are retained as intermediate diagnostic assets. To reproduce the rejected experiment from the same optimized working file:
+
+```bash
+blender --background \
+  --python scripts/blender/retopologize-mr-feast-face.py -- \
+  --input-blend assets/models/mr-feast/processed/mr-feast-working.blend \
+  --output assets/models/mr-feast/processed/mr-feast-game-retopo-face-v1.glb \
+  --report assets/models/mr-feast/processed/mr-feast-retopology-report.json \
+  --preview-dir output/blender/mr-feast-retopo-v1 \
+  --force
+```
+
+The experimental exporter keeps all skinned facial pieces at the scene root, matching the body. Parenting them under the already normalized armature double-scales them in Three.js. That transform rule remains valid, but it does not make the generated surface visually acceptable; the output stays offline until its projection, joins, eye fit, weights, normals, and browser renders pass a new quality gate.
 
 Extract the motion data from Meshy's duplicate full-model animation downloads:
 

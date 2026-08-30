@@ -385,23 +385,25 @@ async function run() {
       assert(initial.route.minimumPatrolClearance >= 1.65, `${id} route is too close to Mr. Feast's patrol; got ${initial.route.minimumPatrolClearance}m`);
       assert(initial.route.minimumStaticClearance >= 0.28, `${id} route clips fixed furniture or walls; got ${initial.route.minimumStaticClearance}m clearance`);
       assert(initial.animation?.available?.includes("walk") && initial.animation.available.includes("idle"), `${id} should bind idle and walk actions; got ${JSON.stringify(initial.animation)}`);
+      const handOrientationSamples = await desktop.evaluate((contestantId) => {
+        const samples = [window.MrFeastFresh.restoreContestantIdleForQA(contestantId)];
+        samples.push(...[0, 0.125, 0.25, 0.375, 0.5, 0.625, 0.75, 0.875].map((phase) => (
+          window.MrFeastFresh.poseContestantWalkingForQA(contestantId, phase)
+        )));
+        return samples;
+      }, id);
+      assert(handOrientationSamples.every((sample) => sample?.armPose?.valid), `${id} needs valid standing and walking hand diagnostics; got ${JSON.stringify(handOrientationSamples)}`);
+      assert(handOrientationSamples.every((sample) => sample.armPose.minimumPalmTowardBodyAlignment >= 0.7), `${id} should preserve inward-facing palms at both walk-swing extremes; got ${JSON.stringify(handOrientationSamples)}`);
+      assert(handOrientationSamples.every((sample) => sample.armPose.maximumPalmForwardAlignment <= 0.02), `${id} palms should stay beside or slightly behind the body plane instead of opening toward the contestant's forward view; got ${JSON.stringify(handOrientationSamples)}`);
       if (id === "kip-solano") {
-        const wristSamples = await desktop.evaluate((contestantId) => {
-          const samples = [window.MrFeastFresh.restoreContestantIdleForQA(contestantId)];
-          samples.push(...[0, 0.125, 0.25, 0.375, 0.5, 0.625, 0.75, 0.875].map((phase) => (
-            window.MrFeastFresh.poseContestantWalkingForQA(contestantId, phase)
-          )));
-          return samples;
-        }, id);
-        assert(wristSamples.every((sample) => sample?.armPose?.valid), `Kip needs valid walking wrist diagnostics; got ${JSON.stringify(wristSamples)}`);
-        assert(wristSamples.every((sample) => sample.armPose.minimumPalmTowardBodyAlignment >= 0.7), `Kip should preserve inward-facing palms at both walk-swing extremes; got ${JSON.stringify(wristSamples)}`);
+        const wristSamples = handOrientationSamples;
         const wristSides = wristSamples.flatMap((sample) => Object.values(sample.wristGeometry?.sides || {}));
         assert(wristSamples.every((sample) => sample.wristGeometry?.valid) && wristSides.every((side) => side.samples >= 24), `Kip needs valid deformed wrist cross-sections in idle and throughout the walk cycle; got ${JSON.stringify(wristSamples)}`);
         assert(wristSides.every((side) => side.minorSectionRetention >= 0.78), `Kip's skinned wrists should retain their thickness instead of collapsing into a thin twist; got ${JSON.stringify(wristSamples)}`);
         assert(wristSides.every((side) => side.handTwistDegrees <= 66 && side.handSwingDegrees <= 60), `Kip's hand joints should eliminate the excessive 85-105 degree wrist twist without introducing a sharp bend; got ${JSON.stringify(wristSamples)}`);
         assert(wristSamples.every((sample) => sample.armPose.maximumHandLocalOffsetDegrees <= 70), `Kip's walking hand joints should stay within 70 degrees of bind so the skinned wrists retain their thickness; got ${JSON.stringify(wristSamples)}`);
-        await desktop.evaluate((contestantId) => window.MrFeastFresh.restoreContestantIdleForQA(contestantId), id);
       }
+      await desktop.evaluate((contestantId) => window.MrFeastFresh.restoreContestantIdleForQA(contestantId), id);
       const result = await desktop.evaluate(({ id, seconds }) => window.MrFeastFresh.runContestantRoutineForQA(id, seconds), { id, seconds: 90 });
       assert(result?.completed === true && result.cycles >= 1, `${id} should complete a deterministic routine cycle; got ${JSON.stringify(result)}`);
       assert(result.activities.includes("walking") && result.activities.includes("idle") && result.activities.includes("seated"), `${id} routine should walk, pause, and sit; got ${JSON.stringify(result.activities)}`);
@@ -429,6 +431,16 @@ async function run() {
       }, id);
       await desktop.waitForTimeout(100);
       await desktop.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, `${id}-neutral-idle-desktop.png`) });
+      for (const phase of [0.25, 0.75]) {
+        await desktop.evaluate(({ contestantId, walkingPhase }) => {
+          window.MrFeastFresh.poseContestantWalkingForQA(contestantId, walkingPhase);
+        }, { contestantId: id, walkingPhase: phase });
+        await desktop.waitForTimeout(100);
+        await desktop.locator("#mansion-stage").screenshot({
+          path: path.join(artifactDir, `${id}-walking-${phase}-desktop.png`),
+        });
+      }
+      await desktop.evaluate((contestantId) => window.MrFeastFresh.restoreContestantIdleForQA(contestantId), id);
       const seatedMotion = await desktop.evaluate((contestantId) => {
         const seated = window.MrFeastFresh.seatContestantForQA(contestantId);
         const probe = window.MrFeastFresh.advanceContestantSeatedIdleForQA(contestantId, 2.4);

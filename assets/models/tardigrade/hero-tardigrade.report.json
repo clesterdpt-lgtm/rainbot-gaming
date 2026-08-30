@@ -1,0 +1,478 @@
+{
+  "generatedAt": "2026-07-22T05:04:01.649623+00:00",
+  "pipeline": "Meshy textured low-poly master -> Blender 4.5 cleanup, custom rig/animation, and standard GLB",
+  "blenderVersion": "4.5.11 LTS",
+  "asset": "hero-tardigrade",
+  "profile": "hero",
+  "source": {
+    "file": "/Volumes/External SSD/Projects/RainbotGaming/assets/models/tardigrade/source/hero-tardigrade-v4-master.glb",
+    "sha256": "3d011b6892362f5805a4c4e066d1b94ec78ab57e6878ffddaa239737ff183698",
+    "fileBytes": 8917140,
+    "counts": {
+      "objects": 1,
+      "meshes": 1,
+      "materials": 1
+    },
+    "triangles": 20568,
+    "bounds": {
+      "min": [
+        -0.480489,
+        -0.948458,
+        -0.416517
+      ],
+      "max": [
+        0.478551,
+        0.950144,
+        0.413145
+      ]
+    }
+  },
+  "output": {
+    "file": "hero-tardigrade.glb",
+    "path": "/Volumes/External SSD/Projects/RainbotGaming/assets/models/tardigrade/hero-tardigrade.glb",
+    "report": "/Volumes/External SSD/Projects/RainbotGaming/assets/models/tardigrade/hero-tardigrade.report.json",
+    "workingBlend": "/Volumes/External SSD/Projects/RainbotGaming/assets/models/tardigrade/source/hero-tardigrade-v4-working.blend",
+    "targetTriangles": 14000,
+    "textureMaxSize": 512,
+    "blenderBounds": {
+      "min": [
+        -1.667044,
+        -3.3,
+        0.0
+      ],
+      "max": [
+        1.667044,
+        3.34752,
+        2.884762
+      ]
+    },
+    "runtimeBounds": {
+      "min": [
+        -1.667044,
+        0.0,
+        -3.34752
+      ],
+      "max": [
+        1.667044,
+        2.884762,
+        3.3
+      ]
+    },
+    "triangles": 13881,
+    "materials": 2,
+    "textures": 3,
+    "skins": 1,
+    "clips": [
+      "airborne",
+      "curl",
+      "dash",
+      "idle",
+      "scuttle"
+    ],
+    "fileBytes": 1678428,
+    "sha256": "2a477180bfc6b8ee6d3284e6245980e100fea77b4c64615590d4d53ba6cf04ce"
+  },
+  "geometry": {
+    "repair": {
+      "verticesBeforeWeld": 18193,
+      "verticesAfterWeld": 10289,
+      "facesBefore": 20568,
+      "facesAfter": 20568,
+      "weldDistance": 1e-06,
+      "flatShaded": false
+    },
+    "budget": {
+      "sourceTriangles": 20568,
+      "finalTriangles": 13790,
+      "passes": [
+        {
+          "pass": 1,
+          "ratio": 0.6704589653831194,
+          "before": 20568,
+          "after": 13790
+        }
+      ]
+    },
+    "anatomy": {
+      "method": "source-already-has-four-planted-rows",
+      "legRowsBefore": [
+        -0.572693,
+        -0.177151,
+        0.178837,
+        0.613933
+      ],
+      "legRowsAfter": [
+        -0.572693,
+        -0.177151,
+        0.178837,
+        0.613933
+      ],
+      "compressedVertices": 0,
+      "crossSectionCompensation": 1.0,
+      "targetLegPairs": 4
+    }
+  },
+  "normalization": {
+    "sourceBounds": {
+      "min": [
+        -0.480489,
+        -0.94855,
+        -0.416395
+      ],
+      "max": [
+        0.478551,
+        0.949919,
+        0.413398
+      ]
+    },
+    "orientedBounds": {
+      "min": [
+        -0.478551,
+        -0.949919,
+        -0.416395
+      ],
+      "max": [
+        0.480489,
+        0.94855,
+        0.413398
+      ]
+    },
+    "blenderBounds": {
+      "min": [
+        -1.667044,
+        -3.3,
+        0.0
+      ],
+      "max": [
+        1.667044,
+        3.3,
+        2.884762
+      ]
+    },
+    "runtimeBounds": {
+      "min": [
+        -1.667044,
+        0.0,
+        -3.3
+      ],
+      "max": [
+        1.667044,
+        2.884762,
+        3.3
+      ]
+    },
+    "orientationStrategy": "-Y to Blender +Y / glTF -Z",
+    "sourceFrontAxis": "-Y",
+    "forward": "-Z",
+    "up": "+Y",
+    "fitDimension": "length",
+    "targetDimension": 6.6,
+    "uniformScale": 3.476485142018022,
+    "grounded": true,
+    "centeredXZ": true,
+    "crossSectionCompensation": 1.0
+  },
+  "materials": {
+    "names": [
+      "SkinPrimary",
+      "MouthDark"
+    ],
+    "count": 2,
+    "removedTextureNodes": [],
+    "semanticFaceCounts": {
+      "SkinPrimary": 13789,
+      "MouthDark": 26
+    },
+    "oralInset": {
+      "material": "MouthDark",
+      "radius": 0.24520475387573243,
+      "depth": 0.07919999885559083,
+      "center": [
+        0.0,
+        3.30792,
+        1.384686
+      ],
+      "frontProtrusion": 0.047519999313354495,
+      "triangles": 92
+    }
+  },
+  "images": [
+    {
+      "name": "Image_0",
+      "sourceSize": [
+        2048,
+        2048
+      ],
+      "runtimeSize": [
+        512,
+        512
+      ],
+      "packed": true
+    },
+    {
+      "name": "Image_1",
+      "sourceSize": [
+        2048,
+        2048
+      ],
+      "runtimeSize": [
+        512,
+        512
+      ],
+      "packed": true
+    },
+    {
+      "name": "Image_3",
+      "sourceSize": [
+        2048,
+        2048
+      ],
+      "runtimeSize": [
+        512,
+        512
+      ],
+      "packed": true
+    },
+    {
+      "name": "normal",
+      "sourceSize": [
+        2048,
+        2048
+      ],
+      "runtimeSize": [
+        512,
+        512
+      ],
+      "packed": true
+    }
+  ],
+  "rig": {
+    "armatures": 1,
+    "skins": 1,
+    "bones": 25,
+    "deformBones": [
+      "Body_01",
+      "Body_02",
+      "Body_03",
+      "Body_04",
+      "Head",
+      "Leg_L4_Upper",
+      "Leg_L4_Lower",
+      "Leg_R4_Upper",
+      "Leg_R4_Lower",
+      "Leg_L3_Upper",
+      "Leg_L3_Lower",
+      "Leg_R3_Upper",
+      "Leg_R3_Lower",
+      "Leg_L2_Upper",
+      "Leg_L2_Lower",
+      "Leg_R2_Upper",
+      "Leg_R2_Lower",
+      "Leg_L1_Upper",
+      "Leg_L1_Lower",
+      "Leg_R1_Upper",
+      "Leg_R1_Lower"
+    ],
+    "bodyBones": [
+      "Body_01",
+      "Body_02",
+      "Body_03",
+      "Body_04",
+      "Head"
+    ],
+    "appendageBones": [
+      "Leg_L1_Upper",
+      "Leg_L1_Lower",
+      "Leg_R1_Upper",
+      "Leg_R1_Lower",
+      "Leg_L2_Upper",
+      "Leg_L2_Lower",
+      "Leg_R2_Upper",
+      "Leg_R2_Lower",
+      "Leg_L3_Upper",
+      "Leg_L3_Lower",
+      "Leg_R3_Upper",
+      "Leg_R3_Lower",
+      "Leg_L4_Upper",
+      "Leg_L4_Lower",
+      "Leg_R4_Upper",
+      "Leg_R4_Lower"
+    ],
+    "sockets": [
+      "Head",
+      "Face",
+      "Back",
+      "Camera"
+    ],
+    "weights": {
+      "vertices": 6948,
+      "influencedVertices": 6948,
+      "maximumInfluences": 4,
+      "groups": [
+        "Body_01",
+        "Body_02",
+        "Body_03",
+        "Body_04",
+        "Head",
+        "Leg_L1_Lower",
+        "Leg_L1_Upper",
+        "Leg_L2_Lower",
+        "Leg_L2_Upper",
+        "Leg_L3_Lower",
+        "Leg_L3_Upper",
+        "Leg_L4_Lower",
+        "Leg_L4_Upper",
+        "Leg_R1_Lower",
+        "Leg_R1_Upper",
+        "Leg_R2_Lower",
+        "Leg_R2_Upper",
+        "Leg_R3_Lower",
+        "Leg_R3_Upper",
+        "Leg_R4_Lower",
+        "Leg_R4_Upper"
+      ]
+    },
+    "worldRootTranslation": false
+  },
+  "clips": [
+    {
+      "name": "idle",
+      "frameStart": 1,
+      "frameEnd": 25,
+      "frames": 5,
+      "fps": 24,
+      "durationSeconds": 1.0,
+      "channels": 21,
+      "periodic": true,
+      "loopEndpointsExact": true,
+      "worldRootTranslation": false
+    },
+    {
+      "name": "scuttle",
+      "frameStart": 1,
+      "frameEnd": 25,
+      "frames": 5,
+      "fps": 24,
+      "durationSeconds": 1.0,
+      "channels": 21,
+      "periodic": true,
+      "loopEndpointsExact": true,
+      "worldRootTranslation": false
+    },
+    {
+      "name": "dash",
+      "frameStart": 1,
+      "frameEnd": 17,
+      "frames": 5,
+      "fps": 24,
+      "durationSeconds": 0.666667,
+      "channels": 21,
+      "periodic": false,
+      "loopEndpointsExact": false,
+      "worldRootTranslation": false
+    },
+    {
+      "name": "curl",
+      "frameStart": 1,
+      "frameEnd": 25,
+      "frames": 5,
+      "fps": 24,
+      "durationSeconds": 1.0,
+      "channels": 21,
+      "periodic": false,
+      "loopEndpointsExact": false,
+      "worldRootTranslation": false
+    },
+    {
+      "name": "airborne",
+      "frameStart": 1,
+      "frameEnd": 25,
+      "frames": 5,
+      "fps": 24,
+      "durationSeconds": 1.0,
+      "channels": 21,
+      "periodic": false,
+      "loopEndpointsExact": false,
+      "worldRootTranslation": false
+    }
+  ],
+  "features": {
+    "animated": true,
+    "skin": true,
+    "worldRootTranslation": false,
+    "forward": "-Z",
+    "up": "+Y",
+    "draco": false,
+    "meshopt": false,
+    "ktx2": false,
+    "webpTextures": false,
+    "validatedFor": "Three.js r128 GLTFLoader"
+  },
+  "validation": {
+    "format": "GLB 2.0",
+    "fileBytes": 1678428,
+    "sha256": "2a477180bfc6b8ee6d3284e6245980e100fea77b4c64615590d4d53ba6cf04ce",
+    "meshes": 1,
+    "triangles": 13881,
+    "materials": 2,
+    "materialNames": [
+      "SkinPrimary",
+      "MouthDark"
+    ],
+    "textures": 3,
+    "imageDimensions": [
+      {
+        "name": "normal",
+        "mimeType": "image/png",
+        "width": 512,
+        "height": 512
+      },
+      {
+        "name": "Image_0",
+        "mimeType": "image/png",
+        "width": 512,
+        "height": 512
+      },
+      {
+        "name": "Image_1",
+        "mimeType": "image/png",
+        "width": 512,
+        "height": 512
+      }
+    ],
+    "periodicAnimationEndpoints": {
+      "idle": {
+        "samples": 5,
+        "startSeconds": 0.041667,
+        "endSeconds": 1.041667,
+        "endpointValueMaxDelta": 0.0,
+        "endpointTangentMaxDelta": 0.0
+      },
+      "scuttle": {
+        "samples": 5,
+        "startSeconds": 0.041667,
+        "endSeconds": 1.041667,
+        "endpointValueMaxDelta": 0.0,
+        "endpointTangentMaxDelta": 0.0
+      }
+    },
+    "skins": 1,
+    "animations": [
+      "airborne",
+      "curl",
+      "dash",
+      "idle",
+      "scuttle"
+    ],
+    "nodes": 27,
+    "extensionsUsed": [],
+    "compression": "none",
+    "rootTranslationChannels": [],
+    "requiredSockets": [
+      "Head",
+      "Face",
+      "Back",
+      "Camera"
+    ]
+  }
+}

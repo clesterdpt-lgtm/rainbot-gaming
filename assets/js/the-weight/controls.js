@@ -73,14 +73,17 @@ TW.ClampedLook = class ClampedLook {
     if (this.locked) {
       // ---- pointer lock: relative movement with edge resistance ----
       const s = this.look.sensitivity;
-      const yawNorm = Math.abs(this.tYaw) / this.look.yawClamp;
-      const yawResist = 1 - Math.pow(yawNorm, 3) * this.look.edgeResist;
-      const pitchLimit = e.movementY > 0 ? this.look.pitchDown : this.look.pitchUp;
-      const pitchNorm = Math.abs(this.tPitch) / pitchLimit;
-      const pitchResist = 1 - Math.pow(pitchNorm, 3) * this.look.edgeResist;
+      const yawDelta = -e.movementX * s;
+      const pitchDelta = -e.movementY * s;
+      const yawResist = edgeResistance(
+        this.tYaw, yawDelta, this.look.yawClamp, this.look.yawClamp, this.look.edgeResist,
+      );
+      const pitchResist = edgeResistance(
+        this.tPitch, pitchDelta, this.look.pitchDown, this.look.pitchUp, this.look.edgeResist,
+      );
 
-      this.tYaw -= e.movementX * s * yawResist;
-      this.tPitch -= e.movementY * s * pitchResist;
+      this.tYaw += yawDelta * yawResist;
+      this.tPitch += pitchDelta * pitchResist;
     } else {
       // ---- fallback when pointer lock is unavailable / not yet granted:
       // the cursor's position on screen drives where the eyes strain to. ----
@@ -101,17 +104,27 @@ TW.ClampedLook = class ClampedLook {
     this.tPitch = clamp(pitch, -this.look.pitchDown, this.look.pitchUp);
   }
 
+  resetGaze() {
+    this.tYaw = this.yaw = 0;
+    this.tPitch = this.pitch = 0;
+    this._tremor = 0;
+    this.apply(0);
+  }
+
   /** apply a relative look from a touch drag (px), same clamps as the mouse */
   applyLookDelta(dx, dy) {
     if (!this.enabled) return;
     const s = 0.0052;   // per-pixel; a short drag covers the stiff-neck range
-    const yawNorm = Math.abs(this.tYaw) / this.look.yawClamp;
-    const yawResist = 1 - Math.pow(yawNorm, 3) * this.look.edgeResist;
-    const pl = dy > 0 ? this.look.pitchDown : this.look.pitchUp;
-    const pNorm = Math.abs(this.tPitch) / pl;
-    const pResist = 1 - Math.pow(pNorm, 3) * this.look.edgeResist;
-    this.tYaw = clamp(this.tYaw - dx * s * yawResist, -this.look.yawClamp, this.look.yawClamp);
-    this.tPitch = clamp(this.tPitch - dy * s * pResist, -this.look.pitchDown, this.look.pitchUp);
+    const yawDelta = -dx * s;
+    const pitchDelta = -dy * s;
+    const yawResist = edgeResistance(
+      this.tYaw, yawDelta, this.look.yawClamp, this.look.yawClamp, this.look.edgeResist,
+    );
+    const pitchResist = edgeResistance(
+      this.tPitch, pitchDelta, this.look.pitchDown, this.look.pitchUp, this.look.edgeResist,
+    );
+    this.tYaw = clamp(this.tYaw + yawDelta * yawResist, -this.look.yawClamp, this.look.yawClamp);
+    this.tPitch = clamp(this.tPitch + pitchDelta * pitchResist, -this.look.pitchDown, this.look.pitchUp);
   }
 
   update(dt) {
@@ -164,4 +177,14 @@ TW.ClampedLook = class ClampedLook {
 };
 
 function clamp(v, lo, hi) { return v < lo ? lo : v > hi ? hi : v; }
+
+// Only resist motion that pushes farther toward the edge currently occupied.
+// Reversing direction always receives full input, so a clamp can never trap
+// the camera. negLimit/posLimit support Phase 1's asymmetric pitch range.
+function edgeResistance(value, delta, negLimit, posLimit, amount) {
+  if (value === 0 || value * delta <= 0) return 1;
+  const limit = value < 0 ? negLimit : posLimit;
+  const norm = clamp(Math.abs(value) / limit, 0, 1);
+  return Math.max(0.05, 1 - Math.pow(norm, 3) * amount);
+}
 })();

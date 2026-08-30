@@ -94,26 +94,24 @@ async function run() {
     await page.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "intro-load-ready.png") });
 
     const errorsBeforeLoad = errors.length;
-    await page.evaluate(() => {
-      window.__MR_FEAST_INTRO_LOAD_PROBE__ = null;
-      document.getElementById("mansion-intro-load")?.addEventListener("click", () => {
-        window.__MR_FEAST_INTRO_LOAD_PROBE__ = { startedAt: performance.now() };
-      }, { capture: true, once: true });
-      document.getElementById("mansion-intro-load")?.addEventListener("click", () => {
-        const probe = window.__MR_FEAST_INTRO_LOAD_PROBE__;
-        probe.handlerMs = performance.now() - probe.startedAt;
-        probe.nextFrameMs = null;
-        probe.state = JSON.parse(window.render_game_to_text());
-        probe.status = document.getElementById("mansion-menu-status")?.textContent || "";
-        requestAnimationFrame(() => {
-          probe.nextFrameMs = performance.now() - probe.startedAt;
-        });
-      }, { once: true });
-    });
     // Visibility/enabled state is asserted above. Force the dispatch here so
     // Playwright's two-frame actionability polling is not mistaken for game
-    // restore time on software-rendered CI WebGL.
+    // picker-open time on software-rendered CI WebGL.
     await page.locator("#mansion-intro-load").click({ force: true });
+    assert(await page.locator("#mansion-load-chooser").isVisible(), "main-menu Load should open the explicit save picker");
+    assert(await page.locator('[data-save-source="manual"]').count() === 1, "the existing explicit save should appear as Manual Save");
+    await page.evaluate(() => {
+      const button = document.querySelector('[data-save-source="manual"]');
+      const probe = { startedAt: performance.now(), nextFrameMs: null };
+      window.__MR_FEAST_INTRO_LOAD_PROBE__ = probe;
+      button.click();
+      probe.handlerMs = performance.now() - probe.startedAt;
+      probe.state = JSON.parse(window.render_game_to_text());
+      probe.status = document.getElementById("mansion-menu-status")?.textContent || "";
+      requestAnimationFrame(() => {
+        probe.nextFrameMs = performance.now() - probe.startedAt;
+      });
+    });
     await page.waitForFunction(() => {
       const current = JSON.parse(window.render_game_to_text());
       return current.started && document.getElementById("mansion-intro")?.hidden;
@@ -146,6 +144,7 @@ async function run() {
     await waitForReady(page);
     const errorsBeforeCorruptLoad = errors.length;
     await page.locator("#mansion-intro-load").click({ force: true });
+    await page.locator('[data-save-source="manual"]').click({ force: true });
     await page.waitForTimeout(100);
     state = await diagnostics(page);
     assert(errors.length === errorsBeforeCorruptLoad, `invalid saves should fail without a browser error: ${errors.slice(errorsBeforeCorruptLoad).join(" | ")}`);

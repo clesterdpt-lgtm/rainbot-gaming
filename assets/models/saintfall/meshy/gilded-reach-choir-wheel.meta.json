@@ -1,0 +1,19 @@
+{
+  "source": "Meshy image-to-3d resumed download",
+  "task": {
+    "id": "01a01f0f-dbbc-7d78-a3a7-70873918f353",
+    "type": "image-to-3d",
+    "status": "SUCCEEDED",
+    "progress": 100,
+    "createdAt": 1787227531182,
+    "startedAt": 1787227531185,
+    "finishedAt": 1787227712112,
+    "expiresAt": 1787486912112,
+    "consumedCredits": 30,
+    "taskError": null
+  },
+  "masterFile": "../../../../output/meshy-masters/saintfall/gilded-reach-choir-wheel-master.glb",
+  "thumbnails": [
+    "gilded-reach-choir-wheel-preview.png"
+  ]
+}

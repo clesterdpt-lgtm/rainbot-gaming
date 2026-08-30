@@ -218,8 +218,9 @@
     objects: new URL("object-atlas-ai-v1.png", textureAssetBase).href,
     // Scatter-prop skins: drop a 4x4 atlas at this path (cells per PropTex
     // below) and every prop re-skins automatically — no code changes needed.
-    // Until the file exists the props render with the flat fallback colours.
-    props: new URL("prop-atlas-ai-v1.png", textureAssetBase).href,
+    // Until the atlas ships, keep this null so the flat fallback colours render
+    // without a noisy 404 request in every player session.
+    props: null,
     infection: new URL("infection-hazard-atlas-ai-v1.png", textureAssetBase).href,
     exitDoor: new URL("exit-door-ai-v2.png", textureAssetBase).href,
   };

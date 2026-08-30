@@ -1,0 +1,33 @@
+{
+  "id": "01a0396e-1ce5-750f-aecc-290594e9acab",
+  "type": "image-to-3d",
+  "status": "SUCCEEDED",
+  "progress": 100,
+  "createdAt": 1787669918527,
+  "startedAt": 1787669918536,
+  "finishedAt": 1787670099625,
+  "expiresAt": 1787929299625,
+  "consumedCredits": 30,
+  "taskError": null,
+  "sourceImage": "assets/concepts/saintfall/meshy/bastion-penitent-tower-shield-red-meshy-source-v1.png",
+  "masterFile": "bastion-shield-master.glb",
+  "thumbnails": [
+    "bastion-shield-preview.png"
+  ],
+  "request": {
+    "image_url": "[local image data URI omitted]",
+    "model_type": "standard",
+    "ai_model": "meshy-6",
+    "enable_pbr": true,
+    "should_texture": true,
+    "should_remesh": true,
+    "topology": "triangle",
+    "target_polycount": 14000,
+    "pose_mode": "",
+    "image_enhancement": false,
+    "remove_lighting": true,
+    "target_formats": [
+      "glb"
+    ]
+  }
+}

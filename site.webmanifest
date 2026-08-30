@@ -1,0 +1,19 @@
+{
+  "name": "Rainbot Network",
+  "short_name": "Rainbot",
+  "description": "Free browser games, fake headlines, scores, and deeply unserious internet culture.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#05070d",
+  "theme_color": "#05070d",
+  "categories": ["games", "entertainment"],
+  "icons": [
+    {
+      "src": "assets/img/avatars/rainbot-avatar-01-rainbot.png",
+      "sizes": "256x256",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}

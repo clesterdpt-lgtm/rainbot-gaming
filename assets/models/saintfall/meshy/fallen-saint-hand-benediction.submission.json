@@ -1,0 +1,22 @@
+{
+  "taskId": "01a01f13-fcbd-7800-b95f-d50e82576eb4",
+  "taskType": "image-to-3d",
+  "input": "assets/concepts/saintfall/meshy/fallen-saint-hand-benediction.png",
+  "request": {
+    "image_url": "[local image data URI omitted]",
+    "model_type": "standard",
+    "ai_model": "meshy-6",
+    "enable_pbr": true,
+    "should_texture": true,
+    "should_remesh": true,
+    "topology": "triangle",
+    "target_polycount": 28000,
+    "pose_mode": "",
+    "image_enhancement": false,
+    "remove_lighting": true,
+    "target_formats": [
+      "glb"
+    ],
+    "texture_prompt": "A single severed monumental bronze right hand statue fragment, exactly five fingers in a blessing gesture, deep emerald verdigris pooled in panel seams, worn gold-bronze bevels, dark cracks, sand abrasion, matte PBR metal, no body, no arm beyond the broken wrist, no glow."
+  }
+}

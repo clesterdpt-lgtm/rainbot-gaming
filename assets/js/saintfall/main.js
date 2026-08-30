@@ -16,27 +16,79 @@ import {
   buildTerrain, makeHeightField, DISTRICTS, DROP_SITE,
 } from "saintfall/terrain.js";
 import { buildWorld } from "saintfall/world.js";
+import { loadIntroVehicleModels } from "saintfall/intro-models.js";
+import { buildPod } from "saintfall/pod.js";
 import { buildVfx } from "saintfall/vfx.js";
 import { createPlayer } from "saintfall/player.js";
+import {
+  SAINTFALL_CHARACTERS,
+  chooseSaintfallCharacter,
+  persistSaintfallCharacter,
+  resolveSaintfallCharacter,
+} from "saintfall/characters.js";
+import { keybindMatches } from "saintfall/keybinds.js";
 import { buildJetpack } from "saintfall/jetpack.js";
 import { buildBoost } from "saintfall/boost.js";
+import { buildSlam } from "saintfall/slam.js";
 import { buildShield } from "saintfall/shield.js";
 import { buildEnemies } from "saintfall/enemies.js";
 import { buildCollision } from "saintfall/collide.js";
 import { buildCombat } from "saintfall/combat.js";
 import { buildMission } from "saintfall/mission.js";
 import { buildBreaches } from "saintfall/breaches.js";
+import { buildAbbess } from "saintfall/abbess.js";
+import { buildCoulter } from "saintfall/coulter.js";
+import { buildDistaff } from "saintfall/distaff.js";
+import { buildGarner } from "saintfall/garner.js";
+import { buildMatriarch } from "saintfall/matriarch.js";
+import { buildStylite } from "saintfall/stylite.js";
+import { buildWinnower } from "saintfall/winnower.js";
+import { buildDistrictBosses } from "saintfall/district-bosses.js";
+import { buildApostate } from "saintfall/apostate.js";
+import { buildUndercroft } from "saintfall/undercroft.js";
+import { buildGuardReadability } from "saintfall/guard-readability.js";
+import { buildProgression } from "saintfall/progression.js";
+import { buildCampaignScore } from "saintfall/campaign-score.js";
+import { FURNACE_LANCE_RULES } from "saintfall/progression-config.js";
 import { buildAudio } from "saintfall/audio.js";
 import { buildWeapons } from "saintfall/weapons.js";
 import { buildHud } from "saintfall/hud.js";
 import { buildTouchControls } from "saintfall/touch.js";
+import { buildTutorial } from "saintfall/tutorial.js";
 import { buildDropIntro } from "saintfall/intro.js";
+import { buildSummitLoadout } from "saintfall/summit-loadout.js";
+import { buildSummitDischarge } from "saintfall/summit-discharge.js";
+import { buildKenosisKit } from "saintfall/summit-kenosis.js";
+import { buildSummitDoctrine } from "saintfall/summit-doctrine.js";
+import { buildSummitCommand } from "saintfall/summit-command.js";
+import { kenosisTreeFor } from "saintfall/summit-doctrine-config.js";
+import { kenosisCallsFor } from "saintfall/summit-command.js";
+import { buildSaveSystem } from "saintfall/save.js";
+import { buildGameUi, readStoredSettings } from "saintfall/ui.js";
+import { buildDifficulty } from "saintfall/difficulty.js";
 import { installQa } from "saintfall/qa.js";
 
 export async function start({ boot, build } = {}) {
   const params = new URLSearchParams(window.location.search);
-  const qa = params.has("qa");
+  /* Temporary encounter shortcut for hands-on Apostate testing. Treat it as
+     QA even without `?qa=1`, so the isolated fight cannot overwrite a real
+     field save or award durable career progress. */
+  const apostateTestStart = params.get("boss") === "apostate";
+  const qa = params.has("qa") || apostateTestStart;
+  const character = chooseSaintfallCharacter({ params, qa });
+  const usesOperativeKit = character.id === "white-vigil"
+    || character.id === "bastion-penitent";
+  const autoStartNewGame = params.get("newGame") === "1";
+  /* The reload handoff is one-shot. Remove it before any gameplay
+     starts so refreshing during the descent returns to the entry
+     menu instead of silently resetting the campaign again. */
+  if (autoStartNewGame) {
+    const cleanUrl = new URL(window.location.href);
+    cleanUrl.searchParams.delete("newGame");
+    history.replaceState(null, "", cleanUrl);
+  }
   const introParam = params.get("intro");
+  const tutorialParam = params.get("tutorial");
   /* Existing QA harnesses expect assets-ready to mean immediately
      playable. Normal players get the cinematic; QA opts into it
      explicitly with ?qa=1&intro=force. */
@@ -44,8 +96,25 @@ export async function start({ boot, build } = {}) {
     && (!qa || introParam === "1" || introParam === "force");
   // A frozen clock is a deterministic QA instrument, never a player URL mode.
   const introManualClock = qa && params.get("introClock") === "manual";
-  const quality = params.get("quality") || (qa ? "high" : "high");
+  /* Production new operations receive orientation by default. Existing QA
+     URLs retain their direct-gameplay contract and opt in explicitly. */
+  const tutorialForced = tutorialParam === "1" || tutorialParam === "force";
+  const tutorialEnabled = tutorialParam !== "0" && tutorialParam !== "skip"
+    && (!qa || tutorialForced);
+  /* A `?quality=` URL value is a SESSION override - harnesses pin a tier
+     with it, and it must not write itself into the player's stored
+     preference. Absent the param, the tier comes from the settings
+     store (read once gameUi exists, below) and defaults to high. */
+  const qualityParam = params.get("quality");
+  /* Same contract for difficulty: `?difficulty=` runs the session at a
+     tier without touching the stored preference (the duel probe pins
+     tiers with it); absent the param, the stored preference applies. */
+  const difficultyParam = params.get("difficulty");
   const timeKey = params.get("time") || "goldenhour";
+  const cycleParam = params.get("cycle");
+  const cycleEnabled = cycleParam === "1"
+    || (!qa && cycleParam !== "0" && !params.has("time"));
+  const cyclePhase = params.has("cyclePhase") ? Number(params.get("cyclePhase")) : NaN;
   const seed = params.has("seed") ? (hashString(params.get("seed")) >>> 0) : 0x5a17fa11;
 
   const canvas = document.getElementById("sf-canvas");
@@ -58,7 +127,10 @@ export async function start({ boot, build } = {}) {
   /* ----------------------------- context ----------------------------- */
 
   progress(0.18, "Reading the sky");
-  const atmos = makeAtmosphere(THREE, TIMES[timeKey] ? timeKey : "goldenhour");
+  const atmos = makeAtmosphere(THREE, TIMES[timeKey] ? timeKey : "goldenhour", {
+    cycle: cycleEnabled,
+    phase: Number.isFinite(cyclePhase) ? cyclePhase : undefined,
+  });
 
   const ctx = {
     THREE,
@@ -67,6 +139,15 @@ export async function start({ boot, build } = {}) {
     atmos,
     districts: DISTRICTS,
     qa,
+    playerFigureFactory: character.factory,
+    playerFigureName: character.name,
+    playerCharacter: {
+      id: character.id,
+      name: character.name,
+      role: character.role,
+      accent: character.accent,
+    },
+    operativeKitActive: usesOperativeKit,
     deferAmbience: introEnabled,
     runtime: {
       phase: introEnabled ? "awaiting-deploy" : "playing",
@@ -75,9 +156,30 @@ export async function start({ boot, build } = {}) {
     },
   };
 
+  /* The tier has to be in force before the garrison is spawned, because
+     enemy health is scaled at spawn - so it is read from the settings
+     store here, ahead of the menu that owns that store. */
+  ctx.difficulty = buildDifficulty();
+  ctx.difficulty.set(difficultyParam || readStoredSettings().difficulty,
+    difficultyParam ? "url" : "settings");
+
   progress(0.22, "Opening the eye");
   const render = createRenderer(ctx, canvas);
   ctx.scene = render.scene;
+  /* THE RENDERER ITSELF, not just its scene.
+   *
+   * The summit and the atoll have both published this for a while and
+   * the campaign never did, which was invisible until the Kenosis
+   * loadout came across in m111: `summit-loadout.aimPoint()` reads
+   * `ctx.render?.camera` to find the reticle's world point, got
+   * nothing here, and silently fell back to the emitter's own rest
+   * axis - so the White Vigil's crescents left the barrels pointing
+   * wherever the arms happened to hang. Measured before this line:
+   * 56 to 88 degrees off the camera, firing into the ground.
+   *
+   * `hud.js` also reaches for `ctx.render?.renderer?.domElement` when
+   * it places the reticle, and gets it now too. */
+  ctx.render = render;
   ctx.camera = render.camera;
   ctx.materials = makeMaterials(THREE, atmos);
   render.applyAtmosphere(atmos);
@@ -86,6 +188,18 @@ export async function start({ boot, build } = {}) {
   const sky = buildSky(ctx);
   ctx.sky = sky;
   render.refreshEnvironment(atmos);
+  /* The visible gradient, grade and zero-shadow sky fill follow the
+     cycle continuously. The one convolved reflection map is built at
+     boot and fades beneath that live fill; no periodic GPU bake is
+     allowed to hitch an active fight. */
+  function advanceSky(dt, camera) {
+    const changed = sky.update(dt, camera);
+    if (changed) {
+      render.applyAtmosphere(atmos);
+      render.syncEnvironment(atmos);
+    }
+    return changed;
+  }
 
   progress(0.30, "Shaping the basin");
   ctx.field = makeHeightField(seed);
@@ -94,6 +208,26 @@ export async function start({ boot, build } = {}) {
 
   const world = await buildWorld(ctx, (v, label) => progress(0.60 + v * 0.32, label));
   ctx.world = world;
+
+  /* The landed pod contributes its own shipped triangles to collision,
+     so the authored vehicle assets must resolve before the raster is baked.
+     Production also loads the carrier and sealed pod for the orbital act;
+     direct-gameplay QA only pays for the open world landmark. */
+  progress(0.921, "Consecrating the descent vehicles");
+  ctx.introVehicles = await loadIntroVehicleModels(ctx, { includeFlight: introEnabled });
+
+  /* The lander is built ONCE, here, in its landed pose - not by the
+     cinematic. The intro borrows it, flies it down and hands it back
+     at the same transform, so the object the player walks away from
+     is literally the object they arrived in. Building it before
+     collision is what lets the rasteriser bake it as an obstacle;
+     building it before the player is what lets the spawn be measured
+     off the real gangway instead of a guess. */
+  progress(0.923, "Setting the lander down");
+  const pod = buildPod(ctx, {
+    x: DROP_SITE.podX, z: DROP_SITE.podZ, yaw: DROP_SITE.podYaw,
+  });
+  ctx.pod = pod;
 
   progress(0.925, "Setting the stones against you");
   const collide = buildCollision(ctx, world);
@@ -123,9 +257,26 @@ export async function start({ boot, build } = {}) {
      and a rise close enough in front to stop a shot at 13m. */
   player.spawn(DROP_SITE.x, DROP_SITE.z, DROP_SITE.yaw);
 
+  /* White Vigil and Bastion carry the same authored weapons in the
+     campaign that they carry on Kenosis. The loadout is built before
+     the compatibility weapon module so the visible hands, grips and
+     emitters are always the operative's; the campaign module remains
+     present (but visually dormant) because old field-save schemas
+     still require its normalized heat record. */
+  const operativeLoadout = usesOperativeKit
+    ? await buildSummitLoadout(ctx, player) : null;
+  if (operativeLoadout) {
+    ctx.playerLoadout = operativeLoadout;
+    ctx.loadout = operativeLoadout;
+  }
+
   const weapons = buildWeapons(ctx);
   ctx.weapons = weapons;
-  weapons.equip("autogun", player.figure.weaponMount);
+  const campaignWeapon = weapons.equip("autogun", player.figure.weaponMount);
+  if (usesOperativeKit && campaignWeapon) {
+    campaignWeapon.root.visible = false;
+    if (campaignWeapon.reliquaryLight) campaignWeapon.reliquaryLight.intensity = 0;
+  }
 
   const jetpack = buildJetpack(ctx, player);
   ctx.jetpack = jetpack;
@@ -135,12 +286,253 @@ export async function start({ boot, build } = {}) {
   ctx.combat = combat;
   const mission = buildMission(ctx);
   ctx.mission = mission;
+
+  /* THIS OPERATIVE'S OWN CALL ACTIONS.
+   *
+   * A White Vigil on the campaign was calling Orbital Lance and
+   * Cluster Salvo - Vesper's ordnance - while her own Mirror Choir
+   * and Crescent Rain existed only on a level nobody can reach. The
+   * kits came across in m111 and the doctrines below; the wheel
+   * follows here.
+   *
+   * MERGED ONTO the mission rather than replacing it. `mission.js`
+   * is the campaign's phase machine as well as its command layer -
+   * relays, bosses, extraction, the boon, the save schema - and none
+   * of that changes. What changes is the four fields the wheel and
+   * the code entry actually read, plus the two the pack and combat
+   * read for the blessing, so a Kenosis operative's Gilding Rite is
+   * the one their own module granted.
+   *
+   * Vesper takes this branch never: `kenosisCallsFor` returns null
+   * and the mission object is untouched, field for field. */
+  if (kenosisCallsFor(ctx.playerCharacter?.id)) {
+    ctx.command = buildSummitCommand(ctx, player, {
+      characterId: ctx.playerCharacter?.id,
+    });
+  }
+  if (ctx.command) {
+    mission.wheelOrder = ctx.command.wheelOrder;
+    mission.stratagems = ctx.command.stratagems;
+    mission.cooldowns = ctx.command.cooldowns;
+    mission.call = ctx.command.call;
+    mission.boon = ctx.command.boon;
+    mission.grantBoon = ctx.command.grantBoon;
+    mission.blocksEnemyProjectile = ctx.command.blocksEnemyProjectile;
+    mission.pending = ctx.command.pending;
+    mission.activeFields = ctx.command.activeFields;
+    /* The arrow code too, or that input path resolves against a
+       catalog this operative does not carry and quietly does nothing. */
+    mission.entry = ctx.command.entry;
+    mission.beginEntry = ctx.command.beginEntry;
+    mission.cancelEntry = ctx.command.cancelEntry;
+    mission.pushDirection = ctx.command.pushDirection;
+
+    /* AND THE SAVE HAS TO CARRY THEM.
+     *
+     * `save.js`'s snapshot validator walks `ctx.mission.stratagems`
+     * and demands a finite cooldown for every key it finds. Swapping
+     * the catalog above without this makes EVERY campaign save fail
+     * validation for these operatives - the wheel offers
+     * `mirrorchoir`, the mission's own snapshot has never heard of
+     * it, and `isFiniteNumber(undefined)` is false. Caught by
+     * `saintfall-operative-kit-carryover-probe.mjs` going 11/11 to
+     * 9/11 on exactly the two field-restore checks.
+     *
+     * Wrapped rather than replaced: the mission's snapshot is still
+     * the mission's - phases, relays, bosses, the lot - with this
+     * operative's cooldowns merged over the top, and handed back on
+     * restore. */
+    const baseSnapshot = mission.snapshot;
+    const baseRestore = mission.restore;
+    mission.snapshot = () => {
+      const snap = baseSnapshot.call(mission);
+      if (snap && typeof snap === "object") {
+        snap.cooldowns = { ...(snap.cooldowns || {}), ...ctx.command.captureCooldowns() };
+      }
+      return snap;
+    };
+    mission.restore = (saved) => {
+      const ok = baseRestore.call(mission, saved);
+      if (ok && saved && saved.cooldowns) ctx.command.restoreCooldowns(saved.cooldowns);
+      return ok;
+    };
+  }
   const breaches = buildBreaches(ctx);
   ctx.breaches = breaches;
-  const shield = buildShield(ctx, player);
+  let shield = buildShield(ctx, player);
   ctx.shield = shield;
   const boost = buildBoost(ctx, player);
   ctx.boost = boost;
+  const slam = buildSlam(ctx, player);
+  ctx.slam = slam;
+
+  /* The active doctrines are the operatives' actual input/combat
+     adapters, not cosmetic labels: Wing owns twin crescent fire,
+     Vigil Step and the aimed Stoop; Censer owns the hammer, tower
+     guard, Hammer Cast, powered leap and Penitent's Fall. They sit on
+     the full campaign combat stack exactly as they do on Kenosis. */
+  const kenosis = operativeLoadout
+    ? buildKenosisKit(ctx, player, operativeLoadout) : null;
+  const noShield = {
+    config: { moveSpeed: 0 },
+    state: { active: false, requested: false },
+    beginFrame: () => null,
+    updateVisual: () => {},
+    reset: () => {},
+    status: () => ({ active: false, requested: false }),
+  };
+  if (kenosis) {
+    ctx.kenosis = kenosis;
+    shield = kenosis.blockModule || noShield;
+    ctx.shield = shield;
+  }
+  const playerDischarge = operativeLoadout
+    ? buildSummitDischarge(ctx, player, operativeLoadout, kenosis?.dischargeSpec)
+    : null;
+  if (playerDischarge) ctx.playerDischarge = playerDischarge;
+  /* The burrower owns its own behaviour, its projectiles and the venom
+     they leave. Built after combat because it damages through it, and
+     before audio because audio subscribes to its bus. */
+  const coulter = buildCoulter(ctx);
+  ctx.coulter = coulter;
+  /* The Glass Scar's own guardian: a district-bound encounter rather
+     than a breach-wave one, so it is built and spawned independently
+     of both. Same ordering reasons as the burrower - after combat,
+     which it damages the player through, and before audio, which
+     subscribes to its bus. */
+  const distaff = buildDistaff(ctx);
+  ctx.distaff = distaff;
+  distaff.ensureSpawned();
+  /* The Censer Works' flyer. Same construction slot and the same
+     reasons as the Distaff - after combat, before audio. */
+  const winnower = buildWinnower(ctx);
+  ctx.winnower = winnower;
+  winnower.ensureSpawned();
+  /* The Ossuary's pit. Same construction slot and the same reasons
+     again - after combat, before audio - with one addition of its own:
+     it builds its entire body procedurally at construction time, so it
+     must not be created before the collision grid exists. Every plate
+     of the crater is laid against `collide.groundHeight`. */
+  const garner = buildGarner(ctx);
+  ctx.garner = garner;
+  garner.ensureSpawned();
+  /* The Bloom's queen. Same construction slot and the same reasons -
+     after combat, which she damages the player through and whose egg
+     tests call back into her, and before audio, which subscribes to
+     her bus. */
+  const abbess = buildAbbess(ctx);
+  ctx.abbess = abbess;
+  abbess.ensureSpawned();
+  /* The Choir's tenant. Same construction slot as the rest - after
+     combat, which wears its grip, and before audio - with one extra
+     dependency of its own: it perches on the world builder's own list
+     of standing needles, so it must be built after the world. */
+  const stylite = buildStylite(ctx);
+  ctx.stylite = stylite;
+  stylite.ensureSpawned();
+  /* Shared lifecycle for the ordinary-simulation district guardians plus
+     the penultimate giant Coulter beneath the Fallen Saint. */
+  const districtBosses = buildDistrictBosses(ctx);
+  ctx.districtBosses = districtBosses;
+  /* The Gilded Reach's mantis. The one boss whose LIFECYCLE stays with
+     the shared controller above - it is still a `domain: "district"`
+     site, still in that snapshot, still reset by that arena ring - and
+     whose BEHAVIOUR is its own. Built after districtBosses because the
+     animal it drives is the one districtBosses spawns. */
+  const matriarch = buildMatriarch(ctx);
+  ctx.matriarch = matriarch;
+  /* The Cathedral's false saint borrows the authored player figure but owns
+     an entirely separate combat brain. It is asynchronous because the same
+     GLB/fallback figure contract is loaded for a second, corrupted body. */
+  const apostate = await buildApostate(ctx);
+  ctx.apostate = apostate;
+  apostate.ensureSpawned();
+  /* The room under the Cathedral. Built after the boss because it
+     drives that body through the collapse, and after collision
+     because its floor is measured off the nave's - and it is the one
+     module in this list that owns a `groundHeight` override, so
+     nothing that reads the ground may be constructed after it
+     without expecting the answer to move. */
+  const undercroft = buildUndercroft(ctx);
+  ctx.undercroft = undercroft;
+
+  /* One presentation layer observes every hostile domain after all of them
+     exist. It does not own attacks or damage; it translates their committed
+     contact beats into a consistent guard/dodge signal. */
+  const guardReadability = buildGuardReadability(ctx);
+  ctx.guardReadability = guardReadability;
+
+  if (apostateTestStart) {
+    const armed = mission.snapshot();
+    armed.phase = "cathedralBoss";
+    armed.extractCalled = false;
+    armed.extractTimer = 0;
+    armed.relays = armed.relays.map((relay) => ({
+      ...relay,
+      done: true,
+      progress: 1,
+    }));
+    armed.relaysDone = armed.relays.length;
+    mission.restore(armed);
+    apostate.reset();
+
+    const boss = apostate.status();
+    const bossInst = apostate.instance();
+    /* The Cathedral garrison belongs to the full operation, but it obscures
+       a direct boss test and can kill the player during the reveal. Keep the
+       Apostate itself; its Call ability still creates its authored brood. */
+    for (const enemy of [...enemies.live]) {
+      if (enemy === bossInst) continue;
+      if (Math.hypot(enemy.x - boss.x, enemy.z - boss.z) <= 96) enemies.remove(enemy);
+    }
+    player.spawn(boss.x - 18, boss.z, 0);
+  }
+
+  /* Career rank and Doctrine choices sit above the field systems they
+     observe. Constructing progression here lets it subscribe to authoritative
+     combat/mission events while every lower-level mechanic can still query
+     `ctx.progression` lazily without creating import cycles. */
+  /* WHICH DOCTRINE THIS OPERATIVE CARRIES.
+   *
+   * The kits came into the campaign in m111 and the trees follow here:
+   * a White Vigil holding blink, the stoop and paired crescents was
+   * still being handed Vesper's Censer/Procession/Wing/Halo/Edict
+   * rites, which improve a furnace lance and a polearm she does not
+   * carry. `progression.js` cannot serve both - it imports
+   * `DOCTRINE_ORDERS` at module scope and `buildProgression(ctx)`
+   * takes no tree argument (see m108) - so the operative picks the
+   * runtime, and both answer the same contract `save.js`, `ui.js`'s
+   * board and `audio.js` read.
+   *
+   * Vesper is untouched: no tree, no change, the same object as
+   * before. */
+  const kenosisTree = kenosisTreeFor(ctx.playerCharacter?.id);
+  const progression = kenosisTree
+    ? buildSummitDoctrine(ctx, player)
+    : buildProgression(ctx);
+  ctx.progression = progression;
+  ctx.doctrine = progression;
+  if (kenosisTree) {
+    /* PUBLISH THIS OPERATIVE'S ORDERS INTO THE VFX VOCABULARY, or
+       every rite this tree fires is rejected by `doctrineCue` and
+       draws nothing at all - silently, because an unknown Order is
+       dropped rather than thrown.
+       The style `id` claims one of the five doctrine mote channels
+       and repoints it at the Order's colour. Only one operative is
+       deployed at a time, so a Vigil on the campaign never shows
+       Vesper's Orders and nothing is taken from anyone. */
+    const styles = {};
+    kenosisTree.orders.forEach((order, index) => {
+      styles[order.id] = { ...order.art, id: 6 + index, family: "kenosis" };
+    });
+    ctx.vfx?.registerDoctrineOrders?.(styles);
+  }
+
+  /* The campaign score observes the completed mission after progression, so
+     the victory XP and any resulting Field Rank are part of the debrief. It
+     is built before saves and UI because both consume its durable record. */
+  const campaignScore = buildCampaignScore(ctx);
+  ctx.campaignScore = campaignScore;
 
   /* Audio subscribes to the buses combat and mission already emit,
      so it can be removed without touching either. It is built after
@@ -149,27 +541,70 @@ export async function start({ boot, build } = {}) {
   ctx.audio = audio;
   audio.attach();
 
+  /* The trooper falls over when killed. Subscribed here rather than
+     called from combat, for the same reason audio is: the player is
+     built before combat exists and cannot subscribe to a bus that is
+     not there yet, and combat has no business knowing that a body has
+     an animation. `spawn` puts them back on their feet. */
+  combat.bus.on("playerDied", () => player.die());
+
   const hud = buildHud(ctx, hudHost);
   ctx.hud = hud;
   const touch = buildTouchControls(ctx, player, touchHost, stage);
   ctx.touch = touch;
+
+  /* Durable state and the native field interface are deliberately
+     constructed after every owning gameplay domain. The menu never
+     reaches into scene graphs itself: save.js asks each domain for a
+     normalized snapshot, and the command wheel confirms through the
+     same mission.call() path as every other deployment. */
+  const saves = buildSaveSystem(ctx, { setTime, setDayCycle, setStorm });
+  ctx.saves = saves;
+  /* `setQuality` is the function declared further down (hoisted); the
+     menu calls it so a tier change moves the sun's shadow map and
+     re-fits the canvas exactly as the boot-time application does. */
+  const gameUi = buildGameUi(ctx, {
+    stage, canvas, save: saves, touch, render, setQuality: (tier) => setQuality(tier),
+  });
+  ctx.gameUi = gameUi;
+  ctx.ui = gameUi;
+
+  const tutorial = buildTutorial(ctx, {
+    enabled: tutorialEnabled,
+    host: document.getElementById("sf-tutorial"),
+    stage,
+    canvas,
+    touch,
+  });
+  ctx.tutorial = tutorial;
 
   const introHost = document.getElementById("sf-intro");
   const touchEnabledAfterDrop = !!touch.enabled;
   const runtimePauseReasons = {
     menu: document.body.classList.contains("rb-escape-menu-open"),
     visibility: document.hidden,
+    command: document.body.classList.contains("sf-command-open"),
   };
+  let runtimeAudioPaused = false;
   function syncRuntimePaused() {
     runtimePauseReasons.menu = document.body.classList.contains("rb-escape-menu-open");
     runtimePauseReasons.visibility = document.hidden;
+    runtimePauseReasons.command = document.body.classList.contains("sf-command-open");
     if (ctx.runtime.phase !== "playing") return ctx.runtime.paused;
-    const next = Object.values(runtimePauseReasons).some(Boolean);
-    if (next === ctx.runtime.paused) return next;
-    ctx.runtime.paused = next;
-    if (next) player.input.clearAll?.();
-    void audio.setPaused?.(next);
-    return next;
+    const nextSimulation = Object.values(runtimePauseReasons).some(Boolean);
+    const nextAudio = runtimePauseReasons.menu || runtimePauseReasons.visibility;
+    if (nextSimulation !== ctx.runtime.paused) {
+      ctx.runtime.paused = nextSimulation;
+      if (nextSimulation) player.input.clearAll?.();
+    }
+    /* The command wheel freezes the battlefield for deliberate
+       selection, but its confirmation tones and the held ambience
+       remain live. A real menu/hidden tab suspends both. */
+    if (nextAudio !== runtimeAudioPaused) {
+      runtimeAudioPaused = nextAudio;
+      void audio.setPaused?.(nextAudio);
+    }
+    return nextSimulation;
   }
   if (introEnabled) {
     hud.setVisible(false);
@@ -179,16 +614,87 @@ export async function start({ boot, build } = {}) {
        cannot acquire pointer lock through two translucent layers. */
     stage?.classList.add("sf-intro-active");
   }
+  /* ------------------------------------------------------------
+     THE CINEMATIC'S WINDOW ONTO THE LIVE WORLD
+
+     From cloud-break onward the drop is filmed inside the real
+     basin, so the intro needs the live scene to be *presented* -
+     terrain LOD paged in, enemies culled, sky and particles moving
+     - without gameplay advancing. `combat`, `mission`, `breaches`,
+     `saves` and the HUD are deliberately absent: a cinematic that
+     ticks the mission clock has already started the game.
+
+     `figure` opts the trooper's own simulation in for the egress
+     beat. That is the whole trick behind the walk-out: it is not an
+     animation of a player, it is the player, moving under the same
+     locomotion, foot IK and camera rig that takes over a second
+     later - which is why there is nothing to cut between.
+     ------------------------------------------------------------ */
+  function cinematicStep(dt, opts = {}) {
+    const d = Math.min(Math.max(dt, 0), 0.1);
+    const cam = opts.camera || render.camera;
+    /* Deliberately the same ORDER as `step`, minus the gameplay
+       systems. Order is load-bearing here for the same reason it is
+       there - the weapon hangs off a mount the figure pose moves -
+       and a cinematic that resolved the pose in a different order
+       left the first real gameplay frame to correct the difference,
+       which is a visible pop on the one frame that must not have
+       one. */
+    if (opts.figure) player.update(d, render.camera);
+    advanceSky(d, cam, true);
+    terrain.updateLod(cam);
+    enemies.update(d, cam);
+    if (opts.figure) {
+      if (usesOperativeKit) {
+        player.postUpdate(d);
+        operativeLoadout?.update?.(d);
+      } else {
+        weapons.update(d, player, render.camera);
+        player.postUpdate(d);
+      }
+      jetpack.updateVisual(d);
+      shield.updateVisual(d);
+    }
+    vfx.update(d, cam);
+    return true;
+  }
+
   const intro = buildDropIntro(ctx, {
     enabled: introEnabled,
     host: introHost,
     stage,
     render,
     audio,
+    pod,
+    cinematicStep,
     manualClock: introManualClock,
+    reducedMotion: gameUi.settingsState?.().reducedMotion,
     deferReveal: introEnabled && !!boot,
     preserveForQa: qa,
-    onComplete() {
+    readSaves: () => saves.read?.() || { autosave: null, manuals: [] },
+    subscribeSaves: (listener) => saves.onChange?.(listener),
+    onLoad: (kind, index) => saves.load?.(kind, index),
+    onNewGame: () => {
+      saves.resetCareer?.({ source: "new-game" })
+        ?? progression.resetCareer?.({ source: "new-game" });
+    },
+    characters: SAINTFALL_CHARACTERS,
+    characterId: character.id,
+    autoStartNewGame,
+    onCharacterChange: (id) => {
+      const next = resolveSaintfallCharacter(id);
+      if (!next) return false;
+      persistSaintfallCharacter(next);
+      if (next.id === character.id) return false;
+      const nextUrl = new URL(window.location.href);
+      nextUrl.searchParams.set("character", next.id);
+      nextUrl.searchParams.set("newGame", "1");
+      window.location.assign(nextUrl.href);
+      return true;
+    },
+    settingsState: () => gameUi.settingsState?.() || {},
+    onSetting: (name, value) => gameUi.setSetting?.(name, value),
+    onComplete({ launchMode } = {}) {
       ctx.runtime.phase = "playing";
       ctx.runtime.paused = false;
       ctx.runtime.handoffFrames = 1;
@@ -197,7 +703,9 @@ export async function start({ boot, build } = {}) {
       hud.setVisible(true);
       touch.setEnabled(touchEnabledAfterDrop);
       audio.startAmbience?.();
+      audio.startMusic?.();
       syncRuntimePaused();
+      if (launchMode === "new") tutorial.start?.({ source: "new-operation" });
     },
   });
   ctx.intro = intro;
@@ -211,8 +719,23 @@ export async function start({ boot, build } = {}) {
   let colliderTick = 0;
   const shotOrigin = new THREE.Vector3();
   const shotDir = new THREE.Vector3();
+  const shotCameraOrigin = new THREE.Vector3();
+  const shotCameraDir = new THREE.Vector3();
+  const shotAimPoint = new THREE.Vector3();
   const shotSide = new THREE.Vector3();
   const shotUp = new THREE.Vector3();
+  const SHOT_RANGE = 320;
+  let shotQueued = false;
+  let shotPort = null;
+  let shotDamage = 22;
+  let shotAimKind = "range";
+  let shotAimEnemy = null;
+  let shotAimReach = SHOT_RANGE;
+  let lastShotSolution = null;
+  const _furnacePos = new THREE.Vector3();
+  let furnaceShotQueued = false;
+  let furnaceRank = 1;
+  let furnaceDamage = FURNACE_LANCE_RULES.ranks[1].damage;
 
   /* ------------------------------ loop ------------------------------ */
 
@@ -226,8 +749,12 @@ export async function start({ boot, build } = {}) {
     vfx,
     enemies,
     weapons,
+    loadout: operativeLoadout,
+    kenosis,
+    discharge: playerDischarge,
     jetpack,
     boost,
+    slam,
     shield,
     player,
     hud,
@@ -236,17 +763,43 @@ export async function start({ boot, build } = {}) {
     combat,
     mission,
     breaches,
+    abbess,
+    stylite,
+    coulter,
+    distaff,
+    garner,
+    winnower,
+    matriarch,
+    apostate,
+    undercroft,
+    guardReadability,
+    progression,
+    campaignScore,
     audio,
     intro,
+    saves,
+    gameUi,
+    tutorial,
+    playerCharacter: ctx.playerCharacter,
     runtime: ctx.runtime,
     audioFactory: buildAudio,
     fps: 0,
     frameMs: 0,
+    shotSolution: () => lastShotSolution ? {
+      ...lastShotSolution,
+      cameraOrigin: [...lastShotSolution.cameraOrigin],
+      cameraDirection: [...lastShotSolution.cameraDirection],
+      aimPoint: [...lastShotSolution.aimPoint],
+      origin: [...lastShotSolution.origin],
+      direction: [...lastShotSolution.direction],
+    } : null,
     resize,
     step,
     setTime,
+    setDayCycle,
     setStorm,
     setQuality,
+    frameOnce: null,
     /* Assigned once `shoot` is defined below. The QA trigger has to
        come through HERE and not through `weapons.fire()`, which only
        spends a round and kicks the weapon - everything a shot does
@@ -269,8 +822,20 @@ export async function start({ boot, build } = {}) {
     if (!TIMES[key]) return;
     atmos.apply(key, atmos.storm);
     render.applyAtmosphere(atmos);
-    render.refreshEnvironment(atmos);
+    render.syncEnvironment(atmos);
     sky.refresh();
+    // The sun just moved in a step; a shadow map from before the step
+    // must not survive into the next interleave gap.
+    render.requestShadowUpdate();
+  }
+
+  function setDayCycle(phase = atmos.cyclePhase, running = true, cycleCount = atmos.cycleCount) {
+    atmos.setCyclePhase(phase, running, cycleCount);
+    render.applyAtmosphere(atmos);
+    render.syncEnvironment(atmos);
+    sky.refresh();
+    render.requestShadowUpdate();
+    return atmos.cycleStatus();
   }
 
   /* ------------------------------------------------------------
@@ -283,46 +848,188 @@ export async function start({ boot, build } = {}) {
      ------------------------------------------------------------ */
   function shoot() {
     if (combat.player.dead) return;
-    if (jetpack.state.inFlight) return;
-    if (boost.state.active) return;
+    /* AIRBORNE AND BOOSTING BOTH FIRE NOW.
+       The lance was refused in flight and during a boost, which meant
+       the two verbs that get you into and across a fight both ended
+       it - every engagement was "move, stop, shoot". What still
+       refuses is the SLAM, because that is itself an attack and the
+       lance is over the trooper's head for the whole of it. */
+    if (slam.state.active) return;
     if (shield.state.active) return;
     if (!weapons.fire()) return;
-    // The muzzle, not the camera: a shot that leaves from the eye
-    // passes through cover the weapon is behind.
+    /* Accept the shot now, but resolve it after the visible weapon has
+       received this frame's aim and recoil pose. Reading a world-space
+       socket here samples LAST frame's lance: `weapons.fire()` has just
+       added recoil, while `weapons.update()` has not applied it yet.
+       During a burst that left the streak 7-8cm away from the rendered
+       needle, and a fast turn could separate them much further. */
     const w = weapons.current;
-    const muzzle = w && w.muzzle ? w.muzzle : null;
-    if (muzzle) muzzle.getWorldPosition(shotOrigin);
-    else shotOrigin.copy(render.camera.position);
-
-    render.camera.getWorldDirection(shotDir);
+    shotPort = w ? (w.emitter || w.muzzle) : null;
+    render.camera.updateWorldMatrix(true, false);
+    shotCameraOrigin.setFromMatrixPosition(render.camera.matrixWorld);
+    render.camera.getWorldDirection(shotCameraDir);
     const cone = weapons.spread();
     if (cone > 0) {
       // Cone, not a square: adding independent jitter per axis
       // concentrates shots at the diagonals.
       const a = Math.random() * Math.PI * 2;
       const r = Math.sqrt(Math.random()) * cone;
-      shotSide.set(shotDir.z, 0, -shotDir.x).normalize();
-      shotUp.crossVectors(shotSide, shotDir).normalize();
-      shotDir.addScaledVector(shotSide, Math.cos(a) * r)
+      shotSide.set(shotCameraDir.z, 0, -shotCameraDir.x).normalize();
+      shotUp.crossVectors(shotSide, shotCameraDir).normalize();
+      shotCameraDir.addScaledVector(shotSide, Math.cos(a) * r)
         .addScaledVector(shotUp, Math.sin(a) * r).normalize();
     }
-    combat.fire(shotOrigin, shotDir, {
-      damage: (weapons.current && weapons.current.spec.damage) || 22,
-    });
-    /* The three things that make a shot land on the PLAYER rather
-       than on the target: light at the muzzle, a shove on the camera,
-       and the report. The bolt and the impact are at the far end of
-       the shot and cannot carry the near end on their own - which is
-       what "the gun feels weak" was describing. */
-    if (vfx.muzzle) {
-      vfx.muzzle(shotOrigin.x, shotOrigin.y, shotOrigin.z,
-        shotDir.x, shotDir.y, shotDir.z, 1);
-    }
+
+    /* THIRD-PERSON CONVERGENCE.
+
+       The camera owns the reticle, but the lance owns the physical
+       origin. Casting a ray from that lower emitter PARALLEL to the
+       camera ray makes a target under the reticle sit above the bolt.
+       On level ground the parallel ray can enter the sand several
+       metres in front of the trooper even though the camera has a
+       clear view of an enemy.
+
+       First resolve what the spread-adjusted reticle ray points at,
+       then converge the posed emitter onto that world point in
+       `flushShot`. Cover is still resolved a second time from the
+       emitter by `combat.fire`, so a camera peeking over a wall does
+       not let the lance shoot through it. */
+    const cameraWall = collide.rayBlock(
+      shotCameraOrigin.x, shotCameraOrigin.y, shotCameraOrigin.z,
+      shotCameraDir.x, shotCameraDir.y, shotCameraDir.z, SHOT_RANGE
+    );
+    const cameraEnemy = combat.raycastEnemies(
+      shotCameraOrigin.x, shotCameraOrigin.y, shotCameraOrigin.z,
+      shotCameraDir.x, shotCameraDir.y, shotCameraDir.z,
+      Math.min(SHOT_RANGE, cameraWall)
+    );
+    shotAimKind = cameraEnemy ? "enemy" : (cameraWall !== Infinity ? "cover" : "range");
+    shotAimEnemy = cameraEnemy ? cameraEnemy.inst.key : null;
+    shotAimReach = cameraEnemy
+      ? cameraEnemy.t
+      : Math.min(SHOT_RANGE, cameraWall);
+    shotAimPoint.copy(shotCameraOrigin).addScaledVector(shotCameraDir, shotAimReach);
+    shotDamage = (w && w.spec.damage) || 22;
+    shotQueued = true;
     weapons.flashMuzzle();
-    player.punch(1);
-    audio.shot(shotOrigin.x, shotOrigin.z, { gain: 0.78 });
+    return true;
   }
   api.shoot = shoot;
+
+  /** Resolve an accepted shot from the lance's FINAL posed tip.
+   *
+   * Damage remains hitscan. The spread-adjusted reticle target is frozen
+   * at press time, while the near end waits: the socket is read after
+   * `weapons.update()` and `player.postUpdate()` so the singular beam
+   * begins on the needle the player actually sees in the discharge
+   * frame. */
+  function flushShot() {
+    if (!shotQueued) return;
+    shotQueued = false;
+    if (shotPort) {
+      shotPort.updateWorldMatrix(true, false);
+      shotOrigin.setFromMatrixPosition(shotPort.matrixWorld);
+    } else {
+      shotOrigin.copy(render.camera.position);
+    }
+    shotDir.subVectors(shotAimPoint, shotOrigin);
+    if (shotDir.lengthSq() < 1e-8) shotDir.copy(shotCameraDir);
+    else shotDir.normalize();
+
+    /* Retain the old parallel-ray clearance as a diagnostic. It makes
+       the exact regression measurable: in the failing ground-level
+       case this stops before the camera-selected enemy, while the
+       converged ray lands on it. */
+    const parallelBlock = collide.rayBlock(
+      shotOrigin.x, shotOrigin.y, shotOrigin.z,
+      shotCameraDir.x, shotCameraDir.y, shotCameraDir.z, SHOT_RANGE
+    );
+    const hit = combat.fire(shotOrigin, shotDir, { damage: shotDamage });
+    lastShotSolution = {
+      aimKind: shotAimKind,
+      aimEnemy: shotAimEnemy,
+      resolvedEnemy: hit ? hit.inst.key : null,
+      cameraReach: Number(shotAimReach.toFixed(4)),
+      emitterToAim: Number(shotOrigin.distanceTo(shotAimPoint).toFixed(4)),
+      legacyParallelClear: parallelBlock === Infinity
+        ? SHOT_RANGE : Number(parallelBlock.toFixed(4)),
+      convergenceDeg: Number((shotDir.angleTo(shotCameraDir) * 180 / Math.PI).toFixed(4)),
+      cameraOrigin: shotCameraOrigin.toArray(),
+      cameraDirection: shotCameraDir.toArray(),
+      aimPoint: shotAimPoint.toArray(),
+      origin: shotOrigin.toArray(),
+      direction: shotDir.toArray(),
+    };
+    player.punch(1);
+    audio.shot(shotOrigin.x, shotOrigin.z, { player: true, gain: 0.42 });
+    shotPort = null;
+  }
+
+  function shootFurnaceLance() {
+    if (combat.player.dead) return false;
+    if (slam.state.active) return false;
+    if (shield.state.active) return false;
+    const rank = Math.max(1, progression.rank?.("censer_furnace_reprieve") || 1);
+    const rule = FURNACE_LANCE_RULES.ranks[rank >= 2 ? 2 : 1];
+    if ((jetpack.state.fuel || 0) < rule.chargeCost - 1e-4) return false;
+    if (!weapons.dischargeFurnaceLance({ rank })) return false;
+
+    jetpack.spend(rule.chargeCost, true, false);
+
+    const w = weapons.current;
+    shotPort = w ? (w.emitter || w.muzzle) : null;
+    render.camera.updateWorldMatrix(true, false);
+    shotCameraOrigin.setFromMatrixPosition(render.camera.matrixWorld);
+    render.camera.getWorldDirection(shotCameraDir);
+
+    const cameraWall = collide.rayBlock(
+      shotCameraOrigin.x, shotCameraOrigin.y, shotCameraOrigin.z,
+      shotCameraDir.x, shotCameraDir.y, shotCameraDir.z, SHOT_RANGE
+    );
+    const cameraEnemy = combat.raycastEnemies(
+      shotCameraOrigin.x, shotCameraOrigin.y, shotCameraOrigin.z,
+      shotCameraDir.x, shotCameraDir.y, shotCameraDir.z,
+      Math.min(SHOT_RANGE, cameraWall)
+    );
+    shotAimKind = cameraEnemy ? "enemy" : (cameraWall !== Infinity ? "cover" : "range");
+    shotAimEnemy = cameraEnemy ? cameraEnemy.inst.key : null;
+    shotAimReach = cameraEnemy
+      ? cameraEnemy.t
+      : Math.min(SHOT_RANGE, cameraWall);
+    shotAimPoint.copy(shotCameraOrigin).addScaledVector(shotCameraDir, shotAimReach);
+    furnaceDamage = rule.damage;
+    furnaceRank = rank;
+    furnaceShotQueued = true;
+    weapons.flashMuzzle();
+    return true;
+  }
+  api.shootFurnaceLance = shootFurnaceLance;
+
+  function flushFurnaceLance() {
+    if (!furnaceShotQueued) return;
+    furnaceShotQueued = false;
+    if (shotPort) {
+      shotPort.updateWorldMatrix(true, false);
+      shotOrigin.setFromMatrixPosition(shotPort.matrixWorld);
+    } else {
+      shotOrigin.copy(render.camera.position);
+    }
+    shotDir.subVectors(shotAimPoint, shotOrigin);
+    if (shotDir.lengthSq() < 1e-8) shotDir.copy(shotCameraDir);
+    else shotDir.normalize();
+
+    const hit = combat.fireFurnaceBeam(shotOrigin, shotDir, {
+      damage: furnaceDamage,
+      rank: furnaceRank,
+    });
+
+    player.punch(furnaceRank >= 2 ? 2.4 : 1.8);
+    audio.furnaceDischarge?.(shotOrigin.x, shotOrigin.z, {
+      gain: 1.15,
+      rank: furnaceRank,
+    });
+    shotPort = null;
+  }
 
   /* Two rites, one physical censer-lance. `autogun` is retained as
      the ranged-mode compatibility key; setMode changes ballistics
@@ -333,16 +1040,21 @@ export async function start({ boot, build } = {}) {
      long as the swing takes. That is what makes one key enough: the
      player never has to know which mode they left it in. */
   let meleeBorrowed = false;
-  function meleeStrike() {
-    if (combat.player.dead) return;
-    if (jetpack.state.inFlight) return;
-    if (shield.state.active) return;
+  let meleeHoldTime = 0;
+  let meleeAimYaw = null;
+  let meleeCharging = false;
+  let meleePending = null;
+
+  function meleeStrike(aimYaw = null) {
+    if (combat.player.dead) return false;
+    if (jetpack.state.inFlight) return false;
+    if (shield.state.active) return false;
     /* Drawing first. The press has already reset the calm timer via
        `updateStow`, so this frame starts the draw and the swing waits
        for the lance to be in hand - a melee that begins with the
        weapon still on the trooper's back swings an empty fist. */
     calmFor = 0;
-    if (weapons.stowPhase > 0.08) return;
+    if (weapons.stowPhase > 0.08) return false;
     const wasRanged = !!weapons.current && !weapons.current.spec.melee;
     if (wasRanged) {
       weapons.setMode("melee");
@@ -352,10 +1064,64 @@ export async function start({ boot, build } = {}) {
        returns false for that case as well as for a refusal - so the
        rite is handed back on the ACTION ending, not on this result.
        Returning it here dropped the player out of melee mid-combo. */
-    if (!player.meleeSwing() && wasRanged && !player.action) {
+    if (!player.meleeSwing(aimYaw) && wasRanged && !player.action) {
       weapons.setMode("ranged");
       meleeBorrowed = false;
+      return false;
     }
+    return true;
+  }
+
+  function meleePierce(aimYaw = null, chargeRatio = 1.0) {
+    if (combat.player.dead) return false;
+    if (jetpack.state.inFlight) return false;
+    if (shield.state.active) return false;
+    calmFor = 0;
+    if (weapons.stowPhase > 0.08) return false;
+    const wasRanged = !weapons.current || !weapons.current.spec.melee;
+    if (wasRanged) {
+      weapons.setMode("melee");
+      meleeBorrowed = true;
+    }
+    const ratio = Math.max(0.15, Math.min(1.0, chargeRatio ?? 1.0));
+    const targetCost = Math.round(15 + ratio * 35);
+    const available = jetpack.state.fuel || 0;
+    if (available < 15 - 1e-4) {
+      return meleeStrike(aimYaw);
+    }
+    const cost = Math.min(available, targetCost);
+    jetpack.spend(cost, true, true);
+    if (!player.meleePierce(aimYaw, ratio) && wasRanged && !player.action) {
+      weapons.setMode("ranged");
+      meleeBorrowed = false;
+      return false;
+    }
+    audio.meleePierceLaunch?.(player.state.x, player.state.z);
+    return true;
+  }
+
+  /* A press must survive the ordinary low-ready/sheathed carry. Previously
+     the input was consumed while the lance was still on the trooper's back;
+     by the time the draw finished there was no action left to perform. */
+  function queueMelee(kind, aimYaw = null, chargeRatio = 1.0) {
+    calmFor = 0;
+    weapons.setStow(false);
+    meleePending = { kind, aimYaw, chargeRatio };
+  }
+
+  function resolveQueuedMelee(canChargePierce, blocked) {
+    if (!meleePending) return false;
+    if (blocked) {
+      meleePending = null;
+      return false;
+    }
+    if (weapons.stowPhase > 0.08) return false;
+    const pending = meleePending;
+    meleePending = null;
+    if (pending.kind === "pierce" && canChargePierce) {
+      return meleePierce(pending.aimYaw, pending.chargeRatio ?? 1.0);
+    }
+    return meleeStrike(pending.aimYaw);
   }
 
   /* ------------------------------------------------------------
@@ -383,7 +1149,8 @@ export async function start({ boot, build } = {}) {
       // `state === "death"` is how enemies.js marks a corpse mid-clip;
       // there is no `dead` flag, and testing for one silently treated
       // every body on the field as a live threat.
-      if (inst.state === "death" || inst.emerging?.active) continue;
+      if (inst.state === "death" || inst.emerging?.active
+        || inst.encounterHidden || inst.encounterLocked) continue;
       const dx = inst.root.position.x - px;
       const dz = inst.root.position.z - pz;
       if (dx * dx + dz * dz < STOW_THREAT_RANGE * STOW_THREAT_RANGE) return true;
@@ -410,15 +1177,24 @@ export async function start({ boot, build } = {}) {
        and keeping it drawn through glide/landing gives both arms a
        purposeful airborne silhouette. */
     if (jetpack.state.inFlight || jetpack.state.requested
-      || boost.state.active || shield.state.active) {
+      || boost.state.active || slam.state.active || shield.state.active) {
       calmFor = 0;
       weapons.setStow(false);
+      /* ADS is suppressed in flight and on a glide but FIRING is not:
+         hip fire from a moving trooper is the point of both, and
+         sights while travelling at nineteen metres a second is a
+         readability problem, not a capability the player wants. */
       weapons.setAds(0);
       return;
     }
     if (!autoStow) { calmFor = 0; weapons.setStow(false); return; }
     const busy = player.input.state.firing
+      || player.input.state.furnaceHeld
+      || player.input.state.meleeHeld
       || player.input.state.ads
+      || meleeCharging
+      || !!meleePending
+      || weapons.furnaceChargeState().charging
       || !!player.action
       || boost.state.active
       || shield.state.active
@@ -429,9 +1205,38 @@ export async function start({ boot, build } = {}) {
     weapons.setStow(calmFor > STOW_IDLE_SECONDS);
   }
 
+  /** Feet off the ground, by any route: pack, jump or a fall in progress. */
+  function airborne() {
+    return jetpack.state.inFlight || slam.state.active || !player.state.grounded;
+  }
+
   function stepGame(d) {
+    const encounterHold = !!player.state.free;
+    if (encounterHold) {
+      /* The reveal camera is a hold, not a second control scheme.
+         Drain and drop any combat input so a held trigger cannot
+         fire from off-camera, then let the encounter modules below
+         finish the intro on their own clocks. */
+      player.input.clearAll?.();
+      weapons.setAds(0);
+    }
+    if (usesOperativeKit) {
+      /* The operative kit is the one input consumer for these two
+         bodies. It routes the held mouse buttons and E into their
+         authored verbs, while the crescent module owns the Vigil's
+         continuous primary fire. */
+      kenosis?.update?.(d);
+      playerDischarge?.update?.(d);
+    } else {
+    /* FLATTENED. `player.applyStun` takes the hands as well as the
+       feet - see its note - and this is the half of that the player
+       module cannot enforce, because what a press MEANS is decided
+       here. Drained and dropped, exactly like the reveal camera's
+       hold: a trigger held through a stun must not fire the moment it
+       ends, and a melee press must not queue a combo out of it. */
+    const stunned = (player.state.stunFor || 0) > 0;
     for (const ev of player.input.drain()) {
-      if (combat.player.dead) continue;
+      if (encounterHold || stunned || combat.player.dead) continue;
       if (ev.type === "boost") {
         if (!jetpack.state.inFlight) boost.trigger();
         continue;
@@ -440,13 +1245,77 @@ export async function start({ boot, build } = {}) {
         mission.cancelEntry();
         continue;
       }
-      if (jetpack.state.inFlight || boost.state.active || shield.state.active) continue;
+      /* ONE KEY, TWO ATTACKS, DECIDED BY ALTITUDE.
+         Q swings on the ground and falls in the air. Routing it here
+         rather than in the input layer keeps the decision next to the
+         systems that know what the trooper is standing on - and means
+         a slam that refuses (too low, no charge) can fall back to the
+         swing instead of eating the press. */
+      if (ev.type === "melee" && airborne()) {
+        if (slam.trigger()) continue;
+        if (jetpack.state.inFlight || slam.state.active) continue;
+      }
+      if (slam.state.active) continue;
+      if (ev.type === "stratOpen" || ev.type === "dir" || ev.type === "vent") {
+        if (jetpack.state.inFlight || boost.state.active || shield.state.active) continue;
+      }
       if (ev.type === "stratOpen") mission.beginEntry();
       else if (ev.type === "dir") mission.pushDirection(ev.dir);
       else if (ev.type === "vent") weapons.vent();
-      else if (ev.type === "melee") meleeStrike();
+      else if (ev.type === "melee" && !boost.state.active && !shield.state.active) {
+        const measureRank = progression.rank?.("procession_executioners_measure") || 0;
+        meleeAimYaw = ev.aimYaw;
+        calmFor = 0;
+        weapons.setStow(false);
+        if (measureRank > 0 && player.input.state.meleeHeld && (jetpack.state.fuel || 0) >= 15 - 1e-4) {
+          meleeHoldTime = 0;
+          meleeCharging = true;
+        } else {
+          queueMelee("strike", ev.aimYaw);
+        }
+      }
     }
+
+    const measureRankVal = progression.rank?.("procession_executioners_measure") || 0;
+    const canChargePierce = !encounterHold && !stunned && !airborne()
+      && !boost.state.active && !shield.state.active && !slam.state.active
+      && measureRankVal > 0 && (jetpack.state.fuel || 0) >= 15 - 1e-4;
+    const meleeBlocked = encounterHold || stunned || combat.player.dead || airborne()
+      || boost.state.active || shield.state.active || slam.state.active;
+
+    const MELEE_HOLD_GATE = 0.50;
+    const MELEE_CHARGE_MAX = 3.00;
+
+    if (meleeCharging && canChargePierce && player.input.state.meleeHeld) {
+      meleeHoldTime = Math.min(MELEE_CHARGE_MAX, meleeHoldTime + d);
+      if (meleeHoldTime >= MELEE_HOLD_GATE) {
+        const progress = Math.min(1.0, (meleeHoldTime - MELEE_HOLD_GATE) / (MELEE_CHARGE_MAX - MELEE_HOLD_GATE));
+        audio.meleePierceCharge?.(progress);
+        vfx.meleePierceCharge?.(player.state.x, player.state.y, player.state.z, progress, measureRankVal);
+        if (meleeHoldTime >= MELEE_CHARGE_MAX && weapons.stowPhase <= 0.08) {
+          meleePierce(meleeAimYaw ?? player.state.aimViewYaw, 1.0);
+          audio.meleePierceCharge?.(0);
+          meleeHoldTime = 0;
+          meleeCharging = false;
+        }
+      }
+    } else if (meleeCharging) {
+      audio.meleePierceCharge?.(0);
+      if (!meleeBlocked) {
+        if (meleeHoldTime >= MELEE_HOLD_GATE && canChargePierce) {
+          const progress = Math.min(1.0, (meleeHoldTime - MELEE_HOLD_GATE) / (MELEE_CHARGE_MAX - MELEE_HOLD_GATE));
+          const chargeRatio = Math.max(0.15, progress);
+          queueMelee("pierce", meleeAimYaw ?? player.state.aimViewYaw, chargeRatio);
+        } else {
+          queueMelee("strike", meleeAimYaw ?? player.state.aimViewYaw);
+        }
+      }
+      meleeCharging = false;
+      meleeHoldTime = 0;
+    }
+    resolveQueuedMelee(canChargePierce, meleeBlocked);
     const melee = weapons.current && weapons.current.spec.melee;
+
     /* The trigger only ever fires now. Melee has its own key, and
        mapping it onto the trigger as well meant that holding fire
        through a swing chained a combo nobody asked for.
@@ -456,8 +1325,59 @@ export async function start({ boot, build } = {}) {
        the time this runs; refusing the shot until it lands is the
        difference between a weapon that was put away and a weapon
        that fires out of the player's back. */
-    if (player.input.state.firing && !melee && !boost.state.active && !shield.state.active
-      && weapons.stowPhase < 0.08) shoot();
+    const canFire = !encounterHold && !stunned && !melee
+      && !slam.state.active && !shield.state.active
+      && weapons.stowPhase < 0.08;
+
+    const furnaceRankVal = progression.rank?.("censer_furnace_reprieve") || 0;
+    const furnaceRule = FURNACE_LANCE_RULES.ranks[furnaceRankVal >= 2 ? 2 : 1];
+    const canChargeFurnace = canFire && furnaceRankVal > 0
+      && (jetpack.state.fuel || 0) >= furnaceRule.chargeCost - 1e-4
+      && !weapons.current?.spec?.melee
+      && !weapons.carry?.overheated
+      && (weapons.carry?.venting || 0) <= 0;
+
+    const fireHeld = player.input.state.firing;
+    const furnaceHeld = player.input.state.furnaceHeld;
+    let furnaceCharge = weapons.furnaceChargeState();
+
+    /* Primary fire remains the automatic Volley at every hold duration.
+       Furnace Lance owns a distinct, remappable hold and discharges only on
+       release at full charge, so neither action has to guess what the player
+       meant from the length of one mouse press. */
+    if (furnaceHeld) {
+      calmFor = 0;
+      weapons.setStow(false);
+      if (canChargeFurnace) {
+        if (!furnaceCharge.charging) {
+          weapons.startFurnaceCharge(furnaceRule.chargeSeconds);
+        }
+        weapons.updateFurnaceCharge(d);
+        furnaceCharge = weapons.furnaceChargeState();
+        const w = weapons.current;
+        const port = w ? (w.emitter || w.muzzle) : null;
+        let emitX = player.state.x;
+        let emitY = player.state.y + 1.2;
+        let emitZ = player.state.z;
+        if (port) {
+          port.updateWorldMatrix(true, false);
+          _furnacePos.setFromMatrixPosition(port.matrixWorld);
+          emitX = _furnacePos.x; emitY = _furnacePos.y; emitZ = _furnacePos.z;
+        }
+        vfx.furnaceCharge(emitX, emitY, emitZ, furnaceCharge.progress, furnaceRankVal);
+        audio.furnaceCharge(furnaceCharge.progress);
+      } else if (furnaceCharge.charging) {
+        weapons.cancelFurnaceCharge();
+        audio.furnaceCharge(0);
+      }
+    } else if (furnaceCharge.charging) {
+      if (furnaceCharge.ready && canChargeFurnace) shootFurnaceLance();
+      weapons.cancelFurnaceCharge();
+      audio.furnaceCharge(0);
+      furnaceCharge = weapons.furnaceChargeState();
+    }
+
+    if (fireHeld && canFire && !furnaceHeld && !furnaceCharge.charging) shoot();
     /* Hand the rite back once the swing is over. `meleeSwing` buffers
        a press during recovery into the next combo step, so the mode
        has to survive until the whole chain has run out - which is
@@ -466,12 +1386,51 @@ export async function start({ boot, build } = {}) {
       weapons.setMode("ranged");
       meleeBorrowed = false;
     }
-    weapons.setAds(!melee && !jetpack.state.inFlight && !boost.state.active && !shield.state.active
-      && player.input.state.ads ? 1 : 0);
+    if (!encounterHold) {
+      weapons.setAds(!melee && !jetpack.state.inFlight && !boost.state.active
+        && !shield.state.active && player.input.state.ads ? 1 : 0);
+    }
     updateStow(d);
+    }
     combat.update(d);
+    /* After combat, because the burrower damages through it and reads
+       the player position combat has just resolved against - and before
+       breaches, so a Coulter that dies to its own frame's venom is
+       counted as dead by the event that is waiting for it. */
+    coulter.update(d);
+    distaff.update(d);
+    garner.update(d);
+    abbess.update(d);
+    stylite.update(d);
+    winnower.update(d);
+    districtBosses.update(d);
+    /* AFTER the shared controller, not before it. That controller owns
+       the Matriarch's reveal gate and its arena reset, and both are
+       decided this frame; a module that acted first would spend one
+       frame per reset swinging at a player it had just been teleported
+       away from. */
+    matriarch.update(d);
+    apostate.update(d);
+    /* AFTER the boss, and it has to be. The collapse writes the
+       player's position and the boss's absolute height for the
+       length of the cinematic, and both of those have to be the last
+       word on the frame - apostate.js's own `poseFigure` would
+       otherwise put the body back on a nave floor that is currently
+       being taken away. */
+    undercroft.update(d);
+    guardReadability.update(d);
     breaches.update(d);
     mission.update(d);
+    /* BEFORE the enemies read their lures and after the mission's own
+       tick: a beacon's lure and a lingering field are written onto
+       creatures and consumed by combat in the same frame. */
+    ctx.command?.update?.(d);
+    /* Every movement owner has now taken its turn: ordinary pursuit in
+       combat, encounter-owned bosses above, and event spawns in mission.
+       Resolve their shared body space once, here, so no controller can undo
+       another controller's separation later in the same frame. */
+    enemies.resolveCrowding?.(player.state);
+    progression.update?.(d);
     audio.update(d, player, render.camera);
     if (colliderView) {
       colliderTick -= d;
@@ -483,17 +1442,55 @@ export async function start({ boot, build } = {}) {
   }
 
   function setStorm(v) {
-    atmos.apply(atmos.time, v);
+    atmos.setStorm(v);
     render.applyAtmosphere(atmos);
-    render.refreshEnvironment(atmos);
+    render.syncEnvironment(atmos);
+    sky.refresh();
+    render.requestShadowUpdate();
     vfx.setStorm(atmos.storm);
   }
 
   function setQuality(tier) {
-    render.setQuality(tier, sky);
+    const applied = render.setQuality(tier, sky);
+    ctx.quality = applied;
     resize();
+    return applied;
   }
+  /* Applied before the first frame is drawn, so a machine that stored
+     LOW never has to survive a HIGH frame to reach the menu. The URL
+     param wins for the session; the stored preference is the default
+     for the tier switch in both menus. */
+  const quality = qualityParam || gameUi.settingsState?.().qualityStored || "high";
   setQuality(quality);
+  // Both menus highlight the LIVE tier, so a URL override shows as such.
+  gameUi.refresh?.();
+  intro.refreshMenu?.();
+  /* A difficulty change is data, not a rebuild: every consumer reads the
+     tier live. The two things that do not are already-spawned health
+     pools and the menus, so both follow here. A save restore sets the
+     tier from the file (source "save") and stores it as the preference,
+     so a new road starts where the last one was walked. */
+  ctx.difficulty.onChange((next, previous, source) => {
+    enemies.rescaleForDifficulty?.(previous, next);
+    if (source === "save") gameUi.setSetting?.("difficulty", next);
+    gameUi.refresh?.();
+    intro.refreshMenu?.();
+  });
+  /* `?ao=0` (or any strength 0..1) overrides the tier's screen-space
+     occlusion. A diagnostic first and a relief second: the pass prints
+     a fixed-position plaid on Apple GPUs (milestone 96) that no other
+     tier setting isolates - `quality=low` also drops shadows and pixel
+     ratio - and a player who sees a grid over the desert deserves a
+     switch that removes exactly the thing drawing it. */
+  if (params.has("ao")) render.setAo(Math.max(0, Math.min(1, Number(params.get("ao")) || 0)), 0.7);
+
+  /* `?dynres=0` pins native resolution for a player who wants it;
+     `?dynres=1` opts a QA run INTO the controller, which is otherwise
+     held at scale 1 so goldens stay deterministic. The settings menu
+     drives the same switch through gameUi. */
+  const dynresParam = params.get("dynres");
+  if (dynresParam === "0") render.setAutoScale(false);
+  else if (dynresParam === "1") render.setAutoScale(true, { force: true });
 
   /** One simulation + render step. `draw` false steps the world
    *  without drawing, which is what lets the harness settle three
@@ -501,17 +1498,30 @@ export async function start({ boot, build } = {}) {
   function step(dt, draw = true) {
     const d = Math.min(dt, 0.1);
     player.update(d, render.camera);
-    sky.update(d, render.camera);
+    advanceSky(d, render.camera, draw);
     terrain.updateLod(render.camera);
     enemies.update(d, render.camera);
-    stepGame(d);
-    weapons.update(d, player, render.camera);
-    player.postUpdate(d);
+    if (usesOperativeKit) {
+      /* Kenosis weapon mounts are solved from the final live palms,
+         and their attacks read those sockets in the same frame. */
+      player.postUpdate(d);
+      operativeLoadout?.update?.(d);
+      stepGame(d);
+    } else {
+      stepGame(d);
+      weapons.update(d, player, render.camera);
+      player.postUpdate(d);
+      flushShot();
+      flushFurnaceLance();
+    }
     jetpack.updateVisual(d);
     shield.updateVisual(d);
     vfx.update(d, render.camera);
     touch.update(d);
     hud.update(d, player, render.camera);
+    saves.update(d);
+    gameUi.update?.(d);
+    tutorial.update?.(d);
     if (draw) render.render(render.camera);
   }
 
@@ -529,16 +1539,21 @@ export async function start({ boot, build } = {}) {
       return;
     }
     if (ctx.runtime.paused) {
+      gameUi.update?.(0);
+      tutorial.update?.(0);
+      hud.update?.(0, player, render.camera);
       if (draw) render.render(render.camera);
       return;
     }
     step(dt, draw);
   }
+  api.frameOnce = frame;
 
   let last = performance.now();
   function loop(now) {
     requestAnimationFrame(loop);
-    const dt = Math.min(0.1, (now - last) / 1000);
+    const rawMs = now - last;
+    const dt = Math.min(0.1, rawMs / 1000);
     last = now;
     const t0 = performance.now();
     frame(dt, true);
@@ -546,21 +1561,34 @@ export async function start({ boot, build } = {}) {
     frameStat.push(ms);
     api.frameMs = frameStat.mean();
     api.fps = api.frameMs > 0 ? 1000 / Math.max(api.frameMs, 1e-3) : 0;
+    /* Presented cadence, not CPU work time: a fill-bound frame spends
+       its overrun in the compositor where performance.now() straddling
+       frame() never sees it, and rAF spacing is the one signal that
+       does. A hidden tab's rAF starvation is excluded by the
+       controller's own outlier guard. */
+    if (!document.hidden) render.tickAutoScale(rawMs);
   }
 
   /* -------------------------- keyboard extras -------------------------- */
 
   const TIME_KEYS = ["goldenhour", "noon", "dusk", "night", "storm"];
+  const ownsKeyboard = () => document.pointerLockElement === canvas
+    || player.input?.state?.locked || document.activeElement === canvas
+    || document.documentElement.classList.contains("sf-maximised");
+  const isInteractiveKeyTarget = (target) => target instanceof Element
+    && !!target.closest("button, a, input, select, textarea, [contenteditable='true'],"
+      + " [role='button'], [role='menuitem'], [role='tab']");
   window.addEventListener("keydown", (e) => {
-    if (intro.isBlocking() && e.code !== "KeyM") return;
-    if (ctx.runtime.paused && e.code !== "KeyM") return;
-    if (e.code >= "Digit1" && e.code <= "Digit5") {
+    if (!ownsKeyboard() || e.defaultPrevented || isInteractiveKeyTarget(e.target)) return;
+    if (intro.isBlocking()) return;
+    if (ctx.runtime.paused) return;
+    if (qa && e.code >= "Digit1" && e.code <= "Digit5") {
       const idx = Number(e.code.slice(5)) - 1;
       if (TIME_KEYS[idx] === "storm") { setTime("goldenhour"); setStorm(1); }
       else { setStorm(0); setTime(TIME_KEYS[idx]); }
       hud.flashDistrict(atmos.preset.label);
     }
-    if (e.code === "KeyF") {
+    if (qa && e.code === "KeyP") {
       const free = player.state.free;
       if (free) player.setFree(false);
       else {
@@ -576,7 +1604,7 @@ export async function start({ boot, build } = {}) {
           c.fov);
       }
     }
-    if (e.code === "KeyH") hud.setVisible(hudHost.style.display === "none");
+    if (keybindMatches("hud", e.code)) hud.setVisible(hudHost.style.display === "none");
     if (e.code === "KeyK") {
       // Show what is actually stopping you. See collide.setDebugView.
       colliderView = !colliderView;
@@ -586,15 +1614,60 @@ export async function start({ boot, build } = {}) {
         ? `Colliders shown (${r && r.boxes ? r.boxes : 0} cells)`
         : "Colliders hidden");
     }
-    if (e.code === "KeyM") {
-      audio.setEnabled(!audio.enabled);
-      hud.flashDistrict(audio.enabled ? "Audio on" : "Audio muted");
-    }
   });
 
   /* ------------------------------ go ------------------------------ */
 
   installQa(ctx, api);
+
+  /* WARM EVERY SHADER WHILE THE LOADER IS STILL UP.
+     Stepping frames below compiles what is VISIBLE. Everything built
+     hidden and revealed on use - the Aegis shield, the jetpack plume,
+     the slam, the VFX pools, the Coulter - would otherwise compile its
+     program inside the first frame it is used in, which is a freeze on
+     the exact input the player pressed to survive something. Measured
+     as a 60-200ms stall on first shield, first jetpack and first shot.
+     Failure here must never block the drop: a driver that refuses the
+     parallel-compile path should cost a hitch, not the game. */
+  progress(0.985, "Lighting the censers");
+  /* Which adapter the browser actually handed over. A dual-GPU laptop
+     can give the page its integrated chip, and a browser with
+     hardware acceleration off (or a crashed GPU process) gives back a
+     CPU rasteriser - either presents as "strong machine, weak game"
+     with no error anywhere, so name the adapter where a bug report
+     can find it. The settings menu shows the same string. */
+  console.info(`[saintfall] GPU: ${render.gpu || "unknown"}`
+    + `${render.softwareRendered ? " - SOFTWARE RENDERING (hardware acceleration is off)" : ""}`);
+  try {
+    const warmed = await render.warmShaders(render.camera, render.scene);
+    if (qa) console.info("[saintfall] shader warm-up", warmed);
+    /* The cinematic's orbital act is its OWN scene - the star dome,
+       Vesper-IX, the barge, and the entry effects that stay hidden
+       until the plasma beat (sheath, wake, embers) live there, not in
+       render.scene, so the warm-up above never reaches them. Compile
+       them here or each first appearance is a program build on the
+       exact beat it becomes visible, mid-cinematic. The getters serve
+       the orbit pair while the intro is in its orbital act, which is
+       exactly the boot state. */
+    if (introEnabled && intro.scene && intro.camera && intro.scene !== render.scene) {
+      const warmedOrbit = await render.warmShaders(intro.camera, intro.scene);
+      if (qa) console.info("[saintfall] intro shader warm-up", warmedOrbit);
+    }
+    /* The pod is LENT to that orbital scene right now - the entry
+       menu shows it hanging under the barge - so the level warm-up
+       above never saw it, and the orbital warm-up compiled it against
+       the ORBIT's three lights. Its six materials were then first
+       drawn in the level on the cloud-break frame, at the level's
+       light count, none of them compiled: measured as seven program
+       builds inside the one frame of the match cut. Compile the
+       borrowed subtree against the LEVEL's lighting state explicitly. */
+    if (introEnabled && pod?.root) {
+      const warmedPod = await render.warmShaders(render.camera, pod.root, render.scene);
+      if (qa) console.info("[saintfall] pod shader warm-up", warmedPod);
+    }
+  } catch (err) {
+    console.warn("[saintfall] shader warm-up skipped:", err && err.message);
+  }
 
   // A few real frames before the loader lifts, so the first thing
   // anyone sees is a composed image rather than a black canvas.
@@ -604,16 +1677,30 @@ export async function start({ boot, build } = {}) {
       // the isolated intro. The hatch match-cut must not discover 50
       // world shaders and 193 unculled enemies on its first frame.
       player.input.clearAll?.();
+      /* The cinematic holds the trooper hidden until egress via
+         figureOverride - which also kept the figure and the lance out
+         of these warm frames, so their shadow-depth programs and GPU
+         buffers were first built ON the egress beat. Hold the figure
+         visible for the hidden draw (the loader is an opaque layer
+         over the canvas, and the orbit render below repaints it), then
+         put the override back exactly as the cinematic left it. */
+      const figureOverride = player.state.figureOverride;
+      player.state.figureOverride = null;
       step(0, true);
+      player.state.figureOverride = figureOverride;
+      if (figureOverride === false) player.figure.root.visible = false;
       intro.update(0);
     } else step(1 / 60, true);
   }
   progress(1, "Ready");
-  // Let the loading title finish its fade before the interactive
-  // Deploy card appears underneath it.
-  if (boot) await boot.hide();
+  /* Put the save-aware entry card underneath the opaque loader first,
+     then fade the loader away. Reversing these two operations exposes
+     the intro's already-rendered orbital frame for the loader's 950ms
+     teardown before the menu becomes visible. */
   intro.reveal?.();
+  if (boot) await boot.hide();
   api.ready = true;
+  if (tutorialForced && !introEnabled) tutorial.start?.({ source: "forced-direct" });
   requestAnimationFrame(loop);
 
   return api;

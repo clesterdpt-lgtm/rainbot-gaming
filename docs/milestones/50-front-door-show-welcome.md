@@ -30,6 +30,7 @@ Replace the abrupt handoff from the title card into free exploration with a stag
 ## Acceptance criteria
 
 - [x] Starting a fresh run places the loaded Mr. Feast just inside the front door, facing the threshold player, while player translation, host patrol, and ordinary interactions remain locked. — test: `scripts/test-mr-feast-opening-welcome.mjs::front-door staging and input gate`
+- [x] The first visible host line immediately exposes a keyboard- and touch-accessible `Skip intro` control. Activating it dismisses the whole welcome, releases movement/patrol, and leaves quest, inventory, and security state untouched. — test: `scripts/test-mr-feast-opening-welcome.mjs::immediate full-intro skip`
 - [x] Seven sequential lines explicitly establish a reality-show competition, the one-million-dollar prize, accessible house areas, camera/house rules, and a prohibition on entering the basement, ending on a suspicious consequence. — test: `scripts/test-mr-feast-opening-welcome.mjs::authored briefing contract`
 - [x] Every line appears complete and remains visible for a named 6–10 second reading window; E/tap cannot advance it before a named minimum hold, and the sequence progresses automatically if the player does nothing. — test: `scripts/test-mr-feast-opening-welcome.mjs::deterministic pacing and guarded advance`
 - [x] After the final line, movement and normal interactions unlock, the opening never repeats during that run, and Mr. Feast resumes from the foyer without altering quest, security, inventory, or save state. — test: `scripts/test-mr-feast-opening-welcome.mjs::clean release to exploration`
@@ -47,6 +48,7 @@ Write and run `scripts/test-mr-feast-opening-welcome.mjs` red before implementat
 
 ## Verification
 
+- The 2026-07-22 skip refinement passed its 390×844 touch browser case: the first line exposed an at-least-44 px `Skip intro` target, clicking it completed the welcome with `player-skipped`, resumed patrol, and left quest, inventory, and security state untouched. Visual proof: `output/playwright/mr-feast-opening-welcome/opening-skip-mobile.png`.
 - Red-first focused regression failed on the missing `MR_FEAST_OPENING_WELCOME` contract before implementation, then passed after implementation.
 - The load-reliability regression failed red on the missing cold-start timeout contract, after controlled Chromium runs reproduced the false page retry at `18.1s` and false runtime retry at `15.4s`; it then passed with a delayed core runtime, separately delayed texture/statue phases, a genuine silent-init failure, and zero browser errors.
 - Runtime and focused-test syntax checks, `git diff --check`, `scripts/test-mr-feast-renovation.mjs`, `scripts/test-mr-feast-contestant-13.mjs`, `scripts/test-mr-feast-tamper-distractions.mjs`, and `scripts/test-mr-feast-contestant-conversations.mjs` passed.

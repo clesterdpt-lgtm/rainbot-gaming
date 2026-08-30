@@ -1,0 +1,80 @@
+{
+  "generatedAt": "2026-08-14T03:48:06.133301+00:00",
+  "pipeline": "approved concept -> Meshy image-to-3D -> Meshy auto-rig -> Blender 4.5 demon browser preparation",
+  "blenderVersion": "4.5.11 LTS",
+  "source": "/Volumes/External SSD/Projects/RainbotGaming/assets/models/mr-feast/source/demon-prototypes/meshy/banquet-saint-rigged.glb",
+  "output": "feast-father-closeup.glb",
+  "slug": "banquet-saint",
+  "rigged": true,
+  "boneCount": 24,
+  "skinnedMeshCount": 1,
+  "normalizationStrategy": "baked-scene-roots",
+  "normalizationScale": 1.000000541637193,
+  "restPosture": {
+    "name": "processed-source-bind",
+    "hipsPitchDegrees": 0.0,
+    "armRaiseDegrees": 0.0,
+    "neckLiftDegrees": 0.0,
+    "lateralScale": 1.0,
+    "headLeveling": "none",
+    "limbCompensation": "none"
+  },
+  "targetHeightMeters": 2.34,
+  "height": 2.34,
+  "groundY": 0.0,
+  "targetTriangles": 60720,
+  "triangles": 60720,
+  "textureMaxSize": 2048,
+  "maxTextureDimension": 2048,
+  "sourceBounds": {
+    "min": [
+      -0.550963,
+      -0.321759,
+      1e-06
+    ],
+    "max": [
+      0.550963,
+      0.321759,
+      2.339999
+    ]
+  },
+  "boundsMin": [
+    -0.550963,
+    -0.321759,
+    0.0
+  ],
+  "boundsMax": [
+    0.550963,
+    0.321759,
+    2.34
+  ],
+  "fileBytes": 10148612,
+  "sourceTriangles": 60720,
+  "meshes": [
+    "Demon_Banquet_Saint_Mesh_01"
+  ],
+  "materials": [
+    "Demon_Banquet_Saint_Material_01"
+  ],
+  "images": [
+    {
+      "name": "texture_0",
+      "width": 2048,
+      "height": 2048
+    }
+  ],
+  "warnings": [],
+  "shading": {
+    "smoothPolygons": 60720,
+    "weldedVertices": 28025,
+    "weldDistanceMeters": 0.0001
+  },
+  "previews": [],
+  "features": {
+    "animations": false,
+    "skins": true,
+    "draco": false,
+    "meshopt": false,
+    "validatedFor": "Three.js r128"
+  }
+}

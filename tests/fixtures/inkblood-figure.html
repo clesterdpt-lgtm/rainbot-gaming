@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>INKBLOOD figure study</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anton&family=Bebas+Neue&family=Noto+Sans+JP:wght@700;900&display=swap" />
+<style>
+  body { margin:0; background:#efeade; font-family: system-ui, sans-serif; }
+  canvas { display:block; }
+  #log { position:fixed; right:8px; top:8px; background:#fff; border:1px solid #000; padding:6px 10px; font-size:12px; max-width:340px; white-space:pre-wrap; }
+</style>
+</head>
+<body>
+<canvas id="sheet"></canvas>
+<div id="log">…</div>
+<script type="module">
+import { bakeFigure } from "../../assets/js/inkblood/sprites.js";
+import { paper } from "../../assets/js/inkblood/art.js";
+
+const q = new URLSearchParams(location.search);
+const names = (q.get("who") || "hero").split(",");
+const SCALE = Number(q.get("scale") || 3);
+const GAME = q.get("game") !== "0";
+const ACTION = q.get("action") || undefined;
+const CYCLE = q.get("cycle") === "1";
+
+const log = document.getElementById("log");
+const c = document.getElementById("sheet");
+const g = c.getContext("2d");
+const errs = [];
+window.addEventListener("error", (e) => { errs.push(String(e.message)); log.textContent = errs.join("\n"); });
+
+(async () => {
+  const t0 = performance.now();
+  const samples = CYCLE
+    ? names.flatMap((name) => Array.from({ length: 8 }, (_, i) => ({ name, t: i / 7 })))
+    : names.map((name) => ({ name, t: 0.25 }));
+  const big = samples.map(({ name, t }) => ({
+    n: CYCLE ? `${name} ${Math.round(t * 100)}%` : name,
+    f: bakeFigure(name, { scale: SCALE, t, action: ACTION }),
+  }));
+  const small = GAME ? samples.map(({ name, t }) => ({
+    n: name,
+    f: bakeFigure(name, { scale: 1, t, action: ACTION }),
+  })) : [];
+  const t1 = performance.now();
+
+  const pad = 40;
+  const W = big.reduce((a, b) => a + b.f.w / 2 + pad, pad) + (GAME ? 260 : 0);
+  const bigHeight = Math.max(...big.map((b) => b.f.h / 2));
+  const smallHeight = GAME ? small.reduce((sum, item) => sum + item.f.h / 2 + 14, 0) : 0;
+  const H = Math.max(bigHeight, smallHeight) + pad * 2 + 40;
+  c.width = Math.ceil(W); c.height = Math.ceil(H);
+
+  g.fillStyle = g.createPattern(paper(), "repeat");
+  g.fillRect(0, 0, c.width, c.height);
+
+  let x = pad;
+  for (const { n, f } of big) {
+    const w = f.w / 2, h = f.h / 2;
+    g.drawImage(f.canvas, x, pad, w, h);
+    g.font = "13px system-ui"; g.fillStyle = "#101014"; g.textAlign = "left";
+    g.fillText(`${n} @${SCALE}x  (${Math.round(f.w/2)}x${Math.round(f.h/2)})`, x, pad + h + 18);
+    x += w + pad;
+  }
+  // Game-size reference strip so the same art can be checked small.
+  if (GAME) {
+    let y = pad;
+    g.font = "12px system-ui"; g.fillStyle = "#101014";
+    g.fillText("game size", x, y - 8);
+    for (const { f } of small) {
+      g.drawImage(f.canvas, x, y, f.w / 2, f.h / 2);
+      y += f.h / 2 + 14;
+    }
+  }
+
+  log.textContent = `baked ${names.join(",")} in ${(t1 - t0).toFixed(0)}ms\nerrors: ${errs.length ? errs.join("|") : "none"}`;
+  window.__BAKED = true;
+})();
+</script>
+</body>
+</html>

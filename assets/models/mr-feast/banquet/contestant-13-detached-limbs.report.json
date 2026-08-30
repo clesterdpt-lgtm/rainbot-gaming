@@ -1,0 +1,204 @@
+{
+  "generatedAt": "2026-07-25T17:18:59.169101+00:00",
+  "pipeline": "one selected Meshy image-to-3D/rig source -> Blender weighted source-face partition and hard planar cuts -> static standard glTF export",
+  "blenderVersion": "4.5.11 LTS",
+  "source": "/Volumes/External SSD/Projects/RainbotGaming/assets/models/mr-feast/source/banquet/contestant-13-victim-source-v2-rigged.glb",
+  "sourceTriangles": 18780,
+  "sourceTexture": "texture_0",
+  "textureMaxSize": 512,
+  "images": [
+    {
+      "name": "texture_0",
+      "width": 512,
+      "height": 512
+    }
+  ],
+  "meshy": {
+    "generationMode": "image-to-3d",
+    "generationTaskId": "019f9998-69b6-7a9b-8221-daaa8090a157",
+    "rigTaskId": "019f999a-ca0a-7d39-b4d0-307326d456ca",
+    "selectedSourceCredits": 35,
+    "rejectedAttempt": {
+      "generationMode": "text-to-3d",
+      "previewTaskId": "019f9975-22e0-7d18-865a-61bb521c323c",
+      "refineTaskId": "019f9976-5f67-730a-b0fd-4a2efa4438e4",
+      "remeshTaskId": "019f997b-5c4d-7ebb-9fa5-9ad4a93a6767",
+      "rigTaskId": "019f997d-f5a8-7473-af31-d5ab6a3d0904",
+      "consumedCredits": 40
+    },
+    "consumedCredits": 75
+  },
+  "static": true,
+  "skins": 0,
+  "animations": 0,
+  "compressionExtensions": [],
+  "validatedFor": "Three.js r128 standard GLTFLoader",
+  "output": "contestant-13-detached-limbs.glb",
+  "report": "/Volumes/External SSD/Projects/RainbotGaming/assets/models/mr-feast/banquet/contestant-13-detached-limbs.report.json",
+  "arrangement": "two proportional arms and two proportional legs in one flat platter layer",
+  "pieceCount": 4,
+  "pieces": [
+    "left-arm",
+    "right-arm",
+    "left-leg",
+    "right-leg"
+  ],
+  "fitScaleXYZ": [
+    1.0,
+    0.962953,
+    0.854514
+  ],
+  "flatOnPlatter": true,
+  "maximumLayerOffsetMeters": 0.004,
+  "auxiliaryPlateCount": 0,
+  "pieceBoundsMeters": [
+    {
+      "id": "left-arm",
+      "kind": "arm",
+      "boundsMeters": {
+        "min": [
+          -0.408708,
+          0.0,
+          -0.39
+        ],
+        "max": [
+          0.297125,
+          0.11145,
+          -0.105618
+        ],
+        "size": [
+          0.705833,
+          0.11145,
+          0.284382
+        ]
+      },
+      "longAxisMeters": 0.705833
+    },
+    {
+      "id": "right-arm",
+      "kind": "arm",
+      "boundsMeters": {
+        "min": [
+          -0.408419,
+          0.0,
+          0.105618
+        ],
+        "max": [
+          0.296835,
+          0.111453,
+          0.39
+        ],
+        "size": [
+          0.705255,
+          0.111453,
+          0.284382
+        ]
+      },
+      "longAxisMeters": 0.705255
+    },
+    {
+      "id": "left-leg",
+      "kind": "leg",
+      "boundsMeters": {
+        "min": [
+          -0.320244,
+          0.0,
+          -0.167171
+        ],
+        "max": [
+          0.40866,
+          0.15,
+          0.013358
+        ],
+        "size": [
+          0.728903,
+          0.15,
+          0.180529
+        ]
+      },
+      "longAxisMeters": 0.728903
+    },
+    {
+      "id": "right-leg",
+      "kind": "leg",
+      "boundsMeters": {
+        "min": [
+          -0.320292,
+          0.0,
+          -0.013639
+        ],
+        "max": [
+          0.408708,
+          0.149922,
+          0.167451
+        ],
+        "size": [
+          0.729,
+          0.149922,
+          0.18109
+        ]
+      },
+      "longAxisMeters": 0.729
+    }
+  ],
+  "boundsMeters": {
+    "min": [
+      -0.408708,
+      0.0,
+      -0.39
+    ],
+    "max": [
+      0.408708,
+      0.15,
+      0.39
+    ],
+    "size": [
+      0.817416,
+      0.15,
+      0.78
+    ]
+  },
+  "triangles": 13523,
+  "meshCount": 8,
+  "meshes": [
+    "Banquet_Victim_Left_Arm_Proximal_Bandage",
+    "Banquet_Victim_Left_Leg_Proximal_Bandage",
+    "Banquet_Victim_Meshy_Left_Arm_Core",
+    "Banquet_Victim_Meshy_Left_Leg_Core",
+    "Banquet_Victim_Meshy_Right_Arm_Core",
+    "Banquet_Victim_Meshy_Right_Leg_Core",
+    "Banquet_Victim_Right_Arm_Proximal_Bandage",
+    "Banquet_Victim_Right_Leg_Proximal_Bandage"
+  ],
+  "materials": [
+    "Banquet_Victim_Bandage_Oxblood",
+    "Banquet_Victim_Source_PBR_02"
+  ],
+  "preservedSourceMaterials": [
+    "Banquet_Victim_Source_PBR_02"
+  ],
+  "fileBytes": 607552,
+  "garmentCleanup": {
+    "removed": [
+      "torso and head geometry partitioned into the companion torso prop"
+    ],
+    "retained": "original Meshy v2 bare arms and hands plus bare legs and feet, including UVs and PBR atlas",
+    "added": "four slim non-graphic oxblood gauze wraps at the proximal endpoints only"
+  },
+  "visibleMeshyDerivedCore": {
+    "meshes": [
+      "Banquet_Victim_Meshy_Left_Arm_Core",
+      "Banquet_Victim_Meshy_Right_Arm_Core",
+      "Banquet_Victim_Meshy_Left_Leg_Core",
+      "Banquet_Victim_Meshy_Right_Leg_Core"
+    ],
+    "triangles": 11411,
+    "method": "direct rig-weight and coordinate-selected Meshy v2 source faces with original UVs and materials retained, then hard-bisected at all four proximal cut planes"
+  },
+  "nonGraphicProximalTreatment": {
+    "limbBandageCaps": 4,
+    "bloodOrExposedAnatomy": false
+  },
+  "sourceMaterialPolicy": "original Meshy v2 PBR atlas retained and resized to a packed 512px maximum",
+  "bloodOrExposedAnatomy": false
+}

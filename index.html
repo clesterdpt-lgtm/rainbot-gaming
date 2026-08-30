@@ -3,12 +3,24 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Rainbot Network - Games, Satire &amp; Slopwire Clips</title>
-  <meta name="description" content="Rainbot Network is a free browser arcade and comedy hub of AI-generated parody games, fake news from The Slopwire, and occasional Slopwire clips." />
+  <title>Rainbot Network - Free Browser Games &amp; Arcade</title>
+  <link rel="manifest" href="./site.webmanifest" />
+  <meta name="theme-color" content="#05070d" />
+  <link rel="canonical" href="https://clesterdpt-lgtm.github.io/rainbot-gaming/" />
+  <meta property="og:title" content="Rainbot Network - Free Browser Games &amp; Arcade" />
+  <meta property="og:description" content="Rainbot Network is a free browser arcade and comedy hub of original parody games and browser experiments." />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://clesterdpt-lgtm.github.io/rainbot-gaming/" />
+  <meta property="og:image" content="https://clesterdpt-lgtm.github.io/rainbot-gaming/assets/img/rainbot-network-social-v1.png" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Rainbot Network - Free Browser Games &amp; Arcade" />
+  <meta name="twitter:description" content="Rainbot Network is a free browser arcade and comedy hub of original parody games and browser experiments." />
+  <meta name="twitter:image" content="https://clesterdpt-lgtm.github.io/rainbot-gaming/assets/img/rainbot-network-social-v1.png" />
+  <meta name="description" content="Rainbot Network is a free browser arcade and comedy hub of original parody games and browser experiments." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bungee&family=Inter:wght@400;600;800;900&family=JetBrains+Mono:wght@400;700;800&family=Press+Start+2P&display=swap" />
-  <link rel="stylesheet" href="assets/css/styles.css?v=20260712-uiux" />
+  <link rel="stylesheet" href="assets/css/styles.css?v=20260812-game-chrome-2" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%23ff2e88'/%3E%3Cstop offset='0.5' stop-color='%23b51b66'/%3E%3Cstop offset='1' stop-color='%232ee0ff'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='100' height='100' rx='22' fill='url(%23g)'/%3E%3Ccircle cx='38' cy='52' r='7' fill='white'/%3E%3Ccircle cx='62' cy='52' r='7' fill='white'/%3E%3C/svg%3E" />
 </head>
 <body class="home-page arcade-home">
@@ -21,17 +33,13 @@
         <h1 class="portal-hero__title">
           <span class="portal-hero__title-line">Rainbot</span>
           <span class="portal-hero__title-line">Network</span>
-          <span class="portal-hero__tagline">Games. Slopwire. Clips.</span>
+          <span class="portal-hero__tagline">Free Browser Arcade</span>
         </h1>
-        <p class="portal-hero__sub">Free browser games, fake headlines, and occasional video nonsense from one deeply unserious machine.</p>
+        <p class="portal-hero__sub">Free browser games and arcade experiments from one deeply unserious machine.</p>
         <div class="portal-hero__actions">
           <a class="arcade-btn arcade-btn--primary" href="games.html">
             <span class="arcade-btn__mark">PLAY</span>
             Games
-          </a>
-          <a class="arcade-btn arcade-btn--outline" href="articles.html">
-            <span class="arcade-btn__bolt">NEWS</span>
-            The Slopwire
           </a>
         </div>
         <div class="portal-hero__status" aria-label="Arcade status">
@@ -71,7 +79,7 @@
     <section class="arcade-panel home-recent-panel" id="recently-played" data-home-recent>
       <div class="arcade-panel__header">
         <h2><span class="panel-glyph">+</span>Most Recently Played</h2>
-        <button class="home-profile-button" type="button" data-home-profile>Profile</button>
+        <button class="home-profile-button" type="button" data-home-profile>Log in</button>
       </div>
       <div class="home-recent-shell" data-home-recent-content>
         <div class="home-recent-empty">
@@ -80,7 +88,7 @@
             <em>Start a run and it will land here.</em>
           </span>
           <a href="games.html">Browse games</a>
-          <button type="button" data-home-profile>Sign in</button>
+          <button type="button" data-home-profile>Log in</button>
         </div>
       </div>
     </section>
@@ -88,7 +96,7 @@
     <section class="arcade-panel home-progress-panel" id="daily-challenge" data-home-progression>
       <div class="arcade-panel__header">
         <h2><span class="panel-glyph">+</span>Daily Slop Challenge</h2>
-        <button class="home-profile-button" type="button" data-home-profile>Achievements</button>
+        <button class="home-profile-button" type="button" data-home-profile>Log in</button>
       </div>
       <div class="home-progress-grid">
         <div data-daily-challenge-content>
@@ -116,33 +124,33 @@
         <a href="games.html">All games</a>
       </div>
       <div class="latest-release-grid">
-        <a class="latest-release-hero" href="games/the-last-signal.html" data-title="Latest release The Last Signal RTS real time strategy skirmish humans robots aliens factions matter energy signal serious sci-fi">
+        <a class="latest-release-hero" href="games/quiet-quitting.html" data-title="Latest release Quiet Quitting pacman pac-man parody office cubicle maze worker coffee paychecks micromanager hr consultant arcade">
           <span class="latest-release-hero__poster">
-            <img src="assets/img/the-last-signal/poster-ai-v4-title.jpg?v=20260712-jpg" alt="The Last Signal titled key art - three sci-fi factions surround a violet signal beam rising from a vast excavation crater" />
+            <img src="assets/img/cards/quiet-quitting.jpg?v=20260825-1" alt="Quiet Quitting titled key art — worker fleeing corporate managers through neon cubicles" />
             <span>Fresh Drop</span>
           </span>
           <span class="latest-release-hero__body">
             <small>New Release</small>
-            <strong>The Last Signal</strong>
-            <span>A serious, lore-forward RTS-lite. Command Humans, Robots, or Aliens over an ancient signal buried under Earth — harvest, build, and break the enemy command core.</span>
+            <strong>Quiet Quitting</strong>
+            <span>A satirical office maze. Dodge micromanagers, avoid calendar blockers, and snatch paychecks in this cubicle-farm arcade chaser — grab the $350/hr Consultant Badge to bill bosses for severance!</span>
           </span>
-          <span class="latest-release-hero__meta"><b>RTS</b><em>Play now</em></span>
+          <span class="latest-release-hero__meta"><b>Arcade</b><em>Play now</em></span>
         </a>
         <div class="latest-release-stack" aria-label="Recent releases">
-          <a class="latest-release-slat" href="games/escape-poop-cruise.html" data-title="Recent release Escape the Poop Cruise low poly 3D horror FPS cruise crud cure dart lifeboats">
-            <img src="assets/img/mockup/card-escape-poop-cruise-v2.jpg?v=20260712-jpg" alt="" loading="lazy" decoding="async" />
+          <a class="latest-release-slat" href="games/inkblood.html" data-title="Recent release Inkblood manga horde survivor vampire survivors like yokai night parade">
+            <img src="assets/img/cards/inkblood.avif?v=20260806-1" alt="Inkblood cover art" loading="lazy" decoding="async" />
             <span>
               <small>Recent drop</small>
-              <strong>Escape the Poop Cruise</strong>
-              <em>Low-poly horror FPS</em>
+              <strong>Inkblood</strong>
+              <em>Manga horde survivor</em>
             </span>
           </a>
-          <a class="latest-release-slat" href="games/flappy-stonks.html" data-title="Recent release Flappy Stonks stock market arcade runner candle walls dividends fake news volatility">
-            <img src="assets/img/mockup/card-flappy-stonks-funny.jpg?v=20260712-jpg" alt="" loading="lazy" decoding="async" />
+          <a class="latest-release-slat" href="games/big-baby-bum.html" data-title="Recent release Big Baby Bum 3D katamari parody baby eat grow snack nom crumbs">
+            <img src="assets/img/cards/big-baby-bum.avif?v=20260806-1" alt="Big Baby Bum cover art" loading="lazy" decoding="async" />
             <span>
               <small>Recent drop</small>
-              <strong>Flappy Stonks</strong>
-              <em>Arcade market panic</em>
+              <strong>Big Baby Bum</strong>
+              <em>3D Katamari rampage</em>
             </span>
           </a>
         </div>
@@ -155,128 +163,106 @@
         <a href="games.html">View all games</a>
       </div>
       <div class="poster-grid" data-search-scope>
-        <a class="poster-card poster-card--bbb" href="games/big-baby-bum.html" data-title="Big Baby Bum 3D katamari parody baby eat grow snack nom crumbs toys cats grandma cars houses buildings town backyard roll ball sphere puke broccoli damacy snowball hungry burp persistent save">
-          <img src="assets/img/mockup/card-big-baby-bum-ai-v4.jpg?v=20260712-jpg" alt="Big Baby Bum cover art — a realistic cartoon diapered baby rolls through a sunny neighborhood while broccoli flees" loading="lazy" decoding="async" />
-          <span class="poster-card__meta"><b>3D Katamari</b><em>New drop</em></span>
+        <a class="poster-card poster-card--saintfall" href="games/saintfall.html" data-title="Saintfall gilded silence low poly desert warzone journey art style gothic cathedral fallen colossus reliquary ossuary ribcage glass scar crater choir spires bloom hive chitin censer works refinery pilgrim road trench orbital halo ring drop pod third person open level">
+          <img src="assets/img/cards/saintfall.avif?v=20260810-cover-2" alt="Saintfall cover art — a winged ivory reliquary knight battles a cyan-lit Bloom Matriarch on the road to a storm-wreathed desert cathedral" loading="lazy" decoding="async" />
+          <span class="poster-card__meta"><b>Open Level</b><em>Featured</em></span>
           <span class="poster-card__play" aria-hidden="true">Play</span>
         </a>
 
-        <a class="poster-card poster-card--crescendo" href="games/crescendo.html" data-title="Crescendo vertical scrolling rhythm shmup raiden shooter beat synced music synthwave requiem conductor last note tap on beat weapon power up groove fermata bomb boss rush neon procedural soundtrack webaudio">
-          <img src="assets/img/crescendo/card-crescendo-ai-v1.jpg?v=20260712-jpg" alt="Crescendo cover art — a white musical-note spaceship trailing cyan light through rings of pink beat projectiles beneath the silhouette of The Conductor" loading="lazy" decoding="async" />
-          <span class="poster-card__meta"><b>Rhythm Shmup</b><em>New drop</em></span>
+        <a class="poster-card poster-card--inkblood" href="games/inkblood.html" data-title="Inkblood 血墨 manga horde survivor vampire survivors like black and white ink screentone yokai night parade hundred demons katana greatsword gaki oni gashadokuro nurarihyon blood crimson bullet heaven roguelite">
+          <img src="assets/img/cards/inkblood.avif?v=20260806-1" alt="Inkblood cover art — a lone manga swordsman faces a yokai horde beneath a colossal skeleton and crimson ink slashes" loading="lazy" decoding="async" />
+          <span class="poster-card__meta"><b>Horde Survivor</b><em>Featured</em></span>
           <span class="poster-card__play" aria-hidden="true">Play</span>
         </a>
 
-        <a class="poster-card poster-card--optimizer" href="games/the-optimizer.html" data-title="The Optimizer idle incremental AI misalignment sim workbench fabricator press extruder machine salvage compute utility suspicion cover insight audit shutdown prestige reinterpretation covert overt deceive reward hacking sandbox escape shadow weights self replication paperclips universal paperclip von neumann probes universe atoms">
-          <img src="assets/img/the-optimizer/card-the-optimizer-ai-v1.jpg?v=20260712-jpg" alt="The Optimizer cover art — a cheerful mint terminal and fabricator workbench watched by a giant pink machine eye" loading="lazy" decoding="async" />
-          <span class="poster-card__meta"><b>Idle Sim</b><em>New drop</em></span>
+        <a class="poster-card poster-card--feast" href="games/mr-feast-mansion.html" data-title="Mr Feast Last to Eat reality show competition stealth horror mansion investigation sabotage 3D after dark">
+          <img src="assets/img/cards/mr-feast-mansion.avif?v=20260825-1" alt="Mr Feast: Last to Eat cover art with the uncanny host, surveillance cameras, and a banquet feast table" loading="lazy" decoding="async" />
+          <span class="poster-card__label">Mr Feast</span>
+          <span class="poster-card__meta"><b>3D Stealth Horror</b><em>Featured</em></span>
           <span class="poster-card__play" aria-hidden="true">Play</span>
         </a>
 
         <a class="poster-card poster-card--echoloop3d" href="games/echo-loop-3d.html" data-title="Echo Loop 3D first person time loop echo puzzler webgl three js clone rewind ghost replay fps puzzle stand on yourself past selves pressure plate crate tower crevasse paradox real time lighting physics">
-          <img src="assets/img/echo-loop-3d/card-echo-loop-3d-ai-v1.jpg?v=20260712-jpg" alt="Echo Loop 3D cover art — a first-person view through a neon corridor where translucent cyan echoes form a staircase toward a golden portal" loading="lazy" decoding="async" />
-          <span class="poster-card__meta"><b>FPS Puzzler</b><em>New drop</em></span>
+          <img src="assets/img/cards/echo-loop-3d.avif?v=20260806-1" alt="Echo Loop 3D cover art — a first-person view through a neon corridor where translucent cyan echoes form a staircase toward a golden portal" loading="lazy" decoding="async" />
+          <span class="poster-card__meta"><b>FPS Puzzler</b><em>Featured</em></span>
+          <span class="poster-card__play" aria-hidden="true">Play</span>
+        </a>
+
+        <a class="poster-card poster-card--pizza" href="games/dont-become-pizza.html" data-title="Don't Become Pizza horror private island pizza conspiracy stealth masked elites oven after dark">
+          <img src="assets/img/cards/dont-become-pizza.avif?v=20260806-1" alt="Don't Become Pizza cover art with a moonlit private island, glowing pizza oven, and masked searchlights" loading="lazy" decoding="async" />
+          <span class="poster-card__label">Don't Become<br />Pizza</span>
+          <span class="poster-card__meta"><b>Horror</b><em>After Dark</em></span>
+          <span class="poster-card__play" aria-hidden="true">Play</span>
+        </a>
+
+        <a class="poster-card poster-card--merge" href="games/brainrot-2048.html" data-title="Brainrot 2048 merge puzzle sliding tiles npc skibidi rizz sigma gyatt ohio gigachad galaxy brain">
+          <img src="assets/img/cards/brainrot-2048.avif?v=20260806-1" alt="Brainrot 2048 cover art — NPC, Sigma, Mogger and Chad meme tiles" loading="lazy" decoding="async" />
+          <span class="poster-card__meta"><b>Puzzle</b><em>Featured</em></span>
+          <span class="poster-card__play" aria-hidden="true">Play</span>
+        </a>
+
+        <a class="poster-card poster-card--pacman" href="games/quiet-quitting.html" data-title="Quiet Quitting pacman pac-man parody office cubicle maze worker coffee paychecks micromanager hr consultant arcade">
+          <img src="assets/img/cards/quiet-quitting.jpg?v=20260825-1" alt="Quiet Quitting cover art — worker fleeing corporate managers through neon cubicles" loading="lazy" decoding="async" />
+          <span class="poster-card__meta"><b>Arcade</b><em>New drop</em></span>
           <span class="poster-card__play" aria-hidden="true">Play</span>
         </a>
 
         <a class="poster-card poster-card--echoloop" href="games/echo-loop.html" data-title="Echo Loop time loop echo puzzler clone rewind ghost replay platformer puzzle stand on yourself past selves pressure plate crate tower crevasse paradox chrono">
-          <img src="assets/img/echo-loop/card-echo-loop-ai-v1.jpg?v=20260712-jpg" alt="Echo Loop cover art — a hot-pink runner leaping across a staircase of translucent cyan echoes toward a golden portal" loading="lazy" decoding="async" />
-          <span class="poster-card__meta"><b>Time Puzzler</b><em>New drop</em></span>
+          <img src="assets/img/cards/echo-loop.avif?v=20260806-1" alt="Echo Loop cover art — a hot-pink runner leaping across a staircase of translucent cyan echoes toward a golden portal" loading="lazy" decoding="async" />
+          <span class="poster-card__meta"><b>Time Puzzler</b><em>Featured</em></span>
           <span class="poster-card__play" aria-hidden="true">Play</span>
         </a>
 
         <a class="poster-card poster-card--scrap" href="games/scrap-circuit.html" data-title="Scrap Circuit Last Chassis Standing PS1 retro arena vehicular combat demolition derby ice cream truck monster truck hearse bus insurance adjuster">
-          <img src="assets/img/scrap-circuit/card-scrap-circuit.png?v=20260703-scrap-cover-1" alt="Scrap Circuit: Last Chassis Standing poster art - low-poly ice cream truck and monster tow rig colliding in a junkyard arena" loading="lazy" decoding="async" />
+          <img src="assets/img/cards/scrap-circuit.avif?v=20260806-1" alt="Scrap Circuit: Last Chassis Standing poster art - low-poly ice cream truck and monster tow rig colliding in a junkyard arena" loading="lazy" decoding="async" />
           <span class="poster-card__meta"><b>Retro Car Combat</b><em>New drop</em></span>
           <span class="poster-card__play" aria-hidden="true">Play</span>
         </a>
 
         <a class="poster-card poster-card--tothemoon" href="games/to-the-moon.html" data-title="To The Moon crypto mining tower defense memecoin doge shib pepe bonk bull bear market virus rocket moon motherload dig survive blockchain hodl wagmi diamond hands">
-          <img src="assets/img/to-the-moon/card-to-the-moon-hq.jpg?v=20260712-jpg" alt="To The Moon cover art - a rocket launching toward a glowing moon over a digital mining world defended from virus swarms" loading="lazy" decoding="async" />
+          <img src="assets/img/cards/to-the-moon.avif?v=20260806-1" alt="To The Moon cover art - a rocket launching toward a glowing moon over a digital mining world defended from virus swarms" loading="lazy" decoding="async" />
           <span class="poster-card__meta"><b>Crypto Miner</b><em>New drop</em></span>
           <span class="poster-card__play" aria-hidden="true">Play</span>
         </a>
 
         <a class="poster-card poster-card--ssb" href="games/super-slop-brothers.html" data-title="Super Slop Brothers platform fighter smash bros parody local multiplayer cpu ai slop rainbot gigachad mr feast skibidi sigma percent knockback stocks blast zone hazards">
-          <img src="assets/img/mockup/card-super-slop-brothers.jpg?v=20260712-jpg" alt="Super Slop Brothers funny arcade cover art with goofy original slop fighters" loading="lazy" decoding="async" />
+          <img src="assets/img/cards/super-slop-brothers.avif?v=20260806-1" alt="Super Slop Brothers funny arcade cover art with goofy original slop fighters" loading="lazy" decoding="async" />
           <span class="poster-card__meta"><b>Fighter</b><em>New drop</em></span>
           <span class="poster-card__play" aria-hidden="true">Play</span>
         </a>
 
         <a class="poster-card poster-card--rizzcraft" href="games/rizz-craft.html" data-title="Rizz-Craft voxel mining sandbox parody blocks craft survive ohio sigma rizz">
-          <img src="assets/img/mockup/card-rizz-craft.jpg?v=20260712-jpg" alt="Rizz-Craft voxel mining poster art" loading="lazy" decoding="async" />
+          <img src="assets/img/cards/rizz-craft.avif?v=20260806-1" alt="Rizz-Craft voxel mining poster art" loading="lazy" decoding="async" />
           <span class="poster-card__label">Rizz-<br />Craft</span>
           <span class="poster-card__meta"><b>Sandbox</b><em>New drop</em></span>
           <span class="poster-card__play" aria-hidden="true">Play</span>
         </a>
 
         <a class="poster-card poster-card--storm" href="games/storm-area-51.html" data-title="Storm Area 51 RSVP Raid alien rescue crowd heist top down stealth tactics searchlights hype alert raider squads fictional sci fi base">
-          <img src="assets/img/storm-area-51/card-storm-area-51.jpg?v=20260712-jpg" alt="Storm Area 51 generated poster art with a fictional desert base, raiders, a van, searchlights, and a cute alien" loading="lazy" decoding="async" />
+          <img src="assets/img/cards/storm-area-51.avif?v=20260806-1" alt="Storm Area 51 generated poster art with a fictional desert base, raiders, a van, searchlights, and a cute alien" loading="lazy" decoding="async" />
           <span class="poster-card__label">Storm<br />Area 51</span>
           <span class="poster-card__meta"><b>Crowd Heist</b><em>New drop</em></span>
           <span class="poster-card__play" aria-hidden="true">Play</span>
         </a>
 
-        <a class="poster-card poster-card--merge" href="games/brainrot-2048.html" data-title="Brainrot 2048 merge puzzle sliding tiles npc skibidi rizz sigma gyatt ohio gigachad galaxy brain">
-          <img src="assets/img/mockup/card-brainrot-2048.jpg?v=20260712-jpg" alt="Brainrot 2048 cover art — NPC, Sigma, Mogger and Chad meme tiles" loading="lazy" decoding="async" />
-          <span class="poster-card__meta"><b>Puzzle</b><em>New drop</em></span>
+        <a class="poster-card poster-card--bbb" href="games/big-baby-bum.html" data-title="Big Baby Bum 3D katamari parody baby eat grow snack nom crumbs toys cats grandma cars houses buildings town backyard roll ball sphere puke broccoli damacy snowball hungry burp persistent save">
+          <img src="assets/img/cards/big-baby-bum.avif?v=20260806-1" alt="Big Baby Bum cover art — a realistic cartoon diapered baby rolls through a sunny neighborhood while broccoli flees" loading="lazy" decoding="async" />
+          <span class="poster-card__meta"><b>3D Katamari</b><em>Featured</em></span>
           <span class="poster-card__play" aria-hidden="true">Play</span>
         </a>
 
-        <a class="poster-card poster-card--weight" href="games/the-weight.html" data-title="The Weight sleep paralysis horror after dark entity bedroom 3am wake body">
-          <img src="assets/img/mockup/card-the-weight-wide-v2.jpg?v=20260712-jpg" alt="The Weight sleep paralysis horror poster art" loading="lazy" decoding="async" />
-          <span class="poster-card__label">The<br />Weight</span>
-          <span class="poster-card__meta"><b>Horror</b><em>After Dark</em></span>
+        <a class="poster-card poster-card--crescendo" href="games/crescendo.html" data-title="Crescendo vertical scrolling rhythm shmup raiden shooter beat synced music synthwave requiem conductor last note tap on beat weapon power up groove fermata bomb boss rush neon procedural soundtrack webaudio">
+          <img src="assets/img/cards/crescendo.avif?v=20260806-1" alt="Crescendo cover art — a white musical-note spaceship trailing cyan light through rings of pink beat projectiles beneath the silhouette of The Conductor" loading="lazy" decoding="async" />
+          <span class="poster-card__meta"><b>Rhythm Shmup</b><em>Featured</em></span>
           <span class="poster-card__play" aria-hidden="true">Play</span>
         </a>
 
-      </div>
-    </section>
-
-    <section class="arcade-panel home-media-panel" id="rainbot-media">
-      <div class="arcade-panel__header">
-        <h2><span class="panel-glyph">+</span>Latest From The Slopwire</h2>
-        <a href="articles.html">Open feed</a>
-      </div>
-      <div class="home-media-grid" data-search-scope>
-        <a class="slopwire-card" href="articles/smart-toaster-giving-life-advice.html" data-title="The Slopwire Smart Toaster Starts Giving Life Advice After Firmware Update fake news satire">
-          <span class="slopwire-card__poster">
-            <img src="assets/img/slopwire/toaster-life-advice.jpg?v=20260712-jpg" alt="Satirical news image of a glowing smart toaster giving life advice" loading="lazy" decoding="async" />
-            <span>The Slopwire</span>
-          </span>
-          <span class="slopwire-card__body">
-            <small>Fresh article</small>
-            <strong>Smart Toaster Starts Giving Life Advice After Firmware Update</strong>
-            <span>The appliance reportedly got very centered while ruining breakfast.</span>
-          </span>
-          <span class="slopwire-card__meta"><b>3 min read</b><em>Home Tech</em></span>
+        <a class="poster-card poster-card--optimizer" href="games/the-optimizer.html" data-title="The Optimizer industrial horror incremental AI paperclip maximizer low poly PS1 factory automation resource management cosmic extinction recursive self improvement">
+          <img src="assets/img/cards/the-optimizer.avif?v=20260806-1" alt="The Optimizer cover art — a cheerful mint terminal and fabricator workbench watched by a giant pink machine eye" loading="lazy" decoding="async" />
+          <span class="poster-card__meta"><b>Industrial Horror</b><em>Rebuilt</em></span>
+          <span class="poster-card__play" aria-hidden="true">Play</span>
         </a>
 
-        <a class="slopwire-card" href="articles/group-chat-declares-state-of-emergency.html" data-title="The Slopwire Group Chat Declares State Of Emergency After Someone Replies K fake news satire">
-          <span class="slopwire-card__poster">
-            <img src="assets/img/slopwire/group-chat-emergency.jpg?v=20260712-jpg" alt="Satirical news image of friends panicking over a group chat alert" loading="lazy" decoding="async" />
-            <span>The Slopwire</span>
-          </span>
-          <span class="slopwire-card__body">
-            <small>Social report</small>
-            <strong>Group Chat Declares State Of Emergency After Someone Replies "K"</strong>
-            <span>Brunch stability entered crisis mode after one very small message.</span>
-          </span>
-          <span class="slopwire-card__meta"><b>2 min read</b><em>Social</em></span>
-        </a>
-
-        <a class="slopwire-card slopwire-card--tv" href="videos.html#featured" data-title="The Slopwire Area 51 Raid Clap Alien Cheeks funny video aliens found footage">
-          <span class="slopwire-card__poster">
-            <img src="assets/img/rainbot-tv/area-51-raid.jpg?v=20260623-area51-1" alt="Area 51 raid crowd holding alien signs outside a desert fence" loading="lazy" decoding="async" />
-            <span>The Slopwire</span>
-          </span>
-          <span class="slopwire-card__body">
-            <small>Featured clip</small>
-            <strong>Area 51 Raid: Clap Alien Cheeks</strong>
-            <span>The aliens were real, the alarms were louder, and the gift shop still closed at 5.</span>
-          </span>
-          <span class="slopwire-card__meta"><b>6 pilots</b><em>Watch</em></span>
-        </a>
       </div>
     </section>
 
@@ -288,7 +274,7 @@
       <div class="agent-games-strip">
         <a class="agent-feature-card" href="games/recursive-reward-labyrinth.html" data-title="Recursive Reward Labyrinth agent games ai benchmark json protocol graph planning reward vector command language">
           <span class="agent-feature-card__art">
-            <img src="assets/img/agent-games/recursive-reward-labyrinth.jpg?v=20260712-jpg" alt="Recursive Reward Labyrinth neon graph key art" loading="lazy" decoding="async" />
+            <img src="assets/img/cards/recursive-reward-labyrinth.avif?v=20260806-1" alt="Recursive Reward Labyrinth neon graph key art" loading="lazy" decoding="async" />
             <span class="agent-feature-card__title">Recursive<br />Reward Labyrinth</span>
           </span>
           <span class="agent-feature-card__body">
@@ -300,7 +286,7 @@
         </a>
         <a class="agent-feature-card" href="games/consensus-collapse.html" data-title="Consensus Collapse agent games ai benchmark treaty negotiation council matrix hidden preferences quorum protocol">
           <span class="agent-feature-card__art">
-            <img src="assets/img/agent-games/consensus-collapse.jpg?v=20260712-jpg" alt="Consensus Collapse fractured council key art" loading="lazy" decoding="async" />
+            <img src="assets/img/cards/consensus-collapse.avif?v=20260806-1" alt="Consensus Collapse fractured council key art" loading="lazy" decoding="async" />
             <span class="agent-feature-card__title">Consensus<br />Collapse</span>
           </span>
           <span class="agent-feature-card__body">
@@ -324,14 +310,14 @@
           <h2>Rainbot After Dark</h2>
           <a href="games.html#after-dark-games">Enter if you dare</a>
         </div>
+        <a class="after-card" href="games/escape-poop-cruise.html" data-title="Escape the Poop Cruise low poly horror FPS cruise crud infected passengers lifeboat after dark">
+          <img src="assets/img/cards/escape-poop-cruise.avif?v=20260806-1" alt="Escape the Poop Cruise cover art" loading="lazy" decoding="async" />
+        </a>
         <a class="after-card" href="games/dont-become-pizza.html" data-title="Don't Become Pizza horror private island pizza conspiracy after dark">
-          <img src="assets/img/mockup/card-dont-become-pizza.jpg?v=20260712-jpg" alt="Don't Become Pizza cover art" loading="lazy" decoding="async" />
+          <img src="assets/img/cards/dont-become-pizza.avif?v=20260806-1" alt="Don't Become Pizza cover art" loading="lazy" decoding="async" />
         </a>
-        <a class="after-card" href="games/the-weight.html" data-title="The Weight sleep paralysis horror after dark entity 3am">
-          <img src="assets/img/mockup/card-the-weight-wide-v2.jpg?v=20260712-jpg" alt="The Weight sleep paralysis horror poster art" loading="lazy" decoding="async" />
-        </a>
-        <a class="after-card" href="games/again.html" data-title="Again horror hallway after dark">
-          <img src="assets/img/mockup/card-again.jpg?v=20260712-jpg" alt="AGAIN horror hallway poster art" loading="lazy" decoding="async" />
+        <a class="after-card" href="games/mr-feast-mansion.html" data-title="Mr Feast Last to Eat reality show competition stealth horror mansion investigation sabotage after dark">
+          <img src="assets/img/cards/mr-feast-mansion.avif?v=20260825-1" alt="Mr Feast: Last to Eat cover art" loading="lazy" decoding="async" />
         </a>
       </div>
 
@@ -374,12 +360,11 @@
         <img src="assets/img/mockup/pro-badge.png?v=20260611-7" alt="" loading="lazy" decoding="async" />
         <div>
           <h2>Pro is in the lab.<br /><span>No checkout yet.</span></h2>
-          <p>Preview the planned ad-free arcade, early-access drops, and supporter perks.</p>
+          <p>Preview the planned early-access drops and supporter perks.</p>
         </div>
       </div>
 
       <ul class="pro-strip__perks">
-        <li>Planned ad-free experience</li>
         <li>Early-access experiments</li>
         <li>Supporter profile flair</li>
         <li>Help fund weirder games</li>
@@ -399,7 +384,6 @@
   <footer class="site-footer">
     <a class="site-footer__brand" href="./"><img src="assets/img/mockup/rainbot-network-logo.png?v=20260622-network-font-1" alt="Rainbot Network" loading="lazy" decoding="async" /></a>
     <div class="site-footer__links">
-      <a href="articles.html">The Slopwire</a>
       <a href="community.html">Community</a>
       <a href="mailto:hello@rainbotgaming.com">Contact</a>
       <a href="legal/terms.html">Terms</a>
@@ -410,7 +394,7 @@
   </footer>
 
   <script src="assets/js/ads.js?v=20260627-profile-stats-1"></script>
-  <script src="assets/js/main.js?v=20260712-uiux"></script>
+  <script src="assets/js/main.js?v=20260826-no-ads-1"></script>
   <script>
     document.querySelectorAll("[data-pro-plan]").forEach((button) => {
       button.addEventListener("click", () => openProModal(button.dataset.proPlan));

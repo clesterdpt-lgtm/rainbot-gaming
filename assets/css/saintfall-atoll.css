@@ -1,0 +1,88 @@
+/* ============================================================
+   SAINTFALL - Meridian-IV chrome  ("The Green Antiphon")
+
+   Page-level chrome only: the boot screen's palette and the side
+   panel. The HUD's shared classes live in saintfall-ui.css; the
+   two instruments this world has that neither of the others does -
+   depth and tide - are styled by atoll-hud.js itself, and the
+   block below says why.
+
+   THE ONE COLOUR RULE THIS FILE OBEYS. The level's palette
+   rations turquoise to WATER and nothing else (see atoll-art.js's
+   header). The chrome is allowed to break that rule exactly once,
+   for the boot screen, because the boot screen is not in the
+   level - and it does so deliberately, so the first thing anybody
+   sees on this page tells them which of the three worlds they are
+   loading before a single triangle is drawn. Vesper boots amber,
+   Kenosis boots ice-blue, this boots lagoon.
+   ============================================================ */
+
+.saintfall-shell--antiphon {
+  --sf-atoll-lagoon: #2fb9b4;
+  --sf-atoll-shallow: #8fe4d8;
+  --sf-atoll-deep: #0d6f8e;
+  --sf-atoll-brass: #c9a24e;
+  --sf-atoll-hull: #b9bcc0;
+  --sf-atoll-ink: #04141a;
+}
+
+/* ------------------------------ boot ------------------------------ */
+
+.saintfall-shell--antiphon #sf-boot {
+  background:
+    radial-gradient(ellipse 120% 70% at 50% 108%,
+      rgba(47, 185, 180, .22), transparent 62%),
+    linear-gradient(178deg,
+      rgba(4, 20, 26, .99) 0%,
+      rgba(6, 30, 39, .97) 46%,
+      rgba(3, 14, 19, .99) 100%);
+}
+
+.saintfall-shell--antiphon .sf-boot__title {
+  color: #e8f6f4;
+  /* The glow is the lagoon seen from underneath - the one place
+     the water colour is allowed off the water. */
+  text-shadow: 0 0 24px rgba(47, 185, 180, .42), 0 2px 0 rgba(0, 0, 0, .5);
+}
+
+.saintfall-shell--antiphon .sf-boot__fill {
+  background: linear-gradient(90deg,
+    var(--sf-atoll-deep), var(--sf-atoll-lagoon) 58%, var(--sf-atoll-shallow));
+}
+
+.saintfall-shell--antiphon .sf-boot__status { color: #9fd6d0; }
+.saintfall-shell--antiphon .sf-boot__tip { color: #7fb0ad; }
+.saintfall-shell--antiphon .sf-boot__back { color: #8fc4c0; }
+
+/* --------------------------- the readouts ---------------------------
+
+   THEY ARE NOT HERE, AND THAT IS DELIBERATE.
+
+   This file originally carried `.sf-atoll-depth` and
+   `.sf-atoll-tide` rules for the two instruments this world has
+   that neither of the others does. `atoll-hud.js` builds its own
+   readout and injects its own `<style>` block for it - which is
+   the pattern `summit-hud.js` already uses, and it is the better
+   one: a HUD element and its rule move together, and a HUD that
+   carries its own styling cannot be half-deployed by a stale CSS
+   cache key.
+
+   The rules here were therefore dead. Two sources for one
+   element's appearance is how a readout ends up styled by whichever
+   file happened to load second, so they are removed rather than
+   left "in case". The live rules are in `atoll-hud.js` under
+   `.sf-tide`.
+
+   What this file keeps is PAGE chrome - the boot screen and the
+   side panel - which the HUD has no business owning.
+   -------------------------------------------------------------- */
+
+/* ---------------------------- side panel ---------------------------- */
+
+.saintfall-shell--antiphon .game-side__panel--saintfall {
+  border-color: rgba(47, 185, 180, .28);
+}
+
+.saintfall-shell--antiphon .game-side__title {
+  color: var(--sf-atoll-shallow);
+}

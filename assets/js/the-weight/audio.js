@@ -169,6 +169,28 @@ TW.AudioEngine = class AudioEngine {
     osc.start(t); osc.stop(t + 1.3);
   }
 
+  // A single close breath placed hard to one side. Unlike the player's loop,
+  // it has no rhythm and therefore cannot be anticipated.
+  nearBreath(pan = 0.8) {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    const src = this.ctx.createBufferSource();
+    src.buffer = this._noise(1.7);
+    const bp = this.ctx.createBiquadFilter();
+    bp.type = 'bandpass'; bp.frequency.value = 430; bp.Q.value = 0.8;
+    const g = this.ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.13, t + 0.42);
+    g.gain.setTargetAtTime(0.0001, t + 0.76, 0.34);
+    const out = this.ctx.createStereoPanner ? this.ctx.createStereoPanner() : null;
+    src.connect(bp).connect(g);
+    if (out) {
+      out.pan.value = Math.max(-1, Math.min(1, pan));
+      g.connect(out).connect(this.master);
+    } else g.connect(this.master);
+    src.start(t); src.stop(t + 1.72);
+  }
+
   knock() {
     if (!this.ctx) return;
     const t = this.ctx.currentTime;

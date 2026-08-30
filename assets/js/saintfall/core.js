@@ -68,6 +68,15 @@ export function makeRng(seed = 1) {
   /** Symmetric jitter in [-m, m]. */
   rng.jit = (m) => (rng() * 2 - 1) * m;
   let spare = null;
+  rng.getState = () => ({ a: a >>> 0, spare });
+  rng.setState = (state) => {
+    const next = Number(state?.a);
+    if (!Number.isFinite(next)) return false;
+    a = (next >>> 0) || 1;
+    spare = state?.spare !== null && state?.spare !== undefined
+      && Number.isFinite(Number(state.spare)) ? Number(state.spare) : null;
+    return true;
+  };
   rng.gauss = () => {
     if (spare !== null) { const v = spare; spare = null; return v; }
     let u = 0; let v = 0; let s = 0;

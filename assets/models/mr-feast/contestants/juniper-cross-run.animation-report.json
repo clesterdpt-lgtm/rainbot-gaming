@@ -1,0 +1,32 @@
+{
+  "generatedAt": "2026-07-19T16:27:31.118Z",
+  "format": "animation-only-glb",
+  "source": "assets/models/mr-feast/source/contestants/juniper-cross-run.glb",
+  "file": "juniper-cross-run.glb",
+  "name": "run",
+  "stationary": true,
+  "loopClosed": true,
+  "compression": "none",
+  "bytes": 24972,
+  "durationSeconds": 0.6333333253860474,
+  "channelsBefore": {
+    "rotation": 24,
+    "translation": 24,
+    "scale": 24,
+    "weights": 0,
+    "other": 0
+  },
+  "channelsAfter": {
+    "rotation": 24,
+    "translation": 0,
+    "scale": 0,
+    "weights": 0,
+    "other": 0
+  },
+  "animations": 1,
+  "nodes": 25,
+  "meshes": 0,
+  "skins": 0,
+  "materials": 0,
+  "textures": 0
+}

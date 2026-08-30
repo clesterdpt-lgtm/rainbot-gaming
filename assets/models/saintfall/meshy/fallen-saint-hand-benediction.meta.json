@@ -1,0 +1,19 @@
+{
+  "source": "Meshy image-to-3d resumed download",
+  "task": {
+    "id": "01a01f13-fcbd-7800-b95f-d50e82576eb4",
+    "type": "image-to-3d",
+    "status": "SUCCEEDED",
+    "progress": 100,
+    "createdAt": 1787227801002,
+    "startedAt": 1787227801006,
+    "finishedAt": 1787227979713,
+    "expiresAt": 1787487179713,
+    "consumedCredits": 30,
+    "taskError": null
+  },
+  "masterFile": "../../../../output/meshy-masters/saintfall/fallen-saint-hand-benediction-master.glb",
+  "thumbnails": [
+    "fallen-saint-hand-benediction-preview.png"
+  ]
+}

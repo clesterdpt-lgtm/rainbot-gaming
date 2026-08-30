@@ -1,0 +1,22 @@
+{
+  "taskId": "01a01f0f-dbbc-7d78-a3a7-70873918f353",
+  "taskType": "image-to-3d",
+  "input": "assets/concepts/saintfall/meshy/gilded-reach-choir-wheel.png",
+  "request": {
+    "image_url": "[local image data URI omitted]",
+    "model_type": "standard",
+    "ai_model": "meshy-6",
+    "enable_pbr": true,
+    "should_texture": true,
+    "should_remesh": true,
+    "topology": "triangle",
+    "target_polycount": 18000,
+    "pose_mode": "a-pose",
+    "image_enhancement": false,
+    "remove_lighting": true,
+    "target_formats": [
+      "glb"
+    ],
+    "texture_prompt": "Ancient Concord cast bronze and dark iron, deep emerald verdigris in recesses, worn gilded edges, sand-scoured matte PBR metal, charcoal acoustic slots, no glow."
+  }
+}

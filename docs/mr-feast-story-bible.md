@@ -62,7 +62,7 @@ of the shipped welcome says exactly that.
 |---|------|---------|-----|
 | 03 | Mara Voss | The Strategist | Day-one contestant; has watched nine people "go home" and strategized herself into denial. Eliminated after Game 2. |
 | 07 | Kip Solano | The Wild Card | Treats everything as content. While he's alive the game is allowed to be funny. Eliminated after Game 1. |
-| 10 | Juniper Cross | The Folklorist | Applied on purpose — she has been researching this estate for years. The player's ally and lore engine. Lost at Game 3. |
+| 10 | Juniper Cross | The Folklorist | Applied on purpose — she has been researching this estate for years. The player's ally and lore engine. Actively races the player in Game 3; her final story result is deferred. |
 | 13 | *(prior)* | — | The previous Contestant 13: investigated, hid the badge/tape/key trail, "became our most-watched episode." Ghost guide and co-protagonist of the true ending. |
 | 13 | **The player** | The Replacement | The season opened with twelve. Nine seats were already cleared before you arrived. Your number is reissued. |
 
@@ -131,12 +131,17 @@ rises with it, and the finale is a scheduled arrival.
 - Kip aftermath beats: his goodbye video loops on the monitor bank with the wrong room
   behind him (the Archive); his confessional is dated Day 41 of a 12-day season; his
   reserved seat stays reserved and nobody — including the player — may sit in it.
-- **Game 2 — LIGHTS OUT (hide-and-seek).** The circuits drop and Mr. Feast "plays
-  seeker." The crouch stealth meter, darkness sampling, and hiding spots become the
-  competition itself. First contestant found is eliminated.
-- **Elimination 2 — Mara**, found in the statistically optimal hiding spot she
-  calculated — the show always knew. Heard through the walls, never seen: the
-  elimination jingle plays over something that is not applause.
+- **Game 2 — STORM RUN.** Ten active exploration minutes after Feast Says, or as
+  soon as the player earns the next major clue, Mr. Feast calls the remaining cast
+  to a rear-terrace start line. Five ordered television checkpoints cross the rear
+  grounds, formal garden, front grounds, east lawn, and hedge-maze interior. Mara
+  and Juniper visibly run the same authored course without exceeding the player's
+  maximum sprint speed. Lightning is not a hazard: selected checkpoint approaches
+  use a flash to reveal Mr. Feast standing impossibly close to the route, then hide
+  him again when darkness returns.
+- **Elimination 2 — Mara**, last across the Storm Run course despite calculating the
+  optimal route. The show knew every shortcut before she chose it. Her elimination
+  jingle begins outside and finishes somewhere beneath the floorboards.
 - Aftermath: through a service hatch the player can overlook the **Elimination
   Dinner** — hooded patrons, thirteen place settings, silverware etiquette, no gore
   (the horror is the manners). One empty chair; the place card carries the player's
@@ -167,13 +172,24 @@ rises with it, and the finale is a scheduled arrival.
   13 sits at its center. The maze was never landscaping — every contestant sent in
   is being walked through the circle, and XIII buried the evidence at its heart on
   purpose.
-- **Game 3 — THE MAZE.** A night hedge-maze course "for the million," head-to-head
-  against Juniper, storm overhead. The maze rearranges between lightning strikes
-  (phase-keyed wall segments — never witnessed moving, same trick as the statues).
-- **Juniper's end:** authored so the player *almost* saves her — she shoves the player
-  through the final gap and is collected. If the player found her complete research
-  beforehand, she passes it in that moment ("It was never about winning. Break the
-  table."), gating the true ending on having actually done the investigation.
+- **Game 3 — FEAST HUNT.** After Storm Run and the patron-feed sabotage, production
+  calls the remaining contestants to the foyer. Three unmistakable gold show props
+  are hidden across all three mansion levels. At release, all interior fixture
+  circuits die and stay unresponsive for the duration of the game. Juniper follows
+  an authored mansion-wide search route, recovers her own three props, and can win
+  by reaching the foyer first. The player must collect all three and physically use
+  the foyer return tray; the third pickup alone is not a win. Cameras report the
+  player's reliable position, Mr. Feast personally hunts whoever is seen, and a
+  catch on any floor eliminates. Crouching, darkness, cover, hiding, and a recovered
+  flashlight remain the fair counters.
+- Each recovered prop advances the house horror without creating another combat AI:
+  the Listening Host and Veiled Waltz turn only while unobserved, camera LEDs go dark
+  while tracking remains active, and Mr. Feast's cheerful announcements thin into
+  silence. The statues redirect and frighten but never damage the player.
+- **Juniper's end is deliberately simple and deferred.** Game 3 does not require a
+  sacrifice cinematic. A later finale slice may eliminate or escort her offscreen
+  after an authored warning about the Winner's Dinner, while her research remains
+  the investigation-earned route to the true ending.
 
 ### Finale — THE WINNER'S DINNER
 
@@ -311,10 +327,15 @@ idea that fits a lane is automatically coherent; anything that fits none gets cu
    tamper states (portrait tilt, chair pull, fridge door) plus a silent no-comment
    housekeeping variant for Mr. Feast; authored set pieces (portrait unison, chair
    ring, piano) come after the ambient tier works.
-5. **Game 2 + Mara elimination + dinner overlook** — the stealth showcase event.
+5. **Game 2 + Mara elimination + dinner overlook** — Storm Run crosses the full
+   estate and turns the weather into a supernatural reveal language without adding
+   a damaging weather-hazard system.
 6. **Phase dressing pass** — painting scoreboard, audio sweetener/detune swaps,
    line-pool swaps, statue notches, the reverse-jingle motif.
-7. **Game 3 + Juniper arc + maze night** — includes the monitor-8 sigil aerial.
+7. **Game 3 core: Feast Hunt** — full-house blackout, three mansion-wide props,
+   live cameras, pursuit, hiding, a physical foyer hand-in, Juniper's competing
+   search route, and the first unobserved foyer-statue turns. Her final story result
+   is deferred.
 8. **Winner's Dinner + three endings** — the shipped welcome replay is the bad
    ending's whole script; the shipped Workroom sabotage is the true ending's first
    half.

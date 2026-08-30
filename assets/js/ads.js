@@ -1,8 +1,7 @@
 /* ============================================
-   RAINBOT GAMING — ad & subscription system
+   RAINBOT GAMING — rewards & subscription system
    --------------------------------------------
-   - AdMob / AdSense / Adsterra are all pluggable
-   - For local dev we use a mock that simulates a 5s rewarded ad
+   - Ads are disabled site-wide; RB.showRewarded() grants instantly
    - Subscription state is in localStorage (replace with your auth/paywall later)
    ============================================ */
 
@@ -304,77 +303,24 @@ const RB = (() => {
     return getLocalProfile();
   }
 
-  // ---------- Ads ----------
+  // ---------- Ads (Disabled / direct grant) ----------
 
   /**
-   * Show a rewarded ad. In production, swap the mock body for the real SDK call.
-   *
-   * AdSense / Ad Manager: not currently supported as rewarded, use AdMob/Unity/Adsterra
-   * Adsterra (Social Bar push not ideal for rewarded; use their Popunder or Direct Link):
-   *   https://www.profitabledisplaynetwork.com (example) — wire onclick handlers to RB.showRewarded
-   *
-   * Adsterra Smart Direct Link (push-style — wrap in your own modal):
-   *   const link = "https://www.profitabledisplaynetwork.com/xyz?key=YOUR_KEY";
-   *   window.open(link, "_blank");
-   *
-   * Unity Ads / AdMob Web (Beta) / ironSource Web: each has its own JS bridge; all
-   * reduce to: show ad → user finishes → resolve(true) → grant reward, or resolve(false) on skip.
+   * Rewarded ads disabled. Resolves immediately so in-game rewards/continues
+   * work without ad interruptions or placeholder popups.
    */
   function showRewarded() {
-    return new Promise((resolve) => {
-      // Prevent the same ad being shown back-to-back
-      if (document.getElementById("rb-ad-modal")) {
-        resolve(false);
-        return;
-      }
-
-      const backdrop = document.createElement("div");
-      backdrop.className = "modal-backdrop modal-backdrop--open";
-      backdrop.id = "rb-ad-modal";
-      backdrop.innerHTML = `
-        <div class="modal" role="dialog" aria-modal="true" aria-labelledby="rb-ad-title">
-          <div class="modal__title" id="rb-ad-title">📺 Watch a quick ad</div>
-          <div class="modal__body">
-            Thanks for keeping Rainbot Network free. Watch the full ad to claim your power-up.
-          </div>
-          <div class="modal__countdown" id="rb-ad-count">5</div>
-          <div class="modal__body" style="font-size:12px;opacity:0.6;">
-            (Mock ad — wire your SDK in <code>RB.showRewarded</code> in <code>assets/js/ads.js</code>)
-          </div>
-        </div>
-      `;
-      document.body.appendChild(backdrop);
-
-      let remaining = AD_DURATION_MS / 1000;
-      const countEl = backdrop.querySelector("#rb-ad-count");
-      const interval = setInterval(() => {
-        remaining -= 1;
-        if (remaining > 0) {
-          countEl.textContent = remaining;
-        } else {
-          clearInterval(interval);
-        }
-      }, 1000);
-
-      // Close after duration (simulating user finishing the ad)
-      setTimeout(() => {
-        clearInterval(interval);
-        backdrop.remove();
-        resolve(true);
-      }, AD_DURATION_MS);
-    });
+    return Promise.resolve(true);
   }
 
   // ---------- Pro / Subscription ----------
 
   /**
    * In production: integrate Stripe Checkout, Paddle, Lemon Squeezy, or RevenueCat Web.
-   * On successful webhook → set isPro = true on this device (or use a signed token from
+   * On successful webhook -> set isPro = true on this device (or use a signed token from
    * your backend). For now we toggle local-only.
    */
   function startCheckout(plan /* "monthly" | "yearly" */) {
-    // TODO: replace with real checkout session
-    // window.location.href = `https://buy.stripe.com/xxx?plan=${plan}`;
     return new Promise((resolve) => {
       const ok = confirm(
         plan === "yearly"
@@ -397,9 +343,7 @@ const RB = (() => {
   }
 
   function isAdFree() {
-    if (state.isPro) return true;
-    if (Date.now() < state.adFreeUntil) return true;
-    return false;
+    return true;
   }
 
   // ---------- Powerups ----------
@@ -517,20 +461,10 @@ const RB = (() => {
 
 window.RB = RB;
 
-// Tiny helper: render a "powered by ad" placeholder
-function renderAdSlot(element, size = "leaderboard") {
-  if (!element) return;
-  if (RB.isAdFree()) {
+// Ad slot placeholder helper (disabled for now)
+function renderAdSlot(element) {
+  if (element) {
     element.style.display = "none";
-    return;
+    element.remove();
   }
-  element.classList.add("ad-slot", "ad-slot--" + size);
-  element.innerHTML = `
-    <div>
-      <div>📢 AD SLOT — ${size.toUpperCase()}</div>
-      <div style="font-size:10px;margin-top:6px;opacity:0.6;">
-        Replace with your network tag in <code>renderAdSlot()</code>
-      </div>
-    </div>
-  `;
 }

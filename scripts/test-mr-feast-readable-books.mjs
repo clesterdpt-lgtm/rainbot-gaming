@@ -104,7 +104,7 @@ async function run() {
     }));
     assert(reader.title && physicalPrompt.includes(reader.title), `the opened title should match the aimed-at spine; reader=${JSON.stringify(reader)} prompt=${physicalPrompt}`);
     assert(reader.author?.length >= 4 && reader.preview?.length >= 120, `each book should have an author line and substantial short excerpt; reader=${JSON.stringify(reader)}`);
-    assert(reader.modal === "true" && reader.focused === "mansion-book-close", `book reader should be modal and move focus to its close control; reader=${JSON.stringify(reader)}`);
+    assert(reader.modal === "true" && reader.focused === "mansion-canvas", `book reader should remain modal while keeping focus on the pointer-lock canvas; reader=${JSON.stringify(reader)}`);
     state = await diagnostics(desktop);
     assert(state.books.open && state.books.active?.title === reader.title, `diagnostics should expose the open volume; books=${JSON.stringify(state.books)}`);
     await desktop.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "readable-book-desktop.png") });

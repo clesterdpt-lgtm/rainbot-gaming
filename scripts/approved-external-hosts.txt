@@ -2,6 +2,7 @@
 # Additions should be reviewed before publishing because GitHub Pages serves
 # this repo directly from main.
 api.meshy.ai
+bigsoundbank.com
 buy.stripe.com
 cdn.jsdelivr.net
 cdn.tailwindcss.com
@@ -17,5 +18,8 @@ pagead2.googlesyndication.com
 pixabay.com
 qzvrrpzmalskayushbrv.supabase.co
 raw.githubusercontent.com
+schema.org
 unpkg.com
+www.halopedia.org
+www.mariowiki.com
 www.profitabledisplaynetwork.com

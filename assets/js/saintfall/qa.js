@@ -22,8 +22,20 @@
 import { clamp, clamp01, angleDelta } from "saintfall/core.js";
 import { TIMES } from "saintfall/art.js";
 import { roadPointAtZ } from "saintfall/terrain.js";
+import { keybindsFor } from "saintfall/keybinds.js";
 
 export function installQa(ctx, api) {
+  /* Press or release every code bound to an action. The harness must
+     drive the ACTION, not a key face that a rebind may have moved. */
+  const holdBind = (action, on) => {
+    const keys = api.player?.input?.keys;
+    if (!keys) return false;
+    for (const code of keybindsFor(action)) {
+      if (on) keys.add(code); else keys.delete(code);
+    }
+    return !!on;
+  };
+
   const { THREE } = ctx;
   const _auditRay = new THREE.Raycaster();
   const _wristBendQ = new THREE.Quaternion();
@@ -65,6 +77,9 @@ export function installQa(ctx, api) {
       return ctx.qa ? (api.intro?.setPaused?.(paused) ?? false) : false;
     },
     skipIntroForQA: () => ctx.qa ? (api.intro?.skip() ?? false) : false,
+    tutorialState: () => api.tutorial?.status?.() || null,
+    startTutorialForQA: () => ctx.qa ? (api.tutorial?.start?.({ source: "qa" }) ?? false) : false,
+    skipTutorialForQA: () => ctx.qa ? (api.tutorial?.skip?.("qa") ?? false) : false,
     renderIntroStill() {
       if (!ctx.qa) return null;
       api.intro?.render?.();
@@ -113,13 +128,47 @@ export function installQa(ctx, api) {
       return steps;
     },
 
+    /**
+     * Advance through the production frame gate instead of stepping the
+     * simulation directly. This is the hook for pause/menu/command-wheel QA:
+     * `advanceTime` intentionally bypasses runtime pause, while this method
+     * must respect it. Main owns `frameOnce` because only main knows every
+     * reason the simulation may be frozen.
+     */
+    advanceRuntimeTime(seconds, dt = 1 / 60) {
+      if (typeof api.frameOnce !== "function") {
+        return { supported: false, steps: 0, phase: api.runtime?.phase || null,
+          paused: !!api.runtime?.paused };
+      }
+      const steps = Math.max(1, Math.round(seconds / dt));
+      for (let i = 0; i < steps; i += 1) api.frameOnce(dt);
+      return { supported: true, steps, phase: api.runtime?.phase || null,
+        paused: !!api.runtime?.paused };
+    },
+
     setTime(key) {
       api.setTime(key);
       return key;
     },
+    dayCycleState: () => ({
+      ...(ctx.atmos.cycleStatus?.() || {}),
+      sky: api.sky?.status?.() || null,
+    }),
+    setDayCycle(phase, running = false, cycleCount = ctx.atmos.cycleCount) {
+      return api.setDayCycle?.(phase, running, cycleCount) || null;
+    },
+    setDayCycleRunning(running = true) {
+      ctx.atmos.setCycleRunning?.(running);
+      return api.setDayCycle?.(ctx.atmos.cyclePhase, running, ctx.atmos.cycleCount) || null;
+    },
     listTimes: () => Object.keys(TIMES || {}),
     setStorm(v) { api.setStorm(clamp01(v)); },
     setQuality(tier) { api.setQuality(tier); },
+    /** Contact-shadow A/B. `gain` 0 removes the term outright. */
+    setContactShadow(gain, steps) {
+      api.render.setContactShadow?.(gain, steps);
+      return api.render.contactShadow;
+    },
 
     /* ---------------------- camera control ---------------------- */
 
@@ -231,7 +280,15 @@ export function installQa(ctx, api) {
      *  only honest way to judge a creature's proportions is next to
      *  the thing the player controls. */
     spawnEnemy(key, x, z, opts) {
-      const inst = api.enemies.spawn(key, x, z, opts || {});
+      /* QA subjects carry provenance. The m101 arena purge removes any
+         enemy WITHOUT an eventId from an engaged boss ring - which is
+         right for the game and wrong for a review scene: the Apostate
+         palette lineup staged two castes beside the live boss and the
+         purge swept them before the camera fired. A harness that
+         wants to watch the purge itself spawns through
+         ctx.enemies.spawn directly. */
+      const options = { eventId: "qa-probe", ...(opts || {}) };
+      const inst = api.enemies.spawn(key, x, z, options);
       api.step(1 / 60, true);
       return inst ? { key: inst.key, x: inst.x, y: inst.y, z: inst.z, state: inst.state } : null;
     },
@@ -243,7 +300,26 @@ export function installQa(ctx, api) {
       return name;
     },
 
-    clearEnemies() { api.enemies.clear(); },
+    /** Hold a creature's clip at one exact second, so a review frame can
+     *  be taken of the pose a mechanic is defined at rather than of
+     *  whichever frame the run happened to land on. */
+    freezeEnemyClip(name, seconds = 0, index = 0) {
+      const inst = api.enemies.live[index];
+      if (!inst) return null;
+      api.enemies.play(inst, name, 0);
+      const action = inst.actions.get(name);
+      if (!action) return null;
+      inst.mixer.update(0);
+      action.time = Math.max(0, Number(seconds) || 0);
+      action.paused = true;
+      inst.mixer.update(0);
+      return { name, time: action.time, duration: action.getClip().duration };
+    },
+
+    clearEnemies() {
+      api.enemies.clear();
+      api.combat?.clearProjectiles?.();
+    },
 
     /** Measured, not asserted: the creature's rendered height in
      *  world units next to the trooper's known 1.85m. */
@@ -495,6 +571,543 @@ export function installQa(ctx, api) {
       return out;
     },
 
+    /* ============================================================
+       LEG RIG INSTRUMENT
+
+       Three complaints from play, none of which a still frame can
+       settle: sabatons pointing up under the jetpack, legs "warped"
+       climbing a steep grade, legs "warped" braking out of a run.
+       All three are one class of defect - the pose the solver
+       PRODUCED is not a pose a leg can hold - so all three are
+       measured off the posed bones rather than off the targets the
+       solver was handed.
+
+       Per leg, per frame:
+
+         ankleDev  how far the ankle is from its own neutral, in
+                   degrees, positive toes-up. NOT the raw bone angle:
+                   the two playable rigs disagree by 26 degrees about
+                   where their foot bones point, and `restPitch` is
+                   exactly that disagreement, so subtracting it is
+                   what makes one gate cover both bodies. Standing
+                   flat is 0. A person can point to about -50 and pull
+                   up to about +25; hard limits are -55 and +30.
+         kneeDeg   bend at the knee, 0 = fully extended, 150 = heel
+                   against the buttock and past what a knee does.
+         missM     how far the posed ankle finished from the target
+                   the solver was given. Non-zero means the two-joint
+                   clamp fired, which is what "stretched" looks like:
+                   the boot is no longer where the gait thinks it is.
+         soleDeg   the sole's pitch against the ground under it,
+                   positive toes-up, so a boot lying correctly along
+                   a 30-degree hill reads 0 and one held flat while
+                   the hill falls away reads 30.
+
+       And per scenario, `popM`: the largest SECOND difference of the
+       ankle's world path. A fast swing has a large first difference
+       and a small second one; a teleport has both, and that is the
+       whole reason this is an acceleration rather than a speed.
+
+       Everything is skipped on a frame where the body failed to
+       advance. A trooper walking into masonry keeps `speed` high
+       while `state.gait` stops, which freezes both legs mid-swing -
+       a real pose, but the wall's, and grading it reports a building
+       as a broken rig.
+       ============================================================ */
+    legRigCheck(options) {
+      const p = api.player;
+      const opts = options || {};
+      const rig = p.legRig
+        ? p.legRig()
+        : { restPitch: 0.55, flightDev: -0.34, ankle: 0.118, reach: [0.82, 0.82] };
+      const fig = p.figure;
+      const hasFeet = !!(fig.footPivots && fig.toePivots);
+      const DEG = 180 / Math.PI;
+      const REST_DEG = rig.restPitch * DEG;
+      const LIMIT_DEG = Math.abs((rig.devLimit ? rig.devLimit[1] : 0.46) * DEG);
+
+      const vHip = new THREE.Vector3();
+      const vKnee = new THREE.Vector3();
+      const vAnkle = new THREE.Vector3();
+      const vToe = new THREE.Vector3();
+      const vA = new THREE.Vector3();
+      const vB = new THREE.Vector3();
+      const angleOf = (a, b) => {
+        if (a.lengthSq() < 1e-12 || b.lengthSq() < 1e-12) return 0;
+        return Math.acos(clamp(a.dot(b) / (a.length() * b.length()), -1, 1)) * DEG;
+      };
+
+      /* Ground slope along the foot's OWN facing, so a boot standing
+         across a hill is not scored against a fall line it is not
+         pointing down. */
+      const groundPitchAt = (x, z, dirX, dirZ) => {
+        const s = 0.18;
+        const hi = api.collide.groundHeight(x + dirX * s, z + dirZ * s);
+        const lo = api.collide.groundHeight(x - dirX * s, z - dirZ * s);
+        if (!Number.isFinite(hi) || !Number.isFinite(lo)) return 0;
+        return Math.atan2(hi - lo, s * 2) * DEG;
+      };
+
+      const rows = [{}, {}];
+      const sample = () => {
+        for (let i = 0; i < 2; i += 1) {
+          const leg = p.legs[i];
+          const row = rows[i];
+          fig.legPivots[i].getWorldPosition(vHip);
+          fig.kneePivots[i].getWorldPosition(vKnee);
+          if (hasFeet) {
+            fig.footPivots[i].getWorldPosition(vAnkle);
+            fig.toePivots[i].getWorldPosition(vToe);
+          } else {
+            vAnkle.copy(leg.foot);
+            vToe.copy(leg.foot);
+          }
+          /* IN THE BODY FRAME, not the world. A pop is the foot
+             coming off its own path; the world path also carries
+             every metre the body travels, and under the jetpack it
+             carries the body's ACCELERATION - which read as a 0.25m
+             discontinuity in a hover that was, on inspection, the
+             player accelerating to 12m/s in a straight line. */
+          const bs = Math.sin(p.state.yaw);
+          const bc = Math.cos(p.state.yaw);
+          const bx = vAnkle.x - p.state.x;
+          const bz = vAnkle.z - p.state.z;
+          row.rawY = vAnkle.y;
+          row.ankleX = bx * bc - bz * bs;
+          row.ankleY = vAnkle.y - p.state.y;
+          row.ankleZ = bx * bs + bz * bc;
+          row.swinging = !!leg.swinging;
+          /* IS THIS BOOT ON THE GROUND. Not `!swinging`, which is
+             also true of both legs in mid-air under the jetpack and
+             of a stance foot whose heel has deliberately come off.
+             `footFollow` is the solver's own statement of who owns
+             the sole - 0 the ground, 1 the ankle - so the frames
+             where the sole is CLAIMED flat are exactly the frames
+             where holding it flat is a promise to check. */
+          row.contact = !leg.swinging && p.state.grounded
+            && (leg.footFollow || 0) < 0.15;
+          row.missM = vAnkle.distanceTo(leg.foot);
+          vA.copy(vKnee).sub(vHip);
+          vB.copy(vAnkle).sub(vKnee);
+          row.kneeDeg = angleOf(vA, vB);
+          row.ankleDev = 0;
+          row.soleDeg = 0;
+          if (hasFeet) {
+            vA.copy(vAnkle).sub(vKnee);
+            vB.copy(vToe).sub(vAnkle);
+            row.ankleDev = angleOf(vA, vB) - 90 + REST_DEG;
+            /* The sole is `restPitch` off the toe direction by
+               definition - that is what restPitch MEANS - so the
+               boot's world pitch is the toe direction's elevation
+               plus it, and the reading against the hill is that
+               minus the hill. */
+            const len = vB.length();
+            const rise = len > 1e-6 ? vB.y / len : 0;
+            const run = Math.hypot(vB.x, vB.z);
+            const gp = run > 1e-4
+              ? groundPitchAt(vAnkle.x, vAnkle.z, vB.x / run, vB.z / run)
+              : 0;
+            const off = (Math.asin(clamp(rise, -1, 1)) + rig.restPitch) * DEG - gp;
+            /* NET OF WHAT AN ANKLE HAS. A hill steeper than the joint
+               cannot be lain on, and a boot climbing one is supposed
+               to have its heel off the ground - scoring that as a
+               fault would make the gate unreachable on Kenosis and
+               unfalsifiable everywhere else. What is left is the part
+               the pose could have fixed and did not. */
+            const spare = Math.max(0, Math.abs(gp) - LIMIT_DEG);
+            row.soleDeg = Math.sign(off) * Math.max(0, Math.abs(off) - spare);
+          }
+        }
+        return rows;
+      };
+
+      /* Per-frame dump for ONE named scenario. A summary cannot say
+         WHERE in a stride a discontinuity is, and every fault found
+         here so far has been identified by its phase. */
+      const wanted = opts.series || null;
+      const run = (spec) => {
+        const series = wanted === spec.id ? [] : null;
+        const acc = [0, 1].map(() => ({
+          missM: 0, devMin: 999, devMax: -999, kneeMax: 0,
+          soleMin: 999, soleMax: -999, steps: [], stanceSoleMax: 0,
+          contactFrames: 0, clampedFrames: 0,
+          worstDevAt: null, worstPopAt: null, worstSoleAt: null,
+        }));
+        const prev = [null, null];
+        let frames = 0;
+        let blocked = 0;
+        let travelled = 0;
+        let hang = 0;
+        let maxHang = 0;
+        let t = 0;
+        let px = p.state.x;
+        let pz = p.state.z;
+
+        const measure = (moving) => {
+          const advanced = Math.hypot(p.state.x - px, p.state.z - pz);
+          travelled += advanced;
+          px = p.state.x;
+          pz = p.state.z;
+          /* A body that is trying to move and is not is pinned on
+             something. Its gait accumulator has stopped, so both legs
+             hold whatever mid-swing pose they were in; every metric
+             below would then describe the collider. */
+          if (moving && p.state.grounded
+            && p.state.speed > 0.35 && advanced < (p.state.speed / 60) * 0.5) {
+            blocked += 1;
+            prev[0] = null; prev[1] = null;
+            t += 1 / 60;
+            return;
+          }
+          const now = sample();
+          for (let i = 0; i < 2; i += 1) {
+            const r = now[i];
+            const a = acc[i];
+            if (r.missM > a.missM) a.missM = r.missM;
+            if (r.ankleDev < a.devMin) a.devMin = r.ankleDev;
+            if (r.ankleDev > a.devMax) {
+              a.devMax = r.ankleDev;
+              a.worstDevAt = {
+                t: Number(t.toFixed(2)),
+                swinging: r.swinging,
+                kneeDeg: Number(r.kneeDeg.toFixed(1)),
+                missM: Number(r.missM.toFixed(3)),
+              };
+            }
+            if (r.kneeDeg > a.kneeMax) a.kneeMax = r.kneeDeg;
+            if (r.soleDeg < a.soleMin) a.soleMin = r.soleDeg;
+            if (r.soleDeg > a.soleMax) a.soleMax = r.soleDeg;
+            /* ONLY WHERE THE ANKLE HAD ROOM LEFT.
+               A sole off the ground with the ankle already at its
+               limit is not a pose fault, it is a leg doing all it
+               can - on a hill steeper than a joint, or a shin the
+               stride put past what a joint can recover, the heel
+               comes up and that is correct. Scoring those made the
+               gate unreachable. Scoring the frames where the ankle
+               still had degrees to spend and did not use them is the
+               question actually worth asking; the rest are counted
+               and reported, not graded. */
+            if (r.contact) {
+              a.contactFrames += 1;
+              if (Math.abs(r.ankleDev) >= LIMIT_DEG - 1) {
+                a.clampedFrames += 1;
+              } else if (Math.abs(r.soleDeg) > a.stanceSoleMax) {
+                a.stanceSoleMax = Math.abs(r.soleDeg);
+                a.worstSoleAt = {
+                  t: Number(t.toFixed(2)),
+                  soleDeg: Number(r.soleDeg.toFixed(1)),
+                  ankleDev: Number(r.ankleDev.toFixed(1)),
+                };
+              }
+            }
+            if (prev[i]) {
+              a.steps.push({
+                d: Math.hypot(
+                  r.ankleX - prev[i].x, r.ankleY - prev[i].y, r.ankleZ - prev[i].z
+                ),
+                t,
+                swinging: r.swinging,
+                speed: p.state.speed,
+                gait: p.state.gait % 1,
+              });
+            } else {
+              a.steps.push(null);
+            }
+            prev[i] = { x: r.ankleX, y: r.ankleY, z: r.ankleZ };
+          }
+          /* A FOOT LEFT IN THE AIR WHILE THE BODY STOPS.
+             The gait is driven by DISTANCE, so a decelerating body
+             advances it more and more slowly and a swing that has
+             already lifted simply hangs there - the boot parked at
+             knee height while the trooper coasts to a halt. It is
+             not a slip, not a snap and not an angle, so nothing else
+             here sees it; what it is, is seconds. */
+          if (p.state.speed < 1.2 && p.state.grounded) {
+            let flying = false;
+            for (let i = 0; i < 2; i += 1) {
+              const g = api.collide.groundHeight(
+                p.legs[i].foot.x, p.legs[i].foot.z
+              );
+              if (Number.isFinite(g) && now[i].rawY - g > rig.ankle + 0.12) flying = true;
+            }
+            if (flying) {
+              hang += 1 / 60;
+              if (hang > maxHang) maxHang = hang;
+            } else hang = 0;
+          } else hang = 0;
+          if (series) {
+            series.push({
+              t: Number(t.toFixed(3)),
+              gait: Number((p.state.gait % 1).toFixed(3)),
+              spd: Number(p.state.speed.toFixed(2)),
+              gnd: p.state.grounded ? 1 : 0,
+              legs: [0, 1].map((k) => ({
+                x: Number(now[k].ankleX.toFixed(4)),
+                y: Number(now[k].ankleY.toFixed(4)),
+                z: Number(now[k].ankleZ.toFixed(4)),
+                sw: now[k].swinging ? 1 : 0,
+                dev: Number(now[k].ankleDev.toFixed(1)),
+                knee: Number(now[k].kneeDeg.toFixed(1)),
+                fol: Number((p.legs[k].footFollow || 0).toFixed(2)),
+                fd: Number((p.legs[k].footDev || 0).toFixed(3)),
+              })),
+            });
+          }
+          frames += 1;
+          t += 1 / 60;
+        };
+
+        for (const step of spec.legs) {
+          const [seconds, mx, mz, flags] = step;
+          if (flags && flags.jet !== undefined) hook.setJetInput(!!flags.jet);
+          if (mx === null) p.input.inject(null);
+          else p.input.inject(mx, mz);
+          const steps = Math.round(seconds * 60);
+          const settle = !!(flags && flags.settle);
+          for (let i = 0; i < steps; i += 1) {
+            api.step(1 / 60, false);
+            if (settle) { px = p.state.x; pz = p.state.z; continue; }
+            measure(mx !== null && (mx !== 0 || mz !== 0));
+          }
+        }
+        p.input.inject(null);
+        hook.setJetInput(false);
+        api.step(1 / 60, false);
+
+        /* A TELEPORT IS AN ISOLATED STEP, not a big one.
+           The first version of this scored the second difference of
+           the ankle's path and failed every scenario - because a
+           swing at 8m/s covers 1.1m in a sixth of a second, and the
+           acceleration that takes is genuinely 0.07m per frame
+           squared. Real motion has neighbours the same size as
+           itself; a snap does not, and what is left after taking the
+           neighbours off is the size of the snap. */
+        const jumpOf = (a) => {
+          let worst = 0;
+          let at = null;
+          for (let n = 1; n < a.steps.length - 1; n += 1) {
+            const cur = a.steps[n];
+            const before = a.steps[n - 1];
+            const after = a.steps[n + 1];
+            if (!cur || !before || !after) continue;
+            const excess = cur.d - 2 * Math.max(before.d, after.d);
+            if (excess > worst) {
+              worst = excess;
+              at = {
+                t: Number(cur.t.toFixed(2)),
+                stepM: Number(cur.d.toFixed(3)),
+                neighbourM: Number(Math.max(before.d, after.d).toFixed(3)),
+                swinging: cur.swinging,
+                speed: Number(cur.speed.toFixed(2)),
+                gait: Number(cur.gait.toFixed(3)),
+              };
+            }
+          }
+          return { worst, at };
+        };
+
+        const fmt = (a) => ({
+          maxTargetMissM: Number(a.missM.toFixed(3)),
+          ankleDevDeg: [Number(a.devMin.toFixed(1)), Number(a.devMax.toFixed(1))],
+          maxKneeBendDeg: Number(a.kneeMax.toFixed(1)),
+          soleDegRange: [Number(a.soleMin.toFixed(1)), Number(a.soleMax.toFixed(1))],
+          plantedSoleMaxDeg: Number(a.stanceSoleMax.toFixed(1)),
+          contactFrames: a.contactFrames,
+          ankleClampedPct: Number(
+            (100 * a.clampedFrames / Math.max(1, a.contactFrames)).toFixed(0)
+          ),
+          jumpM: Number(jumpOf(a).worst.toFixed(4)),
+          maxStepM: Number(a.steps.reduce((m, v) => Math.max(m, v ? v.d : 0), 0).toFixed(3)),
+          worstDevAt: a.worstDevAt,
+          worstJumpAt: jumpOf(a).at,
+          worstSoleAt: a.worstSoleAt,
+        });
+        return {
+          id: spec.id,
+          frames,
+          blockedFrames: blocked,
+          travelM: Number(travelled.toFixed(2)),
+          footHangS: Number(maxHang.toFixed(2)),
+          left: fmt(acc[0]),
+          right: fmt(acc[1]),
+          series,
+        };
+      };
+
+      /* Uphill grade in the facing direction, over the walk rule's
+         own look distance. */
+      const gradeAt = (x, z, yaw) => {
+        const dx = Math.sin(yaw);
+        const dz = Math.cos(yaw);
+        const h0 = api.collide.groundHeight(x, z);
+        const h1 = api.collide.groundHeight(x + dx * 1.6, z + dz * 1.6);
+        if (!Number.isFinite(h0) || !Number.isFinite(h1)) return 0;
+        return (h1 - h0) / 1.6;
+      };
+
+      /* Candidate ground with a requested uphill grade, facing up
+         it. Searched rather than hard-coded: the two levels this runs
+         on do not share a single hill.
+
+         SIXTEEN DIRECTIONS PER SITE, not just the fall line. For the
+         flat control the steepest ascent is a few centimetres of
+         noise and its bearing is arbitrary, which is how the first
+         version of this walked the trooper into the Choir Spires and
+         then graded the pose it froze in. */
+      const findGrades = (cx, cz, want, radius, keep) => {
+        const out = [];
+        const R = radius || 240;
+        for (let ring = 10; ring <= R; ring += 9) {
+          for (let k = 0; k < 16; k += 1) {
+            const ang = (k / 16) * Math.PI * 2 + ring * 0.31;
+            const x = cx + Math.cos(ang) * ring;
+            const z = cz + Math.sin(ang) * ring;
+            const h = api.collide.groundHeight(x, z);
+            if (!Number.isFinite(h)) continue;
+            for (let a = 0; a < 16; a += 1) {
+              const yaw = (a / 16) * Math.PI * 2;
+              const dx = Math.sin(yaw);
+              const dz = Math.cos(yaw);
+              /* Graded over the whole march, not one sample: a site
+                 whose first metre matches and whose sixth is a cliff
+                 is a scenario that measures the cliff. */
+              let worst = 0;
+              let sum = 0;
+              let steps = 0;
+              let prev = h;
+              let ok = true;
+              for (let d = 1.6; d <= 14; d += 1.6) {
+                const hh = api.collide.groundHeight(x + dx * d, z + dz * d);
+                if (!Number.isFinite(hh)) { ok = false; break; }
+                const g = (hh - prev) / 1.6;
+                if (g > 1.5 || g < -1.5) { ok = false; break; }
+                worst = Math.max(worst, Math.abs(g - want));
+                sum += g;
+                steps += 1;
+                prev = hh;
+              }
+              if (!ok || !steps) continue;
+              const grade = sum / steps;
+              out.push({ x, z, yaw, grade, err: Math.abs(grade - want) + worst * 0.35 });
+            }
+          }
+        }
+        out.sort((a, b) => a.err - b.err);
+        return out.slice(0, keep || 10);
+      };
+
+      const home = opts.at || { x: p.state.x, z: p.state.z };
+      const results = [];
+      /* Backed off down the slope so the measured window is the
+         CLIMB and not the first two strides out of a teleport. */
+      const at = (site, back = 0) => {
+        hook.teleport(
+          site.x - Math.sin(site.yaw) * back,
+          site.z - Math.cos(site.yaw) * back,
+          site.yaw
+        );
+        p.setFree(false);
+        for (let i = 0; i < 45; i += 1) api.step(1 / 60, false);
+        return Number(gradeAt(p.state.x, p.state.z, p.state.yaw).toFixed(2));
+      };
+
+      /* THE SITE HAS TO BE WALKED, not merely sampled. Height samples
+         see the terrain and nothing else, and the levels are full of
+         masonry: a pinned trooper keeps `speed` high while
+         `state.gait` stops dead, which freezes both legs mid-swing.
+         That is a real pose, but it is the building's, and grading it
+         reports a wall as a broken rig. So each candidate takes a
+         trial run and the first one that actually travels wins. */
+      const pickSite = (want, back) => {
+        const cands = findGrades(home.x, home.z, want, opts.radius, 8);
+        let fallback = null;
+        for (const site of cands) {
+          const grade = at(site, back);
+          p.input.inject(0, -1);
+          let travel = 0;
+          let stuck = 0;
+          let px = p.state.x;
+          let pz = p.state.z;
+          for (let i = 0; i < 78; i += 1) {
+            api.step(1 / 60, false);
+            const advanced = Math.hypot(p.state.x - px, p.state.z - pz);
+            px = p.state.x;
+            pz = p.state.z;
+            travel += advanced;
+            if (p.state.grounded && p.state.speed > 0.35
+              && advanced < (p.state.speed / 60) * 0.5) stuck += 1;
+          }
+          p.input.inject(null);
+          for (let i = 0; i < 24; i += 1) api.step(1 / 60, false);
+          if (!fallback) fallback = { ...site, grade, travel, stuck };
+          if (travel > 3.0 && stuck < 5) return { ...site, grade, travel, stuck };
+        }
+        return fallback;
+      };
+
+      const flat = pickSite(0, 6) || { x: home.x, z: home.z, yaw: 0, grade: 0 };
+
+      // 1. FLAT CONTROL. If this is broken nothing measured below can
+      //    be blamed on the terrain.
+      const siteOf = (site, back) => ({
+        x: Number(site.x.toFixed(2)),
+        z: Number(site.z.toFixed(2)),
+        yaw: Number(site.yaw.toFixed(4)),
+        back,
+      });
+      let grade = at(flat, 6);
+      results.push({
+        ...run({ id: "flat-walk", legs: [[2.6, 0, -1]] }),
+        grade,
+        site: siteOf(flat, 6),
+      });
+
+      // 2. BRAKING. The release is inside the measured window.
+      grade = at(flat, 6);
+      results.push({
+        ...run({ id: "run-to-stop", legs: [[2.0, 0, -1], [2.6, null, null]] }),
+        grade,
+        site: siteOf(flat, 6),
+      });
+
+      // 3. CLIMBING, at an ordinary hillside and near the walk rule's
+      //    own ceiling.
+      for (const want of [0.55, 1.15]) {
+        const site = pickSite(want, 7);
+        if (!site) { results.push({ id: `climb-${want}`, missing: true }); continue; }
+        grade = at(site, 7);
+        results.push({
+          ...run({ id: `climb-${want}`, legs: [[2.6, 0, -1]] }),
+          grade,
+          site: siteOf(site, 7),
+        });
+      }
+
+      // 4. FLIGHT, held long enough for the pose channel to reach 1.
+      at(flat, 0);
+      results.push({ ...run({
+        id: "jet-hover",
+        legs: [[1.4, 0, 0, { jet: true, settle: true }], [2.0, 0, 0, { jet: true }]],
+      }), site: siteOf(flat, 0) });
+      at(flat, 0);
+      results.push({ ...run({
+        id: "jet-forward",
+        legs: [[1.4, 0, -1, { jet: true, settle: true }], [2.0, 0, -1, { jet: true }]],
+      }), site: siteOf(flat, 0) });
+
+      api.step(1 / 60, true);
+      return {
+        rig: {
+          restPitchDeg: Number(REST_DEG.toFixed(1)),
+          flightDevDeg: Number((rig.flightDev * DEG).toFixed(1)),
+          devLimitDeg: (rig.devLimit || [0, 0]).map((v) => Number((v * DEG).toFixed(0))),
+          reachM: rig.reach.map((v) => Number(v.toFixed(3))),
+          ankleM: Number(rig.ankle.toFixed(3)),
+        },
+        scenarios: results,
+      };
+    },
+
     /**
      * Hold or release the fire button.
      *
@@ -523,6 +1136,18 @@ export function installQa(ctx, api) {
       return { camYaw: s.camYaw, camPitch: s.camPitch, camDist: s.camDist };
     },
 
+    /** Set only the authored model/body heading. The camera is deliberately
+     * untouched so map tests can prove that the player marker follows the
+     * trooper rather than the mouse-look orbit. */
+    setBodyHeading(yaw) {
+      const s = api.player.state;
+      const next = Math.atan2(Math.sin(Number(yaw) || 0), Math.cos(Number(yaw) || 0));
+      const cameraYaw = s.camYaw;
+      s.yaw = next;
+      api.hud?.redrawMinimap?.();
+      return { bodyYaw: s.yaw, cameraYaw, cameraUnchanged: s.camYaw === cameraYaw };
+    },
+
     /** The live leg records, so a probe can read foot placement in the
      *  body frame without going through the module boundary. */
     playerLegs() { return api.player.legs; },
@@ -536,6 +1161,14 @@ export function installQa(ctx, api) {
      *  event queue, so the harness exercises main.js's handler rather
      *  than a private function. */
     pressMelee() { api.player.input.state.events.push({ type: "melee" }); },
+
+    /** Press jump, the way the keyboard does - the edge flag the input
+     *  poll consumes, so the impulse goes through player.js's own
+     *  grounded/rooted gates rather than being written onto `vy`. */
+    pressJump() {
+      api.player.input.state.jumpPressed = true;
+      return true;
+    },
 
     /** Where the lance is between the hands and the back, plus the
      *  grip's position in body space so a probe can see it travel. */
@@ -613,16 +1246,19 @@ export function installQa(ctx, api) {
       if (!mesh) return null;
       const now = ctx.atmos.elapsed;
       const births = mesh.geometry.attributes.aBirth.array;
+      const tint = mesh.geometry.attributes.aTint.array;
       let scheduled = 0;
       let lit = 0;
       let furthestAhead = 0;
+      let energy = 0;
       for (let i = 0; i < births.length; i += 1) {
         if (births[i] < -900) continue;
+        if (tint[i] > 1.5) energy += 1;
         const d = births[i] - now;
         if (d > 1e-4) { scheduled += 1; furthestAhead = Math.max(furthestAhead, d); }
         else if (d > -0.62) lit += 1;
       }
-      return { scheduled, lit, furthestAheadS: Number(furthestAhead.toFixed(3)) };
+      return { scheduled, lit, energy, furthestAheadS: Number(furthestAhead.toFixed(3)) };
     },
 
     /** Where the Pilgrim's Road runs at a given northing, so a probe
@@ -654,6 +1290,37 @@ export function installQa(ctx, api) {
      *  undone to read a pose back in the space it was authored in. */
     playerState() { return api.player.state; },
 
+    /** Ground-adhesion and skid state for deterministic slope probes.
+     *  Kept separate from `grounded`: a steep slide is intentionally
+     *  supported locomotion, while a true ledge must still report air. */
+    downhillState() {
+      const p = api.player.state;
+      const ground = api.collide.groundHeight(p.x, p.z);
+      const root = api.player.figure.root;
+      const baseScale = api.player.figure.baseScale || { y: 1 };
+      return {
+        grounded: p.grounded,
+        grade: Number((p.downhillGrade || 0).toFixed(4)),
+        sliding: !!p.downhillSliding,
+        pose: Number((p.downhillPose || 0).toFixed(4)),
+        clearance: Number((p.y - ground).toFixed(4)),
+        gait: Number(p.gait.toFixed(4)),
+        stride: Number(p.stride.toFixed(4)),
+        feet: api.player.legs.map((leg) => leg.foot.toArray().map((v) => Number(v.toFixed(4)))),
+        legs: api.player.legs.map((leg) => ({
+          side: leg.side,
+          swinging: !!leg.swinging,
+          planted: !!leg.planted,
+        })),
+        root: {
+          pitch: Number(root.rotation.x.toFixed(4)),
+          roll: Number(root.rotation.z.toFixed(4)),
+          relativeY: Number((root.position.y - p.y).toFixed(4)),
+          scaleY: Number((root.scale.y / baseScale.y).toFixed(4)),
+        },
+      };
+    },
+
     /** The most recently launched tracer, straight off the GPU
      *  buffer. A screenshot can show a bolt at the wrong length or
      *  leaving from the wrong place and still look plausible; these
@@ -661,6 +1328,7 @@ export function installQa(ctx, api) {
     lastTracer() {
       const mesh = api.vfx.group.getObjectByName("tracers");
       if (!mesh) return null;
+      const headMesh = api.vfx.group.getObjectByName("tracer-heads");
       const a = mesh.geometry.attributes;
       let newest = -Infinity;
       let idx = -1;
@@ -670,12 +1338,34 @@ export function installQa(ctx, api) {
         if (a.aBirth.array[v] > newest) { newest = a.aBirth.array[v]; idx = v; }
       }
       if (idx < 0) return null;
+      const start = new THREE.Vector3(
+        a.position.array[idx * 3],
+        a.position.array[idx * 3 + 1],
+        a.position.array[idx * 3 + 2]
+      );
+      const direction = new THREE.Vector3(
+        a.aDir.array[idx * 3],
+        a.aDir.array[idx * 3 + 1],
+        a.aDir.array[idx * 3 + 2]
+      );
+      const age = Math.max(0, ctx.atmos.elapsed - newest);
+      const style = a.aStyle ? a.aStyle.array[idx] : 0;
+      /* Hostile plasma travels at 150m/s. The player style is a
+         hitscan laser, so its visible head is the resolved endpoint
+         from the instant the streak appears. */
+      const headDistance = style > 0.5
+        ? a.aSpan.array[idx]
+        : Math.min(age * 150, a.aSpan.array[idx]);
       return {
-        start: [a.position.array[idx * 3], a.position.array[idx * 3 + 1],
-          a.position.array[idx * 3 + 2]],
-        dir: [a.aDir.array[idx * 3], a.aDir.array[idx * 3 + 1], a.aDir.array[idx * 3 + 2]],
+        start: start.toArray(),
+        dir: direction.toArray(),
         span: a.aSpan.array[idx],
         width: a.aWidth.array[idx],
+        style,
+        head: style <= 0.5 && !!headMesh,
+        beam: style > 0.5,
+        age: Number(age.toFixed(4)),
+        headDistance: Number(headDistance.toFixed(2)),
         live,
       };
     },
@@ -704,12 +1394,10 @@ export function installQa(ctx, api) {
     aimAt(x, y, z, settle = 12) {
       const ps = api.player.state;
       const want = new THREE.Vector3(x, y, z);
-      const muzzle = new THREE.Vector3();
+      const eye = new THREE.Vector3();
       for (let i = 0; i < 6; i += 1) {
-        const w = api.weapons.current;
-        if (w && w.muzzle) w.muzzle.getWorldPosition(muzzle);
-        else muzzle.set(ps.x, ps.y + 1.5, ps.z);
-        const to = want.clone().sub(muzzle).normalize();
+        api.render.camera.getWorldPosition(eye);
+        const to = want.clone().sub(eye).normalize();
         const wantYaw = Math.atan2(to.x, to.z);
         const wantPitch = Math.asin(clamp(to.y, -1, 1));
         const dir = new THREE.Vector3();
@@ -723,7 +1411,8 @@ export function installQa(ctx, api) {
       api.step(1 / 60, true);
       const dir = new THREE.Vector3();
       api.render.camera.getWorldDirection(dir);
-      const to = want.clone().sub(muzzle).normalize();
+      api.render.camera.getWorldPosition(eye);
+      const to = want.clone().sub(eye).normalize();
       return { errorDeg: Math.acos(clamp(dir.dot(to), -1, 1)) * 180 / Math.PI };
     },
 
@@ -742,10 +1431,27 @@ export function installQa(ctx, api) {
       const muzzle = new THREE.Vector3();
       const w = api.weapons.current;
       const ps = api.player.state;
-      if (w && w.muzzle) w.muzzle.getWorldPosition(muzzle);
+      if (w && (w.emitter || w.muzzle)) (w.emitter || w.muzzle).getWorldPosition(muzzle);
       else muzzle.set(ps.x, ps.y + 1.5, ps.z);
+      const camera = api.render.camera;
+      const eye = new THREE.Vector3();
+      const cameraDir = new THREE.Vector3();
+      const aimPoint = new THREE.Vector3();
       const dir = new THREE.Vector3();
-      api.render.camera.getWorldDirection(dir);
+      camera.getWorldPosition(eye);
+      camera.getWorldDirection(cameraDir);
+      const cameraWall = api.collide.rayBlock(
+        eye.x, eye.y, eye.z, cameraDir.x, cameraDir.y, cameraDir.z, maxDist
+      );
+      const cameraEnemy = api.combat.raycastEnemies(
+        eye.x, eye.y, eye.z, cameraDir.x, cameraDir.y, cameraDir.z,
+        Math.min(maxDist, cameraWall)
+      );
+      const aimDistance = cameraEnemy
+        ? cameraEnemy.t
+        : Math.min(maxDist, cameraWall);
+      aimPoint.copy(eye).addScaledVector(cameraDir, aimDistance);
+      dir.subVectors(aimPoint, muzzle).normalize();
       const d = api.collide.rayBlock(
         muzzle.x, muzzle.y, muzzle.z, dir.x, dir.y, dir.z, maxDist
       );
@@ -753,7 +1459,25 @@ export function installQa(ctx, api) {
         clearM: d === Infinity ? maxDist : d,
         muzzle: muzzle.toArray(),
         dir: dir.toArray(),
+        cameraDir: cameraDir.toArray(),
+        aimPoint: aimPoint.toArray(),
+        aimKind: cameraEnemy ? "enemy" : (cameraWall !== Infinity ? "cover" : "range"),
       };
+    },
+
+    shotSolution() { return api.shotSolution?.() || null; },
+    reticleState() { return api.hud?.reticleState?.() || null; },
+    guardCueState() { return api.hud?.guardCueState?.() || null; },
+    doctrineCueState() { return api.hud?.doctrineCueState?.() || null; },
+    guardThreatState() { return api.guardReadability?.status?.() || null; },
+    previewGuardCue(options = {}) {
+      return api.guardReadability?.preview?.(options) || null;
+    },
+    resolveGuardCue(id = "guard-training", result = {}) {
+      return api.guardReadability?.resolve?.(id, result) || false;
+    },
+    freezeGuardCue(value = true) {
+      return api.guardReadability?.setFrozen?.(value) || false;
     },
 
     /** Live enemy positions. `spawnEnemy` returns a snapshot, and a
@@ -762,6 +1486,39 @@ export function installQa(ctx, api) {
       return api.enemies.live
         .filter((e) => e.state !== "death")
         .map((e) => ({ key: e.key, x: e.x, y: e.y, z: e.z, state: e.state }));
+    },
+
+    /** Health and stun, for probing area attacks. Separate from
+     *  `enemyList` so probes pinned to that shape keep working. */
+    enemyStatus() {
+      return api.enemies.live.map((e) => ({
+        key: e.key,
+        x: Number(e.x.toFixed(3)),
+        z: Number(e.z.toFixed(3)),
+        health: Number((e.health ?? 0).toFixed(2)),
+        maxHealth: e.spec?.hp ?? null,
+        stunTime: Number((e.stunTime || 0).toFixed(3)),
+        fireTimer: Number((e.fireTimer || 0).toFixed(3)),
+        strike: e.strike
+          ? { t: Number(e.strike.t.toFixed(3)), windup: e.strike.windup }
+          : null,
+        state: e.state,
+      }));
+    },
+
+    /** The enemy-melee tell/strike machinery and its session tallies -
+     *  how many bites were telegraphed, landed, whiffed, guarded, held
+     *  for a slot, or interrupted by a lance stagger. */
+    strikeState: () => api.combat.strikeState?.() || null,
+
+    /** The live difficulty tier and its numbers (difficulty.js). */
+    difficultyState: () => ctx.difficulty?.status?.() || null,
+    /** Pin a tier for a probe. Goes through the same `set` the menus use,
+     *  so live enemy pools rescale and both menus follow. */
+    setDifficultyForQA(tier) {
+      if (!ctx.qa || !ctx.difficulty?.set) return null;
+      ctx.difficulty.set(tier, "qa");
+      return ctx.difficulty.status();
     },
 
     /** Shots fired and shots landed, so a probe can prove its own
@@ -774,7 +1531,7 @@ export function installQa(ctx, api) {
     muzzleLamp() {
       const lamp = api.weapons.current && api.weapons.current.reliquaryLight;
       return lamp
-        ? { intensity: lamp.intensity, distance: lamp.distance }
+        ? { intensity: lamp.intensity, distance: lamp.distance, colour: `#${lamp.color.getHexString()}` }
         : null;
     },
 
@@ -1296,13 +2053,23 @@ export function installQa(ctx, api) {
         render: info,
         runtime: { ...api.runtime },
         intro: api.intro?.status() || null,
+        tutorial: api.tutorial?.status?.() || null,
+        /* OPTIONAL-CHAINED, because a level pack is allowed not to
+           have these. Kenosis and Meridian-IV are environment builds
+           with no enemies and no campaign weapons, and `report()` is
+           the LAST thing the screenshot harness calls - so a bare
+           dereference here throws after every frame has already been
+           captured and turns a successful run into a failed one.
+           `api.terrain` and `api.world` always exist; the other two
+           do not. */
         terrain: api.terrain.stats(),
         world: api.world.stats(),
-        enemies: api.enemies.stats(),
-        weapons: api.weapons.stats(),
+        enemies: api.enemies?.stats?.() || null,
+        weapons: api.weapons?.stats?.() || null,
         atmos: {
           time: ctx.atmos.time,
           storm: Number(ctx.atmos.storm.toFixed(3)),
+          cycle: ctx.atmos.cycleStatus?.() || null,
           sunDir: ctx.atmos.sunDir.toArray().map((n) => Number(n.toFixed(4))),
           sunElevationDeg: Number((Math.asin(ctx.atmos.sunDir.y) * 180 / Math.PI).toFixed(2)),
           exposure: ctx.atmos.exposure,
@@ -1486,19 +2253,21 @@ export function installQa(ctx, api) {
       };
     },
 
-    /** Enter a stratagem code and run it to impact. */
+    /** Dispatch a command through the same authoritative seam used by the
+     * command wheel, then run it to impact. Direction-code entry remains an
+     * internal compatibility path and is intentionally not exercised here. */
     stratagem(key) {
       const spec = api.mission.stratagems[key];
       if (!spec) return { error: `no stratagem "${key}"` };
       api.mission.cooldowns[key] = 0;
-      api.mission.beginEntry();
-      for (const d of spec.code) api.mission.pushDirection(d);
       const before = api.enemies.live.filter((e) => e.state !== "death").length;
       const hpBefore = api.combat.player.hp;
+      const dispatched = api.mission.call(key);
       hook.advanceTime(spec.delay + 0.6, 1 / 60);
       return {
         name: spec.name,
-        accepted: !api.mission.entry.active,
+        accepted: dispatched === key,
+        dispatched,
         onCooldown: Number(api.mission.cooldowns[key].toFixed(1)),
         liveBefore: before,
         liveAfter: api.enemies.live.filter((e) => e.state !== "death").length,
@@ -1756,11 +2525,12 @@ export function installQa(ctx, api) {
       let near = 0;
       const meshes = new Set();
       api.world.group.traverse((o) => {
-        if (!o.isMesh) return;
+        if (!o.isMesh || !o.visible) return;
+        o.updateWorldMatrix(true, false);
         const pos = o.geometry.attributes.position;
         const stride = Math.max(1, Math.floor(pos.count / 20000));
         for (let i = 0; i < pos.count; i += stride) {
-          v.fromBufferAttribute(pos, i);
+          v.fromBufferAttribute(pos, i).applyMatrix4(o.matrixWorld);
           if (Math.hypot(v.x - x, v.z - z) > radius) continue;
           near += 1;
           meshes.add(o.name);
@@ -1965,11 +2735,12 @@ export function installQa(ctx, api) {
       let far = 0;
       let hits = 0;
       api.world.group.traverse((o) => {
-        if (!o.isMesh) return;
+        if (!o.isMesh || !o.visible) return;
+        o.updateWorldMatrix(true, false);
         const pos = o.geometry.attributes.position;
         const stride = Math.max(1, Math.floor(pos.count / 6000));
         for (let i = 0; i < pos.count; i += stride) {
-          v.fromBufferAttribute(pos, i);
+          v.fromBufferAttribute(pos, i).applyMatrix4(o.matrixWorld);
           const d = Math.hypot(v.x - x, v.z - z);
           if (d > radius) continue;
           hits += 1;
@@ -2098,6 +2869,16 @@ export function installQa(ctx, api) {
         step: (a) => a.step(false),
         hurt: (a) => a.hurt(),
         blip: (a) => a.blip(880, 0.06, 0.2),
+        boostIgnite: (a) => a.boostIgnite(0, 0),
+        boostHit: (a) => a.boostHit(2, 2, false),
+        slamCharge: (a) => a.slamCharge(0, 0),
+        slamPlunge: (a) => a.slamPlunge(0, 0),
+        slamImpact: (a) => a.slamImpact(0, 0, 0.6),
+        doctrineCenser: (a) => a.doctrineCue({ order: "censer", cue: "brand-break", x: 0, z: 0, intensity: 0.8 }),
+        doctrineProcession: (a) => a.doctrineCue({ order: "procession", cue: "toll", x: 0, z: 0, intensity: 0.8 }),
+        doctrineWing: (a) => a.doctrineCue({ order: "wing", cue: "circuit", x: 0, z: 0, intensity: 1, capstone: true }),
+        doctrineHalo: (a) => a.doctrineCue({ order: "halo", cue: "parry", x: 0, z: 0, intensity: 0.8 }),
+        doctrineEdict: (a) => a.doctrineCue({ order: "edict", cue: "fusion", x: 0, z: 0, intensity: 1, capstone: true }),
       };
       for (const [name, play] of Object.entries(cases)) {
         const oc = new OC(2, 44100 * 2.5, 44100);
@@ -2294,27 +3075,49 @@ export function installQa(ctx, api) {
       const ps = api.player.state;
       const prof = api.terrain.field.roadProfile;
       const out = [];
-      for (let i = 0; i < runs; i += 1) {
-        const a = prof[Math.floor((i / runs) * (prof.length - 8)) + 4];
-        const b = prof[Math.floor((i / runs) * (prof.length - 8)) + 5];
-        const yaw = Math.atan2(b.z - a.z, b.x - a.x);
-        const side = i % 2 ? 1 : -1;
-        const ang = Math.atan2(Math.sin(yaw) * side, -Math.cos(yaw) * side);
-        const open = api.collide.findOpen(a.x, a.z, api.terrain.heightAt(a.x, a.z), 40, 20);
-        api.player.spawn(open ? open[0] : a.x, open ? open[1] : a.z, 0);
-        api.player.setFree(false);
-        ps.camYaw = 0;
-        ps.speed = 0;
-        for (let k = 0; k < 8; k += 1) api.step(1 / 60, false);
-        const x0 = ps.x;
-        const z0 = ps.z;
-        api.player.input.inject(-Math.sin(ang), -Math.cos(ang));
-        for (let k = 0; k < Math.round(seconds * 60); k += 1) api.step(1 / 60, false);
+      const life = api.combat.player;
+      const savedLife = {
+        invulnerable: !!life.invulnerable,
+        dead: !!life.dead,
+        hp: life.hp,
+        respawnIn: life.respawnIn,
+      };
+      /* This is a terrain-mobility scan. Twenty forty-second combat runs can
+         correctly kill the subject, but a dead controller reports zero
+         traversal and turns a survival outcome into a geometry failure. */
+      life.invulnerable = true;
+      life.dead = false;
+      life.hp = life.maxHp;
+      life.respawnIn = 0;
+      try {
+        for (let i = 0; i < runs; i += 1) {
+          const a = prof[Math.floor((i / runs) * (prof.length - 8)) + 4];
+          const b = prof[Math.floor((i / runs) * (prof.length - 8)) + 5];
+          const yaw = Math.atan2(b.z - a.z, b.x - a.x);
+          const side = i % 2 ? 1 : -1;
+          const ang = Math.atan2(Math.sin(yaw) * side, -Math.cos(yaw) * side);
+          const open = api.collide.findOpen(a.x, a.z, api.terrain.heightAt(a.x, a.z), 40, 20);
+          api.player.spawn(open ? open[0] : a.x, open ? open[1] : a.z, 0);
+          api.player.setFree(false);
+          ps.camYaw = 0;
+          ps.speed = 0;
+          for (let k = 0; k < 8; k += 1) api.step(1 / 60, false);
+          const x0 = ps.x;
+          const z0 = ps.z;
+          api.player.input.inject(-Math.sin(ang), -Math.cos(ang));
+          for (let k = 0; k < Math.round(seconds * 60); k += 1) api.step(1 / 60, false);
+          api.player.input.inject(null, null);
+          out.push({
+            from: [Math.round(x0), Math.round(z0)],
+            netM: Number(Math.hypot(ps.x - x0, ps.z - z0).toFixed(1)),
+          });
+        }
+      } finally {
         api.player.input.inject(null, null);
-        out.push({
-          from: [Math.round(x0), Math.round(z0)],
-          netM: Number(Math.hypot(ps.x - x0, ps.z - z0).toFixed(1)),
-        });
+        life.invulnerable = savedLife.invulnerable;
+        life.dead = savedLife.dead;
+        life.hp = savedLife.hp;
+        life.respawnIn = savedLife.respawnIn;
       }
       const free = 4.4 * seconds;
       const stuck = out.filter((o) => o.netM < free * 0.35);
@@ -2366,11 +3169,25 @@ export function installQa(ctx, api) {
       if (hook._flatSite) return hook._flatSite;
       let best = null;
       let bestVar = Infinity;
+      /* NEUTRAL GROUND MUST NOT BE A BOSS PAD. The m101 arena pads are
+         the flattest ground on the map, so the flatness scorer started
+         choosing the Matriarch's own clearing - which parks every QA
+         subject beside a live district boss, re-aims its brain, and
+         (while a fight is engaged) feeds the subject to the arena
+         stray purge. ONLY the two authored pads are rejected: a
+         blanket all-arenas ban was tried first and it evicted this
+         search from its historical winner in the Fallen Saint basin
+         (where the Coulter sleeps buried and harmless), silently
+         re-siting every tuned harness onto the Pilgrim's Road. */
+      const pads = (ctx.districtBosses?.sites || [])
+        .filter((site) => site.key === "reach" || site.key === "choir")
+        .map((site) => ({ x: site.x, z: site.z, r: (site.arenaRadius || 0) + 30 }));
       for (let i = 0; i < 900; i += 1) {
         const a = i * 2.39996323;
         const r = Math.sqrt((i + 0.5) / 900) * 620;
         const x = Math.cos(a) * r;
         const z = Math.sin(a) * r + 300;
+        if (pads.some((zone) => Math.hypot(x - zone.x, z - zone.z) < zone.r)) continue;
         const g0 = api.terrain.heightAt(x, z);
 
         let worst = 0;
@@ -2907,11 +3724,13 @@ export function installQa(ctx, api) {
         let shortKeys = 0;
         for (const k of spec.keys) {
           /* 8 = weapon channels only, 14 = plus the body block, 15 =
-             plus `slide`. The point of checking length at all is that
-             a channel past the end of a key is zero by construction
-             and no per-value check can see it, so this list has to
-             grow every time a channel is added. */
-          if (k.length !== 15 && k.length !== 14 && k.length !== 8) shortKeys += 1;
+             plus `slide`, 16 = plus `lean`. The point of checking
+             length at all is that a channel past the end of a key is
+             zero by construction and no per-value check can see it, so
+             this list has to grow every time a channel is added - and
+             it duly caught `lean` on the day it was. */
+          if (k.length !== 16 && k.length !== 15 && k.length !== 14
+            && k.length !== 8) shortKeys += 1;
           for (let c = 0; c < CH.length; c += 1) {
             const v = k[7 + c];
             if (typeof v === "number") peaks[c] = Math.max(peaks[c], Math.abs(v));
@@ -3108,11 +3927,519 @@ export function installQa(ctx, api) {
       api.step(1 / 60, true);
       return result;
     },
+    /* ------------------------------------------------------------
+       THE BURROWER
+
+       A four-phase cycle where three of the phases are "you cannot
+       touch it" is untestable from the outside: a harness that spawns
+       one and waits gets an animal that is somewhere under the sand.
+       These hooks expose the state machine's own view of itself and
+       let a check drive it to the phase it wants to assert about,
+       which is the difference between testing the encounter and
+       testing whether a boss eventually appears.
+       ------------------------------------------------------------ */
+    /** The Gilding Rite's live blessing, and a way to light it without
+     *  waiting out a 74-second cooldown and a three-second flight. */
+    boonState: () => (api.mission || ctx.mission)?.boon?.() || null,
+    grantBoonForQA(seconds = 20, damage = 1.4, heat = 0, infiniteCharge = true) {
+      if (!ctx.qa) return null;
+      return (api.mission || ctx.mission)?.grantBoon?.(
+        { seconds, damage, heat, infiniteCharge }, "qa") || null;
+    },
+    /** Every ordnance mesh currently on screen, by kind. The commands
+     *  are pooled geometry, so "did the salvo draw anything" is a
+     *  question with an exact answer. */
+    ordnanceState() {
+      const rig = api.vfx?.group?.getObjectByName?.("ordnance-vfx");
+      if (!rig) return null;
+      const out = { beams: 0, rings: 0, domes: 0, scorches: 0, visible: 0 };
+      for (const child of rig.children) {
+        if (!child.visible) continue;
+        out.visible += 1;
+        const mname = child.material?.name || "";
+        const kind = mname === "sf-scorch" ? "scorches"
+          : mname === "sf-ordnance-beam" ? "beams"
+            : mname === "sf-ordnance-shock" ? "rings"
+              : mname === "sf-ordnance-dust" ? "domes"
+                : child.geometry?.type === "CylinderGeometry" ? "beams"
+                  : child.geometry?.type === "TorusGeometry" ? "rings"
+                    : child.geometry?.type === "SphereGeometry" ? "domes" : null;
+        if (kind) out[kind] += 1;
+      }
+      return out;
+    },
+    doctrineFeedbackState: () => api.vfx?.doctrineState?.() || null,
+    coulterState: () => (api.coulter || ctx.coulter)?.status?.() || null,
+    /** Every live burrower's chain, in world space. The hit volumes are
+     *  built off exactly these points, so a test can assert that what it
+     *  shot at is where the animal is. */
+    coulterBodies() {
+      return api.enemies.live.filter((inst) => inst.body).map((inst) => ({
+        id: inst.id,
+        key: inst.key,
+        phase: inst.body.phase,
+        hidden: !!inst.body.hidden,
+        mawOpen: Number(inst.body.mawOpen.toFixed(3)),
+        health: inst.health,
+        head: [inst.body.head.x, inst.body.head.y, inst.body.head.z]
+          .map((v) => Number(v.toFixed(3))),
+        heading: Number(inst.body.heading.toFixed(4)),
+        pitch: Number(inst.body.pitch.toFixed(4)),
+        span: Number(inst.spineLength.toFixed(3)),
+        joints: inst.body.joints.map((j) => [j.x, j.y, j.z]
+          .map((v) => Number(v.toFixed(3)))),
+        aboveGround: inst.body.joints
+          .filter((j) => j.y > api.collide.groundHeight(j.x, j.z)).length,
+      }));
+    },
+    /** Run the simulation until the first burrower reaches `phase`, or
+     *  give up. Returns the seconds it took, or -1. */
+    advanceToCoulterPhase(phase, limit = 40, dt = 1 / 60) {
+      const target = String(phase);
+      let elapsed = 0;
+      while (elapsed < limit) {
+        const inst = api.enemies.live.find((e) => e.body);
+        if (!inst) return -1;
+        if (inst.body.phase === target) return Number(elapsed.toFixed(3));
+        api.step(dt, false);
+        elapsed += dt;
+      }
+      return -1;
+    },
+    /** Force a phase transition, for checks about a phase rather than
+     *  about how the animal gets into it. */
+    setCoulterPhase(phase, seconds) {
+      const inst = api.enemies.live.find((e) => e.body);
+      if (!inst) return null;
+      inst.body.phase = String(phase);
+      if (Number.isFinite(seconds)) inst.body.timer = seconds;
+      return { phase: inst.body.phase, timer: inst.body.timer };
+    },
+    /** Freeze or release the burrower's decision-making, leaving its
+     *  body still posed from its trail. For photographs. */
+    parkCoulter(on = true) {
+      const hits = api.enemies.live.filter((inst) => inst.body);
+      for (const inst of hits) inst.body.parked = !!on;
+      return hits.length;
+    },
+    venomPools() {
+      const coulter = api.coulter || ctx.coulter;
+      if (!coulter) return [];
+      return (coulter.group?.children || [])
+        .filter((child) => child.name?.startsWith("sf-venom-pool") && child.visible)
+        .map((child) => ({
+          x: Number(child.position.x.toFixed(2)),
+          y: Number(child.position.y.toFixed(2)),
+          z: Number(child.position.z.toFixed(2)),
+          fade: Number((child.material.uniforms.uFade.value || 0).toFixed(3)),
+        }));
+    },
+    spillVenom(x, z, radius, seconds) {
+      const coulter = api.coulter || ctx.coulter;
+      const pool = coulter?.spillPool?.(x, z, radius, seconds);
+      return pool ? { x: pool.x, y: pool.y, z: pool.z, radius: pool.radius } : null;
+    },
+    setToxin(v) { return (api.coulter || ctx.coulter)?.setToxin?.(v) ?? null; },
+    clearVenom() { return (api.coulter || ctx.coulter)?.clearHazards?.() ?? null; },
+    /* ------------------------------------------------------------
+       THE DISTAFF
+
+       Proximity-driven and district-bound rather than wave-driven, so
+       the harness problem is different from the Burrower's: there is
+       no wave to launch, only a lair to walk into. These hooks put
+       the player in range without a real approach, force the phase a
+       check wants to assert about, and read the same per-leg state
+       combat.js's hit tests do - so a check can assert "leg 3 is
+       broken" against the exact array a shot would consult.
+       ------------------------------------------------------------ */
+    distaffState: () => (api.distaff)?.status?.() || null,
+    /** Teleport the player to (roughly) the lair, optionally already
+     *  inside or outside aggro range. Does not force aggro itself -
+     *  `advanceToDistaffPhase` steps the sim to let proximity do it,
+     *  which is what a check about the TRIGGER actually wants. */
+    teleportToDistaff(offset = 30) {
+      const d = api.distaff?.status?.();
+      if (!d) return null;
+      hook._teleportRaw(d.x - offset, d.z, 0);
+      hook.setBodyHeading?.(0);
+      return { x: d.x - offset, z: d.z };
+    },
+    forceDistaffPhase(phase, timer) {
+      return api.distaff?.forcePhase?.(phase, timer) ?? null;
+    },
+    /** Run the simulation until the Distaff reaches `phase`, or give
+     *  up. Returns the seconds it took, or -1. */
+    advanceToDistaffPhase(phase, limit = 40, dt = 1 / 60) {
+      const target = String(phase);
+      let elapsed = 0;
+      while (elapsed < limit) {
+        const d = api.distaff?.status?.();
+        if (!d) return -1;
+        if (d.phase === target) return Number(elapsed.toFixed(3));
+        api.step(dt, false);
+        elapsed += dt;
+      }
+      return -1;
+    },
+    /** Step until the Distaff is between beats - no attack in its clip,
+     *  no lunge, no line on the trooper, no stagger - or give up.
+     *  Returns the seconds it took, or -1. A check about ONE of its
+     *  answers has to start from a quiet animal, not from whatever the
+     *  previous check left in flight. */
+    settleDistaff(limit = 8, dt = 1 / 60) {
+      let elapsed = 0;
+      while (elapsed < limit) {
+        const d = api.distaff?.status?.();
+        if (!d) return -1;
+        if (!d.busy && !d.lunging && !d.reeling && !(d.staggerFor > 0)) {
+          return Number(elapsed.toFixed(3));
+        }
+        api.step(dt, false);
+        elapsed += dt;
+      }
+      return -1;
+    },
+    /** Make `kind` ("slam" | "web" | "reel" | "lunge") its next answer;
+     *  range and phase still apply. See distaff.primeAttack. */
+    primeDistaffAttack(kind) { return api.distaff?.primeAttack?.(kind) ?? null; },
+    /** Buckle the stance through one leg, using the production damage
+     *  path rather than a shortcut around it - `combat.damageLeg` is
+     *  the same function a shot or a swing calls.
+     *
+     *  The Distaff's legs do not BREAK (`legsPersist`); what a leg
+     *  hit spends itself on is the FOOTING pool, and emptying that is
+     *  what puts the animal on the ground. So the amount is read off
+     *  the stance rather than off `legHp` - which was one leg's own
+     *  340 and happened to equal the whole stance pool for exactly as
+     *  long as the two numbers were the same one. `source: "shot"`
+     *  explicitly, so the melee weight does not quietly make this
+     *  overshoot by nearly double.
+     *
+     *  Pass `{ leg: true }` to deal a leg's worth of damage instead of
+     *  a stance's - for tests about the limb rather than the fall. */
+    breakDistaffLeg(index, options = {}) {
+      const inst = api.enemies.live.find((e) => e.key === "distaff");
+      if (!inst || !inst.legHp) return null;
+      const footing = api.distaff?.status?.()?.footingHp;
+      const amount = options.leg || !Number.isFinite(footing)
+        ? inst.legHp[index] + 1
+        : footing + 1;
+      return api.combat.damageLeg(inst, index, amount, {
+        x: inst.x, y: inst.y, z: inst.z, source: "shot",
+      });
+    },
+    webPools() {
+      const d = api.distaff;
+      if (!d) return [];
+      return (d.group?.children || [])
+        .filter((child) => child.name?.startsWith("sf-web-patch") && child.visible)
+        .map((child) => ({
+          x: Number(child.position.x.toFixed(2)),
+          y: Number(child.position.y.toFixed(2)),
+          z: Number(child.position.z.toFixed(2)),
+          fade: Number((child.material.uniforms.uFade.value || 0).toFixed(3)),
+        }));
+    },
+    spillWeb(x, z, radius, seconds) {
+      const patch = api.distaff?.spillPatch?.(x, z, radius, seconds);
+      return patch ? { x: patch.x, y: patch.y, z: patch.z, radius: patch.radius } : null;
+    },
+    clearWebs() { return api.distaff?.clearHazards?.() ?? null; },
+    /* ------------------------------------------------------------
+       THE WINNOWER
+
+       A flyer spends most of its cycle somewhere a harness cannot
+       reach it, so these do for altitude what the Burrower's hooks do
+       for depth: read the phase machine's own view of itself, force
+       the phase under test, and drain the lift pool through the
+       PRODUCTION path rather than by writing the number directly.
+       ------------------------------------------------------------ */
+    winnowerState: () => (api.winnower)?.status?.() || null,
+    teleportToWinnower(offset = 40) {
+      const w = api.winnower?.status?.();
+      if (!w) return null;
+      hook._teleportRaw(w.x - offset, w.z, 0);
+      hook.setBodyHeading?.(0);
+      return { x: w.x - offset, z: w.z };
+    },
+    forceWinnowerPhase(phase, timer) {
+      return api.winnower?.forcePhase?.(phase, timer) ?? null;
+    },
+    advanceToWinnowerPhase(phase, limit = 60, dt = 1 / 60) {
+      const target = String(phase);
+      let elapsed = 0;
+      while (elapsed < limit) {
+        const w = api.winnower?.status?.();
+        if (!w) return -1;
+        if (w.phase === target) return Number(elapsed.toFixed(3));
+        api.step(dt, false);
+        elapsed += dt;
+      }
+      return -1;
+    },
+    /** Drain one point of lift through combat's own function - the
+     *  same call a shot into a heat sac makes. */
+    drainWinnowerLift(amount = 1, sacIndex = 0) {
+      const inst = api.enemies.live.find((e) => e.key === "winnower");
+      if (!inst) return null;
+      return api.combat.drainLift(inst, amount, sacIndex,
+        { x: inst.x, y: inst.y, z: inst.z });
+    },
+    ashFields() {
+      const w = api.winnower;
+      if (!w) return [];
+      return (w.group?.children || [])
+        .filter((child) => child.name?.startsWith("sf-ash-field") && child.visible)
+        .map((child) => ({
+          x: Number(child.position.x.toFixed(2)),
+          y: Number(child.position.y.toFixed(2)),
+          z: Number(child.position.z.toFixed(2)),
+          fade: Number((child.material.uniforms.uFade.value || 0).toFixed(3)),
+        }));
+    },
+    spillAsh(x, z, radius, seconds) {
+      const f = api.winnower?.spillAsh?.(x, z, radius, seconds);
+      return f ? { x: f.x, y: f.y, z: f.z, radius: f.radius } : null;
+    },
+    clearAsh() { return api.winnower?.clearHazards?.() ?? null; },
+    /* ------------------------------------------------------------
+       THE GARNER
+
+       The pit's whole encounter is limbs that come and go, so these
+       hooks are about getting one into a KNOWN state and then leaving
+       damage to production. `forceGarnerArmDown` in particular exists
+       because the melee window is only reachable through a lash that
+       missed, and a check about melee should not have to first arrange
+       for the animal to miss.
+
+       Its per-limb pools are `inst.legHp`, the same array a Distaff leg
+       lives in - so `breakDistaffLeg` above already works on it, and
+       `breakGarnerArm` is the same call with the right key. That is not
+       duplication, it is the contract being exercised twice.
+       ------------------------------------------------------------ */
+    garnerState: () => (api.garner)?.status?.() || null,
+    /** Stand near the pit, INSIDE the encounter's reach.
+     *
+     *  Every caller means "put me where the Garner fight happens", and
+     *  they were all written against a 64m aggro as plain numbers - 40,
+     *  30. When the aggro dropped to 34 (so the fight can no longer
+     *  open out on the pan, where the mouth is below the lip of its own
+     *  funnel and unhittable), a probe asking for 40 was suddenly
+     *  standing outside the encounter entirely: nine checks failed in a
+     *  row, none of them about aggro. The offset is therefore a request
+     *  rather than an order, clamped to inside the wake radius. A probe
+     *  that deliberately wants to be OUTSIDE aggro should use
+     *  `_teleportRaw` and say so. */
+    teleportToGarner(offset = 40) {
+      const g = api.garner?.status?.() || api.garner?.config;
+      if (!g) return null;
+      const aggro = api.garner?.config?.aggroRadius;
+      const reach = Number.isFinite(aggro) ? Math.min(offset, aggro - 4) : offset;
+      const x = Number.isFinite(g.x) ? g.x : g.pitX;
+      const z = Number.isFinite(g.z) ? g.z : g.pitZ;
+      hook._teleportRaw(x - reach, z, 0);
+      hook.setBodyHeading?.(0);
+      return { x: x - reach, z };
+    },
+    forceGarnerPhase(phase, timer) {
+      return api.garner?.forcePhase?.(phase, timer) ?? null;
+    },
+    advanceToGarnerPhase(phase, limit = 60, dt = 1 / 60) {
+      const target = String(phase);
+      let elapsed = 0;
+      while (elapsed < limit) {
+        const g = api.garner?.status?.();
+        if (!g) return -1;
+        if (g.phase === target) return Number(elapsed.toFixed(3));
+        api.step(dt, false);
+        elapsed += dt;
+      }
+      return -1;
+    },
+    /** Send one limb up now, through the same entry the attack clock
+     *  uses - so the erupt/rear/lash sequence a check observes is the
+     *  production one. */
+    forceGarnerLash(index = 0) { return api.garner?.forceLash?.(index) ?? null; },
+    /** ...and put one straight on the sand, which is the state a check
+     *  about the melee window wants without having to dodge first. */
+    forceGarnerArmDown(index = 0) { return api.garner?.forceArmDown?.(index) ?? null; },
+    forceGarnerInhale() { return api.garner?.inhale?.() ?? null; },
+    forceGarnerVolley() { return api.garner?.volley?.() ?? null; },
+    /** Fully drain one limb through the production damage path. */
+    breakGarnerArm(index) {
+      const inst = api.enemies.live.find((e) => e.key === "garner");
+      if (!inst || !inst.legHp) return null;
+      return api.combat.damageLeg(inst, index, inst.legHp[index] + 1, {
+        x: inst.x, y: inst.y, z: inst.z,
+      });
+    },
+    /** Where each limb's four hit nodes actually are this frame. The
+     *  same four points combat.js measures against, so a check can
+     *  assert that a downed limb is genuinely inside melee reach
+     *  rather than trusting that it looks like it. */
+    garnerArmNodes(index = 0) {
+      const inst = api.enemies.live.find((e) => e.key === "garner");
+      const leg = inst?.legs?.[index];
+      if (!leg?.chain) return null;
+      return leg.chain.map((node) => {
+        node.updateWorldMatrix(true, false);
+        return {
+          x: Number(node.matrixWorld.elements[12].toFixed(3)),
+          y: Number(node.matrixWorld.elements[13].toFixed(3)),
+          z: Number(node.matrixWorld.elements[14].toFixed(3)),
+        };
+      });
+    },
+    resetGarner() { return api.garner?.resetToPit?.() ?? null; },
+    /* ------------------------------------------------------------
+       THE ABBESS
+
+       Her fight is a population, so these hooks are about getting a
+       KNOWN population into the room: lay a clutch now, age the brood
+       past its hunting window so trophallaxis can be observed without
+       waiting eleven seconds per child, and read the egg field as data
+       rather than as pixels.
+
+       Eggs are deliberately not enemies, so nothing in `enemies.live`
+       describes them - `abbessEggs` is the only way a check can see
+       them, and `combat.fire`/`meleeStrike` are still the only way to
+       damage them.
+       ------------------------------------------------------------ */
+    abbessState: () => (api.abbess)?.status?.() || null,
+    teleportToAbbess(offset = 40) {
+      const c = api.abbess?.config;
+      if (!c) return null;
+      hook._teleportRaw(c.lairX - offset, c.lairZ, 0);
+      hook.setBodyHeading?.(0);
+      return { x: c.lairX - offset, z: c.lairZ };
+    },
+    forceAbbessPhase(phase, timer) {
+      return api.abbess?.forcePhase?.(phase, timer) ?? null;
+    },
+    advanceToAbbessPhase(phase, limit = 60, dt = 1 / 60) {
+      const target = String(phase);
+      let elapsed = 0;
+      while (elapsed < limit) {
+        const a = api.abbess?.status?.();
+        if (!a) return -1;
+        if (a.phase === target) return Number(elapsed.toFixed(3));
+        api.step(dt, false);
+        elapsed += dt;
+      }
+      return -1;
+    },
+    forceAbbessClutch() { return api.abbess?.forceClutch?.() ?? null; },
+    forceAbbessSlam() { return api.abbess?.forceSlam?.() ?? null; },
+    /** Throw a bite now, through the production path. The return says
+     *  whether the player was inside her cone when it was thrown, so a
+     *  check can tell a dodge from an attack that never reached. */
+    forceAbbessBite() { return api.abbess?.forceBite?.() ?? null; },
+    /** Age every living child past `feedAfterSeconds`, so the walk home
+     *  starts on the next frame instead of eleven seconds later. */
+    recallAbbessBrood() { return api.abbess?.recallBrood?.() ?? null; },
+    abbessEggs() { return api.abbess?.eggs?.() ?? []; },
+    abbessBrood() { return api.abbess?.brood?.() ?? []; },
+    resetAbbess() { return api.abbess?.resetToSeat?.() ?? null; },
+    /* ------------------------------------------------------------
+       THE STYLITE
+
+       A boss that spends the fight ninety metres up, so these hooks
+       exist to reach it: read where it actually is, force the phase
+       under test, and break the grip without having to first land a
+       magazine on a distant target at an awkward angle.
+
+       `wearGrip` itself is deliberately NOT exposed - the grip has to
+       be worn through combat.js's own damage path, so a check about
+       "does shooting it bring it down" has to actually shoot it.
+       ------------------------------------------------------------ */
+    styliteState: () => (api.stylite)?.status?.() || null,
+    stylitePerches: () => api.stylite?.perches?.() ?? [],
+    teleportToStylite(offset = 40) {
+      const s = api.stylite?.status?.();
+      if (!s) return null;
+      hook._teleportRaw(s.x - offset, s.z, 0);
+      hook.setBodyHeading?.(0);
+      return { x: s.x - offset, z: s.z };
+    },
+    forceStylitePhase(phase, timer) {
+      return api.stylite?.forcePhase?.(phase, timer) ?? null;
+    },
+    advanceToStylitePhase(phase, limit = 60, dt = 1 / 60) {
+      const target = String(phase);
+      let elapsed = 0;
+      while (elapsed < limit) {
+        const s = api.stylite?.status?.();
+        if (!s) return -1;
+        if (s.phase === target) return Number(elapsed.toFixed(3));
+        api.step(dt, false);
+        elapsed += dt;
+      }
+      return -1;
+    },
+    forceStyliteFall() { return api.stylite?.forceFall?.() ?? null; },
+    forceStyliteLeap(index) { return api.stylite?.forceLeap?.(index) ?? null; },
+    forceStyliteStoop() { return api.stylite?.forceStoop?.() ?? null; },
+    resetStylite() { return api.stylite?.resetToPerch?.() ?? null; },
+    /* ------------------------------------------------------------
+       THE APOSTATE
+
+       The final encounter is gated by mission progression as well as
+       proximity. These hooks arm that real gate, then leave reveal and
+       damage to the production paths so QA can prove nothing leaks early.
+       ------------------------------------------------------------ */
+    apostateState: () => api.apostate?.status?.() || null,
+    undercroftState: () => api.undercroft?.status?.() || null,
+    /* Drives the second phase without having to shoot 5,600 points off
+       a mirror of the player first. Returns whether the collapse
+       actually armed, so a harness can tell a refusal from a pass. */
+    undercroftCollapse: () => api.undercroft?.begin?.() === true,
+    undercroftGround: (x, z) => api.undercroft?.groundOverrideAt?.(x, z) ?? null,
+    undercroftHit: (x, y, z, radius, damage, opts) =>
+      api.undercroft?.hitProps?.(x, y, z, radius, damage, opts) || 0,
+    armApostateFight() {
+      const saved = api.mission.snapshot();
+      saved.phase = "cathedralBoss";
+      saved.extractCalled = false;
+      saved.extractTimer = 0;
+      saved.relays = saved.relays.map((relay) => ({
+        ...relay, done: true, progress: 1,
+      }));
+      saved.relaysDone = saved.relays.length;
+      api.mission.restore(saved);
+      api.apostate?.reset?.();
+      return { mission: api.mission.stats(), apostate: api.apostate?.status?.() || null };
+    },
+    teleportToApostate(offset = 18) {
+      const a = api.apostate?.status?.();
+      if (!a) return null;
+      hook._teleportRaw(a.x - offset, a.z, 0);
+      hook.setBodyHeading?.(0);
+      return { x: a.x - offset, z: a.z };
+    },
+    advanceToApostatePhase(phase, limit = 20, dt = 1 / 60) {
+      const target = String(phase);
+      let elapsed = 0;
+      while (elapsed < limit) {
+        const a = api.apostate?.status?.();
+        if (!a) return -1;
+        if (a.phase === target) return Number(elapsed.toFixed(3));
+        api.step(dt, false);
+        elapsed += dt;
+      }
+      return -1;
+    },
+    forceApostateAction(name) {
+      return api.apostate?.forceAction?.(String(name)) ?? false;
+    },
+    forceApostateSummon() {
+      return api.apostate?.forceSummon?.() ?? 0;
+    },
     minimapState() {
+      const semantic = api.hud?.minimapState?.() || null;
       const map = document.getElementById("sf-minimap");
       const canvas = document.getElementById("sf-map-canvas");
       const event = document.getElementById("sf-map-event");
-      if (!map || !canvas || !event) return null;
+      if (!map || !canvas) return semantic;
       const box = map.getBoundingClientRect();
       return {
         visible: getComputedStyle(map).display !== "none" && box.width > 0 && box.height > 0,
@@ -3121,9 +4448,180 @@ export function installQa(ctx, api) {
         width: Number(box.width.toFixed(1)),
         height: Number(box.height.toFixed(1)),
         pixels: [canvas.width, canvas.height],
-        phase: event.dataset.phase,
-        text: event.textContent.replace(/\s+/g, " ").trim(),
+        phase: event?.dataset.phase || null,
+        text: event?.textContent.replace(/\s+/g, " ").trim() || "",
+        ...(semantic || {}),
       };
+    },
+    commandWheelState: () => (api.gameUi || ctx.gameUi)?.wheelState?.() || null,
+    menuState: () => (api.gameUi || ctx.gameUi)?.menuState?.() || null,
+    settingsState: () => (api.gameUi || ctx.gameUi)?.settingsState?.() || null,
+    persistenceState: () => (api.saves || ctx.saves)?.state?.() || null,
+    careerConflictStateForQA() {
+      if (!ctx.qa) return null;
+      return (api.saves || ctx.saves)?.conflictState?.() || null;
+    },
+    stageCareerConflictForQA(localCareer, syncedCareer, reason = "qa-career-conflict") {
+      if (!ctx.qa) return { ok: false, reason: "qa-only" };
+      return (api.saves || ctx.saves)?.stageCareerConflictForQA?.(
+        localCareer, syncedCareer, reason
+      ) ?? { ok: false, reason: "save-unavailable" };
+    },
+    resolveCareerConflictForQA(choice) {
+      if (!ctx.qa) return { ok: false, reason: "qa-only" };
+      return (api.saves || ctx.saves)?.resolveCareerConflict?.(choice)
+        ?? { ok: false, reason: "save-unavailable" };
+    },
+    progressionState: () => (api.progression || ctx.progression)?.state?.() || null,
+    progressionDefinitions() {
+      const progression = api.progression || ctx.progression;
+      if (!progression) return null;
+      return typeof progression.definitions === "function"
+        ? progression.definitions() : progression.definitions || null;
+    },
+    progressionCareerForQA() {
+      if (!ctx.qa) return null;
+      const progression = api.progression || ctx.progression;
+      return progression?.captureCareer?.() || null;
+    },
+    validateProgressionCareerForQA(value) {
+      if (!ctx.qa) return false;
+      const progression = api.progression || ctx.progression;
+      return progression?.validateCareer?.(value) || false;
+    },
+    progressionFieldForQA() {
+      if (!ctx.qa) return null;
+      const progression = api.progression || ctx.progression;
+      return progression?.captureField?.() || null;
+    },
+    restoreProgressionFieldForQA(value) {
+      if (!ctx.qa) return { ok: false, reason: "qa-only" };
+      const progression = api.progression || ctx.progression;
+      return progression?.restoreFieldForQA?.(value)
+        ?? { ok: false, reason: "progression-unavailable" };
+    },
+    clearProgressionFieldForQA() {
+      if (!ctx.qa) return { ok: false, reason: "qa-only" };
+      const progression = api.progression || ctx.progression;
+      return progression?.clearFieldLoadout?.({ source: "qa" })
+        ?? { ok: false, reason: "progression-unavailable" };
+    },
+    /* Career mutation remains QA-only and still travels through the
+       production progression service. These are boundary controls for the
+       deterministic regression, not alternate talent rules. */
+    grantProgressionXpForQA(amount, receipt = "qa:grant") {
+      if (!ctx.qa) return { ok: false, reason: "qa-only" };
+      const progression = api.progression || ctx.progression;
+      return progression?.grantXp?.(amount, receipt, "qa")
+        ?? { ok: false, reason: "progression-unavailable" };
+    },
+    spendTalentForQA(talentId) {
+      if (!ctx.qa) return { ok: false, reason: "qa-only" };
+      const progression = api.progression || ctx.progression;
+      return progression?.spend?.(talentId)
+        ?? { ok: false, reason: "progression-unavailable" };
+    },
+    refundTalentForQA(talentId) {
+      if (!ctx.qa) return { ok: false, reason: "qa-only" };
+      const progression = api.progression || ctx.progression;
+      return progression?.refund?.(talentId)
+        ?? { ok: false, reason: "progression-unavailable" };
+    },
+    equipCapstoneForQA(capstoneId, slot) {
+      if (!ctx.qa) return { ok: false, reason: "qa-only" };
+      const progression = api.progression || ctx.progression;
+      return slot === undefined
+        ? progression?.equipCapstone?.(capstoneId)
+          ?? { ok: false, reason: "progression-unavailable" }
+        : progression?.equipCapstone?.(capstoneId, slot)
+          ?? { ok: false, reason: "progression-unavailable" };
+    },
+    unequipCapstoneForQA(slotOrId) {
+      if (!ctx.qa) return { ok: false, reason: "qa-only" };
+      const progression = api.progression || ctx.progression;
+      return progression?.unequipCapstone?.(slotOrId)
+        ?? { ok: false, reason: "progression-unavailable" };
+    },
+    respecProgressionForQA() {
+      if (!ctx.qa) return { ok: false, reason: "qa-only" };
+      const progression = api.progression || ctx.progression;
+      return progression?.respec?.()
+        ?? { ok: false, reason: "progression-unavailable" };
+    },
+    resetProgressionForQA() {
+      if (!ctx.qa) return { ok: false, reason: "qa-only" };
+      const progression = api.progression || ctx.progression;
+      return progression?.resetCareer?.({ source: "qa" })
+        ?? progression?.resetForQA?.()
+        ?? { ok: false, reason: "progression-unavailable" };
+    },
+    resetCareerForQA() {
+      if (!ctx.qa) return { ok: false, reason: "qa-only" };
+      const saves = api.saves || ctx.saves;
+      const progression = api.progression || ctx.progression;
+      return saves?.resetCareer?.({ source: "qa" })
+        ?? progression?.resetCareer?.({ source: "qa" })
+        ?? progression?.resetForQA?.()
+        ?? { ok: false, reason: "progression-unavailable" };
+    },
+    campaignScoreForQA(values = {}) {
+      if (!ctx.qa) return null;
+      return (api.campaignScore || ctx.campaignScore)?.calculate?.(values) || null;
+    },
+    campaignScoreStateForQA() {
+      if (!ctx.qa) return null;
+      return (api.campaignScore || ctx.campaignScore)?.status?.() || null;
+    },
+    campaignScoreRecordForQA() {
+      if (!ctx.qa) return null;
+      return (api.campaignScore || ctx.campaignScore)?.capture?.() || null;
+    },
+    completeCampaignForQA(elapsed = api.mission?.state?.elapsed || 0) {
+      if (!ctx.qa) return null;
+      if (api.mission?.state?.phase === "won") {
+        (api.campaignScore || ctx.campaignScore)?.finalize?.({ source: "qa-repeat" });
+        return (api.campaignScore || ctx.campaignScore)?.status?.() || null;
+      }
+      const saved = api.mission.snapshot();
+      saved.phase = "cathedralBoss";
+      saved.elapsed = Math.max(0, Number(elapsed) || 0);
+      saved.extractCalled = false;
+      saved.extractTimer = 0;
+      saved.relays = saved.relays.map((relay) => ({ ...relay, done: true, progress: 1 }));
+      saved.relaysDone = saved.relays.length;
+      saved.bosses = saved.bosses.map((boss) => ({ ...boss, done: true }));
+      saved.bossesDone = saved.bosses.length;
+      api.mission.restore(saved);
+      api.mission.completeFinalBoss("apostate");
+      return (api.campaignScore || ctx.campaignScore)?.status?.() || null;
+    },
+    campaignDebriefForQA() {
+      if (!ctx.qa) return null;
+      const debrief = document.querySelector("[data-campaign-debrief]");
+      const menu = (api.gameUi || ctx.gameUi)?.menuState?.() || null;
+      return {
+        visible: !!debrief && !debrief.hidden,
+        text: debrief?.textContent?.replace(/\s+/g, " ").trim() || "",
+        score: document.querySelector("[data-debrief-score]")?.textContent?.trim() || "",
+        best: document.querySelector("[data-debrief-best]")?.textContent?.trim() || "",
+        difficulty: document.querySelector("[data-debrief-difficulty]")?.textContent?.trim() || "",
+        time: document.querySelector("[data-debrief-time]")?.textContent?.trim() || "",
+        rank: document.querySelector("[data-debrief-rank]")?.textContent?.trim() || "",
+        menu,
+      };
+    },
+    openMenu(panel = "operation") {
+      return (api.gameUi || ctx.gameUi)?.openMenu?.(panel) ?? false;
+    },
+    closeMenu() { return (api.gameUi || ctx.gameUi)?.closeMenu?.() ?? false; },
+    saveSlot(index = 0) { return (api.saves || ctx.saves)?.saveManual?.(index) || null; },
+    saveAutosave(force = true) {
+      return (api.saves || ctx.saves)?.saveAuto?.(!!force) || null;
+    },
+    loadSlot(index = 0) { return (api.saves || ctx.saves)?.load?.("manual", index) ?? false; },
+    loadAutosave() { return (api.saves || ctx.saves)?.load?.("autosave", 0) ?? false; },
+    clearSaveSlot(index = 0) {
+      return (api.saves || ctx.saves)?.clearManual?.(index) ?? false;
     },
     /** Sweep the palm roll live. Radians, [support, trigger]. */
     setPalmRoll(support, trigger) {
@@ -3156,44 +4654,78 @@ export function installQa(ctx, api) {
       api.boost?.reset(full);
       return api.boost?.status() || null;
     },
+    slamState: () => api.slam?.status() || null,
+    triggerSlam() {
+      const triggered = !!api.slam?.trigger();
+      return { triggered, state: api.slam?.status() || null };
+    },
+    resetSlam(full = true) {
+      api.slam?.reset(full);
+      return api.slam?.status() || null;
+    },
+    /** Altitude above the ground the trooper would land on. */
+    slamAltitude: () => api.slam?.altitude() ?? null,
+    /** Hold or release the glide without a physical key. Injects the
+     *  player's CURRENT primary binding, so a rebound scheme does not
+     *  silently turn every harness hold into a no-op. */
+    setBoostHold(on) {
+      return holdBind("boost", on);
+    },
     /** Boundary setup only. End-to-end control tests should use real
      *  keyboard events so blur/key-release behavior remains covered. */
     setJetpackState: (next) => api.jetpack?.setState(next) || null,
     setJetInput(on) {
-      if (on) {
-        api.player.input.keys.add("ShiftLeft");
-        api.player.input.keys.add("Space");
-      } else {
-        api.player.input.keys.delete("Space");
-        api.player.input.keys.delete("ShiftLeft");
-      }
+      holdBind("boost", on);
+      holdBind("jump", on);
       return !!on;
     },
     setShieldInput(on) {
-      if (on) api.player.input.keys.add("KeyX");
-      else api.player.input.keys.delete("KeyX");
-      return !!on;
+      return holdBind("block", on);
     },
 
     /* Direct handles, for ad-hoc probing from the console. */
     get render() { return api.render; },
     get world() { return api.world; },
     get terrain() { return api.terrain; },
+    /* Water is atoll-only and answers null everywhere else, so
+       `T.water?.stats()` on Vesper-IX simply does nothing rather
+       than throwing. Added so the island's foam, break band and
+       glitter can be MEASURED at a point rather than guessed at
+       from a screenshot. */
+    get water() { return api.water || ctx.water || null; },
     get player() { return api.player; },
     get sky() { return api.sky; },
     get vfx() { return api.vfx; },
     get enemies() { return api.enemies; },
     get weapons() { return api.weapons; },
+    get loadout() { return api.loadout || ctx.playerLoadout || null; },
+    get kenosis() { return api.kenosis || ctx.kenosis || null; },
+    get discharge() { return api.discharge || ctx.playerDischarge || null; },
     get jetpack() { return api.jetpack; },
     get boost() { return api.boost; },
+    get audio() { return api.audio; },
+    get progression() { return api.progression || ctx.progression; },
+    get slam() { return api.slam; },
     get shield() { return api.shield; },
+    get guardReadability() { return api.guardReadability; },
     get touch() { return api.touch; },
     get atmos() { return ctx.atmos; },
     get combat() { return api.combat; },
     get figure() { return api.player.figure; },
     get mission() { return api.mission; },
     get breaches() { return api.breaches; },
+    get abbess() { return api.abbess; },
+    get stylite() { return api.stylite; },
+    get distaff() { return api.distaff; },
+    get garner() { return api.garner; },
+    get winnower() { return api.winnower; },
+    get matriarch() { return api.matriarch; },
+    get coulter() { return api.coulter; },
+    get apostate() { return api.apostate; },
     get collide() { return api.collide; },
+    get gameUi() { return api.gameUi || ctx.gameUi || null; },
+    get saves() { return api.saves || ctx.saves || null; },
+    get undercroft() { return api.undercroft || ctx.undercroft || null; },
     get intro() { return ctx.qa ? api.intro : productionIntroView; },
   };
 

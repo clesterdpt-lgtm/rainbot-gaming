@@ -1,0 +1,21 @@
+{
+  "taskId": "01a02e57-20c2-728f-b0d7-36cedb8cffb1",
+  "taskType": "image-to-3d",
+  "input": "assets/concepts/saintfall/playable-characters/white-vigil-playable-turnaround-front-v1.png",
+  "request": {
+    "image_url": "[local image data URI omitted]",
+    "model_type": "standard",
+    "ai_model": "meshy-6",
+    "enable_pbr": true,
+    "should_texture": true,
+    "should_remesh": true,
+    "topology": "triangle",
+    "target_polycount": 45000,
+    "pose_mode": "a-pose",
+    "image_enhancement": false,
+    "remove_lighting": true,
+    "target_formats": [
+      "glb"
+    ]
+  }
+}

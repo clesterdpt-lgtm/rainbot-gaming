@@ -1,0 +1,61 @@
+{
+  "generatedAt": "2026-07-26T03:41:42.435342+00:00",
+  "format": "animation-only-glb",
+  "pipeline": "blender-authored-demon-locomotion",
+  "source": "assets/models/mr-feast/source/demon-prototypes/meshy/banquet-saint-idle.glb",
+  "file": "banquet-saint-walk.glb",
+  "name": "walk",
+  "stationary": true,
+  "loopClosed": true,
+  "compression": "none",
+  "blenderVersion": "4.5.11 LTS",
+  "bones": 24,
+  "rotationTracks": 24,
+  "translationTracks": 0,
+  "scaleTracks": 0,
+  "rootMotion": false,
+  "durationSeconds": 3.208333,
+  "keyframesPerTrack": 5,
+  "quaternionHemisphereFlips": 0,
+  "baselineSourcePhase": null,
+  "baselinePose": "processed-bind",
+  "bytes": 41968,
+  "previews": [
+    "output/iterate/demon-prototypes/blender-animation-propulsion-final/banquet-saint-walk-front-a.png",
+    "output/iterate/demon-prototypes/blender-animation-propulsion-final/banquet-saint-walk-right-a.png",
+    "output/iterate/demon-prototypes/blender-animation-propulsion-final/banquet-saint-walk-front-b.png",
+    "output/iterate/demon-prototypes/blender-animation-propulsion-final/banquet-saint-walk-right-b.png"
+  ],
+  "authoredStyle": "ceremonial-glide",
+  "armMotionMode": "straight-pendulum-rear-trail",
+  "armBackBiasDegrees": [
+    6.0,
+    13.0
+  ],
+  "armExcursionDegrees": 7.0,
+  "armSymmetryErrorDegrees": 0,
+  "legMotionDegrees": 0,
+  "pendulumOpposesTravel": true,
+  "maximumLimbExcursionDegrees": 20.442819,
+  "kneeLockMinimumDegrees": 179.999991,
+  "elbowLockMinimumDegrees": 179.999991,
+  "minimumFacingAlignment": 1.0,
+  "contactSweepMeters": {
+    "LeftHand": 0.057989,
+    "RightHand": 0.058453,
+    "LeftFoot": 0.0,
+    "RightFoot": 0.0
+  },
+  "minimumContactSweepMeters": 0.0,
+  "armTrailMeters": {
+    "left": [
+      -0.108324,
+      -0.050335
+    ],
+    "right": [
+      -0.10919,
+      -0.050738
+    ]
+  },
+  "lockedJointTargetDegrees": 180
+}

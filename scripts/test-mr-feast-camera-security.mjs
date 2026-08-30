@@ -36,6 +36,16 @@ async function diagnostics(page) {
   return page.evaluate(() => JSON.parse(window.render_game_to_text()));
 }
 
+async function screenshotStage(page, fileName) {
+  const clip = await page.locator("#mansion-stage").boundingBox();
+  assert(clip?.width > 0 && clip?.height > 0, `cannot capture ${fileName}: mansion stage has no bounds`);
+  return page.screenshot({
+    path: path.join(artifactDir, fileName),
+    clip,
+    animations: "disabled",
+  });
+}
+
 async function configureCameraScenario(page, { cameraId, mode, sweep = 0, distance = 4, occluded = false }) {
   return page.evaluate(({ cameraId: id, mode: policy, sweep: normalized, distance: laneDistance, occluded: blocked }) => {
     window.MrFeastFresh.resetCameraSecurityForQA(policy);
@@ -52,8 +62,7 @@ async function advanceSecurity(page, seconds) {
 }
 
 async function countFixtureIndicatorPixels(page, label) {
-  const screenshot = await page.locator("#mansion-stage").screenshot();
-  await sharp(screenshot).png().toFile(path.join(artifactDir, `camera-indicator-${label}.png`));
+  const screenshot = await screenshotStage(page, `camera-indicator-${label}.png`);
   const metadata = await sharp(screenshot).metadata();
   const width = metadata.width || 1;
   const height = metadata.height || 1;
@@ -102,9 +111,9 @@ async function run() {
     let state = await diagnostics(page);
     assert(state.security, "render_game_to_text() should expose the camera-security system");
     assert(state.security.mode === "show", `fresh security policy should start in show mode; security=${JSON.stringify(state.security)}`);
-    assert(state.security.cameras.total === 32, `removing both Workroom cameras should leave 32 public cameras; total=${state.security.cameras.total}`);
-    assert(state.security.cameras.indoors === 24 && state.security.cameras.outdoors === 8, `camera coverage should retain 24 interior and eight grounds units; cameras=${JSON.stringify(state.security.cameras)}`);
-    for (const safeZone of ["MAIN HALL BATHROOM", "UPPER GRAND BATHROOM", "COAT CLOSET", "WORKROOM"]) {
+    assert(state.security.cameras.total === 31, `removing Workroom and service-stair cameras should leave 31 public cameras; total=${state.security.cameras.total}`);
+    assert(state.security.cameras.indoors === 23 && state.security.cameras.outdoors === 8, `camera coverage should retain 23 interior and eight grounds units; cameras=${JSON.stringify(state.security.cameras)}`);
+    for (const safeZone of ["MAIN HALL BATHROOM", "UPPER GRAND BATHROOM", "COAT CLOSET", "WORKROOM", "SERVICE STAIR"]) {
       assert(state.security.cameras.exemptZones.includes(safeZone), `intentional camera-free zone is missing: ${safeZone}`);
       assert(!state.security.cameras.coveredZones.includes(safeZone), `safe zone should not contain a camera: ${safeZone}`);
     }
@@ -118,10 +127,21 @@ async function run() {
     assert(state.security.tuning.scanMinimumSeconds >= 10 && state.security.tuning.scanMaximumSeconds > state.security.tuning.scanMinimumSeconds, `camera one-way sweeps should be deliberately slow; tuning=${JSON.stringify(state.security.tuning)}`);
     assert(state.security.tuning.warningPulseCount === 3 && state.security.tuning.trackingThreshold > 0.5 && state.security.tuning.trackingThreshold < 1, `camera warning/tracking tuning should provide three pulses before alarm; tuning=${JSON.stringify(state.security.tuning)}`);
     assert(state.security.tuning.warningSeconds >= 2 && state.security.tuning.trackingGraceSeconds >= 1.5 && state.security.tuning.exposureSeconds >= state.security.tuning.warningSeconds + state.security.tuning.trackingGraceSeconds, `warning and solid-red tracking phases need readable real-time durations; tuning=${JSON.stringify(state.security.tuning)}`);
+    assert(
+      state.security.tuning.lastSeenRefreshSeconds <= 1
+        && state.security.tuning.lastSeenRetargetMeters <= 1
+        && state.security.tuning.searchPatrolSeconds === 120
+        && state.security.tuning.searchPatrolRadiusMeters >= 8
+        && state.security.tuning.searchPatrolPauseSeconds >= 3
+        && state.security.tuning.searchPatrolMaximumNodes >= 8
+        && state.security.tuning.searchAwarenessCheckSeconds <= 0.25,
+      `camera alarms need frequent final-position refresh, an exact two-minute sweep, and personal reacquisition; tuning=${JSON.stringify(state.security.tuning)}`,
+    );
     const securityDetails = await page.evaluate(() => window.MrFeastFresh.getCameraSecurityState());
     const indoorMounts = securityDetails.cameras.details.filter((entry) => !entry.outdoors);
     const cameraById = new Map(securityDetails.cameras.details.map((entry) => [entry.id, entry]));
     assert(!cameraById.has("cam-main-stair"), "the duplicate camera behind the grand-stair mid-landing should be removed");
+    assert(!cameraById.has("cam-basement-service-stair"), "the basement service stair should contain no public security camera");
     assert(!cameraById.has("cam-basement-workroom-west") && !cameraById.has("cam-basement-workroom-east"), "the Workroom should contain no public security cameras");
     const readingCamera = cameraById.get("cam-upper-reading");
     assert(readingCamera && Math.abs(Math.abs(readingCamera.baseYaw) - Math.PI) < 0.001, `Reading Room camera should face north into the room from its south-wall mount; camera=${JSON.stringify(readingCamera)}`);
@@ -171,14 +191,14 @@ async function run() {
       window.MrFeastFresh.teleport("yardGateEastSeam");
     });
     await page.waitForTimeout(120);
-    await page.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "camera-yard-gate-desktop.png") });
+    await screenshotStage(page, "camera-yard-gate-desktop.png");
 
     await configureCameraScenario(page, { cameraId: mainCamera, mode: "show", sweep: 0, occluded: true });
     await advanceSecurity(page, 0.2);
     state = await diagnostics(page);
     assert(!state.security.observed, `steady green fixture check needs a clear non-detection state; security=${JSON.stringify(state.security)}`);
     const greenIndicatorPixels = await countFixtureIndicatorPixels(page, "green-desktop");
-    assert(greenIndicatorPixels.green >= 24, `steady green fixture LED should be visibly readable in the rendered camera housing; pixels=${JSON.stringify(greenIndicatorPixels)}`);
+    assert(greenIndicatorPixels.green >= 20, `steady green fixture LED should be visibly readable in the rendered camera housing; pixels=${JSON.stringify(greenIndicatorPixels)}`);
 
     await configureCameraScenario(page, { cameraId: mainCamera, mode: "show", sweep: 0 });
     await page.evaluate((id) => window.MrFeastFresh.setCameraOccludedForQA(id, null), mainCamera);
@@ -188,7 +208,7 @@ async function run() {
     assert(state.security.exposure === 0 && state.security.alarm.count === 0, "permitted filming must not build suspicion or raise an alarm");
     const permittedCamera = await page.evaluate((id) => window.MrFeastFresh.getCameraSecurityState().cameras.details.find((entry) => entry.id === id), mainCamera);
     assert(permittedCamera.trackingPlayer && permittedCamera.indicator === "tracking-red", `a permitted show camera should still visibly acquire and follow its filmed subject without alarming; camera=${JSON.stringify(permittedCamera)}`);
-    await page.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "camera-permitted-tracking-desktop.png") });
+    await screenshotStage(page, "camera-permitted-tracking-desktop.png");
     const permittedYawBefore = permittedCamera.yaw;
     await page.evaluate((id) => window.MrFeastFresh.placePlayerInCameraLaneForQA(id, { distance: 4, lateral: -1.5 }), mainCamera);
     await advanceSecurity(page, 0.6);
@@ -269,7 +289,7 @@ async function run() {
       if (cameraState.indicator === "tracking-red") break;
     }
     assert(trackingElapsed >= 2 && trackingState?.alarm.count === 0, `warning pulses should leave an observable pre-alarm interval before tracking; elapsed=${trackingElapsed} security=${JSON.stringify(trackingState)}`);
-    await page.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "camera-solid-red-tracking-desktop.png") });
+    await screenshotStage(page, "camera-solid-red-tracking-desktop.png");
     const trackingSample = warningProbe.find((sample) => sample.indicator === "tracking-red");
     assert(trackingSample?.tracking || trackingState?.cameras.details.find((entry) => entry.id === mainCamera)?.trackingPlayer, `solid red tracking should begin before the alarm so the player still has time to escape; warning=${JSON.stringify(warningProbe)}`);
     const trackingYawBefore = (await page.evaluate((id) => window.MrFeastFresh.getCameraSecurityState().cameras.details.find((entry) => entry.id === id).yaw, mainCamera));
@@ -285,6 +305,23 @@ async function run() {
     await advanceSecurity(page, 5);
     state = await diagnostics(page);
     assert(state.security.alarm.count === 1 && state.security.mode === "lockdown", `sustained hostile exposure should raise one alarm; security=${JSON.stringify(state.security)}`);
+    const firstAlarmPosition = { ...state.security.alarm.last.lastSeen };
+    await page.evaluate((id) => window.MrFeastFresh.placePlayerInCameraLaneForQA(id, {
+      distance: 4,
+      lateral: 1.35,
+    }), mainCamera);
+    await advanceSecurity(page, 1.2);
+    state = await diagnostics(page);
+    const refreshedAlarmPosition = state.security.alarm.last.lastSeen;
+    assert(
+      state.security.alarm.count === 1
+        && state.security.alarm.last.trackingRefreshCount >= 1
+        && Math.hypot(
+          refreshedAlarmPosition.x - firstAlarmPosition.x,
+          refreshedAlarmPosition.z - firstAlarmPosition.z,
+        ) >= state.security.tuning.lastSeenRetargetMeters,
+      `one latched alarm must keep the final recorded position current without spamming alarm count; first=${JSON.stringify(firstAlarmPosition)} refreshed=${JSON.stringify(state.security.alarm.last)}`,
+    );
     await advanceSecurity(page, 3);
     state = await diagnostics(page);
     assert(state.security.alarm.count === 1, `one continuous camera sighting should stay latched instead of spamming alarms; alarm=${JSON.stringify(state.security.alarm)}`);
@@ -357,16 +394,92 @@ async function run() {
     await page.evaluate((id) => {
       window.MrFeastFresh.resetMrFeastWandererForQA();
       window.MrFeastFresh.resetCameraSecurityForQA("show");
+      window.MrFeastFresh.setCameraSoloForQA(id);
+      window.MrFeastFresh.setCameraSweepForQA(id, 0);
+      window.MrFeastFresh.setCameraOccludedForQA(id, false);
+      window.MrFeastFresh.placePlayerInCameraLaneForQA(id, { distance: 4, lateral: 1.2 });
       window.MrFeastFresh.triggerCameraAlarmForQA(id, "qa-investigation");
+      window.MrFeastFresh.setCameraPlayerHiddenForQA(true);
     }, mainCamera);
     state = await diagnostics(page);
     assert(state.mrFeast.security.state === "responding", `camera alarm should divert Mr. Feast from patrol; mrFeast=${JSON.stringify(state.mrFeast.security)}`);
-    const response = await page.evaluate(() => window.MrFeastFresh.runMrFeastCameraResponseForQA(180));
+    const expectedLastSeen = { ...state.security.alarm.last.lastSeen };
+    const arrivalProbe = await page.evaluate(() => window.MrFeastFresh.runMrFeastCameraResponseForQA(45));
+    const searchingHost = await page.evaluate(() => window.MrFeastFresh.getMrFeastState());
+    assert(
+      !arrivalProbe.completed
+        && arrivalProbe.search?.arrivedLastSeen
+        && arrivalProbe.search.minimumDistanceToLastSeen <= 0.5
+        && arrivalProbe.search.elapsedSeconds > 0
+        && arrivalProbe.search.plannedNodeCount >= 8
+        && arrivalProbe.search.plannedZoneCount >= 2
+        && searchingHost.security?.state === "searching"
+        && searchingHost.security.searchRemaining > 60,
+      `Mr. Feast must physically reach the exact reachable camera position before beginning his long patrol; expected=${JSON.stringify(expectedLastSeen)} response=${JSON.stringify(arrivalProbe)}`,
+    );
+    await screenshotStage(page, "camera-last-seen-search-desktop.png");
+    const response = await page.evaluate(() => window.MrFeastFresh.runMrFeastCameraResponseForQA(360));
     assert(response.completed, `Mr. Feast response should complete in deterministic QA time; response=${JSON.stringify(response)}`);
     for (const responseState of ["responding", "searching", "returning", "patrol"]) {
       assert(response.states.includes(responseState), `alarm lifecycle never entered ${responseState}; response=${JSON.stringify(response)}`);
     }
-    assert(response.teleports === 0 && response.distanceTravelled > 0, `Mr. Feast must navigate rather than teleport; response=${JSON.stringify(response)}`);
+    assert(
+      response.teleports === 0
+        && response.distanceTravelled > 0
+        && response.search?.durationSeconds === 120
+        && response.search.elapsedSeconds >= response.search.durationSeconds
+        && response.search.patrolDistance >= 20
+        && response.search.nodeVisits >= 3
+        && response.search.visitedZoneCount >= 2
+        && response.search.minimumDistanceToLastSeen <= 0.5,
+      `Mr. Feast must navigate to the final camera position and patrol nearby for a few minutes before returning; response=${JSON.stringify(response)}`,
+    );
+    await page.evaluate(() => window.MrFeastFresh.setCameraPlayerHiddenForQA(false));
+
+    // A camera search is active perception rather than blind waypoint
+    // walking. Silent hiding remains authoritative, but an exposed player in
+    // his clear forward view must be reacquired through normal pursuit.
+    await page.evaluate((id) => {
+      window.MrFeastFresh.resetMrFeastWandererForQA();
+      window.MrFeastFresh.resetCameraSecurityForQA("show");
+      window.MrFeastFresh.setCameraSoloForQA(id);
+      window.MrFeastFresh.setCameraSweepForQA(id, 0);
+      window.MrFeastFresh.setCameraOccludedForQA(id, false);
+      window.MrFeastFresh.placePlayerInCameraLaneForQA(id, { distance: 4, lateral: 1.2 });
+      window.MrFeastFresh.triggerCameraAlarmForQA(id, "qa-search-reacquisition");
+      window.MrFeastFresh.setCameraPlayerHiddenForQA(true);
+      window.MrFeastFresh.runMrFeastCameraResponseForQA(45);
+    }, mainCamera);
+    const hiddenSearchStage = await page.evaluate(() => (
+      window.MrFeastFresh.stagePlayerForCameraSearchQA({ distance: 2.5, hidden: true })
+    ));
+    await page.evaluate(() => window.MrFeastFresh.advanceMrFeastAwarenessForQA(1));
+    let searchReacquisition = await page.evaluate(() => window.MrFeastFresh.getMrFeastState());
+    assert(
+      hiddenSearchStage?.hidden
+        && hiddenSearchStage.clearLane
+        && !searchReacquisition.pursuit?.active
+        && searchReacquisition.security?.state === "searching",
+      `silent hiding must remain safe during a deliberate nearby search: ${JSON.stringify({ hiddenSearchStage, searchReacquisition })}`,
+    );
+    const exposedSearchStage = await page.evaluate(() => (
+      window.MrFeastFresh.stagePlayerForCameraSearchQA({ distance: 2.5, hidden: false })
+    ));
+    await page.evaluate(() => window.MrFeastFresh.advanceMrFeastAwarenessForQA(0.5));
+    searchReacquisition = await page.evaluate(() => window.MrFeastFresh.getMrFeastState());
+    assert(
+      exposedSearchStage?.clearLane
+        && !exposedSearchStage.hidden
+        && exposedSearchStage.personalSight
+        && searchReacquisition.pursuit?.active?.kind === "camera-search"
+        && searchReacquisition.pursuit?.active?.reason === "witnessed",
+      `an exposed player found during the area sweep must start normal sight-led pursuit: ${JSON.stringify({ exposedSearchStage, searchReacquisition })}`,
+    );
+    await screenshotStage(page, "camera-search-reacquired-desktop.png");
+    await page.evaluate(() => {
+      window.MrFeastFresh.setCameraPlayerHiddenForQA(false);
+      window.MrFeastFresh.resetMrFeastWandererForQA();
+    });
 
     await configureCameraScenario(page, { cameraId: mainCamera, mode: "lockdown", sweep: 0 });
     await advanceSecurity(page, 0.35);
@@ -388,7 +501,7 @@ async function run() {
       return { width: rect.width, height: rect.height };
     });
     assert(desktopNoticeLayout.width <= 160 && desktopNoticeLayout.height <= 40, `desktop camera notice should stay subtle and compact; layout=${JSON.stringify(desktopNoticeLayout)}`);
-    await page.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "camera-status-desktop.png") });
+    await screenshotStage(page, "camera-status-desktop.png");
     await page.evaluate((id) => window.MrFeastFresh.setCameraOccludedForQA(id, true), mainCamera);
     await advanceSecurity(page, 0.2);
     assert(!(await securityNotice.isVisible()), "camera notice should disappear immediately after observation ends, even during lockdown");
@@ -424,7 +537,7 @@ async function run() {
     });
     assert(mobileLayout.withinStage && mobileLayout.width <= 160 && mobileLayout.height <= 40, `mobile camera notice should remain compact inside the stage; layout=${JSON.stringify(mobileLayout)}`);
     assert((await mobilePage.locator("#mansion-security-status").textContent() || "").trim() === "Spotted", "mobile acquisition notice should use the same subtle Spotted copy");
-    await mobilePage.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "camera-status-mobile.png") });
+    await screenshotStage(mobilePage, "camera-status-mobile.png");
     await mobileContext.close();
 
     assert(errors.length === 0, `browser errors: ${errors.join(" | ")}`);

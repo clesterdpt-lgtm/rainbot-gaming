@@ -1,0 +1,22 @@
+{
+  "taskId": "01a020f6-dcf1-769e-9cc7-16108f05f9b4",
+  "taskType": "image-to-3d",
+  "input": "assets/concepts/saintfall/meshy/choirblade-drop-pod-open-meshy-source-v1.png",
+  "request": {
+    "image_url": "[local image data URI omitted]",
+    "model_type": "standard",
+    "ai_model": "meshy-6",
+    "enable_pbr": true,
+    "should_texture": true,
+    "should_remesh": true,
+    "topology": "triangle",
+    "target_polycount": 40000,
+    "pose_mode": "",
+    "image_enhancement": false,
+    "remove_lighting": true,
+    "target_formats": [
+      "glb"
+    ],
+    "texture_prompt": "Ivory glazed ceramic opened petals, pale polished gold hinge rails and interior ribs, dark graphite impact armor and floor, warm amber restraint cradle, physically based materials, no engines, no nozzles, no landing gear."
+  }
+}

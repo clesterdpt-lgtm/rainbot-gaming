@@ -36,6 +36,16 @@ async function diagnostics(page) {
   return page.evaluate(() => JSON.parse(window.render_game_to_text()));
 }
 
+async function screenshotStage(page, fileName) {
+  const clip = await page.locator("#mansion-stage").boundingBox();
+  assert(clip?.width > 0 && clip?.height > 0, `cannot capture ${fileName}: mansion stage has no bounds`);
+  await page.screenshot({
+    path: path.join(artifactDir, fileName),
+    clip,
+    animations: "disabled",
+  });
+}
+
 async function completeFirstClueCompetition(page, expectedClueId) {
   let state = await diagnostics(page);
   assert(
@@ -54,6 +64,34 @@ async function completeFirstClueCompetition(page, expectedClueId) {
     state.feastSays.clueProgressLocked === false && state.feastSays.eliminatedContestantId === "kip-solano",
     `completing Feast Says should reopen investigation and eliminate Kip; got ${JSON.stringify(state.feastSays)}`,
   );
+  await page.evaluate(() => window.MrFeastFresh.advanceFeastSaysForQA(7));
+  await page.waitForFunction(() => document.getElementById("mansion-feast-says")?.hidden);
+  state = await diagnostics(page);
+  return state;
+}
+
+async function completeStormRunCompetition(page, expectedClueId) {
+  await page.waitForFunction(() => window.MrFeastFresh.getStormRunState?.()?.castReady, null, { timeout: 120000 });
+  let state = await diagnostics(page);
+  assert(
+    state.stormRun?.phase === "called"
+      && state.stormRun.triggerReason === "hedge-maze-key"
+      && state.stormRun.triggerClueId === expectedClueId
+      && state.stormRun.callCount === 1
+      && state.stormRun.clueProgressLocked,
+    `the recovered hedge-maze key should call Storm Run once and pause later clues; got ${JSON.stringify(state.stormRun)}`,
+  );
+  const result = await page.evaluate(() => window.MrFeastFresh.completeStormRunForQA("player"));
+  assert(result?.survived === true, `the QA completion should survive Storm Run; got ${JSON.stringify(result)}`);
+  await page.waitForFunction(() => window.MrFeastFresh.getStormRunState?.()?.phase === "completed", null, { timeout: 8000 });
+  state = await diagnostics(page);
+  assert(
+    state.stormRun.clueProgressLocked === false && state.stormRun.eliminatedContestantId === "mara-voss",
+    `completing Storm Run should reopen investigation and eliminate Mara; got ${JSON.stringify(state.stormRun)}`,
+  );
+  await page.evaluate(() => window.MrFeastFresh.advanceStormRunForQA(7));
+  await page.waitForFunction(() => document.getElementById("mansion-storm-run")?.hidden);
+  state = await diagnostics(page);
   return state;
 }
 
@@ -81,11 +119,12 @@ async function pressInteract(page) {
   await page.waitForTimeout(120);
 }
 
-async function waitForContestantFlag(page, flag, timeout = 5000) {
+async function waitForContestantFlag(page, flag, timeout = 15000) {
   try {
     await page.waitForFunction((key) => Boolean(JSON.parse(window.render_game_to_text()).contestant13?.[key]), flag, { timeout });
   } catch (error) {
     const state = await diagnostics(page);
+    if (state.contestant13?.[flag]) return state;
     throw new Error(`timed out waiting for contestant13.${flag}; story: ${JSON.stringify(state.contestant13)}`);
   }
 }
@@ -120,27 +159,27 @@ async function run() {
     assert(state.journal?.entries?.length === 0, "fresh journal should be empty");
     assert(state.contestant13.world.shovelScale <= 0.56, "garden shovel should be reduced to a short concealed spade");
     assert(state.contestant13.world.shovelPosition.x > -23.53 && state.contestant13.world.shovelPosition.x < -18.07 && state.contestant13.world.shovelPosition.z > -12.65 && state.contestant13.world.shovelPosition.z < -4.35, "shovel should sit inside the shifted southeast rose bed");
-    assert(state.contestant13.world.digSiteCell.row === 19 && state.contestant13.world.digSiteCell.col === 3 && state.contestant13.world.digSiteCell.pathStepsFromRear >= 82, "cache should occupy the maze's maximum-depth dead end");
+    assert(
+      state.contestant13.world.digSiteCell.row === 5
+        && state.contestant13.world.digSiteCell.col === 7
+        && state.contestant13.world.digSiteCell.pathStepsFromRear >= 62
+        && state.contestant13.world.digSiteCell.pathStepsFromNorth >= 63,
+      "cache should occupy the redesigned maze's deep terminal chamber from either portal",
+    );
     assert(state.contestant13.world.bookVisible === true, "the unusual Library book should begin visible on its shelf");
     assert(state.contestant13.world.basementDoorLocked === true && state.contestant13.world.basementDoorOpen === false, "the basement stair door should begin closed and locked");
 
     await page.waitForFunction(() => {
       const npc = window.MrFeastFresh?.getMrFeastState?.();
       return npc?.loaded || npc?.error;
-    }, null, { timeout: 30000 });
+    }, null, { timeout: 120000 });
     let npc = await page.evaluate(() => window.MrFeastFresh.getMrFeastState());
     assert(npc.loaded && !npc.error, `Mr. Feast should load for visual QA: ${npc.error || "unknown error"}`);
     assert(npc.modelHeight === 2.01, "Mr. Feast should use the slightly larger 2.01m eye-level fit");
-    assert(npc.skinnedMeshes >= 2 && npc.bones === 24, "Mr. Feast should retain the complete 24-bone rig across the body and retopologized face");
+    assert(npc.skinnedMeshes === 1 && npc.bones === 24, "Mr. Feast should use the intact single-mesh, 24-bone release model while face retopology is paused");
     assert(Object.values(npc.animationTracks).every((clip) => clip.scaleTracks === 0 && clip.translationTracks === 1), "runtime animation clips must contain no scale tracks and only Hips translation");
-    const requiredFacialTargets = [
-      "blink_left", "blink_right", "brow_raise", "brow_compress", "smile",
-      "smile_wide", "sneer_left", "sneer_right", "mouth_open", "jaw_shift",
-    ];
-    assert(npc.face?.supported && npc.face.morphTargetCount === 10, "Mr. Feast should expose the ten-target facial rig");
-    assert(npc.face.missingTargets.length === 0 && requiredFacialTargets.every((name) => npc.face.availableTargets.includes(name)), "facial controller should bind every approved morph target");
-    assert(npc.face.retopologized && npc.face.parts?.face && npc.face.parts?.eyelids === 2 && npc.face.parts?.eyes === 2 && npc.face.parts?.oralCavity && npc.face.parts?.teeth, "Mr. Feast should expose the retopologized face, paired eyelids, separate eyes, oral cavity, and teeth");
-    assert(npc.face.missingComponents.length === 0 && npc.face.morphMeshes === 4 && npc.face.totalBindingCount === 18 && npc.face.bindingsInSync, "retopologized facial controller should resolve all components and keep its 18 bindings synchronized across the face, eyelids, and textured lip rim");
+    assert(npc.face && !npc.face.supported && !npc.face.retopologized, "the rejected facial appliance must remain disabled in the active release");
+    assert(npc.face.morphMeshes === 0 && npc.face.totalBindingCount === 0 && npc.face.parts?.face === false && npc.face.parts?.eyes === 0 && npc.face.parts?.eyelids === 0, "the stable model should not retain detached retopology face or eye geometry");
 
     await page.evaluate(() => {
       window.MrFeastFresh.teleport("ballroomA");
@@ -148,88 +187,25 @@ async function run() {
     });
     npc = await page.evaluate(() => window.MrFeastFresh.getMrFeastState());
     assert(npc.liveBones.cameraY > npc.liveBones.eyeHeight && npc.liveBones.cameraY < npc.liveBones.headTopHeight, "player eye line should cross Mr. Feast's visible eye/head band");
-    const retopologyBounds = await page.evaluate(() => ({
+    const rejectedRetopologyBounds = await page.evaluate(() => ({
       face: window.MrFeastFresh.inspectScene("MrFeast_RetopoFace"),
       eyes: window.MrFeastFresh.inspectScene("MrFeast_Eye"),
     }));
-    const liveFaceSize = retopologyBounds.face.meshes[0]?.size;
-    assert(retopologyBounds.face.count === 1 && liveFaceSize?.x >= 0.14 && liveFaceSize?.y >= 0.2 && liveFaceSize?.z >= 0.16, "retopologized face should remain at full head scale after Three.js evaluates the animated skin");
-    assert(retopologyBounds.eyes.meshes.filter(({ name }) => /^MrFeast_Eye_[LR]$/.test(name)).every(({ size }) => size.x >= 0.022 && size.y >= 0.022), "separate eye spheres should remain full-sized on the animated head instead of collapsing under armature scale");
+    assert(rejectedRetopologyBounds.face.count === 0 && rejectedRetopologyBounds.eyes.count === 0, "the active scene still contains the protruding replacement eyes or face appliance");
 
-    const facialBodyBaseline = {
+    const stableBodyBaseline = {
       hipsScale: { ...npc.liveBones.hipsScale },
       leftThighLength: npc.liveBones.leftThighLength,
       modelHeight: npc.modelHeight,
     };
-    const facialPresets = {};
-    for (const expression of ["neutral", "friendly", "watching", "threatened", "close"]) {
-      facialPresets[expression] = await page.evaluate((name) => {
-        window.MrFeastFresh.setMrFeastFaceForQA({ expression: name, snap: true });
-        window.MrFeastFresh.advanceMrFeastFaceForQA(0.5);
-        return window.MrFeastFresh.getMrFeastState();
-      }, expression);
-      assert(facialPresets[expression].face.expression === expression, `facial QA should select the ${expression} preset`);
-    }
-    assert(facialPresets.friendly.face.weights.smile >= 0.5, "friendly host preset should carry a readable controlled smile");
-    assert(facialPresets.watching.face.weights.brow_compress >= 0.6, "watching preset should visibly compress the brow");
-    assert(facialPresets.threatened.face.weights.smile_wide >= 0.9 && facialPresets.threatened.face.weights.jaw_shift >= 0.4, "threatened preset should fracture into a strongly widened, tense smile");
-    assert(facialPresets.close.face.weights.sneer_left >= 0.35 && facialPresets.close.face.weights.smile_wide >= 0.65, "close-range preset should add a readable asymmetric sneer");
-    const facialBodyAfter = facialPresets.close;
-    assert(JSON.stringify(facialBodyAfter.liveBones.hipsScale) === JSON.stringify(facialBodyBaseline.hipsScale), "facial presets must not scale the hips");
-    assert(facialBodyAfter.liveBones.leftThighLength === facialBodyBaseline.leftThighLength && facialBodyAfter.modelHeight === facialBodyBaseline.modelHeight, "facial presets must not change limb length or model height");
-
-    const independentBlink = await page.evaluate(() => {
-      window.MrFeastFresh.setMrFeastFaceForQA({ expression: "neutral", snap: true });
-      window.MrFeastFresh.triggerMrFeastBlinkForQA("left");
-      window.MrFeastFresh.advanceMrFeastFaceForQA(0.075);
-      return window.MrFeastFresh.getMrFeastState().face;
-    });
-    assert(independentBlink.weights.blink_left > 0.65 && independentBlink.weights.blink_right < 0.1, "facial QA should support a truly independent left blink");
-    assert(independentBlink.bindingsByTarget.blink_left.length === 2 && independentBlink.bindingsByTarget.blink_left.every(({ value }) => value > 0.65), "independent left blink should close both the face aperture and left eyelid mesh");
-    const pairedBlinkBudget = await page.evaluate(() => {
-      window.MrFeastFresh.setMrFeastFaceForQA({ expression: "threatened", snap: true });
-      window.MrFeastFresh.setMrFeastFaceForQA({ expression: "friendly" });
-      window.MrFeastFresh.advanceMrFeastFaceForQA(0.02);
-      window.MrFeastFresh.triggerMrFeastBlinkForQA("both");
-      window.MrFeastFresh.advanceMrFeastFaceForQA(0.075);
-      return window.MrFeastFresh.getMrFeastState().face;
-    });
-    assert(pairedBlinkBudget.weights.blink_left > 0.65 && pairedBlinkBudget.weights.blink_right > 0.65, "paired blink should fully close both retopologized eyelids during an expression transition");
-    assert(["blink_left", "blink_right"].every((name) => pairedBlinkBudget.bindingsByTarget[name].length === 2 && pairedBlinkBudget.bindingsByTarget[name].every(({ value }) => value > 0.65)), "paired blink should drive both face-aperture and eyelid bindings in sync");
-    assert(pairedBlinkBudget.maxActiveMorphs <= 8 && pairedBlinkBudget.bindingsInSync, "expression transitions must reserve two of Three.js r128's eight morph slots for blinking");
-    await page.evaluate(() => {
-      window.MrFeastFresh.advanceMrFeastFaceForQA(0.25);
-      window.MrFeastFresh.setMrFeastPoseForQA({ action: "idle", time: 0, x: 0, z: -9, yaw: 0 });
-      window.MrFeastFresh.setMrFeastFaceForQA({ clear: true, snap: true });
-    });
-    await teleportForInteraction(page, "mrFeastFaceClose", /cycle expression.*neutral/i);
-    for (const expression of ["neutral", "friendly", "watching", "close", "threatened"]) {
-      await pressInteract(page);
-      const cycledFace = await page.evaluate(() => window.MrFeastFresh.getMrFeastState().face);
-      assert(cycledFace.expression === expression && cycledFace.qaCycle?.current === expression, `interacting with Mr. Feast should cycle to ${expression}`);
-    }
-    const wrappedPrompt = (await diagnostics(page)).prompt;
-    assert(/cycle expression.*neutral/i.test(wrappedPrompt || ""), "facial interaction prompt should wrap back to neutral after threatened");
-    await page.evaluate(() => {
+    const stableFaceView = await page.evaluate(() => {
       window.MrFeastFresh.teleport("mrFeastFaceClose");
       window.MrFeastFresh.setMrFeastPoseForQA({ action: "idle", time: 0, x: 0, z: -9, yaw: 0 });
-      window.MrFeastFresh.advanceMrFeastFaceForQA(0.25);
-      window.MrFeastFresh.setMrFeastFaceForQA({ expression: "friendly", snap: true });
+      return JSON.parse(window.render_game_to_text());
     });
+    assert(!/cycle expression/i.test(stableFaceView.prompt || ""), "the paused facial rig should not expose a no-op QA expression prompt");
     await page.evaluate(() => window.advanceTime(80));
-    await page.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "mr-feast-face-friendly-desktop.png") });
-    for (const expression of ["watching", "threatened", "close", "neutral"]) {
-      await page.evaluate((name) => window.MrFeastFresh.setMrFeastFaceForQA({ expression: name, snap: true }), expression);
-      await page.evaluate(() => window.advanceTime(80));
-      await page.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, `mr-feast-face-${expression}-desktop.png`) });
-    }
-    await page.evaluate(() => {
-      window.MrFeastFresh.triggerMrFeastBlinkForQA("left");
-      window.MrFeastFresh.advanceMrFeastFaceForQA(0.075);
-    });
-    await page.evaluate(() => window.advanceTime(80));
-    await page.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "mr-feast-face-blink-left-desktop.png") });
-    await page.evaluate(() => window.MrFeastFresh.advanceMrFeastFaceForQA(0.2));
+    await screenshotStage(page, "mr-feast-stable-face-desktop.png");
 
     const transitionSamples = await page.evaluate(() => {
       const samples = [];
@@ -255,7 +231,7 @@ async function run() {
     assert(Math.max(...hipsScaleValues) - Math.min(...hipsScaleValues) < 0.001, "idle/walk transitions must not scale Mr. Feast");
     assert(Math.max(...thighLengths) - Math.min(...thighLengths) < 0.001, "idle/walk transitions must not change limb lengths");
     assert(Math.max(...headTopHeights) - Math.min(...headTopHeights) < 0.03 && Math.max(...headTopSteps) < 0.01, "idle/walk transitions should not pop vertically");
-    await page.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "mr-feast-tuned-walk-desktop.png") });
+    await screenshotStage(page, "mr-feast-tuned-walk-desktop.png");
 
     const playerFloorBeforeNpcTraversal = (await diagnostics(page)).lighting.activeFloor;
     const grandStairState = await page.evaluate(() => {
@@ -266,7 +242,7 @@ async function run() {
     assert(grandStairState.position.y > 0 && grandStairState.position.y < 2.5, "grand-stair route should interpolate vertical movement");
     assert(grandStairState.currentAnimation === "stalk" && !grandStairState.contactShadowVisible, "Mr. Feast should walk the grand stair without projecting a flat shadow across its steps");
     assert(Object.values(grandStairState.liveBones.hipsScale).every((value) => Math.abs(value - 1) < 0.001), "grand-stair traversal must preserve the rig scale");
-    await page.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "mr-feast-grand-stair-desktop.png") });
+    await screenshotStage(page, "mr-feast-grand-stair-desktop.png");
 
     const serviceStairState = await page.evaluate(() => {
       window.MrFeastFresh.teleport("serviceStairTopOblique");
@@ -275,7 +251,7 @@ async function run() {
     assert(serviceStairState.onStairs && serviceStairState.currentFloor === "BETWEEN LEVELS", "service-stair route should put Mr. Feast between the main level and basement");
     assert(serviceStairState.position.y < 0 && serviceStairState.position.y > -3.8, "service-stair route should interpolate down into the basement");
     assert(serviceStairState.currentAnimation === "stalk" && !serviceStairState.contactShadowVisible, "Mr. Feast should walk the service stair without a floating contact shadow");
-    await page.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "mr-feast-service-stair-desktop.png") });
+    await screenshotStage(page, "mr-feast-service-stair-desktop.png");
 
     const wholeHomeRun = await page.evaluate(() => window.MrFeastFresh.runMrFeastWholeHomeRouteForQA(1800));
     const requiredFloors = ["MAIN LEVEL", "SECOND FLOOR", "BASEMENT"];
@@ -294,7 +270,7 @@ async function run() {
     assert(wholeHomeRun.routeSummary.distanceMeters > 600 && wholeHomeRun.qaLastWholeHomeRun.simulatedSeconds < 1800, "whole-home loop should cover the full mansion within the QA time budget");
     assert(wholeHomeRun.routeSummary.doors >= 19 && wholeHomeRun.visitedRouteDoors.length === wholeHomeRun.routeSummary.doors, "Mr. Feast should automatically open every door required by his route");
     assert(wholeHomeRun.routeDoorOpenEvents >= wholeHomeRun.visitedRouteDoors.length, "whole-home patrol should record real automatic door-open events");
-    assert(Object.values(wholeHomeRun.liveBones.hipsScale).every((value) => Math.abs(value - 1) < 0.001) && Math.abs(wholeHomeRun.liveBones.leftThighLength - facialBodyBaseline.leftThighLength) < 0.001, `a complete route loop must not resize Mr. Feast or his limbs: ${JSON.stringify(wholeHomeRun.liveBones)}`);
+    assert(Object.values(wholeHomeRun.liveBones.hipsScale).every((value) => Math.abs(value - 1) < 0.001) && Math.abs(wholeHomeRun.liveBones.leftThighLength - stableBodyBaseline.leftThighLength) < 0.001, `a complete route loop must not resize Mr. Feast or his limbs: ${JSON.stringify(wholeHomeRun.liveBones)}`);
     assert((await diagnostics(page)).lighting.activeFloor === playerFloorBeforeNpcTraversal, "Mr. Feast changing floors must not change the player's lighting context");
 
     await page.evaluate(() => window.MrFeastFresh.resetMrFeastWandererForQA());
@@ -337,7 +313,7 @@ async function run() {
     assert(state.contestant13.basementKeyFound === false, "early dig must not grant the basement key");
 
     await teleportForInteraction(page, "contestant13BasementDoor", /basement.*locked|need.*key/i);
-    await page.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "basement-door-locked-desktop.png") });
+    await screenshotStage(page, "basement-door-locked-desktop.png");
     await pressInteract(page);
     state = await diagnostics(page);
     assert(state.contestant13.basementUnlocked === false, "the basement door must remain locked without the maze key");
@@ -355,7 +331,7 @@ async function run() {
     assert(state.contestant13.relaySabotaged === false, "relay must not be sabotaged before hearing the recording");
 
     await teleportForInteraction(page, "contestant13LibraryBook", /read “.+”/i);
-    await page.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "library-shelf-book-subtle-desktop.png") });
+    await screenshotStage(page, "library-shelf-book-subtle-desktop.png");
     await pressInteract(page);
     await page.waitForFunction(() => !document.getElementById("mansion-book-reader")?.hidden);
     state = await diagnostics(page);
@@ -363,16 +339,17 @@ async function run() {
     assert(state.journal.entries.filter((id) => id === "contestant-13-book").length === 1, "book clue should enter the journal exactly once");
     assert(/garden.*shovel|shovel.*garden/i.test(state.journal.currentObjective), "reading the book should direct the player to the garden shovel");
     assert(state.feastSays?.phase === "called" && state.feastSays.triggerClueId === "contestant-13-book" && state.feastSays.clueProgressLocked, `the first story clue should call Feast Says and pause the trail; got ${JSON.stringify(state.feastSays)}`);
-    assert(await page.locator("#mansion-casefile").isHidden(), "the investigation HUD should yield to the Feast Says call while clues are paused");
-    assert(await page.locator("#mansion-story-progress").textContent() === "Trail 1/7", "reading the book should count as the first trail step");
-    await page.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "library-clue-desktop.png") });
+    assert(await page.locator("#mansion-casefile").isHidden(), "clue discoveries must not open an on-screen trail/objective HUD");
+    assert(await page.locator("#mansion-story-progress").textContent() === "Trail 1/7", "reading the book should count as the first trail step for diagnostics");
+    assert((await page.locator("#mansion-objective").textContent() || "").trim() === "", "objective tip text must stay blank; clues live in Bag only");
+    await screenshotStage(page, "library-clue-desktop.png");
 
     state = await completeFirstClueCompetition(page, "contestant-13-book");
     if (!(await page.locator("#mansion-book-reader").isHidden())) {
       await page.keyboard.press("Escape");
       await page.waitForFunction(() => document.getElementById("mansion-book-reader")?.hidden);
     }
-    assert(await page.locator("#mansion-casefile").isVisible(), "the investigation HUD should return after Feast Says reopens the mansion");
+    assert(await page.locator("#mansion-casefile").isHidden(), "after Feast Says, investigation guidance must remain inventory-only with no trail HUD");
     await teleportForInteraction(page, "contestant13LibraryBook", /read “.+”/i);
     await pressInteract(page);
     await page.waitForFunction(() => !document.getElementById("mansion-book-reader")?.hidden);
@@ -382,16 +359,17 @@ async function run() {
     await page.waitForFunction(() => document.getElementById("mansion-book-reader")?.hidden);
 
     await teleportForInteraction(page, "contestant13GardenShovel", /take.*shovel|garden shovel/i);
-    await page.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "shovel-hidden-in-roses-desktop.png") });
+    await screenshotStage(page, "shovel-hidden-in-roses-desktop.png");
     await pressInteract(page);
     state = await diagnostics(page);
     assert(state.contestant13.shovelTaken === true, "shovel interaction should collect the shovel");
     assert(state.inventory.items.filter((id) => id === "garden-shovel").length === 1, "shovel should enter inventory exactly once");
     assert(state.inventory.bulkyItem === "garden-shovel", "shovel should be the carried bulky item");
     assert(state.contestant13.world.shovelVisible === false, "collected shovel should disappear from the world");
+    assert(state.stormRun?.phase === "dormant" && state.stormRun.callCount === 0, `the post-Feast shovel must remain earned without calling Storm Run; got ${JSON.stringify(state.stormRun)}`);
 
     await teleportForInteraction(page, "contestant13DigSite", /dig.*(?:contestant 13|xiii)|excavate|disturbed earth/i);
-    await page.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "dig-site-subtle-desktop.png") });
+    await screenshotStage(page, "dig-site-subtle-desktop.png");
     await pressInteract(page);
     await waitForContestantFlag(page, "digSiteExcavated");
     state = await diagnostics(page);
@@ -400,8 +378,10 @@ async function run() {
     assert(state.inventory.items.filter((id) => id === "basement-key-b13").length === 1, "basement key must not duplicate");
     assert(state.inventory.items.filter((id) => id === "contestant-13-tape").length === 1, "tape must not duplicate");
     assert(state.contestant13.world.digMoundVisible === false && state.contestant13.world.digMarkerVisible === false && state.contestant13.world.digHoleVisible === true, "excavation should leave only an unmarked hole");
+    assert(state.stormRun?.phase === "called" && state.stormRun.triggerReason === "hedge-maze-key" && state.stormRun.triggerClueId === "hedge-maze-b13-cache", `the recovered maze key should call Storm Run; got ${JSON.stringify(state.stormRun)}`);
+    state = await completeStormRunCompetition(page, "hedge-maze-b13-cache");
     await teleportForInteraction(page, "contestant13DigSite", /empty hole/i);
-    await page.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "dig-site-empty-hole-desktop.png") });
+    await screenshotStage(page, "dig-site-empty-hole-desktop.png");
 
     await teleportForInteraction(page, "contestant13BasementDoor", /unlock.*basement|use.*key/i);
     await pressInteract(page);
@@ -410,7 +390,7 @@ async function run() {
     assert(state.contestant13.basementUnlocked === true, "the recovered maze key should unlock the basement threshold");
     assert(state.contestant13.world.basementDoorLocked === false && state.contestant13.world.basementDoorOpen === true, "unlocking should open the basement door and persist in world diagnostics");
     assert(state.inventory.items.filter((id) => id === "basement-key-b13").length === 1, "using the basement key must not duplicate it");
-    await page.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "basement-door-unlocked-desktop.png") });
+    await screenshotStage(page, "basement-door-unlocked-desktop.png");
 
     await teleportForInteraction(page, "contestant13ArchiveCage", /unlock.*a-3|evidence cage/i);
     await pressInteract(page);
@@ -424,7 +404,7 @@ async function run() {
     assert(state.contestant13.recordingPlayed === true, "recorder interaction should play Contestant 13's tape");
     assert(state.journal.entries.includes("patron-feed-transcript"), "recording transcript should enter the journal");
     assert(state.contestant13.world.recorderIndicatorActive === true, "playing the recovered tape should light the recorder indicator");
-    await page.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "recording-played-desktop.png") });
+    await screenshotStage(page, "recording-played-desktop.png");
 
     const circuitsBefore = JSON.stringify(state.circuits.map(({ name, on }) => [name, on]));
     await teleportForInteraction(page, "contestant13WorkshopRelay", /sabotage.*patron|sever.*feed/i);
@@ -447,9 +427,9 @@ async function run() {
     assert(threatenedFace.automaticExpression === "threatened" && threatenedFace.expression === "threatened", "relay sabotage should autonomously escalate Mr. Feast's expression");
     assert(threatenedFace.weights.smile_wide >= 0.5, "autonomous threat escalation should visibly widen Mr. Feast's smile");
 
-    const objectiveText = await page.locator("#mansion-objective").textContent();
-    assert(/blind|signal|feed/i.test(objectiveText || ""), "HUD should show the completed sabotage state");
-    await page.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "relay-sabotaged-desktop.png") });
+    assert((await page.locator("#mansion-objective").textContent() || "").trim() === "", "completed sabotage must not re-open objective tip text on the HUD");
+    assert(/blind|signal|feed/i.test(state.journal.currentObjective || ""), "internal completion state should still acknowledge the severed feed for diagnostics/saves");
+    await screenshotStage(page, "relay-sabotaged-desktop.png");
     await page.evaluate(() => window.MrFeastFresh.teleport("contestant13GardenShovel"));
     await page.evaluate(() => window.MrFeastFresh.teleport("contestant13WorkshopRelay"));
     state = await diagnostics(page);
@@ -473,34 +453,50 @@ async function run() {
     await teleportForInteraction(mobilePage, "contestant13GardenShovel", /shovel/i);
     await mobilePage.locator("#touch-interact").click({ force: true });
     await waitForContestantFlag(mobilePage, "shovelTaken");
-    assert(await mobilePage.locator("#mansion-casefile").isHidden(), "finding the shovel before the book should not reveal the Library objective HUD");
+    assert(await mobilePage.locator("#mansion-casefile").isHidden(), "finding the shovel before the book must not open any trail/objective HUD");
     let earlyShovelState = await diagnostics(mobilePage);
     assert(earlyShovelState.feastSays?.phase === "called" && earlyShovelState.feastSays.triggerClueId === "faceless-fountain-shovel" && earlyShovelState.feastSays.clueProgressLocked, `finding the first clue out of order should still call Feast Says and pause later clues; got ${JSON.stringify(earlyShovelState.feastSays)}`);
     await teleportForInteraction(mobilePage, "contestant13DigSite", /dig.*xiii|disturbed earth/i);
     await mobilePage.locator("#touch-interact").click({ force: true });
     earlyShovelState = await diagnostics(mobilePage);
     assert(earlyShovelState.contestant13.digSiteExcavated === false, "finding the shovel first must not bypass the Library story clue");
-    assert(/library|book|shel/i.test(earlyShovelState.journal.currentObjective), "early shovel discovery should preserve the internal Library clue without exposing it on the HUD");
+    assert(/library|book|shel/i.test(earlyShovelState.journal.currentObjective), "early shovel discovery should preserve the internal Library progression without exposing tips on the HUD");
+    assert((await mobilePage.locator("#mansion-objective").textContent() || "").trim() === "", "out-of-order dig must not surface Library tip text on screen");
     assert(earlyShovelState.feastSays.clueProgressLocked, "the out-of-order dig attempt should remain blocked during the live-event call");
     await completeFirstClueCompetition(mobilePage, "faceless-fountain-shovel");
-    assert(await mobilePage.locator("#mansion-casefile").isHidden(), "completing Feast Says should not reveal the Library HUD before the book is read");
+    assert(await mobilePage.locator("#mansion-casefile").isHidden(), "completing Feast Says must still keep the trail HUD suppressed");
     await teleportForInteraction(mobilePage, "contestant13LibraryBook", /read “.+”/i);
     await mobilePage.locator("#touch-interact").click({ force: true });
     await waitForContestantFlag(mobilePage, "bookRead");
     await mobilePage.waitForFunction(() => !document.getElementById("mansion-book-reader")?.hidden);
+    let mobileBookState = await diagnostics(mobilePage);
+    assert(mobileBookState.stormRun?.phase === "dormant" && mobileBookState.stormRun.callCount === 0, `the post-Feast mobile book must not call Storm Run; got ${JSON.stringify(mobileBookState.stormRun)}`);
+    assert(mobileBookState.contestant13.bookRead && mobileBookState.journal.entries.includes("contestant-13-book"), "the mobile book clue should remain earned while Storm Run waits for its real gate");
+    await mobilePage.keyboard.press("Escape");
+    await mobilePage.waitForFunction(() => document.getElementById("mansion-book-reader")?.hidden);
+    await teleportForInteraction(mobilePage, "contestant13DigSite", /dig.*(?:contestant 13|xiii)|excavate|disturbed earth/i);
+    await mobilePage.locator("#touch-interact").click({ force: true });
+    await waitForContestantFlag(mobilePage, "basementKeyFound", 15000);
+    mobileBookState = await diagnostics(mobilePage);
+    assert(mobileBookState.stormRun?.phase === "called" && mobileBookState.stormRun.triggerReason === "hedge-maze-key" && mobileBookState.stormRun.triggerClueId === "hedge-maze-b13-cache", `the recovered mobile maze key should call Storm Run; got ${JSON.stringify(mobileBookState.stormRun)}`);
+    await completeStormRunCompetition(mobilePage, "hedge-maze-b13-cache");
+    await teleportForInteraction(mobilePage, "contestant13LibraryBook", /read “.+”/i);
+    await mobilePage.locator("#touch-interact").click({ force: true });
+    await mobilePage.waitForFunction(() => !document.getElementById("mansion-book-reader")?.hidden);
     const mobileUi = await mobilePage.evaluate(() => {
-      const caseFile = document.getElementById("mansion-casefile")?.getBoundingClientRect();
+      const caseFile = document.getElementById("mansion-casefile");
       const touch = document.getElementById("touch-interact")?.getBoundingClientRect();
       return {
-        caseFile: caseFile && { left: caseFile.left, right: caseFile.right, width: caseFile.width, height: caseFile.height },
+        caseHidden: Boolean(caseFile?.hidden),
+        objectiveText: document.getElementById("mansion-objective")?.textContent || "",
         touch: touch && { width: touch.width, height: touch.height },
         viewport: { width: innerWidth, height: innerHeight },
       };
     });
-    assert(mobileUi.caseFile && mobileUi.caseFile.left >= 0 && mobileUi.caseFile.right <= mobileUi.viewport.width, "mobile case file must fit the viewport");
-    assert(mobileUi.caseFile.height >= 44, "mobile objective HUD should remain readable");
+    assert(mobileUi.caseHidden, "mobile trail/objective HUD must stay hidden after clues are found");
+    assert(mobileUi.objectiveText.trim() === "", "mobile objective tip text must stay blank after clues are found");
     assert(mobileUi.touch && mobileUi.touch.width >= 44 && mobileUi.touch.height >= 44, "touch interact target should remain at least 44px");
-    await mobilePage.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "printed-book-marginalia-mobile.png") });
+    await screenshotStage(mobilePage, "printed-book-marginalia-mobile.png");
     assert(errors.length === 0, `browser errors: ${errors.join(" | ")}`);
     await mobileContext.close();
 

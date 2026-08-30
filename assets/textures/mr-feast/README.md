@@ -13,7 +13,7 @@ The 1254px generated PNG masters remain in the local Codex generated-image archi
 
 ## Cryptic portrait collection
 
-These ten original paintings were generated on 2026-07-11 with the built-in OpenAI image-generation workflow after the dedicated Gemini game-image credential probe returned `GEMINI_API_KEY=`. The first six translate the requested evil-philanthropist satire into fictional old-master scenes; the four host-free additions use only empty architecture, objects, gloves, moths, and stone animals. No real people, minors, real victims, copied real-world artwork, logos, or text appear. Portrait runtime copies are center-cropped 768×1152 JPEGs at quality 84; the ballroom diptych is a 1024×1024 JPEG whose left and right UV halves occupy separate frames.
+These eleven original paintings were generated with the built-in OpenAI image-generation workflow. Ten were created on 2026-07-11 after the dedicated Gemini game-image credential probe returned `GEMINI_API_KEY=`; the Feast Father foreshadowing canvas was added on 2026-07-30 using two paintings from this collection as style references. The first six translate the requested evil-philanthropist satire into fictional old-master scenes; four host-free additions use only empty architecture, objects, gloves, moths, and stone animals; the final canvas suggests a veiled ceremonial presence without revealing its face or anatomy. No real people, minors, real victims, copied real-world artwork, logos, or text appear. Portrait runtime copies are center-cropped 768×1152 JPEGs; the ballroom diptych is a 1024×1024 JPEG whose left and right UV halves occupy separate frames.
 
 | Runtime asset | In-world title and purpose | Final generation brief |
 | --- | --- | --- |
@@ -27,6 +27,7 @@ These ten original paintings were generated on 2026-07-11 with the built-in Open
 | `generated/portraits/portrait-last-applause-v1-ai.jpg` | *The Last Applause* — main and upper galleries | Empty Victorian theater, crimson curtain sewn shut, bodiless opera gloves applauding, eye-like proscenium ornament, and a solemn moth conducting with a matchstick. |
 | `generated/portraits/portrait-orchard-porcelain-teeth-v1-ai.jpg` | *The Orchard of Porcelain Teeth* — upper gallery | Moonlit winter trees bearing porcelain teeth and brass keys, ladders ending in air, and three stone rabbits counting the fallen ceramic fruit on an abacus. |
 | `generated/portraits/portrait-house-dreams-back-v1-ai.jpg` | *The House That Dreams Back* — upper gallery | Recursive impossible corridor, upward rain from closed umbrellas, watchful carpet motifs, and a brass snail towing an unlit chandelier through the dreaming house. |
+| `generated/portraits/portrait-feast-father-at-table-v1-ai.jpg` | *The Place at the Head* — Dining Room | Formal household supper around a long candlelit table, one conspicuously empty foreground setting, and a distant father-like presence completely obscured by black ceremonial veiling; Gothic old-master oil with cracked varnish and no readable creature anatomy. |
 
 The game loads these through a clamp-wrapped sRGB portrait manifest. If a portrait file is unavailable, its frame falls back to the original procedural shadow-ancestor silhouette instead of delaying or breaking the mansion.
 

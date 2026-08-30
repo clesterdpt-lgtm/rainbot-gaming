@@ -1,0 +1,138 @@
+{
+  "generatedAt": "2026-07-16T02:01:13.499891+00:00",
+  "pipelineVersion": 1,
+  "pipeline": "deterministic-bmesh-parametric-face-appliance",
+  "input": "/Volumes/External SSD/Projects/RainbotGaming/assets/models/mr-feast/processed/mr-feast-working.blend",
+  "output": "/Volumes/External SSD/Projects/RainbotGaming/assets/models/mr-feast/processed/mr-feast-game-retopo-face-v1.glb",
+  "face": {
+    "object": "MrFeast_RetopoFace",
+    "components": 1,
+    "vertices": 9345,
+    "triangles": 18132,
+    "grid": [
+      97,
+      97
+    ],
+    "perimeterTuckMillimeters": 4.5
+  },
+  "parts": {
+    "eyes": [
+      "MrFeast_Eye_L",
+      "MrFeast_Eye_R"
+    ],
+    "eyelids": [
+      "MrFeast_Eyelid_L",
+      "MrFeast_Eyelid_R"
+    ],
+    "oralCavity": "MrFeast_OralCavity",
+    "teeth": "MrFeast_Teeth",
+    "lipRim": "MrFeast_LipRim"
+  },
+  "albedoBake": {
+    "completed": true,
+    "size": [
+      1024,
+      1024
+    ],
+    "image": "MrFeast_RetopoFace_Albedo",
+    "error": null,
+    "pixelStats": {
+      "minimumLuminance": 0.0,
+      "maximumLuminance": 0.724573,
+      "meanLuminance": 0.337812,
+      "luminanceRange": 0.724573,
+      "method": "orthographic-source-albedo-projection",
+      "selectedToActiveFallbackReason": "Unified face albedo bake is blank or constant: {'minimumLuminance': 0.0, 'maximumLuminance': 0.0, 'meanLuminance': 0.0, 'luminanceRange': 0.0, 'method': 'cycles-selected-to-active'}"
+    }
+  },
+  "source": {
+    "trianglesBefore": 65000,
+    "visibleFrontTrianglesRemoved": 1722,
+    "preservationPolicy": "first-ray-visible inner mask; original hair, ears, back head, neck, body, and wardrobe retained"
+  },
+  "rig": {
+    "bones": 24,
+    "skinnedMeshes": 11,
+    "policy": "existing Head/neck groups only; no new bones",
+    "meshParenting": "scene-root skinned meshes; Armature modifier only; avoids double 0.01 normalization in Three.js"
+  },
+  "asset": {
+    "triangles": 86546,
+    "sizeBytes": 6456080
+  },
+  "targets": [
+    "blink_left",
+    "blink_right",
+    "brow_raise",
+    "brow_compress",
+    "smile",
+    "smile_wide",
+    "sneer_left",
+    "sneer_right",
+    "mouth_open",
+    "jaw_shift"
+  ],
+  "targetStats": {
+    "blink_left": {
+      "changedVertices": 486,
+      "maxDeltaMillimeters": 10.971
+    },
+    "blink_right": {
+      "changedVertices": 486,
+      "maxDeltaMillimeters": 10.971
+    },
+    "brow_raise": {
+      "changedVertices": 1486,
+      "maxDeltaMillimeters": 9.026
+    },
+    "brow_compress": {
+      "changedVertices": 1484,
+      "maxDeltaMillimeters": 6.779
+    },
+    "smile": {
+      "changedVertices": 1898,
+      "maxDeltaMillimeters": 8.201
+    },
+    "smile_wide": {
+      "changedVertices": 1901,
+      "maxDeltaMillimeters": 15.748
+    },
+    "sneer_left": {
+      "changedVertices": 968,
+      "maxDeltaMillimeters": 8.307
+    },
+    "sneer_right": {
+      "changedVertices": 933,
+      "maxDeltaMillimeters": 8.307
+    },
+    "mouth_open": {
+      "changedVertices": 3548,
+      "maxDeltaMillimeters": 14.994
+    },
+    "jaw_shift": {
+      "changedVertices": 2893,
+      "maxDeltaMillimeters": 8.062
+    }
+  },
+  "morphMeshes": 4,
+  "morphBindings": 18,
+  "blinkClosureGapMillimeters": {
+    "left": 0.4,
+    "right": 0.4
+  },
+  "mouthOpenGapMillimeters": 18.0,
+  "morphNormalExported": false,
+  "previews": [
+    "/Volumes/External SSD/Projects/RainbotGaming/output/blender/mr-feast-retopo-v1/mr-feast-retopo-neutral.png",
+    "/Volumes/External SSD/Projects/RainbotGaming/output/blender/mr-feast-retopo-v1/mr-feast-retopo-blink-left.png",
+    "/Volumes/External SSD/Projects/RainbotGaming/output/blender/mr-feast-retopo-v1/mr-feast-retopo-blink-both.png",
+    "/Volumes/External SSD/Projects/RainbotGaming/output/blender/mr-feast-retopo-v1/mr-feast-retopo-mouth-open.png",
+    "/Volumes/External SSD/Projects/RainbotGaming/output/blender/mr-feast-retopo-v1/mr-feast-retopo-friendly.png",
+    "/Volumes/External SSD/Projects/RainbotGaming/output/blender/mr-feast-retopo-v1/mr-feast-retopo-threatened.png"
+  ],
+  "limitations": [
+    "The unified 1024 face bake preserves source color, but a manual texture-paint cleanup may still improve the aperture borders.",
+    "The connected appliance uses a dense compacted quad grid rather than manual cinematic production topology.",
+    "Eye gaze controls remain object-level and are not yet driven by the mansion runtime."
+  ]
+}

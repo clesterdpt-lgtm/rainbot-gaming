@@ -39,6 +39,16 @@ async function diagnostics(page) {
   return page.evaluate(() => JSON.parse(window.render_game_to_text()));
 }
 
+async function screenshotStage(page, fileName) {
+  const clip = await page.locator("#mansion-stage").boundingBox();
+  assert(clip?.width > 0 && clip?.height > 0, `cannot capture ${fileName}: mansion stage has no bounds`);
+  return page.screenshot({
+    path: path.join(artifactDir, fileName),
+    clip,
+    animations: "disabled",
+  });
+}
+
 async function holdMove(page, { sprint = false, milliseconds = 600 } = {}) {
   if (sprint) await page.keyboard.down("Shift");
   await page.keyboard.down("w");
@@ -79,8 +89,8 @@ async function run() {
     let state = await diagnostics(page);
     assert(state.player.movement.energy === 100 && state.player.movement.mode === "idle", "fresh player should expose a full sprint reserve and idle mode");
     assert(state.player.movement.stealth.visibilityMultiplier === 1 && state.player.movement.stealth.noiseMultiplier === 1, "standing movement should expose neutral stealth multipliers");
-    assert(await page.locator("#mansion-casefile").isHidden(), "fresh play should withhold the left-side case file until the first clue is discovered");
-    assert(!/library|shelves|book that does not/i.test(await page.locator("#mansion-objective").textContent() || ""), "fresh HUD markup should not direct the player to the Library");
+    assert(await page.locator("#mansion-casefile").isHidden(), "fresh play must never show a left-side trail/objective case file");
+    assert((await page.locator("#mansion-objective").textContent() || "").trim() === "", "fresh HUD markup should not direct the player with objective tip text");
     assert(await page.locator("#mansion-journal-button").isHidden(), "the Bag toolbar control should stay hidden on desktop where Tab remains available");
     assert(await page.locator("#touch-sprint").count() === 1 && await page.locator("#touch-sprint").isHidden(), "the sprint touch control should exist but stay hidden on desktop");
     assert(await page.locator("#touch-crouch").isHidden(), "the crouch touch control should stay hidden on desktop");
@@ -110,7 +120,7 @@ async function run() {
         * Math.max(0, Math.min(energy.bottom, scores.bottom) - Math.max(energy.top, scores.top));
     });
     assert(hudOverlap === 0, "energy HUD should not overlap the standalone Scores control");
-    await page.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "sprint-energy-hud-desktop.png") });
+    await screenshotStage(page, "sprint-energy-hud-desktop.png");
 
     await page.evaluate(() => window.MrFeastFresh.setPlayerEnergyForQA(6));
     const exhaustedSprint = await holdMove(page, { sprint: true, milliseconds: 700 });
@@ -128,14 +138,26 @@ async function run() {
     assert(state.player.movement.eyeHeight < state.player.movement.standingEyeHeight - 0.25, "crouch should visibly lower the eye line");
     assert(state.player.movement.stealth.visibilityMultiplier < 1 && state.player.movement.stealth.noiseMultiplier < 1, "crouch should improve visibility and noise stealth multipliers");
     const crouchStart = state.player;
+    // Walk while crouched (no Shift) stays the slow stealth gait.
+    await holdMove(page, { sprint: false, milliseconds: 650 });
+    const crouchWalkEnd = (await diagnostics(page)).player;
+    const crouchWalkDistance = planarDistance(crouchStart, crouchWalkEnd);
+    assert(crouchWalkDistance < walkDistance * 0.85, `crouch-walking should remain slower than standing walk; crouch=${crouchWalkDistance.toFixed(3)} walk=${walkDistance.toFixed(3)}`);
+    assert(crouchWalkEnd.movement.mode === "crouch" && crouchWalkEnd.movement.crouched, "crouch-walking without Shift must stay crouched");
+    // Shift breaks crouch and starts a normal sprint on the same press.
+    await page.evaluate(() => window.MrFeastFresh.setPlayerEnergyForQA(100));
+    const preBreak = (await diagnostics(page)).player;
     await holdMove(page, { sprint: true, milliseconds: 650 });
-    const crouchEnd = (await diagnostics(page)).player;
-    const crouchDistance = planarDistance(crouchStart, crouchEnd);
-    assert(crouchDistance < walkDistance * 0.85, `crouching should remain slower even with Shift held; crouch=${crouchDistance.toFixed(3)} walk=${walkDistance.toFixed(3)}`);
-    assert(crouchEnd.movement.mode !== "sprint", "crouching should prevent sprint mode");
-    await page.keyboard.press("c");
-    await page.evaluate(() => window.MrFeastFresh.advancePlayerForQA(0.45));
-    assert(!(await diagnostics(page)).player.movement.crouched, "pressing C again should restore standing stance");
+    const postBreak = (await diagnostics(page)).player;
+    assert(
+      !postBreak.movement.crouched
+        && postBreak.movement.mode === "sprint"
+        && planarDistance(preBreak, postBreak) > crouchWalkDistance * 1.15,
+      `Shift while crouched should stand up and sprint; crouchWalk=${crouchWalkDistance.toFixed(3)} break=${planarDistance(preBreak, postBreak).toFixed(3)} movement=${JSON.stringify(postBreak.movement)}`,
+    );
+    await page.keyboard.up("Shift");
+    await page.evaluate(() => window.MrFeastFresh.advancePlayerForQA(0.1));
+    assert(!(await diagnostics(page)).player.movement.crouched, "releasing Shift after a crouch-break sprint should leave the player standing");
 
     await page.keyboard.press("i");
     await page.waitForTimeout(50);
@@ -162,13 +184,30 @@ async function run() {
     for (const id of ["mansion-menu-maximize", "mansion-menu-save", "mansion-menu-load", "mansion-menu-dev"]) {
       assert(await page.locator(`#${id}`).count() === 1, `Escape menu is missing ${id}`);
     }
-    await page.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "escape-menu-desktop.png") });
+    await screenshotStage(page, "escape-menu-desktop.png");
 
     await page.locator("#mansion-menu-maximize").click();
     await page.waitForFunction(() => JSON.parse(window.render_game_to_text()).menus.maximized, null, { timeout: 3000 });
     state = await diagnostics(page);
     assert(state.menus.maximized, "Maximize should expand the mansion stage");
     assert(await page.locator("#mansion-stage").evaluate((element) => getComputedStyle(element).position === "fixed"), "Maximize should pin the stage over the viewport");
+
+    // Escape while maximized must open the pause menu without dropping maximized intent.
+    // Headless may not grant OS fullscreen; the page still keeps CSS max + re-enter intent.
+    await page.evaluate(() => document.getElementById("mansion-menu-resume").click());
+    await page.waitForTimeout(80);
+    await page.keyboard.press("Escape");
+    await page.waitForFunction(() => {
+      const menus = JSON.parse(window.render_game_to_text()).menus;
+      return menus.escapeOpen && menus.maximized;
+    }, null, { timeout: 3000 });
+    state = await diagnostics(page);
+    assert(state.menus.escapeOpen && state.menus.maximized, "Escape while maximized should open the menu and keep maximized layout");
+    assert(await page.locator("#mansion-stage").evaluate((element) => (
+      element.classList.contains("is-maxed")
+      && document.body.classList.contains("rb-game-maxed")
+      && getComputedStyle(element).position === "fixed"
+    )), "Escape while maximized should keep the stage pinned full-viewport");
 
     await page.evaluate(() => window.MrFeastFresh.teleport("foyer"));
     const savePosition = (await diagnostics(page)).player;
@@ -178,7 +217,7 @@ async function run() {
 
     await page.locator("#mansion-menu-dev").click();
     state = await diagnostics(page);
-    const expectedItems = ["garden-shovel", "basement-key-b13", "contestant-13-badge", "contestant-13-tape"];
+    const expectedItems = ["garden-shovel", "basement-key-b13", "contestant-13-badge", "contestant-13-tape", "basement-flashlight"];
     const expectedClues = ["contestant-13-book", "faceless-fountain-shovel", "maze-cache-b13", "basement-threshold-b13", "patron-feed-transcript"];
     assert(state.devMode.enabled, "Dev Mode button should enable the testing grant");
     assert(expectedItems.every((id) => state.inventory.items.includes(id)), "Dev Mode should grant every current quest object");
@@ -213,6 +252,8 @@ async function run() {
     await page.keyboard.press("Escape");
     await page.waitForFunction(() => JSON.parse(window.render_game_to_text()).menus.escapeOpen, null, { timeout: 3000 });
     await page.locator("#mansion-menu-load").click();
+    assert(await page.locator("#mansion-load-chooser").isVisible(), "Load should open the manual/autosave picker");
+    await page.locator('[data-save-source="manual"]').click();
     await page.waitForTimeout(150);
     state = await diagnostics(page);
     assert(!state.devMode.enabled && state.inventory.items.length === 0 && state.journal.entries.length === 0, "loading the clean save should leave Dev Mode and restore the saved quest snapshot");
@@ -288,7 +329,7 @@ async function run() {
     assert(mobileControls.crouch.bottom <= mobileControls.interact.top, `mobile crouch should not overlap Interact; controls=${JSON.stringify(mobileControls)}`);
     assert(mobileControls.movement.width <= 148 && mobileControls.movement.height <= 100, `mobile movement controls should keep a compact footprint; controls=${JSON.stringify(mobileControls)}`);
     assert(mobileControls.energy.width <= 136 && mobileControls.energy.height <= 32, `mobile energy HUD should stay compact; controls=${JSON.stringify(mobileControls)}`);
-    assert(mobileControls.feastPhase === "dormant" && mobileControls.feast.width <= 242 && mobileControls.feast.height <= 44, `the idle Feast Says countdown should collapse into a compact phone strip; controls=${JSON.stringify(mobileControls)}`);
+    assert(mobileControls.feastPhase === "dormant" && (mobileControls.feast.display === "none" || mobileControls.feast.height === 0 || mobileControls.feast.width === 0), `the idle Feast Says countdown must stay hidden on phone; controls=${JSON.stringify(mobileControls)}`);
     const bottomUiTop = Math.min(...[mobileControls.movement, mobileControls.sprint, mobileControls.crouch, mobileControls.interact, mobileControls.energy]
       .filter((control) => control.display !== "none" && control.height > 0)
       .map((control) => control.top));
@@ -319,7 +360,7 @@ async function run() {
     await mobilePage.locator("#touch-crouch").click();
     await mobilePage.evaluate(() => window.MrFeastFresh.advancePlayerForQA(0.45));
     assert(!(await diagnostics(mobilePage)).player.movement.crouched, "pressing mobile Crouch again should restore standing stance");
-    await mobilePage.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "mobile-touch-controls.png") });
+    await screenshotStage(mobilePage, "mobile-touch-controls.png");
 
     await mobilePage.locator("#touch-menu").click();
     await mobilePage.waitForFunction(() => JSON.parse(window.render_game_to_text()).menus.escapeOpen);
@@ -331,9 +372,12 @@ async function run() {
     await mobilePage.evaluate(() => window.MrFeastFresh.setDevModeForQA(true));
     const competingTopHud = await mobilePage.evaluate(() => ({
       caseFileVisible: !document.getElementById("mansion-casefile")?.hidden,
+      objectiveText: document.getElementById("mansion-objective")?.textContent || "",
       idleFeastDisplay: getComputedStyle(document.getElementById("mansion-feast-says")).display,
+      idleFeastPhase: document.getElementById("mansion-feast-says")?.dataset.phase || "",
     }));
-    assert(competingTopHud.caseFileVisible && competingTopHud.idleFeastDisplay === "none", `the idle minigame countdown should yield when the investigation card is visible; got ${JSON.stringify(competingTopHud)}`);
+    assert(!competingTopHud.caseFileVisible && competingTopHud.objectiveText.trim() === "", `dev-unlocked clues must still never surface the trail/objective HUD; got ${JSON.stringify(competingTopHud)}`);
+    assert(competingTopHud.idleFeastPhase === "dormant" && competingTopHud.idleFeastDisplay === "none", `the idle next-game countdown must stay hidden while dormant; got ${JSON.stringify(competingTopHud)}`);
 
     await mobilePage.locator("#mansion-journal-button").click();
     await mobilePage.waitForFunction(() => JSON.parse(window.render_game_to_text()).menus.inventoryOpen);
@@ -353,7 +397,7 @@ async function run() {
     });
     assert(mobileDossierLayout.titleTop >= mobileDossierLayout.stageTop && mobileDossierLayout.closeTop >= mobileDossierLayout.stageTop, `mobile dossier title or close control begins outside the stage; layout=${JSON.stringify(mobileDossierLayout)}`);
     assert(mobileDossierLayout.panelScrollWidth <= mobileDossierLayout.panelClientWidth, "mobile dossier should not scroll horizontally");
-    await mobilePage.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "inventory-and-clues-dev-mobile.png") });
+    await screenshotStage(mobilePage, "inventory-and-clues-dev-mobile.png");
     await mobileContext.close();
 
     assert(errors.length === 0, `browser errors: ${errors.join(" | ")}`);

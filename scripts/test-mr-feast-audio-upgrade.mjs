@@ -90,6 +90,7 @@ async function run() {
     "keypad-tick.ogg",
     "keypad-confirm.ogg",
     "keypad-error.ogg",
+    "hedge-maze-blocked-sting.wav",
   ];
   for (const filename of expectedAssets) {
     const info = await stat(path.join(root, "assets/Sounds/mr-feast", filename));
@@ -113,12 +114,20 @@ async function run() {
   }
   assert(/updateFootsteps\(fixedDt\)/.test(runtimeSource) && /audioSystem\?\.updateFootsteps\(1 \/ 60\)/.test(runtimeSource), "footsteps should be advanced from fixed-step grounded movement");
   assert(/footstepSurface\(/.test(runtimeSource) && /footstepWood|footstepStone|footstepGrass/.test(runtimeSource), "footsteps should distinguish wood, stone, and grass surfaces");
-  assert(/const stride = state\.movement\.crouched[^;]+state\.movement\.sprinting/.test(runtimeSource) && /const baseVolume = state\.movement\.crouched[^;]+state\.movement\.sprinting/.test(runtimeSource), "crouch, walk, and sprint should have distinct footstep cadence and loudness");
+  assert(
+    /const stride = state\.movement\.crouched[^;]+state\.movement\.sprinting/.test(runtimeSource)
+      && /let stepVolume;/.test(runtimeSource)
+      && /if \(state\.movement\.crouched\)[\s\S]+else if \(state\.movement\.sprinting\)[\s\S]+stepVolume/.test(runtimeSource),
+    "crouch, walk, and sprint should have distinct footstep cadence and loudness",
+  );
   assert(/audioSystem\.book\("open"\)/.test(runtimeSource) && /audioSystem\.book\("close"\)/.test(runtimeSource), "readable books should have open and close foley hooks");
   assert(/audioSystem\.hide\("enter"\)/.test(runtimeSource) && /audioSystem\.hide\("exit"\)/.test(runtimeSource), "hiding should have fabric movement hooks");
   assert(/audioSystem\.pickup\("key"\)/.test(runtimeSource) && /audioSystem\.key\("unlock"\)/.test(runtimeSource), "story pickups and locks should use physical key cues");
   assert(
-    /Enable game audio/.test(pageSource) && !/(?:Enable|Mute) storm audio/.test(pageSource) && /Mute game audio/.test(runtimeSource),
+    /id="mansion-menu-music"[^>]*>Sound: Off/.test(pageSource)
+      && !/(?:Enable|Mute) storm audio/.test(pageSource)
+      && /Mute game sound/.test(runtimeSource)
+      && /Enable game sound/.test(runtimeSource),
     "the sound control should describe the full game mix instead of only the storm",
   );
 
@@ -143,6 +152,9 @@ async function run() {
       const audio = window.MrFeastFresh?.getAudioStateForQA?.();
       return audio?.expectedAssets >= 34 && audio.loadedAssets?.length === audio.expectedAssets;
     }, null, { timeout: 30000 });
+    // The opening welcome now owns movement immediately after Enter. Finish
+    // that deterministic sequence before testing free-exploration footsteps.
+    await page.evaluate(() => window.MrFeastFresh.advanceOpeningWelcomeForQA(120));
 
     let audio = await page.evaluate(() => window.MrFeastFresh.getAudioStateForQA());
     assert(audio.enabled && audio.contextState === "running", `trusted entry should enable the complete audio mix; audio=${JSON.stringify(audio)}`);
@@ -169,7 +181,7 @@ async function run() {
     await page.evaluate(() => window.MrFeastFresh.setDoorForAudioQA("library door", true));
     await waitForCue(page, "doorOpen", doorBefore);
 
-    await page.evaluate(() => window.MrFeastFresh.teleport("foyer"));
+    await page.evaluate(() => window.MrFeastFresh.teleport("ballroom"));
     audio = await page.evaluate(() => window.MrFeastFresh.getAudioStateForQA());
     const woodBefore = audio.footsteps.count;
     await moveForward(page, 1.3);
@@ -197,7 +209,7 @@ async function run() {
     audio = await page.evaluate(() => window.MrFeastFresh.getAudioStateForQA());
     assert(audio.footsteps.count > grassBefore && audio.footsteps.lastSurface === "grass", `lawn movement should emit grass footsteps; footsteps=${JSON.stringify(audio.footsteps)}`);
 
-    await page.evaluate(() => window.MrFeastFresh.teleport("foyer"));
+    await page.evaluate(() => window.MrFeastFresh.teleport("ballroom"));
     await page.keyboard.press("c");
     const crouchBefore = (await page.evaluate(() => window.MrFeastFresh.getAudioStateForQA())).footsteps.count;
     await moveForward(page, 1.3);
@@ -206,7 +218,7 @@ async function run() {
     assert(crouchSteps > 0 && crouchSteps < walkSteps, `crouching should use a slower step cadence than walking; walk=${walkSteps}, crouch=${crouchSteps}`);
     await page.keyboard.press("c");
 
-    await page.evaluate(() => window.MrFeastFresh.teleport("foyer"));
+    await page.evaluate(() => window.MrFeastFresh.teleport("ballroom"));
     const sprintBefore = (await page.evaluate(() => window.MrFeastFresh.getAudioStateForQA())).footsteps.count;
     await moveForward(page, 1.3, { sprint: true });
     audio = await page.evaluate(() => window.MrFeastFresh.getAudioStateForQA());

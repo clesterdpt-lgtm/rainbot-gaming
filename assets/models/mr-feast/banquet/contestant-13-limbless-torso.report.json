@@ -1,0 +1,104 @@
+{
+  "generatedAt": "2026-07-25T17:18:59.169101+00:00",
+  "pipeline": "one selected Meshy image-to-3D/rig source -> Blender weighted source-face partition and hard planar cuts -> static standard glTF export",
+  "blenderVersion": "4.5.11 LTS",
+  "source": "/Volumes/External SSD/Projects/RainbotGaming/assets/models/mr-feast/source/banquet/contestant-13-victim-source-v2-rigged.glb",
+  "sourceTriangles": 18780,
+  "sourceTexture": "texture_0",
+  "textureMaxSize": 512,
+  "images": [
+    {
+      "name": "texture_0",
+      "width": 512,
+      "height": 512
+    }
+  ],
+  "meshy": {
+    "generationMode": "image-to-3d",
+    "generationTaskId": "019f9998-69b6-7a9b-8221-daaa8090a157",
+    "rigTaskId": "019f999a-ca0a-7d39-b4d0-307326d456ca",
+    "selectedSourceCredits": 35,
+    "rejectedAttempt": {
+      "generationMode": "text-to-3d",
+      "previewTaskId": "019f9975-22e0-7d18-865a-61bb521c323c",
+      "refineTaskId": "019f9976-5f67-730a-b0fd-4a2efa4438e4",
+      "remeshTaskId": "019f997b-5c4d-7ebb-9fa5-9ad4a93a6767",
+      "rigTaskId": "019f997d-f5a8-7473-af31-d5ab6a3d0904",
+      "consumedCredits": 40
+    },
+    "consumedCredits": 75
+  },
+  "static": true,
+  "skins": 0,
+  "animations": 0,
+  "compressionExtensions": [],
+  "validatedFor": "Three.js r128 standard GLTFLoader",
+  "output": "contestant-13-limbless-torso.glb",
+  "report": "/Volumes/External SSD/Projects/RainbotGaming/assets/models/mr-feast/banquet/contestant-13-limbless-torso.report.json",
+  "orientation": {
+    "headAxis": "+X",
+    "faceUpAxis": "+Y",
+    "lateralAxis": "+Z"
+  },
+  "garmentCleanup": {
+    "removed": [
+      "head geometry because the first-person camera occupies the victim viewpoint",
+      "arm and leg geometry partitioned into the detached-limb prop",
+      "bulky shoulder sleeves and split upper-thigh stubs from the visible body silhouette"
+    ],
+    "retained": "original Meshy v2 bare torso, opaque underwear waist, body proportions, UVs, and PBR atlas",
+    "added": "nothing; the visible body is the compact Meshy-derived torso core only"
+  },
+  "visibleMeshyDerivedCore": {
+    "mesh": "Banquet_Victim_Meshy_Torso_Core",
+    "triangles": 4237,
+    "method": "direct rig-weight and coordinate-selected Meshy v2 source faces with original UVs and materials retained, then hard-bisected at the raised torso-only pelvis and first-person neck planes"
+  },
+  "torsoOnlySilhouette": {
+    "enabled": true,
+    "shoulderAttachments": 0,
+    "splitLegStubs": 0,
+    "hipCutHeight": 0.94
+  },
+  "nonGraphicSocketTreatment": {
+    "material": null,
+    "torsoSocketBandageCaps": 0,
+    "locations": [],
+    "bloodOrExposedAnatomy": false
+  },
+  "fitScaleXYZ": [
+    1.0,
+    1.0,
+    1.0
+  ],
+  "boundsMeters": {
+    "min": [
+      -0.2975,
+      0.0,
+      -0.179823
+    ],
+    "max": [
+      0.2975,
+      0.158224,
+      0.179823
+    ],
+    "size": [
+      0.595,
+      0.158224,
+      0.359646
+    ]
+  },
+  "triangles": 4237,
+  "meshCount": 1,
+  "meshes": [
+    "Banquet_Victim_Meshy_Torso_Core"
+  ],
+  "materials": [
+    "Banquet_Victim_Source_PBR_02"
+  ],
+  "preservedSourceMaterials": [
+    "Banquet_Victim_Source_PBR_02"
+  ],
+  "sourceMaterialPolicy": "original Meshy v2 PBR atlas retained and resized to a packed 512px maximum",
+  "fileBytes": 345348
+}

@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "assetVersion": "20260718-natural-characters-1",
+  "assetVersion": "20260719-storm-run-1",
   "pipeline": "Meshy 6 text-to-3D and auto-rig, followed by Blender 4.5 browser preparation",
   "characters": [
     {
@@ -44,6 +44,13 @@
           "loop": true,
           "stationary": true,
           "durationSeconds": 1.033333420753479
+        },
+        "run": {
+          "file": "mara-voss-run.glb",
+          "name": "run",
+          "loop": true,
+          "stationary": true,
+          "durationSeconds": 0.6333333253860474
         }
       },
       "dialogue": [
@@ -56,7 +63,9 @@
         "Every challenge has an incentive. Find the one they forgot to announce.",
         "You keep moving. I'll keep count of who doesn't return.",
         "The safest alliance is a fact nobody can edit out.",
-        "Watch who asks questions, then watch who answers too quickly."
+        "Watch who asks questions, then watch who answers too quickly.",
+        "They starve the rooms of light so you will hurry. Don't.",
+        "If you need a lamp, kitchens hide tools, and so do the wardrobes people actually use."
       ]
     },
     {
@@ -112,7 +121,9 @@
         "I tried a prank on Mr. Feast. He corrected my posture.",
         "If you see a vent big enough for a coward, that's mine.",
         "I'm not panicking. This is premium subscriber breathing.",
-        "Good news: I found an exit. Bad news: it was painted on."
+        "Good news: I found an exit. Bad news: it was painted on.",
+        "It's so dark I keep walking into furniture that used to be scenery.",
+        "There's a flashlight under the kitchen sink. I thought it was a prop. It clicked."
       ]
     },
     {
@@ -160,6 +171,13 @@
           "loop": true,
           "stationary": true,
           "durationSeconds": 1.033333420753479
+        },
+        "run": {
+          "file": "juniper-cross-run.glb",
+          "name": "run",
+          "loop": true,
+          "stationary": true,
+          "durationSeconds": 0.6333333253860474
         }
       },
       "dialogue": [
@@ -172,7 +190,9 @@
         "A locked door is only a boundary if the house agrees.",
         "Listen after the thunder. The useful sounds come second.",
         "Someone taught this house our names before we arrived.",
-        "Folklore calls it a warning when the same mistake happens three times."
+        "Folklore calls it a warning when the same mistake happens three times.",
+        "The upstairs keeps a second night inside the first. Even the lamps seem reluctant.",
+        "I saw a torch waiting in a front bedroom wardrobe. Someone meant to come back for it."
       ]
     }
   ]

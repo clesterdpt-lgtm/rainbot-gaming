@@ -19,11 +19,14 @@
    banners and black basalt - colours that read as reliquary rather
    than as desert.
 
-   Lighting is deliberately minimal: one sun, one image-based sky
-   fill, and a handful of local emitters. Everything else is the
-   grade. Fill comes from `scene.environment`, so changing the sky
-   palette moves every shadow side in the world with it - note that
-   inherited IBL is scaled by `scene.environmentIntensity`, NOT by
+   Lighting is deliberately minimal: one authoritative celestial
+   key, one image-based sky fill, and a handful of local emitters.
+   The visible sky can carry Vesper's binary suns and three moons,
+   but they resolve into that single key so props never grow a forest
+   of contradictory shadows. Everything else is the grade. Fill
+   comes from `scene.environment`, so changing the sky palette moves
+   every shadow side in the world with it - note that inherited IBL
+   is scaled by `scene.environmentIntensity`, NOT by
    `material.envMapIntensity`, which does nothing without a
    per-material envMap.
    ============================================================ */
@@ -59,7 +62,19 @@ const P = {
   /* rock */
   rockLit: "#9a7660",
   rockMid: "#6a4c3e",
-  rockShade: "#3f2b2b",
+  /* Was #3f2b2b - a plain darker, duller RED-BROWN, the exact mistake
+     SAND_RAMP's own header already names and was fixed for: "shadowed
+     sand is lit almost entirely by the sky, so it goes violet and
+     desaturated - it does not go to a darker version of the sunlit
+     hue." Rock sits in the same desert under the same sky and was
+     never given that fix. Measured on a real dune boulder at golden
+     hour, its shadow face rendered rgb(47,7,11) - luminance 16, and
+     the green/blue channels crushed far harder than red - next to
+     shadowed SAND two metres away at rgb(100,52,36), luminance 61.
+     A rock nobody lit reads as a hole cut in the desert, not as
+     stone; from underneath, where almost every facet faces away from
+     the sun, that is most of what a boulder is. */
+  rockShade: "#544a5e",
   basaltLit: "#4a4150",
   basaltMid: "#2f2937",
   basaltDeep: "#191521",
@@ -387,6 +402,23 @@ export const TIMES = {
   },
 };
 
+/* A full Vesper day is deliberately shorter than a terrestrial one:
+   one ordinary operation can still cross the whole arc, but each
+   lighting state has to last long enough to feel like weather rather
+   than a filter switch. Eighteen minutes turned the basin over twice
+   in a hunt; thirty-six keeps dawn-to-night inside a long session
+   without yanking the sun during a fight. Phase zero is 06:00 local
+   time. The final repeated dawn stop makes the wrap mathematically
+   and visually continuous. */
+export const DAY_CYCLE_SECONDS = 36 * 60;
+export const DAY_CYCLE_STOPS = Object.freeze([
+  Object.freeze({ phase: 0.00, key: "goldenhour", sunAzimuth: 108, sunElevation: 13.5 }),
+  Object.freeze({ phase: 0.25, key: "noon", sunAzimuth: 214, sunElevation: 62 }),
+  Object.freeze({ phase: 0.50, key: "dusk", sunAzimuth: 297, sunElevation: 2.2 }),
+  Object.freeze({ phase: 0.72, key: "night", sunAzimuth: 96, sunElevation: 16 }),
+  Object.freeze({ phase: 1.00, key: "goldenhour", sunAzimuth: 108, sunElevation: 13.5 }),
+]);
+
 /* --------------------------- grades --------------------------- */
 
 /**
@@ -394,6 +426,33 @@ export const TIMES = {
  * split-tone. Applied in the composite pass, after tone mapping,
  * which is where a grade belongs - a curve applied before the
  * highlight rolloff just moves the clipping point around.
+ *
+ * `toe` is the GT tone curve's shadow exponent, and it is a GRADE
+ * property rather than a constant in the composite shader because
+ * the five presets do not agree about what a black is. A sandstorm
+ * is a kilometre-wide softbox and genuinely has no black in it;
+ * golden hour, with a 13-degree key, has nothing BUT black on the
+ * far side of every ridge. One number in the shader made those two
+ * the same picture.
+ *
+ * READ THIS BEFORE RAISING `lift` AGAIN. Lift is the black FLOOR:
+ * `c = lift + (gain - lift) * pow(c, gamma)` cannot return anything
+ * below it, so it is an absolute wall across the bottom of every
+ * frame the game will ever draw. At the previous [0.013, 0.011,
+ * 0.015] that wall decoded to sRGB 30, and the measured consequence
+ * was that all eighteen boss gallery frames - six framings, three
+ * bosses, wildly different content, one lit by a bioluminescent
+ * abdomen and one shot at 120 m - reported a 1st-percentile
+ * luminance of 27, 28 or 29. A statistic that does not move when
+ * the picture changes completely is not measuring the picture. The
+ * Halo pool reaches 7.6.
+ *
+ * The floors below are the same HUE as the old ones (the channel
+ * ratios are preserved to within a percent, so shade stays cool
+ * rather than becoming the key's own hue at low value) at roughly a
+ * sixth of the level. Everything above sRGB 100 moves by less than
+ * one code value; the entire change lands in the bottom fifth of
+ * the range, which is the part that was missing.
  */
 export const GRADES = {
   warm: {
@@ -413,8 +472,51 @@ export const GRADES = {
        percentile landed no matter how dark its vertex colours went -
        the plate junctions had nowhere to go. The reference reaches
        L2. Kept very slightly cool and very slightly lifted off zero
-       so shadows read as air rather than as holes. */
-    lift: [0.013, 0.011, 0.015],
+       so shadows read as air rather than as holes.
+
+       AND IT WAS STILL SIX TIMES TOO HIGH. L17 was the diagnosis of
+       a figure; the floor is a property of the FRAME, and the frame
+       measured 27-29 on every capture ever taken. See the block
+       comment above GRADES. Kept off zero for the same reason as
+       before - desert shade is air, not a hole - just at the level
+       air actually sits at. */
+    lift: [0.0022, 0.0018, 0.0030],
+    /* A real toe. The GT curve's shadow exponent only has authority
+       below its linear midpoint (m = 0.22), so this darkens the
+       bottom half of the range and leaves the sand, the sky and
+       every highlight untouched - which is exactly the half of the
+       histogram the brief says is missing. At 1.24 the toe was
+       within a few percent of straight and the shadow band was
+       merely COMPRESSED into the midtones instead of falling away
+       from them. */
+    toe: 1.34,
+    /* Deep shade on Vesper-IX is lit by the sky and by nothing else,
+       so it desaturates and goes violet - it does NOT go to a darker
+       version of the sunlit hue. That rule was previously carried
+       entirely by SAND_RAMP's vertex colours and by the lift's blue
+       bias, and the lift has just been taken away. Without this the
+       new dark end inherits the key's orange at low value, which is
+       maroon, which is the mud the ramp comment warns about. The
+       second number is the knee: full strength at luma 0, gone by
+       0.24. That knee is higher than it looks like it should be for
+       a MEASURED reason - see the composite's own comment in
+       render.js, where binning a frame by luma showed the 60-100
+       band getting MORE saturated when the lift came down. A knee at
+       0.10 left that band untouched and the term measured as inert. */
+    shade: [0.46, 0.24],
+    shadeHue: "#6a5f86",
+    /* EMISSIVE BOUNCE - gain, then the receiver knee in linear scene
+       units. See the composite pass in render.js for what the term
+       is; this is why it is a grade property and not a constant.
+       A one-bounce fill is a RATIO against the key light, so the same
+       glowing gut is nearly invisible against sunlit sand and is the
+       only thing lighting the plate beside it at night. One number in
+       the shader would have to be tuned for one of those two and be
+       wrong for the other - which is the same mistake `toe` was
+       carrying before it became a grade property.
+       Golden hour has a 13-degree key and real black behind every
+       ridge, so a bounce reads: this is the middle of the range. */
+    bounce: [0.34, 1.6],
     gamma: [1.0, 1.015, 1.06],
     gain: [1.06, 1.005, 0.94],
     /* Re-measured. The "plates' 16.4" this was cut against came from
@@ -454,7 +556,13 @@ export const GRADES = {
     contrast: 1.04,
   },
   bleach: {
-    lift: [0.010, 0.010, 0.018],
+    lift: [0.0018, 0.0018, 0.0032],
+    toe: 1.34,
+    shade: [0.30, 0.18],
+    shadeHue: "#5e6a90",
+    // Noon. The key is overhead and enormous; a bounce that shows up
+    // against it would have to be brighter than the thing bouncing.
+    bounce: [0.18, 2.4],
     gamma: [1.0, 1.0, 1.02],
     gain: [1.02, 1.0, 0.98],
     saturation: 0.96,
@@ -464,7 +572,13 @@ export const GRADES = {
     contrast: 1.10,
   },
   dusk: {
-    lift: [0.022, 0.008, 0.036],
+    lift: [0.0040, 0.0015, 0.0066],
+    toe: 1.38,
+    shade: [0.40, 0.22],
+    shadeHue: "#4a3a70",
+    // Vespers: the key is nearly gone and the Bloom's emitters are
+    // becoming the light in the frame rather than decoration on it.
+    bounce: [0.52, 1.1],
     gamma: [0.98, 1.02, 1.05],
     gain: [1.10, 0.985, 0.96],
     /* Vespers used to push every armour material into the same
@@ -478,7 +592,22 @@ export const GRADES = {
     contrast: 1.02,
   },
   night: {
-    lift: [0.008, 0.012, 0.030],
+    /* Cut by a factor of two and a half, not by six. "Moonlight,
+       not blackout" (see TIMES.night): the Bloom's bioluminescence
+       is the best thing night has, and an emitter needs a readable
+       ground to sit on. Night keeps the highest floor and the
+       gentlest toe of the five on purpose. */
+    lift: [0.0032, 0.0048, 0.0120],
+    toe: 1.12,
+    shade: [0.14, 0.16],
+    shadeHue: "#2a3a66",
+    /* The highest of the five, and the one the term exists for.
+       "Moonlight, not blackout" - at night an emitter IS the local
+       light source, and a bioluminescent abdomen that leaves the
+       chitin beside it at moonlight value is the sticker the review
+       named. The knee comes down with it so the bounce survives on
+       surfaces a moon has already lifted. */
+    bounce: [0.78, 0.75],
     gamma: [1.05, 1.02, 0.96],
     gain: [0.92, 0.97, 1.10],
     saturation: 1.05,
@@ -488,7 +617,19 @@ export const GRADES = {
     contrast: 1.12,
   },
   storm: {
-    lift: [0.030, 0.020, 0.012],
+    /* An ochre front is a kilometre-wide softbox. It really has no
+       black in it, so this floor stays comparatively high and the
+       toe stays near straight - crushing a sandstorm would be the
+       histogram driving the art. */
+    lift: [0.0120, 0.0080, 0.0048],
+    toe: 1.10,
+    shade: [0.08, 0.14],
+    shadeHue: "#6a5240",
+    /* An ochre front is a kilometre-wide softbox, so there is nothing
+       for a bounce to be a ratio against - and the haze between the
+       emitter and the wall it would light scatters most of it away
+       before it arrives. Near zero on purpose. */
+    bounce: [0.10, 2.0],
     gamma: [1.0, 1.01, 1.03],
     gain: [1.06, 1.0, 0.90],
     saturation: 0.88,
@@ -511,16 +652,64 @@ export const GRADES = {
    piece of the light. Here, exactly one function writes it.
    ============================================================ */
 
-export function makeAtmosphere(THREE, timeKey = "goldenhour") {
+export function makeAtmosphere(THREE, timeKey = "goldenhour", options = {}) {
+  /* WHICH LIGHTING TABLE THIS ATMOSPHERE IS DRAWN FROM.
+
+     Vesper-IX and Kenosis are two different planets under two
+     different suns, and an atmosphere is nothing but a table of
+     presets plus the machinery that walks between them. The
+     machinery is identical for both; only the table differs. So the
+     table is an ARGUMENT rather than a module constant, and the
+     defaults are exactly the desert's - passing no options resolves
+     to the same three objects this file has always used, which is
+     why nothing on Vesper-IX changes.
+
+     A caller supplying its own tables must supply all three, and must
+     keep the KEY VOCABULARY: `goldenhour`, `dusk` and `night` are not
+     just row names, they set `goldenFactor` / `duskFactor` /
+     `nightFactor`, which modules outside this file read to ask what
+     kind of light they are standing in. A second world renames the
+     LABEL and rewrites the numbers; it does not rename the row. */
+  const TIMES_T = options.times || TIMES;
+  const GRADES_T = options.grades || GRADES;
+  const STOPS_T = options.cycleStops || DAY_CYCLE_STOPS;
+  const STORM_TIME = options.stormTime || "storm";
+  const STORM_GRADE = options.stormGrade || "storm";
+  const FALLBACK_TIME = options.fallbackTime
+    || (TIMES_T === TIMES ? "goldenhour" : STOPS_T[0].key);
+  const FALLBACK_GRADE = options.fallbackGrade
+    || (GRADES_T === GRADES ? "warm" : (TIMES_T[FALLBACK_TIME] || {}).grade
+        || Object.keys(GRADES_T)[0]);
+  const initialStop = STOPS_T.find((stop) => stop.key === timeKey)
+    || STOPS_T[0];
+  const requestedPhase = Number(options.phase);
+  const cycleDuration = Math.max(60, Number(options.duration) || DAY_CYCLE_SECONDS);
   const state = {
     THREE,
     time: timeKey,
-    preset: TIMES[timeKey] || TIMES.goldenhour,
+    preset: TIMES_T[timeKey] || TIMES_T[FALLBACK_TIME],
     /** Blend factor toward the storm preset, 0..1, driven by weather. */
     storm: 0,
     windDir: new THREE.Vector2(-0.82, 0.57).normalize(),
     windSpeed: 1.0,
     elapsed: 0,
+
+    /** Natural time. Phase zero is 06:00, so 0.25/0.5/0.75 map to
+     *  noon/18:00/midnight. QA and explicit `?time=` views can freeze
+     *  it without introducing a separate lighting implementation. */
+    cyclePhase: Number.isFinite(requestedPhase)
+      ? ((requestedPhase % 1) + 1) % 1 : initialStop.phase,
+    cycleDuration,
+    cycleRunning: options.cycle !== false,
+    cycleCount: Math.max(0, Math.floor(Number(options.cycleCount) || 0)),
+    cycleFrom: timeKey,
+    cycleTo: timeKey,
+    cycleBlend: 0,
+    solarHour: 6,
+    daylightFactor: timeKey === "night" ? 0 : 1,
+    goldenFactor: timeKey === "goldenhour" ? 1 : 0,
+    duskFactor: timeKey === "dusk" ? 1 : 0,
+    nightFactor: timeKey === "night" ? 1 : 0,
 
     sunDir: new THREE.Vector3(),          // points FROM the world TOWARD the sun
     sunColor: new THREE.Color(),
@@ -538,12 +727,16 @@ export function makeAtmosphere(THREE, timeKey = "goldenhour") {
     fogStart: 50,
     sunScatter: 1,
     exposure: 1,
-    grade: GRADES.warm,
+    grade: GRADES_T[FALLBACK_GRADE],
 
     /** Uniform block shared by every patched material. One object,
      *  so a single write updates the entire world. */
     uniforms: null,
   };
+
+  const CYCLE_SAMPLE_SECONDS = 0.25;
+  let cycleSampleClock = 0;
+  let manualKey = TIMES_T[timeKey] ? timeKey : FALLBACK_TIME;
 
   state.uniforms = {
     uSunDir: { value: new THREE.Vector3(0, 1, 0) },
@@ -558,54 +751,195 @@ export function makeAtmosphere(THREE, timeKey = "goldenhour") {
     uWind: { value: new THREE.Vector3(-0.82, 0.57, 1.0) },       // x, z, speed
     uGlitter: { value: new THREE.Vector2(0.0, 60.0) },           // strength, falloff distance
     uStorm: { value: 0 },
+
+    /* ---- CLOUD SHADOWS, AND THEY ARE INERT UNTIL A WORLD FILLS
+       THEM IN. ------------------------------------------------
+
+       A cloud shadow has to be a term in the shading of every
+       surface it lands on, so it has to live in the block every
+       patched material already carries - which is this one. Only
+       one world has a cloud deck whose placement is known on the
+       CPU (atoll-sky bakes a plan-view cover map of its own
+       cumulus), so the DEFAULTS here are a one-texel map of zero
+       cover and a gain of zero, and `sfCloudCover` returns
+       exactly 0.0 for Vesper-IX and Kenosis after one uniform
+       branch and no fetch.
+
+       THE ONE-TEXEL TEXTURE IS NOT OPTIONAL. A sampler declared
+       in ATMOS_PARS and never bound is undefined behaviour: some
+       drivers sample black, some sample garbage, and one warns
+       and carries on. Every world binds this, and the world that
+       has a deck overwrites the .value.
+
+       A world that owns a deck writes these three in place - it
+       must not replace the {value} OBJECTS, because the whole
+       point of this block is that every material in the level
+       shares them by reference. */
+    tCloudCover: { value: blankCoverTexture(THREE) },
+    /* x, y = cos/sin of the cloud deck's live rotation about +Y,
+              for un-rotating a world point into the map's frame
+       z     = texture UV per metre
+       w     = the cloud base in metres */
+    uCloudCover: { value: new THREE.Vector4(1, 0, 1 / 23040, 640) },
+    /* x = the live cloud-shadow gain, 0 for a world with no deck.
+       y = SHADOW-MAP UV PER METRE, which is not a cloud number and
+           rides here because nothing else publishes it: three
+           gives a shader its shadow map's size in TEXELS and never
+           in metres, so a material that wants a filter kernel a
+           stated number of metres wide cannot get there. Written
+           by whichever module owns the sun's shadow camera. */
+    uCloudGain: { value: new THREE.Vector2(0, 1 / 720) },
+    /* WHAT A FULLY SHADOWED SURFACE IS MULTIPLIED BY, and it is a
+       COLOUR rather than a scalar on purpose. A cloud removes the
+       warm key and leaves the cool sky, so a surface under one
+       does not go grey - it goes several hue steps colder as well
+       as darker. A scalar here would reproduce, on land, the
+       exact fault three round-5 judges named on the water:
+       "every surface differs only in level, never in colour". */
+    uCloudShade: { value: new THREE.Color(0.42, 0.50, 0.64) },
   };
 
-  /** Apply a named preset, optionally blended toward the storm. */
-  function apply(key = state.time, stormMix = state.storm) {
-    const base = TIMES[key] || TIMES.goldenhour;
-    state.time = key;
-    state.preset = base;
-    state.storm = clamp01(stormMix);
-
-    const s = state.storm;
-    const st = TIMES.storm;
-    const num = (a, b) => lerp(a, b, s);
-    const col = (a, b) => mixRgb(hexToRgb(a), hexToRgb(b), s);
-
-    const azimuth = num(base.sunAzimuth, base.sunAzimuth);
-    const elevation = num(base.sunElevation, Math.max(base.sunElevation, st.sunElevation * 0.7));
-
+  const wrap01 = (value) => ((value % 1) + 1) % 1;
+  const setC = (target, rgb) => target.setRGB(
+    srgb(rgb[0]), srgb(rgb[1]), srgb(rgb[2]), THREE.LinearSRGBColorSpace
+  );
+  const direction = (target, azimuth, elevation) => {
     const az = azimuth * Math.PI / 180;
     const el = elevation * Math.PI / 180;
-    state.sunDir.set(
+    return target.set(
       Math.cos(el) * Math.sin(az),
       Math.sin(el),
       Math.cos(el) * Math.cos(az)
     ).normalize();
+  };
 
-    const setC = (target, rgb) => target.setRGB(
-      srgb(rgb[0]), srgb(rgb[1]), srgb(rgb[2]), THREE.LinearSRGBColorSpace
+  function resolve(baseA, baseB, blend, stormMix, directionA = baseA, directionB = baseB) {
+    const t = clamp01(blend);
+    const s = clamp01(stormMix);
+    const storm = TIMES_T[STORM_TIME];
+    const num = (key) => lerp(lerp(baseA[key], baseB[key], t), storm[key], s);
+    const col = (key) => {
+      const between = mixRgb(hexToRgb(baseA[key]), hexToRgb(baseB[key]), t);
+      return mixRgb(between, hexToRgb(storm[key]), s);
+    };
+
+    /* Interpolate azimuth and elevation, not two unit vectors. The
+       dusk key and the night moon sit on opposite horizons; a great-
+       circle vector blend lifts their midpoint overhead, making the
+       shadows race through noon at 20:30. The angular path keeps the
+       handoff low across the northern sky, where a setting sun really
+       gives way to a rising moon. */
+    const azA = directionA.sunAzimuth;
+    const azB = directionB.sunAzimuth;
+    const azDelta = ((azB - azA + 540) % 360) - 180;
+    direction(state.sunDir,
+      azA + azDelta * t,
+      lerp(directionA.sunElevation, directionB.sunElevation, t));
+
+    setC(state.sunColor, col("sunColor"));
+    state.sunIntensity = num("sunIntensity");
+    setC(state.skyZenith, col("skyZenith"));
+    setC(state.skyHigh, col("skyHigh"));
+    setC(state.skyHorizon, col("skyHorizon"));
+    setC(state.skyLow, col("skyLow"));
+    setC(state.sunHalo, col("sunHalo"));
+    setC(state.groundBounce, col("groundBounce"));
+    state.haloSpread = num("haloSpread");
+    state.envIntensity = num("envIntensity");
+    state.fogDensity = num("fogDensity");
+    state.fogHeightFalloff = num("fogHeightFalloff");
+    state.fogStart = num("fogStart");
+    state.sunScatter = num("sunScatter");
+    state.exposure = num("exposure");
+    const baseGrade = blendGrade(
+      GRADES_T[baseA.grade] || GRADES_T[FALLBACK_GRADE],
+      GRADES_T[baseB.grade] || GRADES_T[FALLBACK_GRADE],
+      t
     );
-
-    setC(state.sunColor, col(base.sunColor, st.sunColor));
-    state.sunIntensity = num(base.sunIntensity, st.sunIntensity);
-    setC(state.skyZenith, col(base.skyZenith, st.skyZenith));
-    setC(state.skyHigh, col(base.skyHigh, st.skyHigh));
-    setC(state.skyHorizon, col(base.skyHorizon, st.skyHorizon));
-    setC(state.skyLow, col(base.skyLow, st.skyLow));
-    setC(state.sunHalo, col(base.sunHalo, st.sunHalo));
-    setC(state.groundBounce, col(base.groundBounce, st.groundBounce));
-    state.haloSpread = num(base.haloSpread, st.haloSpread);
-    state.envIntensity = num(base.envIntensity, st.envIntensity);
-    state.fogDensity = num(base.fogDensity, st.fogDensity);
-    state.fogHeightFalloff = num(base.fogHeightFalloff, st.fogHeightFalloff);
-    state.fogStart = num(base.fogStart, st.fogStart);
-    state.sunScatter = num(base.sunScatter, st.sunScatter);
-    state.exposure = num(base.exposure, st.exposure);
-    state.grade = blendGrade(GRADES[base.grade] || GRADES.warm, GRADES.storm, s);
-
+    state.grade = blendGrade(baseGrade, GRADES_T[STORM_GRADE], s);
     sync();
     return state;
+  }
+
+  function sampleCycle(phase = state.cyclePhase) {
+    const p = wrap01(phase);
+    let from = STOPS_T[0];
+    let to = STOPS_T[1];
+    for (let i = 0; i < STOPS_T.length - 1; i += 1) {
+      if (p >= STOPS_T[i].phase && p < STOPS_T[i + 1].phase) {
+        from = STOPS_T[i];
+        to = STOPS_T[i + 1];
+        break;
+      }
+    }
+    const linear = (p - from.phase) / Math.max(0.0001, to.phase - from.phase);
+    const blend = smoothstep(linear);
+    return { phase: p, from, to, blend };
+  }
+
+  function applyCycle(phase = state.cyclePhase) {
+    const sample = sampleCycle(phase);
+    state.cyclePhase = sample.phase;
+    state.cycleFrom = sample.from.key;
+    state.cycleTo = sample.to.key;
+    state.cycleBlend = sample.blend;
+    state.solarHour = (6 + sample.phase * 24) % 24;
+    state.time = sample.blend < 0.5 ? sample.from.key : sample.to.key;
+    state.preset = TIMES_T[state.time] || TIMES_T[FALLBACK_TIME];
+    const weight = (key) => (sample.from.key === key ? 1 - sample.blend : 0)
+      + (sample.to.key === key ? sample.blend : 0);
+    state.duskFactor = clamp01(weight("dusk"));
+    state.nightFactor = clamp01(weight("night"));
+    state.goldenFactor = clamp01(weight("goldenhour"));
+    state.daylightFactor = clamp01(1 - state.nightFactor);
+    return resolve(
+      TIMES_T[sample.from.key], TIMES_T[sample.to.key], sample.blend, state.storm,
+      sample.from, sample.to
+    );
+  }
+
+  /** Apply a named preset as a deliberate fixed review/preview mode. */
+  function apply(key = state.time, stormMix = state.storm) {
+    const base = TIMES_T[key] || TIMES_T[FALLBACK_TIME];
+    manualKey = TIMES_T[key] ? key : FALLBACK_TIME;
+    state.cycleRunning = false;
+    state.time = manualKey;
+    state.preset = base;
+    state.storm = clamp01(stormMix);
+    state.cycleFrom = manualKey;
+    state.cycleTo = manualKey;
+    state.cycleBlend = 0;
+    state.duskFactor = manualKey === "dusk" ? 1 : 0;
+    state.nightFactor = manualKey === "night" ? 1 : 0;
+    state.goldenFactor = manualKey === "goldenhour" ? 1 : 0;
+    state.daylightFactor = 1 - state.nightFactor;
+    const stop = STOPS_T.find((entry) => entry.key === manualKey);
+    if (stop) {
+      state.cyclePhase = stop.phase;
+      state.solarHour = (6 + stop.phase * 24) % 24;
+    }
+    return resolve(base, base, 0, state.storm);
+  }
+
+  function setCyclePhase(phase, running = state.cycleRunning, cycleCount = state.cycleCount) {
+    state.cyclePhase = wrap01(Number(phase) || 0);
+    state.cycleRunning = !!running;
+    state.cycleCount = Math.max(0, Math.floor(Number(cycleCount) || 0));
+    cycleSampleClock = 0;
+    return applyCycle(state.cyclePhase);
+  }
+
+  function setCycleRunning(running = true) {
+    state.cycleRunning = !!running;
+    if (state.cycleRunning) applyCycle(state.cyclePhase);
+    return state.cycleRunning;
+  }
+
+  function setStorm(stormMix = 0) {
+    state.storm = clamp01(stormMix);
+    return state.cycleRunning ? applyCycle(state.cyclePhase)
+      : resolve(TIMES_T[manualKey] || TIMES_T[FALLBACK_TIME],
+        TIMES_T[manualKey] || TIMES_T[FALLBACK_TIME], 0, state.storm);
   }
 
   /** Push state into the shared uniform block. */
@@ -626,6 +960,33 @@ export function makeAtmosphere(THREE, timeKey = "goldenhour") {
   function update(dt) {
     state.elapsed += dt;
     state.uniforms.uTimeSF.value = state.elapsed;
+    if (!state.cycleRunning || dt <= 0) return false;
+    const turns = state.cyclePhase + dt / state.cycleDuration;
+    if (turns >= 1) state.cycleCount += Math.floor(turns);
+    state.cyclePhase = wrap01(turns);
+    cycleSampleClock += dt;
+    if (cycleSampleClock < CYCLE_SAMPLE_SECONDS) return false;
+    cycleSampleClock %= CYCLE_SAMPLE_SECONDS;
+    applyCycle(state.cyclePhase);
+    return true;
+  }
+
+  function cycleStatus() {
+    return {
+      phase: Number(state.cyclePhase.toFixed(6)),
+      duration: state.cycleDuration,
+      running: state.cycleRunning,
+      cycleCount: state.cycleCount,
+      solarHour: Number(state.solarHour.toFixed(3)),
+      from: state.cycleFrom,
+      to: state.cycleTo,
+      blend: Number(state.cycleBlend.toFixed(4)),
+      time: state.time,
+      daylight: Number(state.daylightFactor.toFixed(4)),
+      golden: Number(state.goldenFactor.toFixed(4)),
+      dusk: Number(state.duskFactor.toFixed(4)),
+      night: Number(state.nightFactor.toFixed(4)),
+    };
   }
 
   /** Linear-space sky colour for a world-space direction. The sky
@@ -659,10 +1020,16 @@ export function makeAtmosphere(THREE, timeKey = "goldenhour") {
   }
 
   state.apply = apply;
+  state.applyCycle = applyCycle;
+  state.setCyclePhase = setCyclePhase;
+  state.setCycleRunning = setCycleRunning;
+  state.setStorm = setStorm;
+  state.cycleStatus = cycleStatus;
   state.sync = sync;
   state.update = update;
   state.skyAt = skyAt;
-  apply(timeKey, 0);
+  if (state.cycleRunning && timeKey !== STORM_TIME) applyCycle(state.cyclePhase);
+  else apply(timeKey, timeKey === STORM_TIME ? 1 : 0);
   return state;
 }
 
@@ -684,6 +1051,45 @@ function blendGrade(a, b, t) {
     highlightTint: hex(a.highlightTint, b.highlightTint),
     tint: lerp(a.tint, b.tint, t),
     contrast: lerp(a.contrast, b.contrast, t),
+    /* THE BLACK-FLOOR SELECTOR, and it must survive the blend for
+       exactly the reason the note below gives. Fallback 0, which is
+       the shipped pivot line: a grade that does not set it - every
+       Vesper-IX and Kenosis row - keeps the operator it was tuned
+       against, through the day cycle as well as at a settled hour. */
+    contrastFloor: lerp(a.contrastFloor ?? 0, b.contrastFloor ?? 0, t),
+    /* THE DIFFUSE SKY FILL'S OWN GAIN, and it is here rather than in
+       the time table for two reasons that are both about NaN.
+       `resolve`'s `num()` lerps a key across baseA, baseB and the
+       storm row, so a field added to ONE time row arrives as
+       undefined on the other four and NaN at the uniform - which is
+       the round-0 fault this file has a hundred lines about. A grade
+       field goes through this function instead, where the ?? idiom
+       makes absence mean "unchanged". Fallback 1.0: a world that has
+       not set it - every Vesper-IX and Kenosis row - keeps exactly
+       the fill it was tuned against. */
+    skyFillGain: lerp(a.skyFillGain ?? 1, b.skyFillGain ?? 1, t),
+    /* Every grade field has to be listed here or the day cycle
+       silently drops it: applyAtmosphere reads the BLENDED grade,
+       and a field this function forgets arrives as undefined, which
+       three writes into the uniform as NaN. One NaN in the composite
+       is the whole frame. The fallbacks are the values these three
+       had before they were parameters, so an unmigrated grade object
+       still renders. */
+    toe: lerp(a.toe ?? 1.24, b.toe ?? 1.24, t),
+    shade: arr(a.shade || [0, 0.2], b.shade || [0, 0.2]),
+    shadeHue: hex(a.shadeHue || "#808080", b.shadeHue || "#808080"),
+    bounce: arr(a.bounce || [0.34, 1.6], b.bounce || [0.34, 1.6]),
+    /* THE OCCLUSION TERM'S TINT AND KEY KNEE, and it is optional -
+       the only grade field that is. Vesper-IX's five grades do not
+       set it and must keep the composite's own defaults, so an
+       absent `ao` has to stay absent through the blend rather than
+       become a pair of numbers. See the composite pass in render.js:
+       the knee is where the occlusion hands the picture back as it
+       gets bright, and it was cut against a desert whose scene
+       buffer runs p50 0.165. A snow field runs several times that,
+       so on a white world an unchanged knee exempts the ENTIRE
+       frame and the contact darkening quietly stops existing. */
+    ao: (a.ao || b.ao) ? arr(a.ao || b.ao, b.ao || a.ao) : undefined,
   };
 }
 
@@ -707,6 +1113,20 @@ function blendGrade(a, b, t) {
    classic way to turn mid grey into milk.
    ============================================================ */
 
+/* ONE TEXEL OF ZERO COVER. See uCloudCover in the atmosphere's
+   uniform block: the sampler is declared for every world and has
+   to be bound for every world, and a world with no cloud deck
+   binds this. RedFormat to match the real map atoll-sky bakes, so
+   a world swapping its own texture in swaps like for like. */
+function blankCoverTexture(THREE) {
+  const tex = new THREE.DataTexture(
+    new Uint8Array([0]), 1, 1, THREE.RedFormat, THREE.UnsignedByteType
+  );
+  tex.name = "sf-cloud-cover-blank";
+  tex.needsUpdate = true;
+  return tex;
+}
+
 const ATMOS_PARS = /* glsl */`
 uniform vec3  uSunDir;
 uniform vec3  uSunHalo;
@@ -720,7 +1140,42 @@ uniform float uTimeSF;
 uniform vec3  uWind;
 uniform vec2  uGlitter; // strength, falloff distance
 uniform float uStorm;
+uniform sampler2D tCloudCover;
+uniform vec4  uCloudCover;  // cos, sin of the deck rotation, uv per metre, cloud base m
+uniform vec2  uCloudGain;   // cloud gain, shadow-map uv per metre
+uniform vec3  uCloudShade;  // what a fully shadowed surface multiplies by
 varying vec3  vSFWorld;
+
+/* THE CLOUD DECK OVERHEAD, as a fraction of the direct beam it
+   removes at this world point. 0 everywhere in a world with no
+   deck, and the branch keeps the fetch out of those worlds
+   entirely - it is a UNIFORM branch, so it is coherent across
+   every pixel of every draw and costs one scalar compare.
+
+   Three steps and they have to be in this order:
+     1. PROJECT up the sun to the cloud base. At a 26-degree sun
+        and a 640 m base that is 1460 m of horizontal offset,
+        which is why the shadow is nowhere near under the cloud.
+     2. UN-ROTATE by the deck's live rotation.y. A cloudscape can
+        only ever turn about +Y, so the cells are static in the
+        deck's own frame and the map is a build-time bake.
+     3. FETCH. One channel, one bilinear tap, no mip chain - the
+        map's finest feature is a soft edge two texels across, so
+        there is nothing above Nyquist in it to alias.
+
+   THE FLOOR ON sunDir.y IS THE DIVIDE'S. It does not have to be
+   tight: the world that owns a deck fades the gain out below
+   about three degrees of elevation, where the projection stops
+   producing a picture and the direct beam has mostly gone anyway. */
+float sfCloudCover(vec3 wp) {
+  if (uCloudGain.x < 0.001) return 0.0;
+  float sy = max(uSunDir.y, 0.06);
+  vec2 q = wp.xz + uSunDir.xz * ((uCloudCover.w - wp.y) / sy);
+  vec2 l = vec2(q.x * uCloudCover.x - q.y * uCloudCover.y,
+                q.x * uCloudCover.y + q.y * uCloudCover.x);
+  vec2 uv = clamp(l * uCloudCover.z + 0.5, 0.0, 1.0);
+  return texture2D(tCloudCover, uv).r * uCloudGain.x;
+}
 
 vec3 sfSky(vec3 rd) {
   float h = clamp(rd.y * 0.5 + 0.5, 0.0, 1.0);
@@ -740,8 +1195,29 @@ vec3 sfSky(vec3 rd) {
 }
 `;
 
+/* THE INSTANCE TRANSFORM HAS TO BE IN HERE.
+   `transformed` is the LOCAL position. three applies instanceMatrix
+   to `mvPosition` INSIDE project_vertex, not to `transformed` - so
+   without the branch below every instance of an InstancedMesh
+   reports the same vSFWorld, namely the batch mesh's own origin.
+
+   Every consequence of that is silent. Aerial perspective and fog
+   go constant across a whole batch, so a 128m tile of canopy fogs
+   as one flat card; the additive near-fade smoothstep(0.6, 11.0,
+   sfDist) is constant, so an additive volume either draws fully or
+   not at all across the batch; and the glitter world-cell collapses
+   to one cell.
+
+   The #ifdef makes this a PROVABLE NO-OP for both shipped worlds:
+   USE_INSTANCING is only defined for an InstancedMesh, and the only
+   two in the repository (apostate.js:1592, intro.js:489) are not
+   patched by this function at all. */
 const ATMOS_VERT = /* glsl */`
-  vSFWorld = (modelMatrix * vec4(transformed, 1.0)).xyz;
+  #ifdef USE_INSTANCING
+    vSFWorld = (modelMatrix * instanceMatrix * vec4(transformed, 1.0)).xyz;
+  #else
+    vSFWorld = (modelMatrix * vec4(transformed, 1.0)).xyz;
+  #endif
 `;
 
 /* Aerial perspective alone, with no reference to `normal` or
@@ -805,6 +1281,34 @@ const ATMOS_FRAG = /* glsl */`
   float fres = 1.0 - clamp(dot(normal, vDir), 0.0, 1.0);
   vec3 rimCol = sfSky(vec3(rd.x, max(rd.y, 0.05) + 0.06, rd.z));
   gl_FragColor.rgb += rimCol * pow(fres, uRim.y) * uRim.x;
+
+  // --- cloud shadows ---------------------------------------------------
+  // A no-op in any world whose atmosphere has no cover map (see
+  // sfCloudCover, which returns 0.0 after a uniform branch).
+  //
+  // WEIGHTED BY HOW SUNLIT THE SURFACE ALREADY IS, and that is
+  // the whole difference between this and a flat multiply. A
+  // cloud takes away the KEY and leaves the sky; a face already
+  // turned away from the sun has no key to lose, so darkening it
+  // by the same fraction would put a second shadow on top of the
+  // one it is already in - which is how a cloud-shadow term
+  // undoes an ambient-fill pass and turns shaded canopy back into
+  // the "undifferentiated dark green paste" this engine has
+  // already been marked for.
+  //
+  // The 0.28 floor is not zero because a cloud also veils part of
+  // the SKY dome for the surface under it, and the sky is what is
+  // lighting the shaded face. Measured as the deck's cover at the
+  // hour it matters: a fifth of the dome, rounded up because the
+  // cell directly overhead is the brightest part of it.
+  {
+    float sfCover = sfCloudCover(vSFWorld);
+    if (sfCover > 0.001) {
+      float sunFacing = max(dot(normal, uSunDir), 0.0);
+      gl_FragColor.rgb *= mix(vec3(1.0), uCloudShade,
+        sfCover * (0.28 + 0.72 * sunFacing));
+    }
+  }
 
   // --- directional aerial perspective ---------------------------------
   // Haze pools low and thins with altitude, so a ridge line stays
@@ -984,19 +1488,41 @@ totalEmissiveRadiance += sfBio;
  * above 1 the emitter clears the bloom chain's bright threshold and
  * actually blooms, which is the whole point of a lit eye.
  * `opts.dunes` scales the aeolian ripple relief; 0 turns it off.
+ *
+ * `opts.extend` is THE ONLY SUPPORTED WAY TO ADD MORE SHADER to a
+ * material, and it exists because the obvious alternative is a silent
+ * trap. Chaining a second `onBeforeCompile` on afterwards works - this
+ * function calls the previous one first, so that direction composes -
+ * but `customProgramCacheKey` is a single overwritten property, not a
+ * chain. Whoever sets it last wins, and the loser's variants collapse
+ * into one compiled program: two materials that differ only in the
+ * bolted-on half then silently share whichever shader compiled first.
+ * That failure looks exactly like "my shader did nothing".
+ *
+ * So an extension goes THROUGH here instead. `extend(shader, renderer,
+ * material)` runs last inside this compile, after every injection
+ * below, and `opts.extendKey` is folded into the cache key so the
+ * extended variant stays distinct. One onBeforeCompile, one key.
  */
 export function patchMaterial(material, atmos, opts = {}) {
   if (!material || material.userData.sfPatched) return material;
   material.userData.sfPatched = true;
+  material.userData.sfBasic = false;
 
   const rimScale = opts.rim === undefined ? 1 : opts.rim;
   const glitter = opts.glitter || 0;
   const bio = opts.bio || 0;
   const dunes = opts.dunes || 0;
+  const extend = typeof opts.extend === "function" ? opts.extend : null;
+  const extendKey = opts.extendKey ? String(opts.extendKey) : "";
   material.userData.sfRim = rimScale;
   material.userData.sfGlitter = glitter;
   material.userData.sfBio = bio;
   material.userData.sfDunes = dunes;
+  /* Recorded so a clone can be re-patched into the same shader rather
+     than quietly losing half of it - see `transparentOf`. */
+  material.userData.sfExtend = extend;
+  material.userData.sfExtendKey = extendKey;
 
   const prev = material.onBeforeCompile;
   material.onBeforeCompile = (shader, renderer) => {
@@ -1049,6 +1575,14 @@ export function patchMaterial(material, atmos, opts = {}) {
     frag = frag.replace("#include <opaque_fragment>", `#include <opaque_fragment>${ATMOS_FRAG}`);
     shader.fragmentShader = frag;
 
+    /* LAST, deliberately. An extension anchored on a chunk this
+       function has already consumed would otherwise find nothing to
+       replace and fail by doing nothing at all. Every block above
+       either re-emits its own #include (the dune and bio blocks both
+       open with theirs) or anchors on `opaque_fragment`, so the chunk
+       names an extension reaches for are all still present here. */
+    if (extend) extend(shader, renderer, material);
+
     material.userData.sfShader = shader;
   };
 
@@ -1056,7 +1590,7 @@ export function patchMaterial(material, atmos, opts = {}) {
   // recompile; forcing the key keeps variants distinct.
   material.customProgramCacheKey = () =>
     `sf:${rimScale.toFixed(3)}:${glitter.toFixed(3)}:${bio.toFixed(3)}`
-    + `:${dunes.toFixed(3)}`;
+    + `:${dunes.toFixed(3)}${extendKey ? `|${extendKey}` : ""}`;
   material.needsUpdate = true;
   return material;
 }
@@ -1077,6 +1611,13 @@ export function patchMaterial(material, atmos, opts = {}) {
 export function patchBasicMaterial(material, atmos, fade = 0.7, additive = false) {
   if (!material || material.userData.sfPatched) return material;
   material.userData.sfPatched = true;
+  /* Material.clone() does not preserve onBeforeCompile in every pinned Three
+     build. Record which atmosphere path authored the material so presentation
+     clones can restore the unlit shader instead of feeding MeshBasicMaterial
+     through the lit normal/rim patch. */
+  material.userData.sfBasic = true;
+  material.userData.sfFade = fade;
+  material.userData.sfAdditive = !!additive;
   const prev = material.onBeforeCompile;
   material.onBeforeCompile = (shader, renderer) => {
     if (prev) prev(shader, renderer);
@@ -1292,7 +1833,18 @@ export function makeMaterials(THREE, atmos) {
     delete m.onBeforeCompile;
     delete m.customProgramCacheKey;
     m.userData = { ...src.userData, sfPatched: false };
-    patchMaterial(m, atmos, { rim: src.userData.sfRim ?? 1, glitter: 0 });
+    /* The extension is carried across too. It was not, and the bug
+       that would have caused is the quiet kind: an alpha variant of a
+       surfaced material would come back with the atmosphere intact and
+       the surface silently missing, so one boss part would read as
+       plastic and nothing would be logged. */
+    patchMaterial(m, atmos, {
+      rim: src.userData.sfRim ?? 1,
+      glitter: 0,
+      bio: src.userData.sfBio ?? 0,
+      extend: src.userData.sfExtend || undefined,
+      extendKey: src.userData.sfExtendKey || undefined,
+    });
     made.set(key, m);
     return m;
   };
@@ -1390,6 +1942,40 @@ function smoothstep01(e0, e1, x) {
   return t * t * (3 - 2 * t);
 }
 
+/* ---------------------- value noise ----------------------
+   Trig is not noise. Any sum of a few sines has a spectrum of a few
+   spikes, so on a surface large enough to span several wavelengths
+   it resolves into visible stripes or a cross-hatch - which is what
+   happened to the Saint. This is the real thing: a hash on the
+   integer lattice, smoothstep-faded, so its spectrum is broad and
+   nothing in it lines up with anything else.
+
+   `Math.imul` rather than `*`: the mixing constants push the product
+   past 2^53, where float64 silently drops the low bits that carry
+   all the entropy, and the "hash" degenerates into a smooth ramp.
+   imul is an exact 32-bit multiply and is what makes this a hash. */
+function vhash3(i, j, k) {
+  let h = Math.imul(i, 374761393) ^ Math.imul(j, 668265263) ^ Math.imul(k, 1274126177);
+  h = Math.imul(h ^ (h >>> 13), 1274126177);
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+}
+
+/** Trilinear value noise in [0,1), mean 0.5, cell size 1. */
+function vnoise3(x, y, z) {
+  const xi = Math.floor(x), yi = Math.floor(y), zi = Math.floor(z);
+  const fx = x - xi, fy = y - yi, fz = z - zi;
+  const ux = fx * fx * (3 - 2 * fx);
+  const uy = fy * fy * (3 - 2 * fy);
+  const uz = fz * fz * (3 - 2 * fz);
+  let sum = 0;
+  for (let c = 0; c < 8; c += 1) {
+    const ox = c & 1, oy = (c >> 1) & 1, oz = (c >> 2) & 1;
+    const w = (ox ? ux : 1 - ux) * (oy ? uy : 1 - uy) * (oz ? uz : 1 - uz);
+    sum += w * vhash3(xi + ox, yi + oy, zi + oz);
+  }
+  return sum;
+}
+
 export function paintByHeight(THREE, geometry, ramp, opts = {}) {
   geometry.computeBoundingBox();
   const bb = geometry.boundingBox;
@@ -1438,7 +2024,30 @@ export function paintByHeight(THREE, geometry, ramp, opts = {}) {
     const hLocal = (y - bb.min.y) / lspan;
     const h = hBody * (1 - localWeight) + hLocal * localWeight;
     const up = clamp01(nrm.getY(i) * 0.5 + 0.5);
-    const n = Math.sin(x * 0.7 + z * 1.13) * 0.5 + 0.5;
+    /* The tonal break-up term, and it must not be PERIODIC. This was
+       `sin(x*0.7 + z*1.13)`: a single plane wave, one direction, one
+       wavelength of 4.73m, and no y term at all - so its phase was
+       extruded vertically and every structure on the map shared the
+       same world-space bands.
+
+       Replaced with value noise, two octaves at ~5m and ~1.9m. Mean
+       is 0.5 and the amplitude is unchanged, so nothing downstream
+       re-tunes; measured autocorrelation at the old wavelength falls
+       from 0.955 to 0.10.
+
+       Honest about the size of this: it is a correctness fix to the
+       primitive, not a fix for a named visible defect. It moves
+       ~28% of pixels on the ossuary interior and under 3% on the
+       open-desert poses, and the ribs read slightly cleaner. It was
+       NOT the cause of the faint rectangular quilt visible on large
+       smooth surfaces under a 3x zoom - that survives this change and
+       is still unattributed. Do not cite this comment as having
+       explained it.
+
+       Build-time only: runs once per merged mesh at load, costs the
+       renderer nothing. */
+    const n = vnoise3(x * 0.20, y * 0.20, z * 0.20) * 0.62
+      + vnoise3(x * 0.53, y * 0.53, z * 0.53) * 0.38;
     /* CAVITY. A downward-facing face is an undercut - the underside
        of a lame, the lip beneath a gorget - and in a flat-shaded
        untextured figure the near-black line at those junctions IS

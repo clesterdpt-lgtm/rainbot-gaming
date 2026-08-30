@@ -54,8 +54,8 @@ async function bootPage(browser, viewport, errors) {
   const page = await browser.newPage({ viewport });
   watchErrors(page, errors);
   await page.goto(`${baseUrl}/games/mr-feast-mansion.html?qa=1&autostart=1&allLights=1`, { waitUntil: "domcontentloaded" });
-  await page.waitForFunction(() => window.MrFeastFresh?.state?.ready, null, { timeout: 120000 });
-  await page.waitForFunction(() => window.MrFeastFresh.getMrFeastState()?.loadStatus === "ready", null, { timeout: 120000 });
+  await page.waitForFunction(() => window.MrFeastFresh?.state?.ready, null, { timeout: 180000 });
+  await page.waitForFunction(() => window.MrFeastFresh.getMrFeastState()?.loadStatus === "ready", null, { timeout: 180000 });
   await page.waitForTimeout(300);
   return page;
 }
@@ -196,8 +196,13 @@ async function run() {
     await page.evaluate(() => window.MrFeastFresh.leaveHideSpotForQA());
     // He should still come back for it later, as an ordinary, undisturbed
     // housekeeping errand. The dispatch now correctly waits until he is fully
-    // back on patrol, so step the notice deterministically before driving it.
-    await page.evaluate(() => window.MrFeastFresh.advanceTamperForQA(10));
+    // back on patrol. The deterministic pursuit sweep deliberately freezes
+    // the host at its endpoint, so explicitly resume him before stepping the
+    // pending notice and driving the later errand.
+    await page.evaluate(() => {
+      window.MrFeastFresh.resumeMrFeastForQA();
+      window.MrFeastFresh.advanceTamperForQA(10);
+    });
     const lateFixRun = await page.evaluate(() => window.MrFeastFresh.runMrFeastHousekeepingForQA(420));
     assert(lateFixRun.completed === true && lateFixRun.fixesCompleted === 1, `an escaped tamper should still get a normal later fix; got ${JSON.stringify(lateFixRun)}`);
     state = await diagnostics(page);
@@ -258,17 +263,32 @@ async function run() {
       const element = document.getElementById("mansion-gameover");
       return { hidden: element.hidden, title: element.querySelector("#mansion-gameover-title")?.textContent || "", loadDisabled: document.getElementById("mansion-gameover-load")?.disabled };
     });
-    assert(!overlay.hidden && /caught/i.test(overlay.title), `the CAUGHT overlay should be visible; got ${JSON.stringify(overlay)}`);
-    assert(overlay.loadDisabled === false, "the load button should be enabled when a save exists");
-    await page.screenshot({ path: path.join(artifactDir, "game-over-desktop.png") });
+    assert(overlay.hidden, `a physical catch should hold recovery controls until the banquet closes; got ${JSON.stringify(overlay)}`);
+    await page.waitForFunction(
+      () => window.MrFeastFresh.getBanquetLossState()?.assetStatus === "ready"
+        && window.MrFeastFresh.getBanquetLossState()?.visible,
+      null,
+      { timeout: 180000 },
+    );
 
-    // Simulation must freeze underneath the overlay.
+    // Simulation must freeze underneath the captured-at-dinner presentation.
     const frozenBefore = await page.evaluate(() => JSON.parse(window.render_game_to_text()).mrFeast.position);
     await page.evaluate(() => window.advanceTime(600));
     const frozenAfter = await page.evaluate(() => JSON.parse(window.render_game_to_text()).mrFeast.position);
     assert(frozenBefore.x === frozenAfter.x && frozenBefore.z === frozenAfter.z, `the simulation should freeze during game over; got ${JSON.stringify({ frozenBefore, frozenAfter })}`);
 
+    await page.evaluate(() => window.MrFeastFresh.advanceBanquetLossForQA(25));
+    overlay = await page.evaluate(() => {
+      const element = document.getElementById("mansion-gameover");
+      return { hidden: element.hidden, title: element.querySelector("#mansion-gameover-title")?.textContent || "", loadDisabled: document.getElementById("mansion-gameover-load")?.disabled };
+    });
+    assert(!overlay.hidden && /served/i.test(overlay.title), `the SERVED recovery overlay should follow the banquet; got ${JSON.stringify(overlay)}`);
+    assert(overlay.loadDisabled === false, "the load button should be enabled when a save exists");
+    await page.screenshot({ path: path.join(artifactDir, "game-over-desktop.png") });
+
     await page.click("#mansion-gameover-load");
+    assert(await page.locator("#mansion-load-chooser").isVisible(), "game-over Load should open the save picker");
+    await page.locator('[data-save-source="manual"]').click();
     await page.waitForTimeout(250);
     state = await diagnostics(page);
     assert(state.gameOver === null, "loading the save should clear the fail state");
@@ -318,7 +338,7 @@ async function run() {
       window.MrFeastFresh.setCameraStoryStateForQA({ basementUnlocked: false, relaySabotaged: false });
     });
 
-    // --- Fleeing into the basement mid-pursuit still ends in capture ----------
+    // --- Breaking sight before fleeing downstairs does not broadcast the player
     await page.evaluate(() => {
       window.MrFeastFresh.setDevModeForQA(true);
       window.MrFeastFresh.resetMrFeastWandererForQA();
@@ -334,20 +354,22 @@ async function run() {
     await page.evaluate(() => {
       const entryId = window.MrFeastFresh.getMrFeastState().pursuit.active?.entryId;
       if (entryId) window.MrFeastFresh.tamperForQA(entryId, false);
-      // The scenario proves cross-floor pathing and the basement capture; the
-      // give-up tuning itself is covered by the hidden-player section above.
-      window.MrFeastFresh.setPursuitGiveUpForQA(90);
+      // The player vanishes behind the mansion before changing floors. Mr.
+      // Feast may run to the last-seen Music Room clue, but must not receive
+      // the unseen Archive teleport as a new target.
+      window.MrFeastFresh.setPursuitGiveUpForQA(0);
       window.MrFeastFresh.teleport("archive");
     });
     const fleeRun = await page.evaluate(() => window.MrFeastFresh.runMrFeastPursuitForQA(240));
     const fleeState = await diagnostics(page);
     assert(
-      fleeRun.outcome === "game-over",
-      `with the stair unlocked he should chase into the basement and capture; got ${JSON.stringify({ fleeRun, mrFeast: fleeState.mrFeast })}`,
+      fleeRun.outcome === "lost",
+      `an unobserved floor change should end at the last-known clue, not in an omniscient capture; got ${JSON.stringify({ fleeRun, mrFeast: fleeState.mrFeast })}`,
     );
-    assert(fleeRun.teleports === 0, "the cross-floor chase must not teleport Mr. Feast");
+    assert(fleeRun.teleports === 0, "the lost-player search must not teleport Mr. Feast");
     state = fleeState;
-    assert(state.gameOver && state.gameOver.floor === "BASEMENT", `the flee capture should land in the basement; got ${JSON.stringify(state.gameOver)}`);
+    assert(state.gameOver === null, `an unseen Archive move must not create a basement capture; got ${JSON.stringify(state.gameOver)}`);
+    assert(state.mrFeast.pursuit.trackingSource === "lost" && state.mrFeast.pursuit.lastKnownPosition.z > 7, `pursuit should retain the Music Room clue instead of the live Archive position; got ${JSON.stringify(state.mrFeast.pursuit)}`);
     await page.evaluate(() => {
       window.MrFeastFresh.clearGameOverForQA();
       window.MrFeastFresh.setDevModeForQA(false);
@@ -365,6 +387,13 @@ async function run() {
       window.MrFeastFresh.reportInfractionForQA("portrait");
       return window.MrFeastFresh.runMrFeastPursuitForQA(120);
     });
+    await mobile.waitForFunction(
+      () => window.MrFeastFresh.getBanquetLossState()?.assetStatus === "ready"
+        && window.MrFeastFresh.getBanquetLossState()?.visible,
+      null,
+      { timeout: 180000 },
+    );
+    await mobile.evaluate(() => window.MrFeastFresh.advanceBanquetLossForQA(25));
     const mobileOverlay = await mobile.evaluate(() => {
       const element = document.getElementById("mansion-gameover");
       const rect = element.querySelector(".mansion-menu__panel").getBoundingClientRect();

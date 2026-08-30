@@ -55,6 +55,33 @@ async function completeFirstClueCompetition(page, expectedClueId) {
   return state;
 }
 
+async function completeSecondClueCompetition(page, expectedClueId) {
+  let state = await diagnostics(page);
+  assert(
+    state.stormRun?.phase === "called"
+      && state.stormRun.triggerReason === "clue"
+      && state.stormRun.triggerClueId === expectedClueId
+      && state.stormRun.callCount === 1
+      && state.stormRun.clueProgressLocked,
+    `the first post-Feast clue should call Storm Run once and pause later clues; got ${JSON.stringify(state.stormRun)}`,
+  );
+  const result = await page.evaluate(() => window.MrFeastFresh.completeStormRunForQA("player"));
+  assert(
+    result?.survived === true && result.eliminatedContestantId === "mara-voss",
+    `the QA completion should survive Storm Run and eliminate Mara; got ${JSON.stringify(result)}`,
+  );
+  await page.waitForFunction(() => window.MrFeastFresh.getStormRunState?.()?.phase === "completed", null, { timeout: 8000 });
+  state = await diagnostics(page);
+  assert(
+    state.stormRun.clueProgressLocked === false && state.stormRun.eliminatedContestantId === "mara-voss",
+    `completing Storm Run should reopen investigation and eliminate Mara; got ${JSON.stringify(state.stormRun)}`,
+  );
+  await page.evaluate(() => window.MrFeastFresh.advanceStormRunForQA(7));
+  await page.waitForFunction(() => document.getElementById("mansion-storm-run")?.hidden);
+  state = await diagnostics(page);
+  return state;
+}
+
 function watchErrors(page, errors) {
   page.on("pageerror", (error) => errors.push(error.message));
   page.on("console", (message) => {
@@ -195,6 +222,7 @@ async function run() {
     });
     state = await diagnostics(page);
     assert(state.workroomCode.targets.find((candidate) => candidate.artId === secondArtId).revealed === true, "a QA tilt should reveal the second scratch");
+    await completeSecondClueCompetition(page, `painting-scratch:${secondArtId}`);
     await page.evaluate(() => window.MrFeastFresh.advanceTamperForQA(30));
     await page.evaluate(() => window.MrFeastFresh.runMrFeastHousekeepingForQA(420));
     state = await diagnostics(page);
@@ -289,6 +317,8 @@ async function run() {
       await visualPage.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, `scratch-${carrier.artId}-corner-desktop.png`) });
       if (carrier.artId === "five-doors") {
         await completeFirstClueCompetition(visualPage, "painting-scratch:five-doors");
+      } else if (carrier.artId === "polite-eclipse") {
+        await completeSecondClueCompetition(visualPage, "painting-scratch:polite-eclipse");
       }
       await visualPage.evaluate((artId) => {
         const entryForArt = window.MrFeastFresh.getTamperState().entries.find((candidate) => candidate.artId === artId);

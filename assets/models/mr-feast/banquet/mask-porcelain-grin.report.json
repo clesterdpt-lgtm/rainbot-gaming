@@ -1,0 +1,85 @@
+{
+  "generatedAt": "2026-07-25T02:10:31.450059+00:00",
+  "pipeline": "Meshy text-to-3D prop -> Blender crop/decimate/variant/export",
+  "id": "porcelain-grin",
+  "label": "The Porcelain Grin",
+  "description": "Warm porcelain, hollow eyes, a fixed red smile, and gold tear drops.",
+  "source": "/Volumes/External SSD/Projects/RainbotGaming/assets/models/mr-feast/source/banquet/mask-grin-source-master.glb",
+  "output": "mask-porcelain-grin.glb",
+  "forwardAxis": "+Z",
+  "cropBottomRatio": 0.24,
+  "authoredScale": [
+    0.94,
+    0.9,
+    1.0
+  ],
+  "ornament": "grin-tears",
+  "sourceTriangles": 276505,
+  "triangles": 14225,
+  "boundsMeters": {
+    "min": [
+      -0.150872,
+      -0.173267,
+      -0.24
+    ],
+    "max": [
+      0.150872,
+      0.173267,
+      0.24
+    ],
+    "size": [
+      0.301744,
+      0.346534,
+      0.48
+    ]
+  },
+  "textureMaxSize": 512,
+  "images": [
+    {
+      "name": "Image_0",
+      "width": 512,
+      "height": 512
+    },
+    {
+      "name": "Image_0.001",
+      "width": 512,
+      "height": 512
+    },
+    {
+      "name": "Image_1",
+      "width": 512,
+      "height": 512
+    },
+    {
+      "name": "Image_1.001",
+      "width": 512,
+      "height": 512
+    },
+    {
+      "name": "Image_2",
+      "width": 512,
+      "height": 512
+    },
+    {
+      "name": "Image_2.001",
+      "width": 512,
+      "height": 512
+    },
+    {
+      "name": "Image_3",
+      "width": 512,
+      "height": 512
+    },
+    {
+      "name": "Image_3.001",
+      "width": 512,
+      "height": 512
+    }
+  ],
+  "materials": [
+    "Banquet_Mask_Porcelain_Grin_Material_01"
+  ],
+  "fileBytes": 1694644,
+  "rigged": false,
+  "validatedFor": "Three.js r128 static GLTFLoader"
+}

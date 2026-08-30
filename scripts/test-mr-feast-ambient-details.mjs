@@ -125,6 +125,73 @@ check("7 boiler scuttle", /boiler-coal-scuttle/.test(basementFurnishings) || /bo
 const libraryWritingSet = section("function addLibraryWritingSet()", "\n  function ");
 check("8 library floor clear", !/physics\.addFixedBox/.test(libraryWritingSet), "the library writing set is tabletop decor and must not block Mara's seat approach");
 
+// 10. Second detail pass. Basement corridor fixtures drop their chandelier
+// rings for the shared utility cage-and-bulb look while keeping the authored
+// cone emitters (check 29 of the renovation suite still forbids corridor
+// omnis), and the mantels, vanities, foyer consoles, rear corridor ceiling,
+// pool deck, and rear terrace each gain one dressed vignette.
+const fixtureBuilder = section("addFixture(x, z, style, floorYOverride)", "addCeilingResponseGlow");
+check("10 uniform basement fixtures", /const utilityLook = style === "basement" \|\| \(style === "corridor" && fixtureFloorY === FLOOR\.BASEMENT\)/.test(fixtureBuilder), "basement corridor fixtures still hang formal chandelier rings");
+check("10 uniform basement fixtures", /if \(utilityLook\) \{/.test(fixtureBuilder) && /ring\.castShadow\s*=\s*style\s*===\s*"atrium"/.test(fixtureBuilder), "the utility look must swap only the visible geometry, leaving ring shadows and emitters authored");
+check("10 mantel decor", count(mainFurnishings + upperFurnishings, /addMantelDecor\(/g) >= 3, "all three fireplaces should carry mantel decor");
+check("10 vanity sets", count(mansion, /addVanityCounterSet\(/g) >= 3, "both bathroom vanities need counter sets");
+const foyerConsoleBuilder = section("function addFoyerConsoleDecor()", "\n  function ");
+check("10 foyer consoles", /addFoyerConsoleDecor\(\);/.test(mainFurnishings) && /foyer-console-vase/.test(foyerConsoleBuilder), "the foyer console tables are still bare");
+const foyerConsoleVase = foyerConsoleBuilder.match(/cylinder\(\{ name: "foyer-console-vase",[^}]+\}\);/s)?.[0] || "";
+check("10 foyer console vase placement", /const x = side \* 3\.9;/.test(foyerConsoleBuilder) && /\bx,\s*y:\s*topY \+ 0\.12/.test(foyerConsoleVase), "each foyer vase must use its console table's left/right x coordinate and rest on the tabletop");
+const foyerConsoleCardTray = foyerConsoleBuilder.match(/box\(\{ name: "foyer-console-card-tray",[^}]+\}\);/s)?.[0] || "";
+check("10 foyer console card trays stay on top", /const cardTrayInsetX = 0\.14;/.test(foyerConsoleBuilder) && /x: x - side \* cardTrayInsetX/.test(foyerConsoleCardTray) && /y: topY \+ 0\.009/.test(foyerConsoleCardTray), "each foyer card tray must stay inside the rotated 0.55m-deep console top, with a visible tabletop margin");
+const pipeBuilder = section("function addRearCorridorServicePipes()", "\n  function ");
+check("10 rear corridor pipes", /addRearCorridorServicePipes\(\);/.test(basementFurnishings) && /rear-corridor-pipe-bracket/.test(pipeBuilder) && !/physics\.addFixedBox/.test(pipeBuilder), "the rear cross-corridor ceiling line is missing or blocks the chase lane");
+check("10 rear terrace urns", /rear-terrace-planter-urn/.test(plantingBuilder) && /portico-entry-mat/.test(plantingBuilder), "the rear terrace urns or portico entry mat are missing (names must keep culling-safe prefixes)");
+check("10 pool deck table", /pool-side-table-top/.test(section("function buildEstatePool()", "\n  function ")), "the pool deck lacks its lounger-side drinks table");
+
+// 11. Texture/detail pass. Procedural grocery labels replace flat-color food
+// primitives (bread and baskets keep the plain surface), the refrigerator
+// carries semantic cold-larder stock, the pool stair gains finished treads
+// and collider-free handrails, and the pool water shader rains.
+check("11 grocery textures", /function makeGroceryTexture\(kind\)/.test(mansion) && /makeGroceryTexture\("tin"\)/.test(mansion) && /makeGroceryTexture\("box"\)/.test(mansion) && /makeGroceryTexture\("produce"\)/.test(mansion), "procedural grocery label/skin textures are missing");
+check("11 labeled stock only", /M\.groceryBox, boxes/.test(mansion) && /M\.groceryTin, tins/.test(mansion) && /material: M\.foodBox/.test(section("function addKitchenCounterDressing()", "\n  function ")), "labeled cartons must apply to shelf stock while bread keeps the plain foodBox surface");
+const stockBuilder = section("function addStockedStorageContents", "class Refrigerator");
+check("11 semantic fridge", /kind === "refrigerator"/.test(stockBuilder) && ["fridge-milk-bottles", "fridge-roast", "fridge-cheese-wedges", "fridge-eggs", "fridge-butter"].every((batch) => stockBuilder.includes(batch)), "the refrigerator still stocks the generic dry-goods mix");
+const poolBuilder = section("function buildEstatePool()", "\n  function ");
+check("11 pool stair finish", /estate-pool-step-tread-/.test(poolBuilder) && /estate-pool-rail-/.test(poolBuilder) && /estate-pool-step-riser-reveal-/.test(poolBuilder), "the pool stair lacks its finished treads, riser reveals, or handrails");
+check("11 pool rails stay soft", !/estate-pool-rail[\s\S]{0,400}physics\.addFixedBox/.test(poolBuilder), "pool handrails must remain decor so the entry ramp and QA routes are unchanged");
+const waterBuilder = section("function makeEstatePoolWater", "function addPoolLounger");
+check("11 storm water", /rainRipples/.test(waterBuilder) && /valueNoise/.test(waterBuilder) && /uniform float uTime;[\s\S]*uDeep/.test(waterBuilder), "the pool water shader lacks the storm rain ripples and drifting grain");
+
+// 12. Doubled pool. The basin's swimming area doubled by growing west while
+// the authored entry stair, ramp, wall gap, east lounger deck, and Mr.
+// Feast's deck response geometry stayed fixed at their original coordinates.
+check("12 doubled pool", /pool: Object\.freeze\(\{ centerX: -13\.85, centerZ: -25\.5, width: 20\.0, depth: 11\.8 \}\)/.test(mansion), "YARD_LAYOUT.pool does not carry the doubled westward basin");
+const poolBuild = section("function buildEstatePool()", "\n  function ");
+check("12 doubled pool water", /makeEstatePoolWater\(19\.4, 12\.725, pool\.centerX, -24\.7625, -0\.39\)/.test(poolBuild), "the water plane does not span the doubled basin and reach the stairs");
+check("12 single water plane", (poolBuild.match(/makeEstatePoolWater\(/g) || []).length === 1, "the pool must use one continuous water plane, not a seamed tongue");
+check("12 stair stays authored", /const stairX = -9;/.test(poolBuild) && /physics\.addFixedRamp\(stairX, -19\.6/.test(poolBuild), "the entry stair and ramp must stay at x=-9 so pool routes and the deck response spot survive");
+check("12 west grounds cut", /rain-soaked-grounds-rear-west-middle", -29\.7, -25, 8\.6, 14/.test(mansion), "the west grounds slab still fills the enlarged basin");
+check("12 pool zone widened", /addRoomZone\(-2\.2, mainMax, -26\.5, -1\.2, -33\.5, -17\.8, "MAIN LEVEL", "POOL TERRACE"\)/.test(mansion), "the POOL TERRACE room zone does not cover the west water and deck");
+
+// 13. No empty cabinets anywhere in the home: every Cabinet is either a
+// dressed walk-in or carries a role-specific stockKind, and every new stock
+// kind has a builder branch. Newly stocked cabinets opt out of door-operated
+// interior lights so the fixed shader-light budget is untouched.
+const cabinetCalls = Array.from(mansion.matchAll(/new Cabinet\(\{\s*name: [`"']([^`"']+)[`"'][^;]*?\}\)/gs))
+  .concat(Array.from(mansion.matchAll(/addKitchenBaseCabinet\(\{\s*name: [`"']([^`"']+)[`"'][^;]*?\}\)/gs)))
+  .filter((match) => !/\.\.\.options|\.\.\.pantryCabinet/.test(match[0]));
+check("13 cabinets enumerated", cabinetCalls.length >= 16, `expected at least sixteen cabinet call sites; found ${cabinetCalls.length}`);
+for (const match of cabinetCalls) {
+  check("13 no empty cabinets", /stockKind:|walkIn: true/.test(match[0]), `cabinet "${match[1]}" opens empty`);
+}
+const stockKindBranches = section("function addStockedStorageContents", "class Refrigerator");
+for (const kindName of ["barware", "sideboard", "cookware", "prep", "undersink", "cellar-reserve", "linens", "tools", "washroom"]) {
+  check("13 stock kind builders", stockKindBranches.includes(`"${kindName}"`), `stock kind ${kindName} has no builder branch`);
+}
+const newlyStocked = ["library drinks cabinet", "dining sideboard", "wine cabinet", "linen cupboard", "workroom tool cabinet"];
+for (const cabinetName of newlyStocked) {
+  const call = cabinetCalls.find((match) => match[1] === cabinetName);
+  check("13 light budget preserved", call && /interiorLight: false/.test(call[0]), `newly stocked "${cabinetName}" would mint a door-operated spotlight`);
+}
+
 // 9. Cache-busting: the page key and the runtime version stay in sync and
 // moved past the pre-ambient-details value. The exact key is deliberately not
 // pinned so parallel milestones can bump it again without editing this suite.

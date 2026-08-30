@@ -1,0 +1,255 @@
+{
+  "generatedAt": "2026-07-22T02:33:01.466123+00:00",
+  "pipeline": "Meshy textured low-poly master -> Blender 4.5 cleanup, custom rig/animation, and standard GLB",
+  "blenderVersion": "4.5.11 LTS",
+  "asset": "prop-droplet",
+  "profile": "prop",
+  "source": {
+    "file": "/Volumes/External SSD/Projects/RainbotGaming/assets/models/tardigrade/source/prop-droplet-master.glb",
+    "sha256": "fc4797126a315e0c17cdbbc87e5cb20f5e015cabe4fd2d4075310e892f54f8f6",
+    "fileBytes": 4575392,
+    "counts": {
+      "objects": 1,
+      "meshes": 1,
+      "materials": 1
+    },
+    "triangles": 1688,
+    "bounds": {
+      "min": [
+        -0.534247,
+        -0.534247,
+        -0.953033
+      ],
+      "max": [
+        0.534247,
+        0.534247,
+        0.953033
+      ]
+    }
+  },
+  "output": {
+    "file": "prop-droplet.glb",
+    "path": "/Volumes/External SSD/Projects/RainbotGaming/assets/models/tardigrade/prop-droplet.glb",
+    "report": "/Volumes/External SSD/Projects/RainbotGaming/assets/models/tardigrade/prop-droplet.report.json",
+    "workingBlend": null,
+    "targetTriangles": 5000,
+    "textureMaxSize": 512,
+    "blenderBounds": {
+      "min": [
+        -0.868892,
+        -0.868892,
+        0.0
+      ],
+      "max": [
+        0.868892,
+        0.868892,
+        3.1
+      ]
+    },
+    "runtimeBounds": {
+      "min": [
+        -0.868892,
+        0.0,
+        -0.868892
+      ],
+      "max": [
+        0.868892,
+        3.1,
+        0.868892
+      ]
+    },
+    "triangles": 1688,
+    "materials": 1,
+    "textures": 3,
+    "skins": 0,
+    "clips": [],
+    "fileBytes": 548856,
+    "sha256": "b2a2296a64d559e7e3afc63a39b2deaae2c68280b7d1717d2747fdc877fe5a54"
+  },
+  "geometry": {
+    "repair": {
+      "verticesBeforeWeld": 1248,
+      "verticesAfterWeld": 846,
+      "facesBefore": 1688,
+      "facesAfter": 1688,
+      "weldDistance": 1e-06,
+      "flatShaded": false
+    },
+    "budget": {
+      "sourceTriangles": 1688,
+      "finalTriangles": 1688,
+      "passes": []
+    }
+  },
+  "normalization": {
+    "sourceBounds": {
+      "min": [
+        -0.534247,
+        -0.534247,
+        -0.953033
+      ],
+      "max": [
+        0.534247,
+        0.534247,
+        0.953033
+      ]
+    },
+    "orientedBounds": {
+      "min": [
+        -0.534247,
+        -0.534247,
+        -0.953033
+      ],
+      "max": [
+        0.534247,
+        0.534247,
+        0.953033
+      ]
+    },
+    "blenderBounds": {
+      "min": [
+        -0.868892,
+        -0.868892,
+        0.0
+      ],
+      "max": [
+        0.868892,
+        0.868892,
+        3.1
+      ]
+    },
+    "runtimeBounds": {
+      "min": [
+        -0.868892,
+        0.0,
+        -0.868892
+      ],
+      "max": [
+        0.868892,
+        3.1,
+        0.868892
+      ]
+    },
+    "orientationStrategy": "unchanged",
+    "sourceFrontAxis": null,
+    "forward": "-Z",
+    "up": "+Y",
+    "fitDimension": "maximumDimension",
+    "targetDimension": 3.1,
+    "uniformScale": 1.6263865449514798,
+    "grounded": true,
+    "centeredXZ": true
+  },
+  "materials": {
+    "names": [
+      "prop-droplet_Material_01"
+    ],
+    "count": 1,
+    "removedTextureNodes": [],
+    "semanticFaceCounts": {}
+  },
+  "images": [
+    {
+      "name": "Image_0",
+      "sourceSize": [
+        2048,
+        2048
+      ],
+      "runtimeSize": [
+        512,
+        512
+      ],
+      "packed": true
+    },
+    {
+      "name": "Image_1",
+      "sourceSize": [
+        2048,
+        2048
+      ],
+      "runtimeSize": [
+        512,
+        512
+      ],
+      "packed": true
+    },
+    {
+      "name": "Image_2",
+      "sourceSize": [
+        2048,
+        2048
+      ],
+      "runtimeSize": [
+        512,
+        512
+      ],
+      "packed": true
+    },
+    {
+      "name": "Image_3",
+      "sourceSize": [
+        2048,
+        2048
+      ],
+      "runtimeSize": [
+        512,
+        512
+      ],
+      "packed": true
+    }
+  ],
+  "rig": null,
+  "clips": [],
+  "features": {
+    "animated": false,
+    "skin": false,
+    "worldRootTranslation": false,
+    "forward": "-Z",
+    "up": "+Y",
+    "draco": false,
+    "meshopt": false,
+    "ktx2": false,
+    "webpTextures": false,
+    "validatedFor": "Three.js r128 GLTFLoader"
+  },
+  "validation": {
+    "format": "GLB 2.0",
+    "fileBytes": 548856,
+    "sha256": "b2a2296a64d559e7e3afc63a39b2deaae2c68280b7d1717d2747fdc877fe5a54",
+    "meshes": 1,
+    "triangles": 1688,
+    "materials": 1,
+    "materialNames": [
+      "prop-droplet_Material_01"
+    ],
+    "textures": 3,
+    "imageDimensions": [
+      {
+        "name": "Image_2",
+        "mimeType": "image/png",
+        "width": 512,
+        "height": 512
+      },
+      {
+        "name": "Image_0",
+        "mimeType": "image/png",
+        "width": 512,
+        "height": 512
+      },
+      {
+        "name": "Image_1",
+        "mimeType": "image/png",
+        "width": 512,
+        "height": 512
+      }
+    ],
+    "periodicAnimationEndpoints": {},
+    "skins": 0,
+    "animations": [],
+    "nodes": 1,
+    "extensionsUsed": [],
+    "compression": "none",
+    "rootTranslationChannels": [],
+    "requiredSockets": []
+  }
+}

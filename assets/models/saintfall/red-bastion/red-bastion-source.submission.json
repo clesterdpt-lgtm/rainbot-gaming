@@ -1,0 +1,22 @@
+{
+  "taskId": "01a0364d-aa66-7ab3-80d3-b8ae42ef2f4e",
+  "taskType": "image-to-3d",
+  "input": "assets/concepts/saintfall/playable-characters/heavy-b1-bastion-penitent-red-meshy-unarmed-v1.png",
+  "request": {
+    "image_url": "[local image data URI omitted]",
+    "model_type": "standard",
+    "ai_model": "meshy-6",
+    "enable_pbr": true,
+    "should_texture": true,
+    "should_remesh": true,
+    "topology": "triangle",
+    "target_polycount": 45000,
+    "pose_mode": "a-pose",
+    "image_enhancement": false,
+    "remove_lighting": true,
+    "target_formats": [
+      "glb"
+    ],
+    "texture_prompt": "Preserve worn ivory ceramic armor, deep crimson panels, aged brass trim, charcoal articulated under-suit, and warm amber reliquary glow; no green."
+  }
+}

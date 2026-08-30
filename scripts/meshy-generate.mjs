@@ -12,9 +12,10 @@ const HELP = `Meshy model pipeline
 
 Usage:
   node scripts/meshy-generate.mjs --mode balance
-  node scripts/meshy-generate.mjs --mode status --task-type TYPE --task-id ID
+  node scripts/meshy-generate.mjs --mode status --task-type TYPE --task-id ID [--output DIR --slug NAME]
   node scripts/meshy-generate.mjs --mode text-to-3d --prompt TEXT --output DIR --slug NAME [--polycount 12000] [--texture-prompt TEXT]
   node scripts/meshy-generate.mjs --mode image-to-3d --image FILE --output DIR --slug NAME [--polycount 100000]
+  node scripts/meshy-generate.mjs --mode multi-image-to-3d --images FRONT,SIDE,TOP,REAR --output DIR --slug NAME
   node scripts/meshy-generate.mjs --mode remesh --task-id MODEL_TASK_ID --output DIR --slug NAME [--polycount 80000]
   node scripts/meshy-generate.mjs --mode rig --task-id IMAGE_TASK_ID --output DIR --slug NAME [--height 1.92]
   node scripts/meshy-generate.mjs --mode animate --task-id RIG_TASK_ID --action-id ID --output DIR --slug NAME
@@ -74,6 +75,7 @@ function endpointForTaskType(type, id = "") {
   const route = {
     "text-to-3d": ["v2", "text-to-3d"],
     "image-to-3d": ["v1", "image-to-3d"],
+    "multi-image-to-3d": ["v1", "multi-image-to-3d"],
     remesh: ["v1", "remesh"],
     rigging: ["v1", "rigging"],
     animations: ["v1", "animations"],
@@ -250,7 +252,10 @@ async function runImageTo3d(apiKey, args) {
     should_remesh: true,
     topology: "triangle",
     target_polycount: polycount,
-    pose_mode: args.pose || "a-pose",
+    // Static image-to-3D props (hands, heads, scenery) must not be
+    // coerced into a humanoid A-pose. Callers generating a character can
+    // still opt in explicitly with `--pose a-pose` or `--pose t-pose`.
+    pose_mode: args.pose || "",
     image_enhancement: false,
     remove_lighting: true,
     target_formats: ["glb"],
@@ -277,6 +282,57 @@ async function runImageTo3d(apiKey, args) {
     masterFile: `${slug}-master.glb`,
     thumbnails: thumbnailEntries.map(([view]) => `${slug}-${view}.png`),
     request: { ...request, image_url: "[local image data URI omitted]" },
+  });
+}
+
+async function runMultiImageTo3d(apiKey, args) {
+  const images = String(required(args, "images"))
+    .split(",").map((file) => file.trim()).filter(Boolean);
+  if (images.length < 2 || images.length > 4) {
+    throw new Error("--images must contain 2 to 4 comma-separated PNG or JPEG files");
+  }
+  const output = path.resolve(required(args, "output"));
+  const slug = required(args, "slug");
+  const imageUrls = await Promise.all(images.map(localImageDataUri));
+  const request = {
+    image_urls: imageUrls,
+    texture_image_urls: imageUrls,
+    ai_model: args["ai-model"] || "meshy-7",
+    enable_pbr: true,
+    should_texture: true,
+    // Meshy recommends the unreduced reconstruction for highest fidelity.
+    // Browser budgets are enforced by Saintfall's existing offline optimizer.
+    should_remesh: args.remesh === "true",
+    target_formats: ["glb"],
+    alpha_thumbnail: true,
+  };
+  const taskId = await createTask(apiKey, "multi-image-to-3d", request);
+  const redactedRequest = {
+    ...request,
+    image_urls: imageUrls.map(() => "[local image data URI omitted]"),
+    texture_image_urls: imageUrls.map(() => "[local image data URI omitted]"),
+  };
+  await writeMetadata(path.join(output, `${slug}.submission.json`), {
+    taskId,
+    taskType: "multi-image-to-3d",
+    inputs: images.map((file) => path.relative(process.cwd(), path.resolve(file))),
+    request: redactedRequest,
+  });
+  if (args["no-poll"]) return;
+  const task = await pollTask(apiKey, "multi-image-to-3d", taskId);
+  await download(task.model_urls?.glb, path.join(output, `${slug}-master.glb`));
+  const thumbnailEntries = Object.entries(task.thumbnail_urls || {});
+  if (!thumbnailEntries.length && task.thumbnail_url) thumbnailEntries.push(["preview", task.thumbnail_url]);
+  if (task.alpha_thumbnail_url) thumbnailEntries.push(["alpha", task.alpha_thumbnail_url]);
+  for (const [view, url] of thumbnailEntries) {
+    await downloadOptional(url, path.join(output, `${slug}-${view}.png`));
+  }
+  await writeMetadata(path.join(output, `${slug}.meta.json`), {
+    ...taskSummary(task),
+    sourceImages: images.map((file) => path.relative(process.cwd(), path.resolve(file))),
+    masterFile: `${slug}-master.glb`,
+    thumbnails: thumbnailEntries.map(([view]) => `${slug}-${view}.png`),
+    request: redactedRequest,
   });
 }
 
@@ -379,10 +435,69 @@ async function main() {
     const taskId = required(args, "task-id");
     const task = await apiRequest(apiKey, endpointForTaskType(taskType, taskId));
     console.log(JSON.stringify(taskSummary(task), null, 2));
+    /* A long Meshy job may finish successfully just as the final asset
+       download loses its connection.  Let status double as a resumable
+       download rather than submitting a second paid generation whose shape
+       would no longer match the completed preview/refine task. */
+    if (args.output || args.slug) {
+      const output = path.resolve(required(args, "output"));
+      const slug = required(args, "slug");
+      if (task.status !== "SUCCEEDED") {
+        throw new Error(`${taskType} task ${taskId} is ${task.status || "UNKNOWN"}, not SUCCEEDED`);
+      }
+      const resumedFile = {
+        "text-to-3d": `${slug}-master.glb`,
+        "image-to-3d": `${slug}-master.glb`,
+        "multi-image-to-3d": `${slug}-master.glb`,
+        remesh: `${slug}-remeshed.glb`,
+        rigging: `${slug}-rigged.glb`,
+        animations: `${slug}.glb`,
+      }[taskType];
+      const metadataFile = {
+        remesh: `${slug}-remesh.meta.json`,
+        rigging: `${slug}-rig.meta.json`,
+      }[taskType] || `${slug}.meta.json`;
+      const modelUrl = taskType === "rigging"
+        ? task.result?.rigged_character_glb_url
+        : taskType === "animations"
+          ? task.result?.animation_glb_url
+          : task.model_urls?.glb;
+      await download(modelUrl, path.join(output, resumedFile));
+      const rigFiles = taskType === "rigging" ? {
+        rigged: resumedFile,
+        walking: `${slug}-walk.glb`,
+        running: `${slug}-run.glb`,
+      } : null;
+      if (rigFiles) {
+        await downloadOptional(task.result?.basic_animations?.walking_glb_url,
+          path.join(output, rigFiles.walking));
+        await downloadOptional(task.result?.basic_animations?.running_glb_url,
+          path.join(output, rigFiles.running));
+      }
+      const thumbnailEntries = Object.entries(task.thumbnail_urls || {});
+      if (!thumbnailEntries.length && task.thumbnail_url) {
+        thumbnailEntries.push(["preview", task.thumbnail_url]);
+      }
+      for (const [view, url] of thumbnailEntries) {
+        await downloadOptional(url, path.join(output, `${slug}-${view}.png`));
+      }
+      const fileContract = ["text-to-3d", "image-to-3d", "multi-image-to-3d"].includes(taskType)
+        ? { masterFile: resumedFile }
+        : taskType === "rigging"
+          ? { files: rigFiles }
+          : { file: resumedFile };
+      await writeMetadata(path.join(output, metadataFile), {
+        source: `Meshy ${taskType} resumed download`,
+        task: taskSummary(task),
+        ...fileContract,
+        thumbnails: thumbnailEntries.map(([view]) => `${slug}-${view}.png`),
+      });
+    }
     return;
   }
   if (mode === "text-to-3d") return runTextTo3d(apiKey, args);
   if (mode === "image-to-3d") return runImageTo3d(apiKey, args);
+  if (mode === "multi-image-to-3d") return runMultiImageTo3d(apiKey, args);
   if (mode === "remesh") return runRemesh(apiKey, args);
   if (mode === "rig") return runRig(apiKey, args);
   if (mode === "animate") return runAnimation(apiKey, args);

@@ -4,34 +4,34 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <meta name="theme-color" content="#0b0809" />
-  <title>SAINTFALL - Vesper-IX - Rainbot Network</title>
+  <title>SAINTFALL - Rainbot Network</title>
   <link rel="manifest" href="../site.webmanifest" />
   <link rel="canonical" href="https://clesterdpt-lgtm.github.io/rainbot-gaming/games/saintfall.html" />
-  <meta name="description" content="Drop onto Vesper-IX. A two-kilometre desert basin where a colossal reliquary fell out of orbit, and eleven districts of gilded low-poly wreckage between you and the Vault-Cathedral." />
+  <meta name="description" content="Drop onto the desert basin where a colossal reliquary fell out of orbit, and eleven districts of gilded low-poly wreckage between you and the Vault-Cathedral." />
   <meta property="og:title" content="SAINTFALL" />
-  <meta property="og:description" content="Operation THE GILDED SILENCE. A large-scale low-poly warzone: the Fallen Saint, the Ossuary, the Glass Scar, the Choir Spires and the Censer Works." />
+  <meta property="og:description" content="Hunt six district bosses, break the colossal Coulter beneath the Fallen Saint, then face the Apostate in the Vault-Cathedral." />
   <meta property="og:image" content="https://clesterdpt-lgtm.github.io/rainbot-gaming/assets/img/saintfall/card-saintfall.jpg?v=20260810-cover-2" />
   <meta property="og:type" content="website" />
   <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:title" content="SAINTFALL: Vesper-IX" />
+  <meta name="twitter:title" content="SAINTFALL" />
   <meta name="twitter:description" content="Cross the gilded silence and reach the Vault-Cathedral." />
   <meta name="twitter:image" content="https://clesterdpt-lgtm.github.io/rainbot-gaming/assets/img/saintfall/card-saintfall.jpg?v=20260810-cover-2" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%230b0809'/%3E%3Cpath d='M12 74h76' stroke='%23d8a441' stroke-width='5' stroke-linecap='round'/%3E%3Cpath d='M50 20c11 0 18 9 18 21s-7 24-18 33c-11-9-18-21-18-33s7-21 18-21z' fill='none' stroke='%23f6d585' stroke-width='5' stroke-linejoin='round'/%3E%3Ccircle cx='50' cy='40' r='5' fill='%234d8c74'/%3E%3C/svg%3E" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700&family=Share+Tech+Mono&display=swap&v=20260811-9" />
-  <link rel="stylesheet" href="../assets/css/styles.css?v=20260806-network-polish-1" />
-  <link rel="stylesheet" href="../assets/css/saintfall.css?v=20260811-9" />
+  <link rel="stylesheet" href="../assets/css/styles.css?v=20260812-game-chrome-2" />
+  <link rel="stylesheet" href="../assets/css/saintfall.css?v=20260830-character-roster-shell-1" />
+  <link rel="stylesheet" href="../assets/css/saintfall-ui.css?v=20260823-rebindable-controls-1" />
 </head>
-<body class="rb-standalone-shell saintfall-shell">
+<body class="rb-standalone-shell saintfall-shell" data-rb-native-escape-menu="true">
   <nav class="nav"><div id="nav-slot"></div></nav>
 
   <main class="game-page saintfall-page">
     <div class="game-page__header">
       <div>
         <h1 class="game-page__title">SAINTFALL</h1>
-        <div class="game-page__sub">Vesper-IX &middot; Operation The Gilded Silence &middot; a 2km basin, eleven districts</div>
+        <div class="game-page__sub">Operation The Gilded Silence &middot; a 2km basin, eleven districts</div>
       </div>
       <a href="../games.html" class="btn btn--ghost" style="font-size:14px;padding:8px 14px;">All games</a>
     </div>
@@ -40,25 +40,15 @@
       <div class="game-stage rb-standalone-stage saintfall-stage-shell">
         <div class="canvas-wrap rb-standalone-surface">
           <div class="sf-stage">
-            <button class="sf-fs-btn fullscreen-btn" id="sf-fullscreen" type="button" aria-label="Max screen" title="Max screen">&#9974;</button>
-
             <canvas id="sf-canvas" aria-label="SAINTFALL playfield"></canvas>
             <div id="sf-hud"></div>
             <div id="sf-touch" data-touch-controls aria-label="SAINTFALL touch controls" aria-hidden="true"></div>
+            <div id="sf-tutorial" hidden aria-hidden="true"></div>
             <div id="sf-intro" aria-hidden="true"></div>
 
             <div id="sf-boot">
               <a class="sf-boot__back" href="../games.html">&larr; Rainbot</a>
-              <div class="sf-boot__mark" aria-label="SAINTFALL loading">
-                <div class="sf-boot__ring"></div>
-                <div class="sf-boot__ring"></div>
-                <svg class="sf-boot__glyph" viewBox="0 0 120 120" role="img" aria-hidden="true">
-                  <path d="M60 22c14 0 23 12 23 27s-9 30-23 42c-14-12-23-27-23-42s9-27 23-27z" />
-                  <path d="M46 54h28M60 42v34" />
-                </svg>
-              </div>
               <h2 class="sf-boot__title">SAINTFALL</h2>
-              <p class="sf-boot__sub">Operation The Gilded Silence</p>
               <div class="sf-boot__bar"><div class="sf-boot__fill" id="sf-boot-fill"></div></div>
               <div class="sf-boot__status" id="sf-boot-status">Standing by</div>
               <div class="sf-boot__tip" id="sf-boot-tip"></div>
@@ -75,25 +65,32 @@
 
         <div class="game-side__panel game-side__panel--saintfall">
           <h3 class="game-side__title">THE GILDED SILENCE</h3>
-          <p>Drop onto Vesper-IX and cross the basin to the Vault-Cathedral. Track Bloom breaches on the tactical map, purge each rising brood, and survive until the Matriarch surfaces.</p>
-          <p>Click the playfield to capture the mouse. Fire with LMB, aim with RMB, and use Q for melee.</p>
+          <p>Hunt the guardian of Censer Works, Glass Scar, the Ossuary, the Bloom, Choir Spires, and the Gilded Reach. Those six victories awaken the colossal Coulter beneath the Fallen Saint; break it to open the Vault-Cathedral and its Apostate.</p>
+          <p>Click the playfield to capture the mouse. Fire with LMB, aim with RMB, use F for melee, press Esc for the field menu, and hold Q + left click to select a missile drop.</p>
         </div>
-
-        <div id="ad-leaderboard"></div>
-        <div id="ad-rectangle" style="display:flex; justify-content:center;"></div>
 
         <details class="game-side__howto">
           <summary>How to play</summary>
           <ul>
-            <li>Move with WASD, sprint with Shift, crouch with Ctrl, and vault with Space.</li>
-            <li>Hold Shift + Space to use the jetpack; Ctrl descends while airborne.</li>
-            <li>Tap E while moving to boost-slide; forward boosts damage and deflect lighter enemies.</li>
-            <li>Hold X to project a frontal gold Aegis shield; it drains the same reliquary charge as the jetpack.</li>
-            <li>Look with the mouse, fire with LMB, aim with RMB, and use Q for melee.</li>
-            <li>On touch, drag the left relic to move, swipe the right side to look, and use the labeled hold/tap controls.</li>
-            <li>Follow the tactical mini-map when a Bloom breach opens. Every marked event brood must be defeated before the next, harder surge begins.</li>
-            <li>Use 1&ndash;5 to change the light, F to detach the camera, and H to hide the HUD.</li>
-            <li>Reach the Vault-Cathedral and survive the districts between the drop and the nave.</li>
+            <li>Move with WASD at full stride, and vault with Space.</li>
+            <li>Tap Shift to ignite the glide, and <b>hold</b> it to keep gliding - steer with A, S or D, and keep firing throughout. Gliding forward burns through light enemies and throws them clear.</li>
+            <li>Hold Shift + Space to use the jetpack.</li>
+            <li>Press F while airborne for the Penitent's Fall - a ground slam that damages and stuns everything around the point of impact.</li>
+            <li>Hold E to project a frontal gold Aegis shield; it drains the same reliquary charge as the jetpack. Connected melee strikes reclaim charge, with an extra return on kills.</li>
+            <li>Look with the mouse, fire with LMB, aim with RMB, and use F for melee.</li>
+            <li>Hold <b>Q</b>, hover toward a field command (missile drop, cluster, resupply), and <b>left click</b> to deploy. Releasing Q or clicking the centre cancels.</li>
+            <li>Press <b>Esc</b> for the operation menu, controls, settings, and field saves.</li>
+            <li>On touch, drag the left relic to move, swipe the right side to look, and hold-drag the labeled <b>Call</b> control for field command.</li>
+            <li>Use the six gold boss markers to choose your route. Defeat every district guardian, then follow the new Fallen Saint signal to the penultimate fight.</li>
+            <li>Bloom waves arrive intermittently on the roads between hunts. If you outrun a wave it burrows and returns near you after a recovery window; it will not enter an undefeated boss arena.</li>
+            <li>The Bloom holds the Abbess &mdash; a queen too swollen to move. She lays clutches of eggs behind her: burn them before they split, because every Thresher that survives will walk back and feed her. When she heaves her abdomen up to slam, the underside is the softest thing on her.</li>
+            <li>The Ossuary holds the Garner. Walk in and the pan falls in with you: its tentacles break ground beside you and strike, and one that misses lies on the sand for a few seconds before it drags itself home — that is when a polearm can reach it. Cut enough of them and the mouth gapes.</li>
+            <li>The Choir Spires hold the Stylite, which fights from the needle crowns and never comes down on its own. Shooting it does not just hurt it &mdash; it wears through the grip holding it up there. Empty that and it falls eighty metres onto the flats, and a polearm does nearly triple damage to the thing while it is lying stunned in its own crater.</li>
+            <li>The Coulter waits beneath the Fallen Saint: a hundred-metre ridge moving through the sand that cannot be hurt until it surfaces.</li>
+            <li>Boss territory warnings mark each arena boundary. Turn back when the exit warning appears; crossing the boundary resets that boss to full strength.</li>
+            <li>Do not stand in the green. Venom keeps working after you leave it.</li>
+            <li>Press <strong>M</strong> for the full tactical map and objective list. Press it again to resume the operation.</li>
+            <li>The Cathedral confrontation stays sealed until all six districts and the Fallen Saint Coulter are defeated.</li>
           </ul>
         </details>
       </aside>
@@ -113,27 +110,39 @@
         <h3>The Districts</h3>
         <ul>
           <li>The Threshold &mdash; landing zone, south gate</li>
-          <li>The Gilded Reach &mdash; dune sea and singing vanes</li>
+          <li>The Gilded Reach &mdash; dune sea, singing vanes, and the Matriarch</li>
           <li>The Fallen Saint &mdash; the reliquary, and what is left of it</li>
           <li>Vault-Cathedral &mdash; nave, rose window, open ribs</li>
-          <li>The Ossuary &mdash; one animal, ninety metres of it</li>
-          <li>The Glass Scar &mdash; an orbital strike, vitrified</li>
-          <li>The Censer Works &mdash; promethium, and three flare stacks</li>
-          <li>The Choir Spires &mdash; wind-carved needles</li>
-          <li>The Bloom &mdash; chitin, spores, and the Throat</li>
+          <li>The Ossuary &mdash; bone courtyards, and the Garner sunk in a sand funnel</li>
+          <li>The Glass Scar &mdash; an orbital strike, vitrified, guarded by the Distaff</li>
+          <li>The Censer Works &mdash; promethium, three flare stacks, and the Winnower</li>
+          <li>The Choir Spires &mdash; wind-carved needles and the Stylite perched on their crowns</li>
+          <li>The Bloom &mdash; chitin, spores, and the Abbess seated in the Throat</li>
           <li>The Fosse &mdash; the old trench line</li>
           <li>The Pilgrim's Road &mdash; the spine of the map</li>
         </ul>
       </div>
       <div class="sf-brief__card">
+        <h3>The Brood</h3>
+        <ul>
+          <li>Thresher &mdash; knee-high, six legs, forty at a time</li>
+          <li>Gleaner &mdash; four stilts, three metres up, shoots from fifty</li>
+          <li>Harrow &mdash; wide, low, and the reason your cover stops working</li>
+          <li>Matriarch &mdash; nine metres of it, holding the Gilded Reach; the Abbess lays one when she is dying</li>
+          <li>Coulter &mdash; a hundred-metre penultimate boss beneath the Fallen Saint</li>
+          <li>Stylite &mdash; a leaping Choir bug that jumps crown to crown and shoots down at you</li>
+        </ul>
+      </div>
+      <div class="sf-brief__card">
         <h3>Controls</h3>
         <ul>
-          <li><b>WASD</b> move, <b>Shift</b> sprint, <b>Ctrl</b> crouch</li>
-          <li><b>Space</b> vault, hold <b>Shift+Space</b> for jetpack, <b>E</b> boost slide, hold <b>X</b> to block, <b>Ctrl</b> descends</li>
-          <li><b>Mouse</b> look (click to capture), <b>LMB</b> fire, <b>RMB</b> aim, <b>Q</b> melee, <b>R</b> vent heat</li>
-          <li><b>Touch</b> left relic to move, swipe to look, and use the labeled hold/tap controls</li>
-          <li><b>1&ndash;5</b> golden hour / high sun / vespers / night / ochre front</li>
-          <li><b>F</b> detach the camera, <b>H</b> hide the HUD</li>
+          <li><b>WASD</b> move, <b>Space</b> vault</li>
+          <li><b>Shift</b> tap to boost, hold to glide (steer with A/S/D, fire while gliding)</li>
+          <li>Hold <b>Shift+Space</b> for jetpack, <b>F</b> airborne for the ground slam</li>
+          <li><b>Mouse</b> look (click to capture), <b>LMB</b> fire, <b>RMB</b> aim, <b>F</b> melee, hold <b>E</b> to block, <b>R</b> vent heat</li>
+          <li><b>Q</b> hold and left click to deploy field command / missile drop (release Q to cancel)</li>
+          <li><b>Tab</b> or <b>Esc</b> operation menu, controls, settings, save and load</li>
+          <li><b>Touch</b> left relic to move, swipe to look, and hold-drag <b>Call</b> for field command</li>
         </ul>
       </div>
       <div class="sf-brief__card">
@@ -156,45 +165,10 @@
     <div>&copy; 2026 Rainbot Network. Parody.</div>
   </footer>
 
-  <script>
-    (() => {
-      const btn = document.getElementById("sf-fullscreen");
-      const stage = document.querySelector(".sf-stage");
-      const surface = stage.closest(".rb-standalone-surface") || stage;
-      const syncMaxButton = (active) => {
-        btn.textContent = active ? "✕" : "⛶";
-        btn.setAttribute("aria-label", active ? "Exit max screen" : "Max screen");
-        btn.setAttribute("title", active ? "Exit max screen" : "Max screen");
-      };
-      btn.addEventListener("click", () => {
-        const maxed = stage.classList.toggle("is-maxed");
-        document.documentElement.classList.toggle("sf-maximised", maxed);
-        document.body.classList.toggle("rb-game-maxed", maxed);
-        syncMaxButton(maxed);
-        if (maxed && surface.requestFullscreen) surface.requestFullscreen().catch(() => {});
-        else if (!maxed && document.fullscreenElement) document.exitFullscreen().catch(() => {});
-        window.dispatchEvent(new Event("resize"));
-      });
-      document.addEventListener("fullscreenchange", () => {
-        if (!document.fullscreenElement) {
-          stage.classList.remove("is-maxed");
-          document.documentElement.classList.remove("sf-maximised");
-          document.body.classList.remove("rb-game-maxed");
-          syncMaxButton(false);
-          window.dispatchEvent(new Event("resize"));
-        }
-      });
-    })();
-  </script>
-
   <!-- ads.js defines the RB global that main.js subscribes to; loading
        main.js without it throws before the nav ever renders. -->
   <script src="../assets/js/ads.js?v=20260627-profile-stats-1"></script>
-  <script src="../assets/js/main.js?v=20260806-network-polish-1"></script>
-  <script src="../assets/js/saintfall/boot.js?v=20260811-9"></script>
-  <script>
-    renderAdSlot(document.getElementById("ad-leaderboard"), "leaderboard");
-    renderAdSlot(document.getElementById("ad-rectangle"), "rectangle");
-  </script>
+  <script src="../assets/js/main.js?v=20260814-apostate-direct-start-1"></script>
+  <script src="../assets/js/saintfall/boot.js?v=20260830-cast-aim-1"></script>
 </body>
 </html>

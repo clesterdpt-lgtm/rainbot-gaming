@@ -1,0 +1,85 @@
+{
+  "generatedAt": "2026-07-25T02:10:29.604651+00:00",
+  "pipeline": "Meshy text-to-3D prop -> Blender crop/decimate/variant/export",
+  "id": "moth-veil",
+  "label": "The Veiled Moth",
+  "description": "A compressed beak framed by broad oxblood moth wings and a fine veil.",
+  "source": "/Volumes/External SSD/Projects/RainbotGaming/assets/models/mr-feast/source/banquet/mask-raven-source-master.glb",
+  "output": "mask-moth-veil.glb",
+  "forwardAxis": "+Z",
+  "cropBottomRatio": 0.22,
+  "authoredScale": [
+    1.16,
+    0.43,
+    0.86
+  ],
+  "ornament": "moth-wings",
+  "sourceTriangles": 1052628,
+  "triangles": 52822,
+  "boundsMeters": {
+    "min": [
+      -0.420263,
+      -0.092499,
+      -0.340243
+    ],
+    "max": [
+      0.420263,
+      0.092499,
+      0.230038
+    ],
+    "size": [
+      0.840527,
+      0.184999,
+      0.570281
+    ]
+  },
+  "textureMaxSize": 512,
+  "images": [
+    {
+      "name": "Image_0",
+      "width": 512,
+      "height": 512
+    },
+    {
+      "name": "Image_0.001",
+      "width": 512,
+      "height": 512
+    },
+    {
+      "name": "Image_1",
+      "width": 512,
+      "height": 512
+    },
+    {
+      "name": "Image_1.001",
+      "width": 512,
+      "height": 512
+    },
+    {
+      "name": "Image_2",
+      "width": 512,
+      "height": 512
+    },
+    {
+      "name": "Image_2.001",
+      "width": 512,
+      "height": 512
+    },
+    {
+      "name": "Image_3",
+      "width": 512,
+      "height": 512
+    },
+    {
+      "name": "Image_3.001",
+      "width": 512,
+      "height": 512
+    }
+  ],
+  "materials": [
+    "Banquet_Mask_Moth_Veil_Material_01"
+  ],
+  "fileBytes": 2914348,
+  "rigged": false,
+  "validatedFor": "Three.js r128 static GLTFLoader"
+}

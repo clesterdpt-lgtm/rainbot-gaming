@@ -1,0 +1,80 @@
+{
+  "generatedAt": "2026-07-16T00:02:56.385375+00:00",
+  "input": "/Volumes/External SSD/Projects/RainbotGaming/assets/models/mr-feast/processed/mr-feast-working.blend",
+  "output": "/Volumes/External SSD/Projects/RainbotGaming/assets/models/mr-feast/processed/mr-feast-game-faced.glb",
+  "topologyPolicy": "optimized-source readable expressions",
+  "morphNormalExported": false,
+  "vertexCountBefore": 55133,
+  "vertexCountAfter": 55133,
+  "trianglesBefore": 65000,
+  "trianglesAfter": 65000,
+  "skinnedMeshes": 1,
+  "bones": 24,
+  "targets": [
+    "blink_left",
+    "blink_right",
+    "brow_raise",
+    "brow_compress",
+    "smile",
+    "smile_wide",
+    "sneer_left",
+    "sneer_right",
+    "mouth_open",
+    "jaw_shift"
+  ],
+  "targetStats": {
+    "blink_left": {
+      "changedVertices": 99,
+      "maxDeltaMillimeters": 5.809
+    },
+    "blink_right": {
+      "changedVertices": 135,
+      "maxDeltaMillimeters": 5.088
+    },
+    "brow_raise": {
+      "changedVertices": 368,
+      "maxDeltaMillimeters": 8.061
+    },
+    "brow_compress": {
+      "changedVertices": 368,
+      "maxDeltaMillimeters": 4.834
+    },
+    "smile": {
+      "changedVertices": 613,
+      "maxDeltaMillimeters": 6.435
+    },
+    "smile_wide": {
+      "changedVertices": 613,
+      "maxDeltaMillimeters": 12.948
+    },
+    "sneer_left": {
+      "changedVertices": 342,
+      "maxDeltaMillimeters": 8.192
+    },
+    "sneer_right": {
+      "changedVertices": 271,
+      "maxDeltaMillimeters": 8.173
+    },
+    "mouth_open": {
+      "changedVertices": 708,
+      "maxDeltaMillimeters": 6.065
+    },
+    "jaw_shift": {
+      "changedVertices": 1266,
+      "maxDeltaMillimeters": 7.207
+    }
+  },
+  "previews": [
+    "/Volumes/External SSD/Projects/RainbotGaming/output/blender/mr-feast-face/mr-feast-face-neutral.png",
+    "/Volumes/External SSD/Projects/RainbotGaming/output/blender/mr-feast-face/mr-feast-face-friendly.png",
+    "/Volumes/External SSD/Projects/RainbotGaming/output/blender/mr-feast-face/mr-feast-face-watching.png",
+    "/Volumes/External SSD/Projects/RainbotGaming/output/blender/mr-feast-face/mr-feast-face-threatened.png",
+    "/Volumes/External SSD/Projects/RainbotGaming/output/blender/mr-feast-face/mr-feast-face-blink_left.png",
+    "/Volumes/External SSD/Projects/RainbotGaming/output/blender/mr-feast-face/mr-feast-face-blink_both.png"
+  ],
+  "limitations": [
+    "Source face has no animation-ready eyelid loops, oral cavity, separate eyes, or facial bones.",
+    "blink targets are restrained squints; full eyelid closure requires face retopology.",
+    "mouth_open is a restrained lip-parting micro-expression, not a speech-capable jaw opening."
+  ]
+}

@@ -190,6 +190,17 @@ export function buildCollision(ctx, world) {
    *  Most of the map is terrain; authored raised floors can opt in
    *  through the world without becoming blocking obstacles. */
   function groundHeight(x, z) {
+    /* AN OVERRIDE, NOT A MAXIMUM, and that distinction is the whole
+       reason a cavern can exist in this game at all. `walkSurfaceAt`
+       below can only ever RAISE the floor, because an authored road
+       lying on terrain is the only thing it was written for. A room
+       carved under the map has to LOWER it, which no max can do - so
+       the undercroft answers first and its answer is taken whole.
+
+       It is `null` everywhere and always except inside one disc,
+       during one phase of one fight; see undercroft.js. */
+    const underY = ctx.undercroft?.groundOverrideAt?.(x, z);
+    if (underY !== null && underY !== undefined) return underY;
     const terrainY = terrain.groundHeightAt
       ? terrain.groundHeightAt(x, z)
       : terrain.heightAt(x, z);
@@ -255,9 +266,24 @@ export function buildCollision(ctx, world) {
   }
 
   function rasterMesh(mesh) {
+    /* Collision is built before the first rendered frame. Nested live
+       landmarks therefore have not had Three's renderer update their
+       matrixWorld yet: the landed pod's meshes all still reported the
+       identity transform here, were sampled at the Fallen Saint instead
+       of at THRESHOLD, and contributed zero cells. The picture was in the
+       right place because the renderer fixed the matrices later; collision
+       had already baked the wrong place forever. Update the complete
+       ancestor chain before reading it so every transformed structure is
+       rasterised where it is actually drawn. */
+    mesh.updateWorldMatrix(true, false);
     const geo = mesh.geometry;
     const pos = geo.attributes.position;
     if (!pos) return;
+    /* Dense curved hulls are built from sub-cell triangles even though
+       the assembled surface is several metres across. Explicitly tagged
+       structural meshes bypass the per-triangle clutter filter below;
+       their shipped triangles still define the exact collider. */
+    const structuralMesh = mesh.userData.collisionSolid === true;
     const idx = geo.index;
     const count = idx ? idx.count : pos.count;
     const m = mesh.matrixWorld;
@@ -304,7 +330,7 @@ export function buildCollision(ctx, world) {
          walls remain in full even when their tops rise much higher.
          Thin decorative wire stays brush-through, matching walking. */
       const footprint = Math.max(maxX - minX, maxZ - minZ);
-      if (footprint >= 0.5) {
+      if (structuralMesh || footprint >= 0.5) {
         const ga = groundAt(wax, waz);
         const gb = groundAt(wbx, wbz);
         const gc = groundAt(wcx, wcz);
@@ -342,7 +368,7 @@ export function buildCollision(ctx, world) {
          with a real footprint - a pillar, a wall, a rock - clears it
          easily, because the test is the LONGER of the two horizontal
          dimensions, so a thin wall still counts along its length. */
-      if (Math.max(maxX - minX, maxZ - minZ) < 0.5) continue;
+      if (!structuralMesh && Math.max(maxX - minX, maxZ - minZ) < 0.5) continue;
       /* Wholly buried geometry cannot block. The Saint's 108m head is
          sunk ten metres into the dune and its lower half was marking
          cells solid where the player sees only sand. Tested per
@@ -484,14 +510,25 @@ export function buildCollision(ctx, world) {
   }
 
   const meshes = [];
-  world.group.traverse((o) => {
+  const collect = (o) => {
     if (!o.isMesh) return;
     // The raised paving is represented by world.walkSurfaceAt and is
     // therefore support, never an obstacle. Road furniture is kept in
     // a separate `road-stone` mesh and rasterised normally.
     if (o.name.startsWith("road-surface-")) return;
+    /* Additive light cards have geometry and no substance. The
+       lander's halo shaft is a 26m cone: rasterised, it becomes an
+       invisible tower standing on the drop site, and the first thing
+       the player does after the cinematic is walk into it. */
+    if (o.userData.noCollide) return;
     meshes.push(o);
-  });
+  };
+  world.group.traverse(collect);
+  /* The lander is a live, hinged object in the scene rather than a
+     merged member of the world batch, so it has to be handed to the
+     rasteriser explicitly. It is baked in its LANDED pose, which is
+     the only pose it holds while anything is walking around it. */
+  if (ctx.pod?.root) ctx.pod.root.traverse(collect);
   /* Per-mesh cell counts, kept because "something is walling off
      open desert" is unanswerable without provenance: the grid stores
      a height, not who put it there. */
@@ -499,8 +536,15 @@ export function buildCollision(ctx, world) {
   const buildT0 = (typeof performance !== "undefined" ? performance.now() : Date.now());
   for (const mesh of meshes) {
     const before = cells;
+    const beforeFlight = flightCells;
+    const beforeIntervals = flightIntervals;
     rasterMesh(mesh);
-    perMesh.push({ name: mesh.name, cells: cells - before });
+    perMesh.push({
+      name: mesh.name,
+      cells: cells - before,
+      flightCells: flightCells - beforeFlight,
+      flightIntervals: flightIntervals - beforeIntervals,
+    });
   }
   perMesh.sort((a, b) => b.cells - a.cells);
   const buildMs = (typeof performance !== "undefined" ? performance.now() : Date.now()) - buildT0;
@@ -513,6 +557,18 @@ export function buildCollision(ctx, world) {
      ------------------------------------------------------------ */
 
   const RADIUS = 0.42;
+  /* Feet may settle into the rendered terrain by only this small skin.
+     The previous 10cm allowance was large enough to put a boot and the
+     chase ray visibly below a steep hill for a frame. */
+  const FLIGHT_TERRAIN_SKIN = 0.02;
+  const FLIGHT_TERRAIN_RING_PROBES = 64;
+  const FLIGHT_TERRAIN_UNIT_RING = Array.from(
+    { length: FLIGHT_TERRAIN_RING_PROBES },
+    (_, i) => {
+      const a = i * Math.PI * 2 / FLIGHT_TERRAIN_RING_PROBES;
+      return [Math.cos(a), Math.sin(a)];
+    }
+  );
   /* What the player can walk up without being stopped. Kerbs, steps,
      rubble, bone fragments and the causeway edge are all below this.
 
@@ -530,23 +586,241 @@ export function buildCollision(ctx, world) {
   function blocked(x, z, feetY, radius = RADIUS) {
     const knee = feetY + STEP;        // steppable below this
     const head = feetY + HEAD_ROOM;   // duckable above this
-    // An obstruction only stops the player if it overlaps the body:
-    // its top must be above the step height AND its bottom below head
-    // height. Testing the top alone cannot tell a wall from an
-    // overhang, and made the ground under every arch impassable.
-    const hit = (px, pz) => {
-      const c = cellAt(px, pz);
-      return c !== null && c.hi > knee && c.lo < head;
+    /* Test the complete capsule disk against the occupied grid cells.
+       Nine isolated samples were enough for the 0.42m player, but left
+       an unsampled annulus inside larger enemy bodies: at one shipped
+       Harrow spawn radius 0.96 reported blocked while radius 1.05
+       reported clear. The creature could therefore step across thin
+       walls even though its smaller body would have hit them.
+
+       Circle-vs-cell AABB overlap is exact for the raster we actually
+       navigate and cheap at these sizes (normally 4 cells for the
+       player, 9 for an ordinary enemy). */
+    const r = Math.max(0, Number(radius) || 0);
+    const minGX = Math.max(0, Math.floor((x - r + HALF) / CELL));
+    const maxGX = Math.min(HALF * 2 - 1, Math.floor((x + r + HALF) / CELL));
+    const minGZ = Math.max(0, Math.floor((z - r + HALF) / CELL));
+    const maxGZ = Math.min(HALF * 2 - 1, Math.floor((z + r + HALF) / CELL));
+    const r2 = r * r + 1e-9;
+    for (let gz = minGZ; gz <= maxGZ; gz += 1) {
+      const z0 = gz * CELL - HALF;
+      const nearestZ = Math.max(z0, Math.min(z0 + CELL, z));
+      const dz = z - nearestZ;
+      for (let gx = minGX; gx <= maxGX; gx += 1) {
+        const x0 = gx * CELL - HALF;
+        const nearestX = Math.max(x0, Math.min(x0 + CELL, x));
+        const dx = x - nearestX;
+        if (dx * dx + dz * dz > r2) continue;
+        const c = cellAt(x0 + CELL * 0.5, z0 + CELL * 0.5);
+        // An obstruction only stops the capsule if it overlaps the body:
+        // its top is above step height and its bottom is below head height.
+        if (c !== null && c.hi > knee && c.lo < head) return true;
+      }
+    }
+    return false;
+  }
+
+  /* ------------------------------------------------------------
+     WALKING NAVIGATION
+
+     Movement collision answers whether one candidate capsule is legal.
+     It cannot answer how to get around a wall: repeatedly asking `slide`
+     for the same player-facing step leaves an enemy pressing into one
+     collision cell forever. These two queries keep route planning beside
+     the authoritative solidity grid, so AI never invents a second set of
+     structure bounds that can drift away from the rendered world.
+     ------------------------------------------------------------ */
+
+  let pathQueries = 0;
+  let pathDirect = 0;
+  let pathSuccesses = 0;
+  let pathFailures = 0;
+  let pathExpanded = 0;
+  let pathWorstExpanded = 0;
+  let pathWaypoints = 0;
+
+  /** Does a walking capsule have a clear swept line between two points? */
+  function walkClear(ax, az, bx, bz, radius = RADIUS) {
+    const dx = bx - ax;
+    const dz = bz - az;
+    const dist = Math.hypot(dx, dz);
+    if (dist < 1e-6) {
+      return !blocked(bx, bz, groundHeight(bx, bz), radius);
+    }
+    /* Stay below half a collision cell. Endpoint-only tests can hop a
+       thin wall when the navigation lattice is wider than the wall. */
+    const stride = Math.max(0.24, Math.min(0.48, radius * 0.55));
+    const steps = Math.max(1, Math.ceil(dist / stride));
+    for (let i = 1; i <= steps; i += 1) {
+      const t = i / steps;
+      const x = ax + dx * t;
+      const z = az + dz * t;
+      if (blocked(x, z, groundHeight(x, z), radius)) return false;
+    }
+    return true;
+  }
+
+  /**
+   * Bounded A* over the shipped collision raster.
+   *
+   * This is deliberately requested only by an enemy that has already
+   * stalled, not run for every creature every frame. A coarse lattice
+   * finds the side of a courtyard or wreck; `walkClear` then smooths the
+   * result back to a few long, safe steering legs. The exact player goal
+   * stays off-grid, so routes do not end one lattice cell beside them.
+   */
+  function findPath(sx, sz, gx, gz, radius = RADIUS, options = {}) {
+    pathQueries += 1;
+    const direct = Math.hypot(gx - sx, gz - sz);
+    if (direct < 1e-4) return [];
+    if (walkClear(sx, sz, gx, gz, radius)) {
+      pathDirect += 1;
+      return [[gx, gz]];
+    }
+
+    const spacing = Number.isFinite(options.spacing)
+      ? Math.max(0.9, Number(options.spacing))
+      : 1.0;
+    const maxNodes = Number.isFinite(options.maxNodes)
+      ? Math.max(128, Math.floor(options.maxNodes)) : 7000;
+    const detour = Number.isFinite(options.detour)
+      ? Math.max(spacing * 4, Number(options.detour))
+      : Math.max(220, Math.min(360, direct * 4.5));
+    const maxEstimate = direct + detour;
+    const SQRT2 = Math.SQRT2;
+    const neighbours = [
+      [1, 0, 1], [-1, 0, 1], [0, 1, 1], [0, -1, 1],
+      [1, 1, SQRT2], [1, -1, SQRT2], [-1, 1, SQRT2], [-1, -1, SQRT2],
+    ];
+    const keyOf = (ix, iz) => `${ix},${iz}`;
+    const worldAt = (ix, iz) => [sx + ix * spacing, sz + iz * spacing];
+
+    const open = [];
+    const push = (node) => {
+      let i = open.length;
+      open.push(node);
+      while (i > 0) {
+        const p = (i - 1) >> 1;
+        if (open[p].f <= node.f) break;
+        open[i] = open[p];
+        i = p;
+      }
+      open[i] = node;
     };
-    // Centre plus eight probes on the capsule's rim. Cardinal-only
-    // sampling misses a solid cell that clips the capsule at a
-    // diagonal corner; the player can then enter it and be blocked
-    // only after their centre crosses the cell edge.
-    const d = radius * Math.SQRT1_2;
-    return hit(x, z) || hit(x + radius, z) || hit(x - radius, z)
-      || hit(x, z + radius) || hit(x, z - radius)
-      || hit(x + d, z + d) || hit(x + d, z - d)
-      || hit(x - d, z + d) || hit(x - d, z - d);
+    const pop = () => {
+      const first = open[0];
+      const tail = open.pop();
+      if (open.length && tail) {
+        let i = 0;
+        while (true) {
+          const left = i * 2 + 1;
+          if (left >= open.length) break;
+          const right = left + 1;
+          const child = right < open.length && open[right].f < open[left].f
+            ? right : left;
+          if (open[child].f >= tail.f) break;
+          open[i] = open[child];
+          i = child;
+        }
+        open[i] = tail;
+      }
+      return first;
+    };
+
+    const startKey = keyOf(0, 0);
+    const best = new Map([[startKey, 0]]);
+    const parent = new Map();
+    const records = new Map([[startKey, { ix: 0, iz: 0 }]]);
+    const legalCache = new Map([[startKey, true]]);
+    const legal = (ix, iz) => {
+      const key = keyOf(ix, iz);
+      if (legalCache.has(key)) return legalCache.get(key);
+      const [x, z] = worldAt(ix, iz);
+      const ok = Math.abs(x) <= 1010 && Math.abs(z) <= 1010
+        && !blocked(x, z, groundHeight(x, z), radius);
+      legalCache.set(key, ok);
+      return ok;
+    };
+
+    push({ key: startKey, ix: 0, iz: 0, g: 0, f: direct });
+    let found = null;
+    let expanded = 0;
+    while (open.length && expanded < maxNodes) {
+      const cur = pop();
+      if (!cur || cur.g !== best.get(cur.key)) continue;
+      expanded += 1;
+      const [cx, cz] = worldAt(cur.ix, cur.iz);
+      const goalDist = Math.hypot(gx - cx, gz - cz);
+      if (goalDist <= spacing * 1.75 && walkClear(cx, cz, gx, gz, radius)) {
+        found = cur;
+        break;
+      }
+
+      for (const [ox, oz, scale] of neighbours) {
+        const ix = cur.ix + ox;
+        const iz = cur.iz + oz;
+        if (!legal(ix, iz)) continue;
+        /* Do not cut diagonally through the touching corners of two
+           solids. A clear endpoint is not enough for a circular body. */
+        if (ox && oz && (!legal(cur.ix + ox, cur.iz)
+          || !legal(cur.ix, cur.iz + oz))) continue;
+        const [nx, nz] = worldAt(ix, iz);
+        if (!walkClear(cx, cz, nx, nz, radius)) continue;
+        const g = cur.g + spacing * scale;
+        const h = Math.hypot(gx - nx, gz - nz);
+        if (g + h > maxEstimate) continue;
+        const key = keyOf(ix, iz);
+        if (g >= (best.get(key) ?? Infinity) - 1e-6) continue;
+        best.set(key, g);
+        parent.set(key, cur.key);
+        records.set(key, { ix, iz });
+        push({ key, ix, iz, g, f: g + h });
+      }
+    }
+
+    pathExpanded += expanded;
+    pathWorstExpanded = Math.max(pathWorstExpanded, expanded);
+    if (!found) {
+      pathFailures += 1;
+      return null;
+    }
+
+    const raw = [];
+    let key = found.key;
+    while (key && key !== startKey) {
+      const record = records.get(key);
+      if (!record) break;
+      raw.push(worldAt(record.ix, record.iz));
+      key = parent.get(key);
+    }
+    raw.reverse();
+    const tail = raw[raw.length - 1];
+    if (!tail || Math.hypot(tail[0] - gx, tail[1] - gz) > 0.05) raw.push([gx, gz]);
+
+    /* Greedy visibility smoothing retains the furthest safe point from
+       each anchor. A 90-node grid walk normally becomes two or three
+       steering legs, avoiding robotic lattice zig-zags. */
+    const path = [];
+    let ax = sx;
+    let az = sz;
+    let at = 0;
+    while (at < raw.length) {
+      let next = at;
+      for (let i = raw.length - 1; i >= at; i -= 1) {
+        if (!walkClear(ax, az, raw[i][0], raw[i][1], radius)) continue;
+        next = i;
+        break;
+      }
+      const point = raw[next];
+      path.push(point);
+      ax = point[0];
+      az = point[1];
+      at = next + 1;
+    }
+
+    pathSuccesses += 1;
+    pathWaypoints += path.length;
+    return path;
   }
 
   /** Full-height capsule overlap for jetborne movement.
@@ -559,21 +833,36 @@ export function buildCollision(ctx, world) {
    * from imprisoning a capsule that legally stood there. */
   function flightBlocked(x, z, feetY, radius = RADIUS, height = HEAD_ROOM,
     ignoreTerrain = false) {
-    const support = groundHeight(x, z);
-    const takingOff = feetY <= support + STEP + 0.04;
+    /* Being below the support at a CANDIDATE point does not mean the
+       capsule is taking off; it is also exactly what happens when an
+       airborne player flies into a hill. The old inference therefore
+       re-enabled the 0.82m walking-step allowance on uphill contact
+       and accepted a frame with the trooper visibly under terrain.
+       Only the sweep's bounded, legal-launch exemption may classify
+       a probe as takeoff clearance. */
+    const takingOff = ignoreTerrain
+      && feetY <= groundHeight(x, z) + STEP + 0.04;
     const bottom = feetY + 0.02;
     const head = feetY + height;
+    if (!ignoreTerrain) {
+      const terrainLimit = feetY + FLIGHT_TERRAIN_SKIN;
+      /* The capsule occupies a DISK, not nine isolated columns. On a
+         steep rendered triangle, the old centre/cardinal/diagonal
+         probes missed the high point between bearings by 2.5cm.
+
+         On the rendered terrain, a linear triangle reaches its disk
+         maximum on the circular boundary unless a terrain vertex lies
+         inside it. Sample that boundary finely and include every LOD0
+         grid vertex inside the footprint. This keeps the hot authored-
+         mesh span query at its existing nine probes while making hill
+         contact match the visible terrain height field. */
+      if (flightGroundHeight(x, z, radius, terrainLimit) > terrainLimit) return true;
+    }
     const hit = (px, pz) => {
-      /* Terrain is not part of the world mesh raster, but it is still
-         a solid flight boundary. Without this test a boosted capsule
-         could cross a trench bank entirely below the destination
-         surface and then be snapped twenty metres upward by the
-         landing clamp. Preserve the ordinary step allowance while
-         the capsule is lifting from a legal support; once airborne,
-         any terrain above its foot clearance blocks the sweep. */
-      const localGround = groundHeight(px, pz);
-      const groundClearance = takingOff ? STEP + 0.04 : 0.10;
-      if (!ignoreTerrain && localGround > feetY + groundClearance) return true;
+      /* Terrain was resolved against the full footprint above. Keep
+         the local support only to distinguish low, launch-overlapped
+         mesh spans while the authoritative takeoff latch is active. */
+      const localGround = takingOff ? groundHeight(px, pz) : -Infinity;
       const spans = flightCellAt(px, pz);
       if (!spans) return false;
       for (let i = 0; i < spans.length; i += 2) {
@@ -589,6 +878,39 @@ export function buildCollision(ctx, world) {
       || hit(x, z + radius) || hit(x, z - radius)
       || hit(x + d, z + d) || hit(x + d, z - d)
       || hit(x - d, z + d) || hit(x - d, z - d);
+  }
+
+  /** Highest rendered/support surface under a circular flight capsule.
+   *  `stopAbove` lets hot overlap queries return on their first block;
+   *  landing calls omit it to classify terrain contact against roofs. */
+  function flightGroundHeight(x, z, radius = RADIUS, stopAbove = Infinity) {
+    let high = groundHeight(x, z);
+    if (high > stopAbove) return high;
+    for (const [ux, uz] of FLIGHT_TERRAIN_UNIT_RING) {
+      high = Math.max(high, groundHeight(x + ux * radius, z + uz * radius));
+      if (high > stopAbove) return high;
+    }
+    if (world.walkSurfaceMaxInCircle) {
+      high = Math.max(high, world.walkSurfaceMaxInCircle(x, z, radius));
+      if (high > stopAbove) return high;
+    }
+    const gridStep = terrain.groundSampleStep;
+    if (!Number.isFinite(gridStep) || gridStep <= 0) return high;
+    const minGX = Math.ceil((x - radius + HALF) / gridStep);
+    const maxGX = Math.floor((x + radius + HALF) / gridStep);
+    const minGZ = Math.ceil((z - radius + HALF) / gridStep);
+    const maxGZ = Math.floor((z + radius + HALF) / gridStep);
+    const radiusSq = radius * radius + 1e-9;
+    for (let gx = minGX; gx <= maxGX; gx += 1) {
+      const px = gx * gridStep - HALF;
+      for (let gz = minGZ; gz <= maxGZ; gz += 1) {
+        const pz = gz * gridStep - HALF;
+        if ((px - x) ** 2 + (pz - z) ** 2 > radiusSq) continue;
+        high = Math.max(high, groundHeight(px, pz));
+        if (high > stopAbove) return high;
+      }
+    }
+    return high;
   }
 
   /** Swept/substepped flight resolve.
@@ -617,11 +939,12 @@ export function buildCollision(ctx, world) {
     let hitX = false;
     let hitY = false;
     let hitZ = false;
-    const takeoffGround = groundHeight(x, z);
-    const legalTakeoff = allowTakeoffExit || (
-      y <= takeoffGround + STEP + 0.04
-      && !blocked(x, z, takeoffGround, radius)
-    );
+    /* Takeoff clearance is controller state, not something a sweep
+       can rediscover from proximity to its starting ground. At
+       flight speed each frame begins less than a capsule radius from
+       the last; auto-detecting here re-armed the exemption every
+       frame and let a player ratchet through an uphill bank. */
+    const legalTakeoff = !!allowTakeoffExit;
     const overlaps = (qx, qz, qy) => {
       /* A position accepted by the walking controller is a known
          legal launch origin. Ignore terrain-only rim overlap for the
@@ -789,7 +1112,7 @@ export function buildCollision(ctx, world) {
    * steps that answer is right to within a third of a metre - which
    * is under the width of the things being shot at.
    */
-  function rayBlock(ox, oy, oz, dx, dy, dz, maxDist) {
+  function rayBlock(ox, oy, oz, dx, dy, dz, maxDist, allowOriginExit = true) {
     const step = 0.35;
     const n = Math.ceil(maxDist / step);
     /* If the ORIGIN is already inside solid, the ray has to get out
@@ -812,7 +1135,14 @@ export function buildCollision(ctx, world) {
       }
       return false;
     };
-    let inside = solidAt(ox, oy, oz);
+    const originInside = solidAt(ox, oy, oz);
+    /* Player weapons intentionally get to leave a wall cell when their
+       camera-owned muzzle clips it. Enemy spinnerets do not: letting a
+       Gleaner start inside masonry and ignore that first surface is the
+       literal definition of firing through the structure. Callers that
+       own a physical enemy muzzle pass `false`. */
+    if (originInside && !allowOriginExit) return 0;
+    let inside = originInside;
     for (let i = 1; i <= n; i += 1) {
       const d = i * step;
       const x = ox + dx * d;
@@ -837,9 +1167,11 @@ export function buildCollision(ctx, world) {
    * reach the player, which reads as an enemy that ignores you.
    */
   function findOpen(x, z, groundY, tries = 24, spread = 9,
-    radius = RADIUS, feetAt = null) {
+    radius = RADIUS, feetAt = null, accept = null) {
     const atY = feetAt || groundHeight;
-    if (!blocked(x, z, atY(x, z), radius)) return [x, z];
+    const legal = (px, pz) => !blocked(px, pz, atY(px, pz), radius)
+      && (!accept || accept(px, pz));
+    if (legal(x, z)) return [x, z];
     /* Search complete near-to-far rings rather than one golden-spiral
        point per radius. The spiral can sail between a narrow legal
        lane even when an open cell is directly beside the capsule;
@@ -855,7 +1187,7 @@ export function buildCollision(ctx, world) {
         const a = phase + (d / 16) * Math.PI * 2;
         const nx = x + Math.cos(a) * r;
         const nz = z + Math.sin(a) * r;
-        if (!blocked(nx, nz, atY(nx, nz), radius)) return [nx, nz];
+        if (legal(nx, nz)) return [nx, nz];
       }
       if (r >= spread) break;
     }
@@ -937,10 +1269,13 @@ export function buildCollision(ctx, world) {
     setDebugView,
     blocked,
     flightBlocked,
+    flightGroundHeight,
     sweepFlightCapsule,
     findFlightLanding,
     findOpen,
     slide,
+    walkClear,
+    findPath,
     rayBlock,
     radius: RADIUS,
     step: STEP,
@@ -956,6 +1291,15 @@ export function buildCollision(ctx, world) {
         recoveries,
         angledSlides,
         hardStops,
+        navigation: {
+          queries: pathQueries,
+          direct: pathDirect,
+          successes: pathSuccesses,
+          failures: pathFailures,
+          expanded: pathExpanded,
+          worstExpanded: pathWorstExpanded,
+          waypoints: pathWaypoints,
+        },
         perMesh,
       };
     },

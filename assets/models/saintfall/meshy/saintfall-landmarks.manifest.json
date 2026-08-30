@@ -1,0 +1,48 @@
+{
+  "generatedAt": "2026-08-20",
+  "source": "Meshy image-to-3D, meshy-6",
+  "runtimeContract": {
+    "engine": "Three.js 0.180.0 GLTFLoader",
+    "meshCompression": "none",
+    "textureFormat": "WebP",
+    "static": true
+  },
+  "models": {
+    "fallenSaintHead": {
+      "approvedConcept": "Head B - Veiled Oracle",
+      "taskId": "01a01f0f-dbc6-76cf-9cda-1d2f1064d7ac",
+      "sourceImage": "../../../concepts/saintfall/meshy/fallen-saint-head-veiled-oracle.png",
+      "masterFile": "../../../../output/meshy-masters/saintfall/fallen-saint-head-veiled-oracle-master.glb",
+      "runtimeFile": "fallen-saint-head-veiled-oracle.glb",
+      "previewFile": "fallen-saint-head-veiled-oracle-preview.png",
+      "taskMetadata": "fallen-saint-head-veiled-oracle.meta.json",
+      "triangles": 34530,
+      "sizeBytes": 4771332,
+      "sha256": "40c93edce09452d9a9e577a49e1a04989e7d763fe3f00faafe8d137fe003fce8"
+    },
+    "fallenSaintHand": {
+      "approvedConcept": "Hand A - Last Benediction",
+      "taskId": "01a01f13-fcbd-7800-b95f-d50e82576eb4",
+      "sourceImage": "../../../concepts/saintfall/meshy/fallen-saint-hand-benediction.png",
+      "masterFile": "../../../../output/meshy-masters/saintfall/fallen-saint-hand-benediction-master.glb",
+      "runtimeFile": "fallen-saint-hand-benediction.glb",
+      "previewFile": "fallen-saint-hand-benediction-preview.png",
+      "taskMetadata": "fallen-saint-hand-benediction.meta.json",
+      "triangles": 28184,
+      "sizeBytes": 3647648,
+      "sha256": "0275549ecb4a78d5149fcfead8ea460729228bf53cc041eea0bff87c7f8d3792"
+    },
+    "gildedReachCross": {
+      "approvedConcept": "Cross A - Choir Wheel",
+      "taskId": "01a01f0f-dbbc-7d78-a3a7-70873918f353",
+      "sourceImage": "../../../concepts/saintfall/meshy/gilded-reach-choir-wheel.png",
+      "masterFile": "../../../../output/meshy-masters/saintfall/gilded-reach-choir-wheel-master.glb",
+      "runtimeFile": "gilded-reach-choir-wheel.glb",
+      "previewFile": "gilded-reach-choir-wheel-preview.png",
+      "taskMetadata": "gilded-reach-choir-wheel.meta.json",
+      "triangles": 17712,
+      "sizeBytes": 1934424,
+      "sha256": "04248a4397ffd8929bf797369f0f1ac74fadcfcac337a8184acbc554f1f95e5e"
+    }
+  }
+}

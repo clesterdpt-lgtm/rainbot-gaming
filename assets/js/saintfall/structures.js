@@ -378,6 +378,180 @@ export function makeKit(THREE) {
     return g;
   }
 
+  /**
+   * A tube swept along a 3D polyline, with the irregular faceted
+   * cross-section of eroded rock rather than a pipe's perfect
+   * polygon - `crag()`'s own vocabulary (per-ring phase drift,
+   * per-side radius jitter, a ring side-count that can itself
+   * vary) carried along a path instead of stacked straight up.
+   *
+   * Built for exactly one thing this file did not have a shape for:
+   * a natural arch, where the cross-section has to stay honestly
+   * PERPENDICULAR TO THE SPAN even where the span goes nearly
+   * horizontal overhead. `ringSolid`'s rings are always flat discs
+   * in the world XZ plane - correct for `crag`, which only ever
+   * rises, and wrong here: held to that assumption, an arch's crown
+   * would look pinched from the side, its true cross-section cut on
+   * the diagonal instead of sliced true. So the frame per ring is
+   * solved from the PATH's own local tangent, the way `tube()`
+   * already does for cables and roots - that part is copied from it
+   * verbatim, winding included, because getting an outward normal
+   * backwards here is a hole you would have to go stand inside the
+   * rock to find.
+   *
+   * `radii[i]` is one radius per point, so the caller can taper
+   * legs-thick to span-thinner along the path however it likes.
+   */
+  function rockTube(rng, points, radii, opts = {}) {
+    const baseSides = opts.sides || 7;
+    const up = new THREE.Vector3(0, 1, 0);
+    const pos = [];
+    const idx = [];
+    const starts = [];
+    const counts = [];
+    let phase = rng() * TAU;
+    /* THE FIRST VERSION OF THIS REUSED `crag()`'s PER-RING JITTER
+       RATE DIRECTLY, AND IT WAS TUNED FOR THE WRONG SHAPE.
+
+       `crag()` stacks four to seven rings. A 0.30-radian random walk
+       in phase and a +-1 random walk in side count are gentle
+       irregularity over that few steps. Handed to a sixty-ring sweep
+       - what a metres-long arch needs for the tangent frame below to
+       turn smoothly - the SAME per-step jitter compounds into a
+       random walk of several full turns end to end, and a changing
+       side count means adjacent rings routinely disagree on how many
+       vertices they have. The visible result was not "eroded rock":
+       it was a torn, spiky silhouette at every point the phase had
+       wandered far from its neighbours, worst exactly at the crown,
+       where the path curves fastest and has the least ring-to-ring
+       geometry in common to hide a mismatch behind.
+
+       So: side count is CONSTANT along one call (real strata do not
+       gain and lose a facet every few centimetres), and phase drift
+       defaults an order of magnitude gentler - enough to keep a
+       facet ridge from running perfectly straight, not enough to
+       spiral it. A caller building something short and stacked, the
+       way `crag()` itself would, can still ask for the old amount of
+       both through `opts.phaseDrift` / `opts.sideJitter`. */
+    const sides = Math.max(4, baseSides + (opts.sideJitter ? rng.int(-opts.sideJitter, opts.sideJitter) : 0));
+    const phaseDrift = opts.phaseDrift ?? 0.03;
+    /* PARALLEL TRANSPORT, NOT A PER-RING REFERENCE VECTOR.
+
+       `tube()`'s own frame - reused verbatim by the first draft of
+       this function - picks `ref` fresh at every ring from a hard
+       switch on `dir.y`: world-up normally, world-X when the
+       tangent is within about twenty degrees of vertical. That is
+       fine for a pipe that stays mostly one or the other. An arch's
+       legs start near-vertical and the path bends toward horizontal
+       within the first few rings on EITHER end - crossing the
+       switch - so `right`/`nrm` were being thrown away and rebuilt
+       from a different axis mid-sweep, and the cross-section spun
+       to match in one step. That is the seam this shape kept
+       tearing at, and it is not a tuning problem; the frame itself
+       was discontinuous.
+
+       Parallel transport carries `right`/`nrm` forward by the
+       SMALLEST rotation that takes the previous tangent to the next
+       one, so the frame only ever turns as fast as the path itself
+       does. The arbitrary reference vector is used exactly once, to
+       seed ring zero, and never touched again. */
+    let right = null;
+    let nrm = null;
+    let prevDir = null;
+    for (let i = 0; i < points.length; i += 1) {
+      const p = points[i];
+      const a = points[Math.max(0, i - 1)];
+      const b = points[Math.min(points.length - 1, i + 1)];
+      const dir = new THREE.Vector3(b[0] - a[0], b[1] - a[1], b[2] - a[2]).normalize();
+      if (dir.lengthSq() < 1e-6) dir.copy(prevDir || up);
+      if (!right) {
+        const ref = Math.abs(dir.y) > 0.94 ? new THREE.Vector3(1, 0, 0) : up;
+        right = new THREE.Vector3().crossVectors(dir, ref).normalize();
+        nrm = new THREE.Vector3().crossVectors(right, dir).normalize();
+      } else {
+        const dot = Math.max(-1, Math.min(1, prevDir.dot(dir)));
+        const axis = new THREE.Vector3().crossVectors(prevDir, dir);
+        if (axis.lengthSq() > 1e-10) {
+          axis.normalize();
+          const q = new THREE.Quaternion().setFromAxisAngle(axis, Math.acos(dot));
+          right.applyQuaternion(q);
+          nrm.applyQuaternion(q);
+        }
+        // Re-orthogonalise against the actual new tangent every ring
+        // rather than trusting the rotation alone - float error is
+        // small per step, but this sweep can run sixty of them, and
+        // an uncorrected frame drifts non-perpendicular by the end.
+        right.sub(dir.clone().multiplyScalar(right.dot(dir))).normalize();
+        nrm.crossVectors(right, dir).normalize();
+      }
+      prevDir = dir.clone();
+      phase += rng.jit(phaseDrift);
+      starts.push(pos.length / 3);
+      counts.push(sides);
+      const baseR = radii[i];
+      for (let s = 0; s < sides; s += 1) {
+        const ang = (s / sides) * TAU + phase;
+        const k = 1 + rng.jit(opts.jitter ?? 0.20);
+        const r = baseR * k;
+        pos.push(
+          p[0] + right.x * Math.cos(ang) * r + nrm.x * Math.sin(ang) * r,
+          p[1] + right.y * Math.cos(ang) * r + nrm.y * Math.sin(ang) * r,
+          p[2] + right.z * Math.cos(ang) * r + nrm.z * Math.sin(ang) * r
+        );
+      }
+    }
+    // Zero-area guard, copied from `ringSolid` - a ring whose radius
+    // noise happens to collapse two adjacent verts to (near) the same
+    // point would otherwise leave a degenerate triangle whose orphan
+    // vertex normalises to a NaN normal.
+    const tri = (i0, i1, i2) => {
+      const p0 = i0 * 3, p1 = i1 * 3, p2 = i2 * 3;
+      const ux = pos[p1] - pos[p0], uy = pos[p1 + 1] - pos[p0 + 1], uz = pos[p1 + 2] - pos[p0 + 2];
+      const vx = pos[p2] - pos[p0], vy = pos[p2 + 1] - pos[p0 + 1], vz = pos[p2 + 2] - pos[p0 + 2];
+      const cx = uy * vz - uz * vy, cy = uz * vx - ux * vz, cz = ux * vy - uy * vx;
+      if (cx * cx + cy * cy + cz * cz < 1e-14) return;
+      idx.push(i0, i1, i2);
+    };
+    // Adjacent rings can carry different side counts (the +-1 jitter
+    // above), so the wall has to fan across the mismatch the way
+    // `ringSolid` does rather than assume a 1:1 `tube()`-style zip.
+    for (let i = 0; i < points.length - 1; i += 1) {
+      const s0 = starts[i], s1 = starts[i + 1];
+      const c0 = counts[i], c1 = counts[i + 1];
+      const steps = Math.max(c0, c1);
+      for (let s = 0; s < steps; s += 1) {
+        const a0 = s0 + Math.floor((s / steps) * c0) % c0;
+        const a1 = s0 + Math.floor(((s + 1) / steps) * c0) % c0;
+        const b0 = s1 + Math.floor((s / steps) * c1) % c1;
+        const b1 = s1 + Math.floor(((s + 1) / steps) * c1) % c1;
+        if (a0 !== a1 && b0 !== b1) { tri(a0, b0, b1); tri(a0, b1, a1); }
+        else if (a0 !== a1) tri(a0, b0, a1);
+        else if (b0 !== b1) tri(a0, b0, b1);
+      }
+    }
+    // Same order convention as `tube()`: the ring's own winding faces
+    // back along the sweep, so the start cap keeps it and the end
+    // cap reverses it.
+    if (points.length && opts.capStart !== false) {
+      const c = pos.length / 3;
+      pos.push(points[0][0], points[0][1], points[0][2]);
+      for (let s = 0; s < counts[0]; s += 1) tri(c, starts[0] + s, starts[0] + ((s + 1) % counts[0]));
+    }
+    if (points.length && opts.capEnd !== false) {
+      const c = pos.length / 3;
+      const last = points.length - 1;
+      pos.push(points[last][0], points[last][1], points[last][2]);
+      for (let s = 0; s < counts[last]; s += 1) {
+        tri(c, starts[last] + ((s + 1) % counts[last]), starts[last] + s);
+      }
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+    g.setIndex(idx);
+    g.computeVertexNormals();
+    return g;
+  }
+
   /** A tube swept along a 3D polyline. Pipes, cables, roots. */
   function tube(points, radius, sides = 5, opts = {}) {
     const rings = [];
@@ -766,7 +940,14 @@ export function makeKit(THREE) {
       webTop.push([x, lerp(pierH * 0.92, wallH, Math.pow(t, 1.55)) - thickness * 0.9]);
       webBot.push([x, lerp(pierH * 0.42, wallH * 0.62, Math.pow(t, 2.1)) - thickness * 0.9]);
     }
-    geos.push(ribbonSolid(webTop, webBot, thickness * 1.05));
+    /* Reversed: ribbonSolid's outward face depends on the direction
+       webTop/webBot are traversed, not just on top sitting above
+       bot, and this pair was wound backward - invisible from
+       outside across every buttress on the building, one wedge per
+       bay along the aisle roofline. Confirmed by disabling this
+       ribbon and watching the whole row of red drop out of the
+       facing-debug pass. */
+    geos.push(ribbonSolid(webTop.slice().reverse(), webBot.slice().reverse(), thickness * 1.05));
 
     if (pinnacle) {
       const p = prism({ h: pierH * 0.30, rBottom: thickness * 1.25, rTop: 0.06, sides: 4, twist: Math.PI / 4 });
@@ -1471,8 +1652,15 @@ export function makeKit(THREE) {
        and noticeably deeper front-to-back than it is wide - a head
        modelled on a sphere reads as a pumpkin no matter what is
        carved onto the front of it. The 0.78 width factor is doing
-       most of the work here. */
-    geos.push(ringSolid([
+       most of the work here.
+
+       Held as a NAMED TABLE rather than inline, because the casting
+       seams below have to sit exactly on this surface. Deriving them
+       by interpolating these same rings is the only way they cannot
+       drift: a seam authored from its own hand-copied numbers looks
+       right until someone tunes the skull, and then floats a metre
+       off it or sinks inside it, and nothing in the build fails. */
+    const craniumRings = [
       { y: -0.06 * s, rx: 0.15 * s, rz: 0.20 * s, sides: 9, phase: 0.2 },
       { y: 0.08 * s, rx: 0.25 * s, rz: 0.33 * s, sides: 9, phase: 0.2 },
       { y: 0.26 * s, rx: 0.34 * s, rz: 0.45 * s, sides: 9, phase: 0.3 },
@@ -1481,7 +1669,108 @@ export function makeKit(THREE) {
       { y: 0.88 * s, rx: 0.37 * s, rz: 0.47 * s, sides: 9, phase: 0.5 },
       { y: 1.02 * s, rx: 0.24 * s, rz: 0.31 * s, sides: 9, phase: 0.5 },
       { y: 1.08 * s, rx: 0.08 * s, rz: 0.10 * s, sides: 9, phase: 0.6 },
-    ]));
+    ];
+    geos.push(ringSolid(craniumRings));
+
+    /* A ring here is a POLYGON inscribed in an ellipse, not the
+       ellipse itself, and anything mounted on the surface has to
+       know the difference. At nine sides a facet's midpoint sits at
+       cos(pi/9) = 0.94 of the nominal radius, so a stud placed on
+       the ellipse floats ~6% of the radius proud of the flat it is
+       supposed to be bolted to - which on a 43m cheek is nearly four
+       metres of daylight under it. That is exactly how the first
+       pass of the rivet courses came out: a ring of boxes hovering
+       around the skull. This returns the factor that puts a point on
+       the real facet. */
+    const polyRadiusFactor = (a, sides, phase) => {
+      const seg = TAU / sides;
+      let local = (a - (phase || 0)) % seg;
+      if (local < 0) local += seg;
+      return Math.cos(seg * 0.5) / Math.cos(local - seg * 0.5);
+    };
+
+    /* Sample the cranium's own profile at an arbitrary height. */
+    const craniumAt = (yy) => {
+      let a = craniumRings[0];
+      let b = craniumRings[craniumRings.length - 1];
+      for (let i = 0; i < craniumRings.length - 1; i += 1) {
+        if (yy >= craniumRings[i].y && yy <= craniumRings[i + 1].y) {
+          a = craniumRings[i]; b = craniumRings[i + 1];
+          break;
+        }
+      }
+      const t = clamp01((yy - a.y) / ((b.y - a.y) || 1));
+      return {
+        rx: lerp(a.rx, b.rx, t), rz: lerp(a.rz, b.rz, t),
+        phase: lerp(a.phase || 0, b.phase || 0, t),
+      };
+    };
+
+    /* CASTING SEAMS, and the reason a hundred metres of bronze needs
+       them at all.
+
+       Nobody casts a colossus in one piece. It is poured in sections
+       and bolted, and the flanges where those sections meet are the
+       most visible thing on any real monumental bronze - the Statue
+       of Liberty is a lesson in exactly this. Without them the skull
+       is a single smooth shell, which is why it read as an egg from
+       the road and as an untextured dome from underneath: at a
+       hundred metres across there was not one edge on it to catch
+       the light or give the eye a scale reference.
+
+       They are also the only detail here that works at EVERY
+       distance. A seam is a hard line, so it survives haze at 900m
+       where surface colour does not; up close it is a real step with
+       a real shadow. Two horizontal courses and one vertical spine,
+       which is a plausible way to actually mould a head. */
+    const seamBand = (yy, proud, thick) => {
+      const p = craniumAt(yy);
+      return ringSolid([
+        { y: yy - thick, rx: p.rx * proud, rz: p.rz * proud, sides: 9, phase: p.phase },
+        { y: yy, rx: p.rx * (proud + 0.012), rz: p.rz * (proud + 0.012), sides: 9, phase: p.phase },
+        { y: yy + thick, rx: p.rx * proud, rz: p.rz * proud, sides: 9, phase: p.phase },
+      ], { capTop: false, capBottom: false });
+    };
+    geos.push(seamBand(0.30 * s, 1.012, 0.018 * s));
+    geos.push(seamBand(0.63 * s, 1.012, 0.016 * s));
+
+    /* Rivets along both courses. Deliberately chunky - at this scale
+       a realistic bolt is sub-pixel from anywhere the head is framed,
+       so these are sized to read as a dotted line of highlights
+       rather than as individual fasteners. */
+    for (const [yy, count] of [[0.30 * s, 22], [0.63 * s, 20]]) {
+      const p = craniumAt(yy);
+      for (let i = 0; i < count; i += 1) {
+        const a = (i / count) * TAU + p.phase;
+        // Seated on the real facet, and only just proud of the seam
+        // band it studs (which is itself at 1.012).
+        const f = polyRadiusFactor(a, 9, p.phase) * 1.018;
+        const stud = prism({ h: 0.020 * s, rBottom: 0.013 * s, rTop: 0.009 * s, sides: 5 });
+        stud.rotateX(Math.PI / 2);
+        stud.rotateY(-a);
+        stud.translate(
+          Math.cos(a) * p.rx * f, yy, Math.sin(a) * p.rz * f
+        );
+        geos.push(stud);
+      }
+    }
+
+    /* The vertical spine seam, up the BACK only - a mould line the
+       sculptor would have hidden away from the face. */
+    for (let i = 0; i < 9; i += 1) {
+      const t = i / 8;
+      const yy = lerp(0.02 * s, 0.98 * s, t);
+      const p = craniumAt(yy);
+      // Straight out the back: angle -pi/2 in this ring's own frame,
+      // seated on the facet there rather than on the ellipse.
+      const back = -Math.PI / 2;
+      const f = polyRadiusFactor(back, 9, p.phase) * 1.01;
+      const plate = prism({ h: 0.13 * s, rBottom: 0.022 * s, rTop: 0.018 * s, sides: 4 });
+      plate.scale(1, 1, 0.45);
+      plate.translate(0, 0, -p.rz * f);
+      plate.translate(0, yy, 0);
+      geos.push(plate);
+    }
 
     // Chin: the head has to end in something, or the underside
     // reads as where the model was cut off.
@@ -1510,15 +1799,64 @@ export function makeKit(THREE) {
     ridge.translate(0, 0, 0.53 * s);
     geos.push(ridge);
 
-    // Eye slits: deep recessed wedges. The darkness inside is the
-    // expression.
+    /* BROW SHELF. The single thing that makes a colossal face read
+       as a face from a distance.
+
+       An eye slit on its own is a dark mark on a bright panel, and
+       at 250m a dark mark is just a hole - which is exactly what the
+       head looked like from the road. What reads is the SHADOW a
+       heavy brow throws down into the socket: it is large, it moves
+       with the sun, and it survives haze because it is a value
+       block rather than a detail. Egyptian and Art Deco colossi both
+       lean on this and for the same reason.
+
+       Proud of the face plate and angled down, so the shadow falls
+       across the eyes rather than above them. */
+    {
+      const brow = extrudeZ([
+        [-0.36 * s, 0.635 * s], [-0.30 * s, 0.695 * s], [0.30 * s, 0.695 * s],
+        [0.36 * s, 0.635 * s], [0.30 * s, 0.650 * s], [-0.30 * s, 0.650 * s],
+      ], 0.12 * s);
+      brow.rotateX(-0.22);
+      brow.translate(0, 0, 0.50 * s);
+      geos.push(brow);
+    }
+
+    /* Eye sockets: a recessed BOX behind the slit, not just the slit.
+       A wedge cut into a surface still shows its own lit back face at
+       most angles and reads as a painted-on shape; giving the socket
+       real interior depth means what the player sees is unlit
+       cavity, which is the "darkness IS the expression" this was
+       always after. */
     for (const sx of [-1, 1]) {
+      const socket = prism({ h: 0.20 * s, rBottom: 0.075 * s, rTop: 0.055 * s, sides: 4 });
+      socket.scale(1, 1, 2.2);
+      socket.rotateX(Math.PI / 2);
+      socket.rotateZ(sx * 0.16);
+      socket.translate(sx * 0.16 * s, 0.60 * s, 0.44 * s);
+      geos.push(socket);
+
       const eye = prism({ h: 0.16 * s, rBottom: 0.045 * s, rTop: 0.02 * s, sides: 4 });
       eye.scale(1, 1, 2.6);
       eye.rotateX(Math.PI / 2);
       eye.rotateZ(sx * 0.16);
       eye.translate(sx * 0.16 * s, 0.60 * s, 0.50 * s);
       geos.push(eye);
+    }
+
+    /* A closed mouth line, cut as a shallow recess rather than
+       modelled as lips - the Saint is a helm-faced Concord idol, not
+       a portrait, and an actual mouth on something this size drifts
+       toward the uncanny. What it buys is a third horizontal in the
+       face's value structure (brow, eyes, mouth), which is what stops
+       the lower half reading as blank plate. */
+    {
+      const mouth = extrudeZ([
+        [-0.19 * s, 0.235 * s], [-0.16 * s, 0.265 * s], [0.16 * s, 0.265 * s],
+        [0.19 * s, 0.235 * s], [0.16 * s, 0.248 * s], [-0.16 * s, 0.248 * s],
+      ], 0.10 * s);
+      mouth.translate(0, 0, 0.505 * s);
+      geos.push(mouth);
     }
 
     // Cheek buttresses.
@@ -1672,8 +2010,43 @@ export function makeKit(THREE) {
     return geo;
   }
 
+  /**
+   * Split every shared vertex so each triangle carries its own
+   * three, then recompute normals - which, with nothing shared,
+   * come out as FACE normals. Flat shading, baked into the buffer.
+   *
+   * The alternative is a flat-shaded material, and there isn't one
+   * to hand: everything rock in this level merges into a couple of
+   * meshes on one shared material, so shading is a property of the
+   * geometry or it is a property of nothing.
+   *
+   * Only worth it on something big enough to need real resolution.
+   * A seven-sided crag is already all silhouette and no interior,
+   * but a hundred-metre landform needs twenty-odd sides to keep its
+   * ellipse from going polygonal - and at that density smooth
+   * normals turn a carved rock into a beanbag. Costs 6x the
+   * vertices of the indexed form and no draw calls.
+   */
+  function facet(geo) {
+    const src = geo.attributes.position;
+    const idx = geo.index;
+    const count = idx ? idx.count : src.count;
+    const out = new Float32Array(count * 3);
+    for (let i = 0; i < count; i += 1) {
+      const v = idx ? idx.getX(i) : i;
+      out[i * 3] = src.getX(v);
+      out[i * 3 + 1] = src.getY(v);
+      out[i * 3 + 2] = src.getZ(v);
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute("position", new THREE.Float32BufferAttribute(out, 3));
+    g.computeVertexNormals();
+    geo.dispose?.();
+    return g;
+  }
+
   return {
-    ringSolid, prism, slab, polyExtrudeY, extrudeZ, ribbonSolid, tube,
+    ringSolid, prism, slab, polyExtrudeY, extrudeZ, ribbonSolid, tube, rockTube,
     crag, shard, boulderField,
     archOutline, gothicArch, column, flyingButtress, spire, skull, statue,
     banner, ribbonPole,
@@ -1682,7 +2055,7 @@ export function makeKit(THREE) {
     crackingTower, flareStack, tank, catwalk,
     sandbagWall, wireRun, bunker,
     saintHead, saintHand,
-    transform, roughen, merge: (list) => mergeGeometries(THREE, list),
+    transform, roughen, facet, merge: (list) => mergeGeometries(THREE, list),
   };
 }
 

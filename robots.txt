@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://clesterdpt-lgtm.github.io/rainbot-gaming/sitemap.xml

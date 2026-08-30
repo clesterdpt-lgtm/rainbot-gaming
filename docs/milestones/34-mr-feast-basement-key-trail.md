@@ -54,7 +54,7 @@ User notices and reads the slightly unusual Library-shelf book, finds the shovel
 ## Notes
 
 - Progress continues to reset on reload.
-- The maze cache remains at cell `(19, 3)`, preserving the approved deep-maze discovery pacing.
+- Milestone 70 moves the maze cache to cell `(5, 7)`, a true one-neighbor terminal chamber. It sits `63` path steps from the north portal and `62` from the rear portal, preserving deep-maze discovery pacing after the portal route redesign.
 - The recovered key is the restricted-service key for the basement and its evidence cage in this slice; a later basement milestone can introduce separate keys and puzzle-specific locks.
 - Mr. Feast skips the basement branch of his live visual patrol while the service-stair door is story-locked; deterministic whole-home QA temporarily releases and restores the door without advancing the quest.
 - The middle Library bookcase reserves shelf `2`, slot `5` for the clue volume instead of drawing an instanced book underneath it. Its front face sits about `0.07m` ahead of the neighboring volumes, its real title is printed beneath the mark, and a zero-depth procedural decal forms the small `XIII` from broken, slightly wandering dark gouges with thin exposed-fiber edges. Both diagonals of the `X` run corner-to-corner and receive a short continuous intersection pass so the mark cannot collapse into a `V`.

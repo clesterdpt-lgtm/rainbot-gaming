@@ -6,16 +6,19 @@ const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(scriptDir, "..");
 const mansionPath = path.join(root, "assets/js/mr-feast-mansion.js");
 const pagePath = path.join(root, "games/mr-feast-mansion.html");
+const statePath = path.join(root, "docs/STATE.md");
 const localLauncherPath = path.join(root, "Open Mr Feast Mansion.command");
 const mrFeastAssetRoot = path.join(root, "assets/models/mr-feast");
 const mrFeastManifestPath = path.join(mrFeastAssetRoot, "mr-feast-asset-manifest.json");
 const mrFeastTuningReportPath = path.join(mrFeastAssetRoot, "animations/mr-feast-tuning-report.json");
 const mrFeastTuningScriptPath = path.join(root, "scripts/tune-mr-feast-animations.mjs");
 const mrFeastFacialReportPath = path.join(mrFeastAssetRoot, "processed/mr-feast-facial-report.json");
+const mrFeastRetopologyModelPath = path.join(mrFeastAssetRoot, "processed/mr-feast-game-retopo-face-v1.glb");
 const mrFeastRetopologyReportPath = path.join(mrFeastAssetRoot, "processed/mr-feast-retopology-report.json");
 const estateStatueManifestPath = path.join(mrFeastAssetRoot, "statues/manifest.json");
 const mansion = fs.readFileSync(mansionPath, "utf8");
 const page = fs.readFileSync(pagePath, "utf8");
+const projectState = fs.readFileSync(statePath, "utf8");
 const localLauncher = fs.existsSync(localLauncherPath) ? fs.readFileSync(localLauncherPath, "utf8") : "";
 const mrFeastManifest = JSON.parse(fs.readFileSync(mrFeastManifestPath, "utf8"));
 const mrFeastTuningReport = JSON.parse(fs.readFileSync(mrFeastTuningReportPath, "utf8"));
@@ -382,7 +385,7 @@ check("coat closet garment angle", /const hangingAngles\s*=\s*\[-0\.11,\s*-0\.05
 check("coat closet clear aisle", /const clearAisle\s*=\s*\{\s*minX:\s*-13\.72,\s*maxX:\s*-12\.68,\s*minZ:\s*-2\.82,\s*maxZ:\s*0\.62\s*\}/.test(coatClosetFurnishings), "player-sized center aisle is no longer explicitly preserved");
 check("coat closet hiding spot", /new HidingSpot\(\{[\s\S]*?name:\s*"coat closet"[\s\S]*?targets:\s*\[westCoats\[8\],\s*westCoats\[9\],\s*westCoats\[10\],\s*westCoats\[11\],\s*garmentBag\]/.test(coatClosetFurnishings), "hiding interaction is not attached to visible hanging garments");
 check("functional hiding state", /state\.isHidden\s*=\s*true/.test(hidingSpotClass) && /state\.isHidden\s*=\s*false/.test(hidingSpotClass), "entering and leaving do not set a stable hidden gameplay state");
-check("functional hiding exit", /getLabel:[^\n]*Leave/.test(hidingSpotClass) && /activate:[^\n]*this\.exit/.test(hidingSpotClass), "second keyboard or touch interaction cannot always leave the hiding spot");
+check("functional hiding exit", /getLabel:[^\n]*(?:Leave|leaveLabel)/.test(hidingSpotClass) && /activate:[^\n]*this\.exit/.test(hidingSpotClass), "second keyboard or touch interaction cannot always leave the hiding spot");
 check("hidden movement lock", /if \(state\.isHidden\)[\s\S]*?physics\.movePlayer\(0, 0\);[\s\S]*?return;/.test(playerUpdate), "movement can carry the player away while hidden");
 check("hidden interaction lock", /if \(state\.activeHideSpot\) return state\.activeHideSpot\.interaction;/.test(interactionLookup), "prompt refresh can lose the leave-hiding interaction");
 check("hidden HUD", /id="mansion-hidden"[^>]*hidden/.test(page) && /#mansion-stage\.is-hiding::after/.test(page) && /dom\.hiddenStatus\.hidden\s*=\s*(?:false|true)/.test(hidingSpotClass), "hiding state lacks persistent player feedback");
@@ -436,8 +439,15 @@ check("7 ballroom marble", !/addRug\(\s*0\s*,\s*-8\.2[^;]*M\.greenRug/.test(slab
 check("7 ballroom marble", mansion.includes('textureUrl("antique-marble-ai.jpg")'), "ballroom marble must retain the generated antique-marble texture source");
 
 // 8. Every dining chair faces the table center.
-const diningChairs = parsedCalls("addChair", section("// Dining room", "// Ballroom", mainFurnishings));
-check("dining room wall clearance", !/addWallPortrait|artId:\s*"feast-of-merit"/.test(section("// Dining room", "// Ballroom", mainFurnishings)), "the dining-room portrait still overlaps the window composition");
+const diningFurnishings = section("// Dining room", "// Ballroom", mainFurnishings);
+const diningChairs = parsedCalls("addChair", diningFurnishings);
+check(
+  "dining room wall clearance",
+  count(diningFurnishings, /addWallPortrait\(/g) === 1
+    && /axis:\s*"z"[\s\S]*?fixed:\s*-15[\s\S]*?center:\s*-11\.22[\s\S]*?width:\s*0\.88[\s\S]*?height:\s*1\.32[\s\S]*?artId:\s*"feast-father-at-table"/.test(diningFurnishings)
+    && !/artId:\s*"feast-of-merit"/.test(diningFurnishings),
+  "the Dining Room must keep one narrow side-wall lore painting clear of the window composition",
+);
 const diningAt = (x, z) => diningChairs.find((call) => near(call.values[0], x, 0.08) && near(call.values[1], z, 0.08));
 for (const x of [-12, -10.45, -8.95, -7.4]) {
   check("8 dining-chair orientation", near(diningAt(x, -7.25)?.values[3], 0), `north dining chair at x=${x} must face south toward the table`);
@@ -694,7 +704,9 @@ for (const name of ["estate-pool-water", "estate-pool-bottom", "estate-pool-copi
 }
 check("19 swimming pool", ["north", "south", "west-middle", "east-middle"].every((part) => exteriorBuild.includes(`rain-soaked-grounds-rear-${part}`)), "rear ground/collider is not carved around the pool cavity");
 check("19 swimming pool", !/rain-soaked-grounds-rear["']\s*,\s*w:\s*92[^;]*d:\s*36/.test(exteriorBuild), "legacy solid rear collider still runs beneath the pool");
-check("19 swimming pool", /physics\.addFixedRamp\(pool\.centerX/.test(yardBuild), "pool entry stairs lack a continuous Rapier walking surface");
+// The doubled basin's centre moved west of the authored stair, so the ramp
+// anchors to the fixed stairX rather than pool.centerX.
+check("19 swimming pool", /physics\.addFixedRamp\((?:stairX|pool\.centerX), -19\.6/.test(yardBuild), "pool entry stairs lack a continuous Rapier walking surface");
 for (const support of [
   "pool-north-terrace-support-left",
   "pool-north-terrace-support-right",
@@ -718,9 +730,19 @@ if (mazeRows.length) {
   check("19 hedge maze", mazeRows.every((row) => row.length === width) && width === 9, "long maze is not a rectangular 31x9 layout");
   const cells = mazeRows.join("");
   check("19 hedge maze", (cells.match(/S/g) || []).length === 1 && (cells.match(/E/g) || []).length === 1, "maze needs one entrance and one internal traversal goal");
-  check("33 closed south maze wall", mazeRows.at(-1) === "#########" && mazeRows.at(-2).includes("E"), "maze still has a visible exit cut through its south boundary");
   const start = cells.indexOf("S");
   const exit = cells.indexOf("E");
+  const exitRow = Math.floor(exit / width);
+  const exitCol = exit % width;
+  check(
+    "33 closed south maze wall",
+    mazeRows.at(-1) === "#########"
+      && exitRow > 0
+      && exitRow < mazeRows.length - 1
+      && exitCol > 0
+      && exitCol < width - 1,
+    "maze traversal goal must remain an internal dead end rather than a boundary exit",
+  );
   const queue = start >= 0 ? [start] : [];
   const seen = new Set(queue);
   while (queue.length) {
@@ -749,10 +771,15 @@ if (mazeRows.length) {
     }).length;
   };
   const junctions = openCells.filter((index) => openDegree(index) >= 3);
+  const deadEnds = openCells.filter((index) => openDegree(index) === 1);
   const edgeCount = openCells.reduce((total, index) => total + openDegree(index), 0) / 2;
   const routeChoices = edgeCount - openCells.length + 1;
   const northOpenCells = openCells.filter((index) => Math.floor(index / width) < Math.floor(mazeRows.length / 2));
-  check("32 hedge maze choices", junctions.length >= 18 && routeChoices >= 8, `maze offers only ${junctions.length} junction cells and ${routeChoices} alternate loops`);
+  check(
+    "32 hedge maze choices",
+    junctions.length >= 6 && deadEnds.length >= 8 && routeChoices === 0,
+    `maze needs an acyclic forced route with meaningful branches; got ${junctions.length} junctions, ${deadEnds.length} dead ends, and ${routeChoices} loops`,
+  );
   check("32 north maze access", mazeRows[5][0] === "." && northOpenCells.every((index) => seen.has(index)), "north maze lacks a visible west-side entrance or contains unreachable passages");
   check("36 rear maze alignment", mazeRows[18][0] === "S" && mazeRows[19][0] === "#", "rear maze opening is not shifted onto the terrace centerline row");
 }
@@ -811,8 +838,8 @@ check("20 continuous exterior facade", /const interstoryHeight\s*=\s*FLOOR\.UPPE
 check("20 continuous exterior facade", count(exteriorWalls, /w:\s*30\.34,\s*h:\s*interstoryHeight/g) === 2 && count(exteriorWalls, /h:\s*interstoryHeight,\s*d:\s*24\.34/g) === 2, "facade infill does not span both full-width and full-depth elevations");
 check("20 exterior re-entry rendering", /distanceFromHouse/.test(exteriorCulling) && /nearHouse/.test(exteriorCulling), "exterior culling does not restore the interior before a player reaches the house");
 check("20 exterior re-entry diagnostics", /interiorDetailsHidden:\s*Boolean\(interiorDetailsHidden\)/.test(diagnostics), "diagnostics cannot prove whether the interior render set is restored");
-check("20 rear re-entry thresholds", /ballroom-rear-threshold/.test(exteriorBuild) && !/kitchen-service-threshold/.test(exteriorBuild) && count(exteriorBuild, /physics\.addFixedRamp\(threshold\.x/g) === 0, "sealed kitchen wall still owns an exterior threshold or ramp");
-check("20 outer entry ramps", /front-portico-outer-entry-ramp/.test(exteriorBuild) && /ballroom-rear-outer-entry-ramp/.test(exteriorBuild) && count(exteriorBuild, /addExteriorEntryRamp\(/g) === 2, "front and rear slab edges do not both have visible walkable approach ramps");
+check("20 rear re-entry doorstep", /ballroom-rear-doorstep/.test(exteriorBuild) && !/kitchen-service-threshold/.test(exteriorBuild) && !/ballroom-raised-terrace-landing/.test(exteriorBuild), "the sealed kitchen wall still owns an exterior threshold, or the rear entry lacks its single limestone doorstep");
+check("20 rear entry has no ramp or stoop", !/ballroom-rear-outer-entry-ramp/.test(exteriorBuild) && count(exteriorBuild, /addExteriorEntryRamp\(/g) === 1 && /front-portico-outer-entry-ramp/.test(exteriorBuild), "the rear ballroom entry must be a plain step-up (front portico keeps its single approach ramp)");
 for (const route of ["frontDoorRoundTrip", "terraceDoorRoundTrip"]) {
   check("20 exterior re-entry routes", qaHooks.includes(`${route}:`), `missing exterior round-trip route ${route}`);
 }
@@ -921,10 +948,17 @@ check("36 softer entry lighting", /addWallSconce\(\s*x,\s*2\.12,\s*12\.19,\s*0,\
 check("36 exterior glow handoff", /setGlowRenderState\(lit\)/.test(lightCircuitClass) && /material\.userData\.renderLit = renderLit/.test(lightCircuitClass) && /circuit\.setGlowRenderState\(circuit\.on && rendersInContext\)/.test(lightRendering), "decorative entrance glows do not follow the switched indoor-to-grounds handoff");
 check("36 glow diagnostics", /activeLightPools:\s*circuits\.reduce[\s\S]*?material\.userData\.renderLit/.test(diagnostics) && /activeLightPools:\s*c\.glowMaterials\.filter\(\(material\) => material\.userData\.renderLit\)/.test(diagnostics), "QA cannot observe context-gated light pools");
 check("34 open-volume light coverage", /OPEN_VOLUME_BUDGET_CIRCUITS/.test(mansion) && /for \(const circuitName of OPEN_VOLUME_BUDGET_CIRCUITS\)/.test(budgetedLightSelection), "unused main-floor shader slots are not reassigned to the foyer, grand stair, and upper landing");
+check("63 shared foyer/stair circuit", /const OPEN_VOLUME_SHARED_LIGHTING = Object\.freeze/.test(mansion) && /circuit:\s*"foyer and staircase lights"/.test(mansion), "the foyer, stair hall, and upper landing lack one named shared-circuit contract");
+for (const room of ["FRONT FOYER", "GRAND STAIR HALL", "FOYER BALCONY", "UPPER LANDING"]) {
+  check("63 shared foyer/stair circuit", new RegExp(`"${room}": \\[OPEN_VOLUME_SHARED_LIGHTING\\.circuit\\]`).test(lightingMap), `${room} does not map to the shared foyer/stair circuit`);
+}
+check("63 shared foyer/stair circuit", /const stair = foyer;/.test(lightingBuild) && /const upperLanding = foyer;/.test(lightingBuild) && !/new LightCircuit\("(?:foyer chandelier|grand stair lights|upper landing lights)"/.test(lightingBuild), "the open volume still creates independent foyer, stair, or landing circuits");
+check("63 four-way foyer/stair controls", /OPEN_VOLUME_SHARED_LIGHTING[\s\S]*?fixtureRoles:\s*Object\.freeze\(\["foyer",\s*"grand-stair",\s*"upper-landing"\]\)/.test(mansion) && /for \(const role of OPEN_VOLUME_SHARED_LIGHTING\.fixtureRoles\)/.test(budgetedLightSelection), "fixed-budget lighting does not preserve a representative for every merged open-volume section");
+check("63 separate rear lounge circuit", /"REAR LOUNGE"\s*:\s*\["rear lounge lights"\]/.test(lightingMap) && /new LightCircuit\("rear lounge lights"/.test(lightingBuild), "rear lounge no longer owns its independent circuit");
 check("34 energized slot preference", /const enclosureAvailable = \(light\)/.test(budgetedLightSelection) && /!enclosure \|\| enclosure\.open \|\| enclosure\.angle > 0\.025/.test(budgetedLightSelection) && /filter\(\(light\) => rendersOnLevel\(light\) && enclosureAvailable\(light\)\)/.test(budgetedLightSelection), "closed closet emitters can consume every useful upper-floor spot slot while zero-energy padding already stabilizes the shader type count");
 check("34 grounds auxiliary slots", /light\.visible = renderContext !== "grounds"/.test(lightRendering), "inactive indoor cabinet lamps still displace useful exterior spotlights on the grounds");
 check("34 low-cost context lighting", /OPEN_VOLUME_HEMISPHERE_INTENSITY/.test(mansion) && /GROUNDS_HEMISPHERE_INTENSITY/.test(mansion) && /GROUNDS_MOON_INTENSITY/.test(mansion) && /GROUNDS_EXPOSURE/.test(mansion) && /function updateContextLighting\(dt\)/.test(contextLighting) && /Math\.exp\(-CONTEXT_LIGHTING_RESPONSE \* dt\)/.test(contextLighting) && /updateContextLighting\(dt\)/.test(animationLoop) && /state\.mazeLightingContext[\s\S]*?MAZE_EXPOSURE[\s\S]*?outdoors \? GROUNDS_EXPOSURE : NIGHT_LIGHTING\.exposure/.test(stormSystem), "foyer and grounds readability is not restored with smooth, shader-count-neutral hemisphere, moon, and exposure energy");
-check("35 maze fixed-budget lighting", /MAZE_LIGHT_BUDGET_FIXTURES = Object\.freeze\(\[[\s\S]*?maze-north-entrance-lamp-north[\s\S]*?maze-wayfinding-lamp-11[\s\S]*?maze-center-tall-lamp[\s\S]*?maze-rear-entrance-lamp-north[\s\S]*?maze-wayfinding-lamp-23[\s\S]*?maze-wayfinding-lamp-27[\s\S]*?\]\)/.test(mazeLayout) && /mazeBudgetPriority:\s*mazeBudgetPriority >= 0 \? mazeBudgetPriority : null/.test(yardBuild) && /sourceLight\.userData\.mazeBudgetPriority/.test(yardBuild), "maze lights are not distributed from both entrances through the full route inside the existing six-spot budget");
+check("35 maze fixed-budget lighting", /MAZE_LIGHT_BUDGET_FIXTURES = Object\.freeze\(\[[\s\S]*?maze-north-entrance-lamp-south[\s\S]*?MAZE_NORTH_VISIBILITY\.fixture[\s\S]*?maze-center-tall-lamp[\s\S]*?maze-rear-entrance-lamp-north[\s\S]*?maze-wayfinding-lamp-23[\s\S]*?maze-wayfinding-lamp-27[\s\S]*?\]\)/.test(mazeLayout) && /mazeBudgetPriority:\s*mazeBudgetPriority >= 0 \? mazeBudgetPriority : null/.test(yardBuild) && /sourceLight\.userData\.mazeBudgetPriority/.test(yardBuild), "maze lights are not distributed from the readable north entry through the full route inside the existing six-spot budget");
 check("35 maze fixed-budget lighting", /if \(state\.mazeLightingContext\)/.test(budgetedLightSelection) && /filter\(\(light\) => Number\.isFinite\(light\.userData\.mazeBudgetPriority\)\)/.test(budgetedLightSelection) && /for \(const light of mazeCandidates\) trySelect\(light, groundsSpotLimit, groundsPointLimit\)/.test(budgetedLightSelection), "maze context does not reassign the six already-paid grounds spot slots to maze lamps");
 check("35 maze shader-neutral lift", /MAZE_HEMISPHERE_INTENSITY = 0\.41/.test(mansion) && /MAZE_MOON_INTENSITY = 0\.60/.test(mansion) && /MAZE_EXPOSURE = 1\.0/.test(mansion) && /mazeContext \? MAZE_HEMISPHERE_INTENSITY : GROUNDS_HEMISPHERE_INTENSITY/.test(contextLighting) && /mazeContext \? MAZE_MOON_INTENSITY : GROUNDS_MOON_INTENSITY/.test(contextLighting), "maze readability does not use the existing ambient uniforms and exposure path");
 check("35 maze boundary sync", /function isMazeLightingContext\(/.test(mansion) && /roomLabel !== "EAST LAWN" && roomLabel !== "REAR LAWN"/.test(mansion) && /previousMazeLightingContext/.test(updateLocation) && /mazeLightingContextChanged/.test(updateLocation) && /else if \(mazeLightingContextChanged\) syncLightRendering\(\)/.test(updateLocation), "entering or leaving either maze approach does not refresh the fixed light selection once at the boundary");
@@ -947,7 +981,7 @@ check("20 auxiliary interior lighting", /for \(const light of auxiliaryInteriorL
 check("20 stable light rendering", !/ownerRoom|rendersInOwnerRoom/.test(lightRendering), "room-name proximity gating can still hide a lit closet or room light while the player moves");
 check("20 exterior light containment", /addPracticalLight\(0,\s*3\.05,\s*13\.35,[\s\S]*?contained:\s*true,[\s\S]*?angle:\s*0\.62/.test(signatureChandelierBuilders) && /addRearFacadeWallLantern\([\s\S]*?addWallSconce\([\s\S]*?-14\.15/.test(yardBuild), "front or rear facade fixtures can project through the mansion shell");
 check("20 manual light state", !/\.setState\(|\.toggle\(/.test(updateLocation + exteriorCulling + lightRendering), "room or exterior transitions mutate a light circuit without a switch interaction");
-check("20 lightning containment", /outdoorRoomNames\.has\(state\.currentRoom\)/.test(stormSystem) && /this\.light\.intensity\s*=\s*outdoors\s*\?\s*lightning \* 11\s*:\s*0/.test(stormSystem), "the unshadowed lightning key can still pass through interior walls");
+check("20 lightning containment", /outdoorRoomNames\.has\(state\.currentRoom\)/.test(stormSystem) && /this\.light\.intensity\s*=\s*outdoors\s*\?\s*lightning \* 11(?: \* this\.lightIntensityMultiplier)?\s*:\s*0/.test(stormSystem), "the unshadowed lightning key can still pass through interior walls");
 check("20 real fixture emission", /this\.addContainedSpotLight\(/.test(section("addFixture(x, z, style", "addContainedSpotLight(x, y", lightCircuitClass)), "visible fixtures are not backed by real contained lights");
 check("20 maze lamp sources", /maze-center-tall-lamp/.test(yardBuild), "hedge maze has no visible tall center lamp");
 check("20 maze lamp sources", /mazeLampSources/.test(yardBuild) && /mazeWayfindingCells/.test(yardBuild) && /mazeCornerCells/.test(yardBuild), "maze boundary, corner, or mapped wayfinding lamps are missing real light sources");
@@ -972,7 +1006,7 @@ check("35 brighter entrance lamps", /height:\s*3\.75,[\s\S]*?intensity:\s*300,[\
 const outerPathLampBlock = section("const mazeOuterPathCells", "const mazeLampSources", yardBuild);
 check("35 outer-path lighting", count(outerPathLampBlock, /role:\s*"outer-path"/g) === 2 && /row:\s*11,\s*col:\s*0/.test(outerPathLampBlock) && /row:\s*15,\s*col:\s*0/.test(outerPathLampBlock), "west outer pathway lacks two evenly spaced real lamp sources");
 check("35 outer-path lighting", /height:\s*3\.75,[\s\S]*?intensity:\s*285,[\s\S]*?distance:\s*12\.5,[\s\S]*?angle:\s*1\.08/.test(outerPathLampBlock), "outer-path lamps are too weak or narrow to bridge the entrance pools");
-check("35 brighter maze lights", /source\.role === "center" \? 4\.35 : 3\.75/.test(yardBuild) && /source\.role === "center" \? 420 : 300/.test(yardBuild) && /source\.role === "center" \? 13\.2 : 12\.6/.test(yardBuild), "interior maze lamps did not receive the brighter center/wayfinding hierarchy");
+check("35 brighter maze lights", /source\.role === "center" \? 4\.35 : 3\.75/.test(yardBuild) && /northVisibilitySource \? MAZE_NORTH_VISIBILITY\.intensity : 300/.test(yardBuild) && /northVisibilitySource \? MAZE_NORTH_VISIBILITY\.distance : 12\.6/.test(yardBuild) && /minimumExposure:\s*0\.16/.test(mansion) && /minimumCanvasLuminance:\s*0\.035/.test(mansion), "interior maze lamps did not preserve the brighter center hierarchy plus the measured north-phone visibility profile");
 check("33 maze corner lamp match", /height:\s*4\.35,[\s\S]*?intensity:\s*420,[\s\S]*?distance:\s*13\.2,[\s\S]*?angle:\s*1\.1,[\s\S]*?downward:\s*true/.test(section("mazeCornerCells\.map", "}\),", yardBuild)), "corner lamps do not match the center lamp height, brightness, reach, and cone");
 check("20 maze light budget", count(section("const mazeWayfindingCells", "const mazeLampSources", yardBuild), /castsShadow:\s*true/g) === 1, "only the tall center maze lamp may spend a shadow map");
 check("20 maze light occlusion", /hedge-maze-walls[\s\S]*?true,\s*true\)/.test(yardBuild), "maze hedge walls do not cast shadows from the authored lamps");
@@ -994,6 +1028,7 @@ const expectedPortraitFiles = [
   "portrait-last-applause-v1-ai.jpg",
   "portrait-orchard-porcelain-teeth-v1-ai.jpg",
   "portrait-house-dreams-back-v1-ai.jpg",
+  "portrait-feast-father-at-table-v1-ai.jpg",
 ];
 const expectedPaintingFiles = [
   "painting-work-in-progress-dreaming-v1-ai.jpg",
@@ -1011,8 +1046,8 @@ const expectedArtworkFiles = [
 const newPortraitIds = ["banquet-forgot-guests", "last-applause", "orchard-porcelain-teeth", "house-dreams-back"];
 const paintingRoomWallArtIds = ["choir-floorboards", "polite-eclipse", "five-doors", "garden-knees", "moths-guests", "arrived-early"];
 const paintingRoomArtworkIds = ["work-in-progress-dreaming", ...paintingRoomWallArtIds];
-check("21 generated portrait collection", count(portraitManifest, /file:\s*"(?:portraits\/portrait|paintings\/painting)-[^"]+-v1-ai\.jpg"/g) === 17, "artwork manifest does not expose all seventeen immutable generated artwork files");
-check("21 generated portrait collection", count(portraitFurnishings, /artId:\s*"[^"]+"/g) === 19, "all nineteen mansion picture frames are not assigned a stable generated art ID");
+check("21 generated portrait collection", count(portraitManifest, /file:\s*"(?:portraits\/portrait|paintings\/painting)-[^"]+-v1-ai\.jpg"/g) === 18, "artwork manifest does not expose all eighteen immutable generated artwork files");
+check("21 generated portrait collection", count(portraitFurnishings, /artId:\s*"[^"]+"/g) === 20, "all twenty mansion picture frames are not assigned a stable generated art ID");
 for (const artId of newPortraitIds) {
   check("23 non-host painting collection", portraitManifest.includes(`"${artId}"`) && portraitFurnishings.includes(`artId: "${artId}"`), `${artId} is not registered and placed in the mansion`);
 }
@@ -1025,7 +1060,7 @@ for (const view of ["mainGalleryLastApplause", "upperArtHouseDreams", "upperArtB
 check("21 generated portrait loader", /function loadArtworkTexture/.test(mansion) && /ClampToEdgeWrapping/.test(portraitBuilder) && /THREE\.sRGBEncoding/.test(portraitBuilder) && !/RepeatWrapping/.test(portraitBuilder), "artwork textures are not loaded as clamped sRGB paintings");
 check("21 generated portrait loader", /portrait-art-\$\{artId\}/.test(portraitBuilder) && /if \(!artTexture\)/.test(portraitBuilder), "generated art lacks stable scene names or procedural fallback gating");
 check("21 generated portrait diptych", /repeatX:\s*0\.5,\s*offsetX:\s*0/.test(portraitFurnishings) && /repeatX:\s*0\.5,\s*offsetX:\s*0\.5/.test(portraitFurnishings), "ballroom diptych halves are not mapped to complementary frames");
-check("21 switch-owned portrait visibility", count(portraitFurnishings, /circuitName:\s*"[^"]+"/g) === 19 && /function bindPortraitMaterialsToLighting/.test(mansion) && /circuit\.glowMaterials\.push\(placement\.material\)/.test(mansion), "portrait readability is not owned by the same manual light switches as its room");
+check("21 switch-owned portrait visibility", count(portraitFurnishings, /circuitName:\s*"[^"]+"/g) + count(portraitFurnishings, /circuitName:\s*OPEN_VOLUME_SHARED_LIGHTING\.circuit/g) === 20 && /function bindPortraitMaterialsToLighting/.test(mansion) && /circuit\.glowMaterials\.push\(placement\.material\)/.test(mansion), "portrait readability is not owned by the same manual light switches as its room");
 check("23 painting readability", /onEmissiveIntensity\s*=\s*0\.48/.test(portraitBuilder) && /offEmissiveIntensity\s*=\s*0/.test(portraitBuilder) && /circuit\.on\s*\?\s*0\.48\s*:\s*0/.test(portraitBuilder), "lit paintings are not gently readable while preserving a true zero-emissive lights-off state");
 for (const relativeFile of expectedArtworkFiles) {
   const fullPath = path.join(root, "assets/textures/mr-feast/generated", relativeFile);
@@ -1137,7 +1172,7 @@ check("47 music-room table clearance route", /musicTableWestClearance:\s*\[8\.05
 check("48 rotated sofa collider", /physics\.addFixedBox\(x,\s*floorY \+ colliderHeight \/ 2,\s*z,\s*w,\s*colliderHeight,\s*0\.9,\s*rotationY \|\| 0\)/.test(sofaBuilder), "rotated sofas still use an oversized axis-aligned collider");
 check("48 music-room couch-table aisle", /musicTableWestClearance:\s*\{[\s\S]*?actions:\s*\[\{\s*yaw:\s*Math\.PI,\s*seconds:\s*3\.0\s*\}\][\s\S]*?minZ:\s*8\.0[\s\S]*?maxZ:\s*9\.3/.test(qaHooks), "Music Room route does not prove the full aisle between the couch and table is clear");
 check("49 dossier Tab binding", /event\.code === "Tab"[\s\S]*?contestant13Quest\.toggleJournal\(\)/.test(mansion) && !/event\.code === "KeyI"|event\.code === "KeyJ"/.test(mansion), "inventory dossier is not exclusively bound to Tab");
-check("49 discovery-first HUD", !/Search the Library shelves for a book that does not quite belong\./i.test(page) && /dom\.caseFile\.hidden\s*=\s*!state\.started\s*\|\|\s*!this\.story\.bookRead/.test(contestant13Quest), "fresh play still exposes the left-side Library direction");
+check("49 discovery-first HUD", !/Search the Library shelves for a book that does not quite belong\./i.test(page) && /if \(dom\.caseFile\) dom\.caseFile\.hidden = true/.test(contestant13Quest) && /Never surface step-by-step trail tips/.test(contestant13Quest) && /#mansion-casefile\s*\{[\s\S]*?display:\s*none\s*!important/.test(page) && /phase !== FEAST_SAYS_PHASE\.DORMANT/.test(mansion) && /phase !== STORM_RUN_PHASE\.DORMANT/.test(mansion), "trail tips or idle next-game countdowns still surface outside Bag/inventory");
 check("50 illustrated dossier", /itemIcons:\s*Object\.freeze/.test(contestant13Config) && /function itemIconSvg\(/.test(mansion) && /mansion-inventory-card__icon/.test(contestant13Quest), "carried objects lack distinct scalable dossier illustrations");
 check("50 illustrated dossier", /id="mansion-clue-notepad"/.test(page) && /\.mansion-clue-notepad/.test(page) && /\.mansion-clue-note/.test(page) && /linear-gradient/.test(page), "recovered clues are not presented on a ruled notepad");
 
@@ -1231,19 +1266,19 @@ check("41 Contestant 13 page copy", !/There are no objectives/i.test(page) && /C
 
 // 42. Discovery tuning makes the physical clues less obvious without making
 // them unreliable: the shovel sits low inside a rose row, the cache is at the
-// maze's maximum-depth dead end, and excavation removes every authored mark.
+// maze's deep terminal chamber, and excavation removes every authored mark.
 check("42 Contestant 13 rose-hidden shovel", /shovel:\s*Object\.freeze\(\{ x:\s*-22\.35, z:\s*-5\.50, yOffset:\s*0\.16, scale:\s*0\.56 \}\)/.test(contestant13Config) && /group\.position\.set\(shovelLayout\.x, YARD_LAYOUT\.groundY \+ shovelLayout\.yOffset, shovelLayout\.z\)/.test(contestant13ShovelBuild) && /group\.scale\.setScalar\(shovelLayout\.scale\)/.test(contestant13ShovelBuild) && /group\.rotation\.z\s*=\s*-1\.42/.test(contestant13ShovelBuild), "shovel is not reduced and placed low inside the shifted southeast rose bed");
 check("42 Contestant 13 shovel target", /contestant-13-garden-shovel-hitbox/.test(contestant13ShovelBuild) && /hitbox\.visible\s*=\s*false/.test(contestant13ShovelBuild) && /\[hitbox\]/.test(contestant13ShovelBuild), "hidden shovel lacks a dedicated forgiving interaction target");
-check("42 Contestant 13 deeper cache", /const goal\s*=\s*mazeCellCenter\(19, 3\)/.test(contestant13DigSiteBuild) && /pathStepsFromRear:\s*82/.test(contestant13Config), "cache is not at the maze's deepest reachable dead end");
+check("42 Contestant 13 deeper cache", /const goal\s*=\s*mazeCellCenter\(CONTESTANT_13\.world\.digSite\.row,\s*CONTESTANT_13\.world\.digSite\.col\)/.test(contestant13DigSiteBuild) && /digSite:\s*Object\.freeze\(\{\s*row:\s*5,\s*col:\s*7,\s*pathStepsFromRear:\s*62,\s*pathStepsFromNorth:\s*63\s*\}\)/.test(contestant13Config), "cache is not at the redesigned maze's deep terminal chamber");
 check("42 Contestant 13 subtle mark", /contestant-13-dig-site-marker/.test(contestant13DigSiteBuild) && /w:\s*0\.025[^;]+h:\s*0\.012[^;]+d:\s*0\.18/.test(contestant13DigSiteBuild) && /material:\s*M\.darkFloor/.test(contestant13DigSiteBuild), "XIII marker remains too large, bright, or raised");
 check("42 Contestant 13 clean hole", /digMound\.visible\s*=\s*false/.test(contestant13Quest) && /digMarker\.visible\s*=\s*false/.test(contestant13Quest) && /digHole\.visible\s*=\s*true/.test(contestant13Quest) && /contestant-13-dig-site-open-hole[^;]+height:\s*0\.02[^;]+y:\s*0\.045/.test(contestant13DigSiteBuild) && /Inspect empty hole/.test(contestant13DigSiteBuild), "excavation does not remove the mound and XIII mark while preserving a visible inspectable hole above the maze path surface");
 check("42 Contestant 13 discovery diagnostics", /shovelScale:/.test(contestant13Quest) && /pathStepsFromRear:/.test(contestant13Quest) && /digMoundVisible:/.test(contestant13Quest) && /digMarkerVisible:/.test(contestant13Quest) && /digHoleVisible:/.test(contestant13Quest), "runtime diagnostics do not expose the tuned clue geometry and post-dig state");
-check("42 Contestant 13 tuned QA views", /contestant13GardenShovel:\s*\[-22\.28,\s*YARD_LAYOUT\.groundY,\s*-4\.05,\s*0,\s*-0\.75\]/.test(qaRoomViews) && /contestant13DigSite:\s*\[25,\s*YARD_LAYOUT\.groundY,\s*-13\.90,\s*0,\s*-0\.93\]/.test(qaRoomViews), "QA views do not frame the concealed shovel and deeper cache");
+check("42 Contestant 13 tuned QA views", /contestant13GardenShovel:\s*\[-22\.28,\s*YARD_LAYOUT\.groundY,\s*-4\.05,\s*0,\s*-0\.75\]/.test(qaRoomViews) && /contestant13DigSite:\s*\[29\.65,\s*YARD_LAYOUT\.groundY,\s*5\.75,\s*-Math\.PI \/ 2,\s*-0\.93\]/.test(qaRoomViews), "QA views do not frame the concealed shovel and deep terminal cache");
 check("44 garden quest placement", /const shovelLayout = CONTESTANT_13\.world\.shovel;/.test(contestant13ShovelBuild) && /group\.position\.set\(shovelLayout\.x, YARD_LAYOUT\.groundY \+ shovelLayout\.yOffset, shovelLayout\.z\)/.test(contestant13ShovelBuild), "the garden shovel does not move with its authored garden placement");
 
 // 47. The revised trail starts with a subtle shelf volume, separates the
 // garden-tool and maze-key hints, and makes the basement a real quest gate.
-check("47 basement key trail physical story", /book:\s*Object\.freeze\(\{[\s\S]*?x:\s*-14\.5, z:\s*7\.9,[\s\S]*?localZ:\s*-0\.075/.test(contestant13Config) && /contestant-13-library-shelf-book/.test(contestant13BookBuild) && /group\.position\.set\(bookLayout\.x, FLOOR\.MAIN, bookLayout\.z\)/.test(contestant13BookBuild) && /group\.rotation\.y\s*=\s*-Math\.PI \/ 2/.test(contestant13BookBuild), "Contestant 13's clue is not embedded in the middle Library bookcase");
+check("47 basement key trail physical story", /book:\s*Object\.freeze\(\{[\s\S]*?x:\s*-14\.35, z:\s*7\.9,[\s\S]*?localZ:\s*-0\.075/.test(contestant13Config) && /contestant-13-library-shelf-book/.test(contestant13BookBuild) && /group\.position\.set\(bookLayout\.x, FLOOR\.MAIN, bookLayout\.z\)/.test(contestant13BookBuild) && /group\.rotation\.y\s*=\s*-Math\.PI \/ 2/.test(contestant13BookBuild), "Contestant 13's clue is not embedded in the middle Library bookcase");
 check("47 basement key trail physical story", /shelfIndex:\s*2, reservedSlot:\s*5/.test(contestant13Config) && /localX:\s*0\.215, localZ:\s*-0\.075/.test(contestant13Config) && /reservedBookSlots/.test(bookshelfBuilder) && /reservedSlots\.has\(`\$\{shelf\}:\$\{i\}`\)/.test(bookshelfBuilder) && /reservedBookSlots:\s*\[\{ shelf:\s*clueBookLayout\.shelfIndex, slot:\s*clueBookLayout\.reservedSlot \}\]/.test(mainFurnishings), "the clue book does not own a clean reserved gap between neighboring instanced volumes");
 check("47 basement key trail physical story", /width:\s*0\.12, height:\s*0\.43, depth:\s*0\.3/.test(contestant13Config) && /w:\s*bookLayout\.width, h:\s*bookLayout\.height, d:\s*bookLayout\.depth/.test(contestant13BookBuild) && /createContestantThirteenScratchTexture\(\)/.test(contestant13BookBuild) && /new THREE\.PlaneGeometry\(bookLayout\.scratchWidth, bookLayout\.scratchHeight\)/.test(contestant13BookBuild) && /surfaceTreatment\s*=\s*"etched-decal"/.test(contestant13BookBuild) && /raisedDepth\s*=\s*0/.test(contestant13BookBuild), "the clue volume lacks a flat etched XIII decal");
 check("47 organic XIII scratches", /const scratchPaths\s*=\s*\[/.test(contestant13BookBuild) && /ctx\.setLineDash\(\[13, 4, 8, 3\]\)/.test(contestant13BookBuild) && /rgba\(14, 10, 7, 0\.68\)/.test(contestant13BookBuild) && /rgba\(190, 170, 126, 0\.72\)/.test(contestant13BookBuild) && !/contestant-13-library-book-scratch-x-left/.test(contestant13BookBuild) && !/material:\s*M\.agedTrim, parent:\s*scratch/.test(contestant13BookBuild), "the spine XIII is still built from clean raised geometry instead of broken layered scratch marks");
@@ -1259,7 +1294,7 @@ check("47 basement key trail state machine", /locked:\s*true[\s\S]*?onCreate:\s*
 check("47 basement key trail state machine", /getLockedLabel/.test(hingedDoorClass) && /onLockedActivate/.test(hingedDoorClass) && /unlockBasement\(door/.test(contestant13Quest) && /door\.locked\s*=\s*false/.test(contestant13Quest), "the shared door contract cannot explain or resolve the basement lock through the quest");
 check("47 basement key trail state machine", /this\.story\.basementKeyFound\s*=\s*true/.test(contestant13Quest) && /this\.addItem\("basement-key-b13"\)/.test(contestant13Quest) && /if \(!this\.story\.basementUnlocked\)/.test(contestant13Quest), "the maze reward does not gate the Archive chain behind basement unlock");
 check("47 basement key trail diagnostics", /bookVisible:/.test(contestant13Quest) && /bookScratch:\s*"XIII"/.test(contestant13Quest) && /bookSlotReserved:\s*true/.test(contestant13Quest) && /basementDoorLocked:/.test(contestant13Quest) && /basementDoorOpen:/.test(contestant13Quest) && /basementUnlocked:\s*this\.story\.basementUnlocked/.test(contestant13Quest), "diagnostics do not expose the separated XIII-marked shelf book and persistent basement-door state");
-check("47 basement key trail QA views", /contestant13LibraryBook:\s*\[-12\.75,\s*FLOOR\.MAIN,\s*8\.1,\s*Math\.PI \/ 2,\s*-0\.08\]/.test(qaRoomViews) && /contestant13BasementDoor:\s*\[12\.55,\s*FLOOR\.MAIN,\s*-4\.65,\s*Math\.PI,\s*-0\.08\]/.test(qaRoomViews), "QA views do not frame the subtle book and basement lock from the player's Kitchen approach");
+check("47 basement key trail QA views", /contestant13LibraryBook:\s*\[-12\.6,\s*FLOOR\.MAIN,\s*8\.1,\s*Math\.PI \/ 2,\s*-0\.08\]/.test(qaRoomViews) && /contestant13BasementDoor:\s*\[12\.55,\s*FLOOR\.MAIN,\s*-4\.65,\s*Math\.PI,\s*-0\.08\]/.test(qaRoomViews), "QA views do not frame the subtle book and basement lock from the player's Kitchen approach");
 check("47 basement key trail patrol gate", /door\.name === "basement stair door" && target\.id === "main-service-door"/.test(mrFeastWanderer) && /point\.id === "main-service-exit"/.test(mrFeastWanderer) && /lockedRouteDoors/.test(mrFeastWanderer) && /door\.locked = true/.test(mrFeastWanderer), "Mr. Feast can walk through the locked basement threshold or full-route QA can corrupt story-door state");
 
 // 48. Player mobility and testing controls share one authoritative state
@@ -1273,8 +1308,12 @@ check("48 escape menu", !/id="mansion-audio"/.test(page) && !/id="mansion-fullsc
 check("48 escape menu", /function toggleGameAudio\(/.test(mansion) && /dom\.menuMusic\.addEventListener\("click"/.test(mansion) && /Sound: On/.test(mansion) && /Sound: Off/.test(mansion), "Escape menu sound control is not wired to the audio system");
 check("48 resume reclaims look", /function reclaimLookControl\(/.test(mansion) && /armLookReclaimFollowUps/.test(mansion) && /armFollowUps:\s*true/.test(mansion) && /pointerdown/.test(mansion), "closing the Escape menu does not re-request pointer lock for camera look");
 check("48 book keeps cursor hidden", /keepCanvasInteractive/.test(mansion) && /is-book-open/.test(mansion) && /mr-feast-book-open/.test(mansion) && /cursor:\s*none/.test(page) && /do NOT inert the canvas/.test(mansion), "opening a book still inerts the canvas or shows the system cursor");
-check("48 true fullscreen", /requestFullscreen/.test(mansion) && /Exit fullscreen/.test(mansion) && /syncFullscreenStateFromDocument/.test(mansion) && /navigationUI:\s*"hide"/.test(mansion), "Maximize still uses CSS-only browser chrome instead of the Fullscreen API");
+check("48 true fullscreen", /function setMaximized\(/.test(mansion) && /requestFullscreen\(\{\s*navigationUI:\s*"hide"\s*\}\)/.test(mansion) && /Exit fullscreen/.test(mansion) && /applyMaximizedChrome\(true\)/.test(mansion) && /is-maxed/.test(mansion), "Maximize no longer enters true monitor Fullscreen API with CSS safety chrome");
+check("48 escape keeps maximize", /intentionalMaximizeExitUntil/.test(mansion) && /wantNativeFullscreen/.test(mansion) && /keyboard\.lock\(\["Escape"\]\)/.test(mansion) && /restoreNativeFullscreenIfWanted/.test(mansion) && /event\.code === "Escape"/.test(mansion) && /setMenuOpen\(!state\.menuOpen\)/.test(mansion), "Escape while maximized does not lock Escape or restore OS fullscreen after a system exit");
 check("48 save contract", /RBGameSaves\?\.create\("mr-feast-mansion",\s*\{ version:\s*1 \}\)/.test(mansion) && /serializeMansionSave/.test(mansion) && /restoreMansionSave/.test(mansion) && /playerPosition/.test(mansion), "mansion progress and player transform are not versioned through RBGameSaves");
+check("69 checkpoint autosave isolation", /storageKey:\s*"rainbot_game_autosaves:mr-feast-mansion"/.test(mansion) && /maximumSlots:\s*3/.test(mansion) && /mansionSaveSlot\?\.save\(payload/.test(mansion) && /writeCheckpointAutosaves\(entries\)/.test(mansion), "checkpoint autosaves do not use a bounded store separate from the existing manual slot");
+check("69 shared save picker", /id="mansion-load-chooser"/.test(page) && /id="mansion-load-choices"/.test(page) && /id="mansion-load-cancel"/.test(page) && /openLoadChooser\(dom\.introLoad\)/.test(mansion) && /openLoadChooser\(dom\.menuLoad\)/.test(mansion) && /openLoadChooser\(dom\.gameOverLoad\)/.test(mansion), "intro, Escape, and game-over Load controls do not share one explicit save chooser");
+check("69 safe checkpoint gates", /opening-welcome/.test(mansion) && /dev-mode/.test(mansion) && /live-competition/.test(mansion) && /active-pursuit/.test(mansion) && /active-search/.test(mansion) && /timed-interaction/.test(mansion) && /hiding/.test(mansion) && /seated/.test(mansion), "checkpoint autosaves are not guarded against transient or unsafe mansion states");
 check("48 reversible dev mode", /devModeSnapshot/.test(mansion) && /setDevMode\(enabled/.test(mansion) && /recordingPlayed\s*=\s*true/.test(mansion) && /relaySabotaged\s*=\s*false/.test(mansion) && /restoreQuestSnapshot/.test(mansion), "Dev Mode does not grant the current trail while preserving a reversible pre-dev snapshot and unfinished sabotage");
 
 // 43. Mr. Feast is an optional, animated test layer. He follows a safe
@@ -1293,6 +1332,40 @@ const expectedMrFeastAssets = [
   mrFeastManifest.animations?.run?.file,
 ];
 check("43 Mr Feast manifest", mrFeastManifest.heightMeters === 2.01 && mrFeastManifest.sourceHeightMeters === 1.92 && mrFeastManifest.forwardAxis === "+Z" && mrFeastManifest.animations?.stalk?.playbackRate === 0.37 && expectedMrFeastAssets.every(Boolean), "runtime manifest is missing the eye-level fit, forward axis, stride-calibrated stalk rate, or motion assets");
+const faceRetopologyPaused = /\*\*33 — Mr\. Feast Face Retopology\*\* is paused/.test(projectState);
+const pageCacheKey = page.match(/mr-feast-mansion\.js\?v=([^"']+)/)?.[1] || "";
+const mansionRuntimeVersion = mansion.match(/const MANSION_RUNTIME_VERSION\s*=\s*"([^"]+)"/)?.[1] || "";
+check(
+  "43 Mr Feast face release gate",
+  !faceRetopologyPaused || (
+    mrFeastManifest.version === 1
+    && mrFeastManifest.model === "processed/mr-feast-game-rigged.glb"
+    && !mrFeastManifest.face
+    && /assetVersion:\s*"20260721-stable-face-1"/.test(mansion)
+    && Boolean(pageCacheKey)
+    && pageCacheKey === mansionRuntimeVersion
+  ),
+  "the paused and visually rejected retopology is still selected by the public manifest or an old cache key",
+);
+check(
+  "46 active Mr Feast retopology quality gate",
+  faceRetopologyPaused || (
+    mrFeastManifest.version >= 3
+    && mrFeastManifest.model !== "processed/mr-feast-game-rigged.glb"
+    && mrFeastRetopologyReport?.surface?.maxNeighborDepthDeltaMillimeters <= 10
+    && mrFeastRetopologyReport?.surface?.p99NeighborDepthDeltaMillimeters <= 5
+    && mrFeastRetopologyReport?.surface?.edgesAbove10Millimeters === 0
+    && mrFeastRetopologyReport?.eyeFit?.left?.cornealProtrusionMillimeters <= 3
+    && mrFeastRetopologyReport?.eyeFit?.right?.cornealProtrusionMillimeters <= 3
+    && mrFeastRetopologyReport?.faceJoin?.nearCoplanarSamples === 0
+    && mrFeastRetopologyReport?.faceJoin?.depthOrderFlips === 0
+    && mrFeastRetopologyReport?.faceJoin?.uncoveredSkinRays === 0
+    && mrFeastRetopologyReport?.topology?.boundaryLoops === 4
+    && mrFeastRetopologyReport?.topology?.looseVertices === 0
+    && mrFeastRetopologyReport?.topology?.nonManifoldEdges === 0
+  ),
+  "an active retopology must replace the rejected appliance with measured surface continuity, recessed eyes, clean joins, and valid boundary topology",
+);
 for (const asset of expectedMrFeastAssets) {
   const assetPath = path.join(mrFeastAssetRoot, asset);
   check("43 Mr Feast runtime assets", fs.existsSync(assetPath), `missing runtime character asset ${asset}`);
@@ -1311,34 +1384,36 @@ for (const asset of expectedMrFeastAssets.slice(1)) {
 }
 const mrFeastModelPath = path.join(mrFeastAssetRoot, mrFeastManifest.model);
 const mrFeastModelJson = glbJson(mrFeastModelPath);
-const mrFeastFaceNode = (mrFeastModelJson?.nodes || []).find((node) => node.name === "MrFeast_RetopoFace");
+const mrFeastRetopologyModelJson = glbJson(mrFeastRetopologyModelPath);
+const mrFeastFaceNode = (mrFeastRetopologyModelJson?.nodes || []).find((node) => node.name === "MrFeast_RetopoFace");
 const mrFeastModelMesh = Number.isInteger(mrFeastFaceNode?.mesh)
-  ? mrFeastModelJson?.meshes?.[mrFeastFaceNode.mesh]
-  : (mrFeastModelJson?.meshes || []).find((mesh) => mesh.name === "MrFeast_RetopoFace");
+  ? mrFeastRetopologyModelJson?.meshes?.[mrFeastFaceNode.mesh]
+  : (mrFeastRetopologyModelJson?.meshes || []).find((mesh) => mesh.name === "MrFeast_RetopoFace");
 const mrFeastModelPrimitives = mrFeastModelMesh?.primitives || [];
 const mrFeastModelTargets = mrFeastModelPrimitives.flatMap((primitive) => primitive.targets || []);
 const mrFeastFacialTargetNames = mrFeastModelMesh?.extras?.targetNames || [];
-const mrFeastFacialMappings = Object.values(mrFeastManifest.face?.morphTargets || {});
-const mrFeastRetopologyNodeNames = (mrFeastModelJson?.nodes || []).map((node) => node.name).filter(Boolean);
-const mrFeastRetopologyMeshNames = (mrFeastModelJson?.meshes || []).map((mesh) => mesh.name).filter(Boolean);
-const mrFeastSceneRootNodes = new Set(mrFeastModelJson?.scenes?.[mrFeastModelJson?.scene || 0]?.nodes || []);
+const mrFeastRetopologyNodeNames = (mrFeastRetopologyModelJson?.nodes || []).map((node) => node.name).filter(Boolean);
+const mrFeastRetopologyMeshNames = (mrFeastRetopologyModelJson?.meshes || []).map((mesh) => mesh.name).filter(Boolean);
+const mrFeastSceneRootNodes = new Set(mrFeastRetopologyModelJson?.scenes?.[mrFeastRetopologyModelJson?.scene || 0]?.nodes || []);
 const mrFeastRetopologyNodeIndexes = requiredMrFeastRetopologyObjects.map((name) =>
-  (mrFeastModelJson?.nodes || []).findIndex((node) => node.name === name),
+  (mrFeastRetopologyModelJson?.nodes || []).findIndex((node) => node.name === name),
 );
-const mrFeastFacePositionAccessor = mrFeastModelJson?.accessors?.[
+const mrFeastFacePositionAccessor = mrFeastRetopologyModelJson?.accessors?.[
   mrFeastModelPrimitives[0]?.attributes?.POSITION
 ];
 const mrFeastFaceAccessorSize = mrFeastFacePositionAccessor?.min?.map(
   (minimum, index) => mrFeastFacePositionAccessor.max[index] - minimum,
 ) || [];
-check("45 Mr Feast facial asset", mrFeastModelJson?.meshes?.length >= 7 && mrFeastModelJson?.skins?.length === 1 && mrFeastModelJson.skins[0].joints?.length === 24, "retopologized model must expose its modular face parts while retaining one shared skin and the 24-bone body rig");
-check("45 Mr Feast facial asset", mrFeastModelTargets.length === requiredMrFeastFacialTargets.length && mrFeastModelTargets.every((target) => Number.isInteger(target.POSITION) && Object.keys(target).length === 1), "facialized model must contain ten POSITION-only morph targets without morph normals or tangents");
-check("45 Mr Feast facial asset", requiredMrFeastFacialTargets.every((name) => mrFeastFacialTargetNames.includes(name)), `facialized model is missing approved targets: ${requiredMrFeastFacialTargets.filter((name) => !mrFeastFacialTargetNames.includes(name)).join(", ")}`);
-check("46 Mr Feast retopology transforms", mrFeastRetopologyNodeIndexes.every((index) => index >= 0 && mrFeastSceneRootNodes.has(index)) && mrFeastFaceAccessorSize[0] >= 0.14 && mrFeastFaceAccessorSize[1] >= 0.20 && mrFeastFaceAccessorSize[2] >= 0.16, "retopologized face parts are parented beneath the 0.01-scale armature or their exported face bounds collapsed below head scale");
-check("45 Mr Feast facial manifest", mrFeastManifest.version === 3 && mrFeastManifest.face?.rigVersion === 3 && mrFeastManifest.face?.presetVersion === 3 && requiredMrFeastFacialTargets.every((name) => mrFeastFacialMappings.includes(name)) && new Set(mrFeastFacialMappings).size === requiredMrFeastFacialTargets.length, "manifest does not expose the version-three retopologized facial contract");
-check("45 Mr Feast facial size", fs.statSync(mrFeastModelPath).size <= 15 * 1024 * 1024, "retopologized runtime GLB exceeds the 15 MiB mobile budget");
+check("43 Mr Feast stable face asset", mrFeastModelJson?.meshes?.length === 1 && mrFeastModelJson?.skins?.length === 1 && mrFeastModelJson.skins[0].joints?.length === 24, "the active release must use the intact single-mesh, 24-bone character while retopology is paused");
+check("43 Mr Feast stable face manifest", mrFeastManifest.version === 1 && mrFeastManifest.model === "processed/mr-feast-game-rigged.glb" && !mrFeastManifest.face, "the active manifest still exposes the rejected retopology contract");
+check("43 Mr Feast stable face size", fs.statSync(mrFeastModelPath).size <= 15 * 1024 * 1024, "the stable runtime GLB exceeds the 15 MiB mobile budget");
+check("46 experimental Mr Feast facial asset", mrFeastRetopologyModelJson?.meshes?.length >= 7 && mrFeastRetopologyModelJson?.skins?.length === 1 && mrFeastRetopologyModelJson.skins[0].joints?.length === 24, "the preserved experimental model lost its modular face parts, shared skin, or 24-bone body rig");
+check("46 experimental Mr Feast facial asset", mrFeastModelTargets.length === requiredMrFeastFacialTargets.length && mrFeastModelTargets.every((target) => Number.isInteger(target.POSITION) && Object.keys(target).length === 1), "the preserved experimental model must contain ten POSITION-only morph targets without morph normals or tangents");
+check("46 experimental Mr Feast facial asset", requiredMrFeastFacialTargets.every((name) => mrFeastFacialTargetNames.includes(name)), `the preserved experimental model is missing targets: ${requiredMrFeastFacialTargets.filter((name) => !mrFeastFacialTargetNames.includes(name)).join(", ")}`);
+check("46 experimental Mr Feast retopology transforms", mrFeastRetopologyNodeIndexes.every((index) => index >= 0 && mrFeastSceneRootNodes.has(index)) && mrFeastFaceAccessorSize[0] >= 0.14 && mrFeastFaceAccessorSize[1] >= 0.20 && mrFeastFaceAccessorSize[2] >= 0.16, "the preserved experimental face parts are parented beneath the 0.01-scale armature or their exported bounds collapsed below head scale");
+check("46 experimental Mr Feast facial size", fs.statSync(mrFeastRetopologyModelPath).size <= 15 * 1024 * 1024, "the preserved experimental GLB exceeds the 15 MiB mobile budget");
 check("45 Mr Feast facial report", mrFeastFacialReport.trianglesBefore === 65000 && mrFeastFacialReport.trianglesAfter === 65000 && mrFeastFacialReport.vertexCountBefore === mrFeastFacialReport.vertexCountAfter && requiredMrFeastFacialTargets.every((name) => mrFeastFacialReport.targets?.includes(name) && mrFeastFacialReport.targetStats?.[name]?.changedVertices > 0), "facial authoring report does not prove stable topology and non-empty sparse targets");
-check("46 Mr Feast retopology structure", Boolean(mrFeastRetopologyReport) && mrFeastRetopologyReport?.pipelineVersion === 1 && mrFeastRetopologyReport?.face?.components === 1 && mrFeastRetopologyReport?.face?.vertices >= 2000 && mrFeastRetopologyReport?.morphMeshes === 4 && mrFeastRetopologyReport?.morphBindings === 18 && mrFeastRetopologyReport?.albedoBake?.completed === true && requiredMrFeastRetopologyObjects.every((name) => mrFeastRetopologyNodeNames.includes(name) || mrFeastRetopologyMeshNames.includes(name)), "runtime asset does not contain the one-piece textured face, separate eyes, eyelids, oral cavity, teeth, and smooth textured lip-rim binding contract");
+check("46 experimental Mr Feast retopology structure", Boolean(mrFeastRetopologyReport) && mrFeastRetopologyReport?.pipelineVersion === 1 && mrFeastRetopologyReport?.face?.components === 1 && mrFeastRetopologyReport?.face?.vertices >= 2000 && mrFeastRetopologyReport?.morphMeshes === 4 && mrFeastRetopologyReport?.morphBindings === 18 && mrFeastRetopologyReport?.albedoBake?.completed === true && requiredMrFeastRetopologyObjects.every((name) => mrFeastRetopologyNodeNames.includes(name) || mrFeastRetopologyMeshNames.includes(name)), "the preserved experiment lost the one-piece textured face, separate eyes, eyelids, oral cavity, teeth, or textured lip-rim binding contract");
 check("46 Mr Feast retopology budget", Boolean(mrFeastRetopologyReport) && mrFeastRetopologyReport?.rig?.bones === 24 && mrFeastRetopologyReport?.rig?.skinnedMeshes >= 2 && mrFeastRetopologyReport?.asset?.triangles <= 90000 && mrFeastRetopologyReport?.asset?.sizeBytes <= 15 * 1024 * 1024, "retopologized character exceeds the browser budget or no longer preserves the 24-bone body rig");
 check("46 Mr Feast retopology deformation", Boolean(mrFeastRetopologyReport) && requiredMrFeastFacialTargets.every((name) => mrFeastRetopologyReport?.targets?.includes(name) && mrFeastRetopologyReport?.targetStats?.[name]?.changedVertices > 0) && mrFeastRetopologyReport?.morphNormalExported === false && mrFeastRetopologyReport?.blinkClosureGapMillimeters?.left <= 1 && mrFeastRetopologyReport?.blinkClosureGapMillimeters?.right <= 1 && mrFeastRetopologyReport?.mouthOpenGapMillimeters >= 8, "retopology report does not prove ten non-empty POSITION-only targets, true independent eyelid closure, and a visible mouth opening");
 const readableFacialDisplacementMillimeters = {
@@ -1365,7 +1440,7 @@ check("43 Mr Feast animation", /THREE\.SkeletonUtils\.clone/.test(mrFeastWandere
 check("43 Mr Feast animation hardening", /sanitizeAnimationClip/.test(mrFeastWanderer) && /propertyName === "scale"/.test(mrFeastWanderer) && /propertyName === "position" && !targetsHips/.test(mrFeastWanderer), "runtime does not defensively reject scale and limb-translation tracks");
 check("43 Mr Feast eye-level fit", /heightMeters:\s*2\.01/.test(mrFeastNpcConfig) && /MR_FEAST_NPC\.heightMeters \|\| Number\(manifest\.heightMeters\)/.test(mrFeastWanderer), "runtime cannot keep Mr. Feast at the authored 2.01m eye-level fit");
 check("43 Mr Feast grounded gait", /const STALK_LOCOMOTION_BONES\s*=\s*new Set/.test(mrFeastTuningScript) && /profile === "stalk" && STALK_LOCOMOTION_BONES\.has\(boneName\)/.test(mrFeastTuningScript) && /stalkPlaybackRateForSpeed\(speed\)/.test(mrFeastWanderer), "stalk tuning can still twist the lower-body gait plane or desynchronize cadence from travel speed");
-check("43 Mr Feast cornering", /movementAlignment:\s*0\.985/.test(mrFeastNpcConfig) && count(mrFeastWanderer, /facingAlignment < MR_FEAST_NPC\.movementAlignment/g) === 2 && /Math\.atan2\(Math\.sin\(nextYaw\), Math\.cos\(nextYaw\)\)/.test(mrFeastWanderer), "sharp turns can still produce visible strafing or unbounded long-session yaw");
+check("43 Mr Feast cornering", /movementAlignment:\s*0\.985/.test(mrFeastNpcConfig) && count(mrFeastWanderer, /facingAlignment < MR_FEAST_NPC\.movementAlignment/g) === 3 && /Math\.atan2\(Math\.sin\(nextYaw\), Math\.cos\(nextYaw\)\)/.test(mrFeastWanderer), "sharp turns can still produce visible strafing or unbounded long-session yaw");
 check("43 Mr Feast 3D navigation", /const distance = Math\.hypot\(dx, dy, dz\)/.test(mrFeastWanderer) && /const horizontalDistance = Math\.hypot\(dx, dz\)/.test(mrFeastWanderer) && count(mrFeastWanderer, /moveWithCollision\(dx \/ distance \* step, dy \/ distance \* step, dz \/ distance \* step\)/g) === 2 && /this\.root\.position\.y \+= movement\.y/.test(mrFeastWanderer) && !/this\.root\.position\.y = FLOOR\.MAIN/.test(mrFeastWanderer), "wanderer cannot continuously interpolate elevation while keeping yaw horizontal");
 check("43 Mr Feast door behavior", /prepareRouteDoor\(target, distance\)/.test(mrFeastWanderer) && /door\.setOpen\(true\)/.test(mrFeastWanderer) && /closeClearedRouteDoors/.test(mrFeastWanderer) && /door\.playerInSwingPath\(\)/.test(mrFeastWanderer), "wanderer does not open, wait for, and safely close route doors");
 check("43 Mr Feast contact shadow", /mr-feast-contact-shadow/.test(mrFeastWanderer) && /new THREE\.CircleGeometry\(1, 24\)/.test(mrFeastWanderer) && /depthWrite:\s*false/.test(mrFeastWanderer), "the moving character lacks a cheap floor contact shadow");
@@ -1380,7 +1455,7 @@ check("45 Mr Feast facial controller", /updateFace\(/.test(mrFeastWanderer) && /
 check("45 Mr Feast facial material readability", /tuneCharacterMaterial\(/.test(mrFeastWanderer) && /material\.emissiveIntensity\s*=\s*0\.08/.test(mrFeastWanderer) && /material\.roughness\s*=\s*Math\.max\(Number\(material\.roughness\) \|\| 0, 0\.68\)/.test(mrFeastWanderer), "Meshy material can still self-illuminate the face strongly enough to erase expression contours");
 check("45 Mr Feast facial diagnostics", /face:\s*this\.getFaceDiagnostics\(\)/.test(mrFeastWanderer) && /targetWeights:/.test(mrFeastWanderer) && /phase:\s*blinkPhase/.test(mrFeastWanderer) && /attention:/.test(mrFeastWanderer) && /setMrFeastFaceForQA/.test(qaHooks) && /triggerMrFeastBlinkForQA/.test(qaHooks) && /advanceMrFeastFaceForQA/.test(qaHooks), "facial weights, blink phase, attention diagnostics, or deterministic QA controls are missing");
 check("45 Mr Feast facial interaction order", /qaExpressionCycle:\s*Object\.freeze\(\["neutral",\s*"friendly",\s*"watching",\s*"close",\s*"threatened"\]\)/.test(mrFeastNpcConfig) && /cycleFaceExpressionForQA\(/.test(mrFeastWanderer), "QA interaction does not cycle the five facial presets in the approved inspection order");
-check("45 Mr Feast QA-only interaction", /if \(state\.qa\) this\.registerFaceQaInteraction\(model\)/.test(mrFeastWanderer) && /addInteractionTarget\(model, this\.faceQaInteraction\)/.test(mrFeastWanderer) && /Cycle expression/.test(mrFeastWanderer), "loaded Mr. Feast model does not expose a QA-only look-at interaction and expression prompt");
+check("45 Mr Feast gated QA-only interaction", /if \(state\.qa && this\.getFaceDiagnostics\(\)\.supported\) this\.registerFaceQaInteraction\(model\)/.test(mrFeastWanderer) && /addInteractionTarget\(model, this\.faceQaInteraction\)/.test(mrFeastWanderer) && /Cycle expression/.test(mrFeastWanderer), "the experimental expression prompt is missing or can appear when the active model has no supported facial rig");
 check("43 Mr Feast deterministic framing", /mrFeastSideProfile:\s*\[-3\.2,\s*FLOOR\.MAIN,\s*-9\.0,\s*-Math\.PI \/ 2,\s*0\]/.test(qaRoomViews) && /mrFeastGaitSide:/.test(qaRoomViews) && /mrFeastGaitTurnSide:/.test(qaRoomViews) && /clipDurations:/.test(mrFeastWanderer), "side-profile gait framing or clip duration diagnostics are missing");
 check("45 Mr Feast facial framing", /mrFeastFaceClose:\s*\[0,\s*FLOOR\.MAIN,\s*-8\.45,\s*0,\s*-0\.02\]/.test(qaRoomViews), "close facial QA framing is missing");
 check("51 Mr Feast bounded camera response", !/attack|damage/i.test(mrFeastWanderer), "camera investigation must not silently expand into attack or damage behavior");
@@ -1474,9 +1549,61 @@ check("55 stealth tuning table", /lightSampleIntervalSeconds:/.test(stealthConfi
 check("55 stealth meter hud", /id="mansion-stealth"[^>]*role="meter"/.test(page) && /id="mansion-stealth-mode"/.test(page) && /id="mansion-stealth-value"/.test(page) && /id="mansion-stealth-fill"/.test(page), "the stealth meter HUD markup is missing or not an accessible meter");
 check("55 stealth light sampling", /function sampleStealthLightExposure/.test(mansion) && /for \(const circuit of circuits\)/.test(section("function sampleStealthLightExposure", "function updateStealth(")) && /isSpotLight/.test(section("function sampleStealthLightExposure", "function updateStealth(")) && /auxiliaryInteriorLights/.test(section("function sampleStealthLightExposure", "function updateStealth(")), "stealth light sampling does not read the real circuit and auxiliary emitters");
 check("55 stealth crouch-gated bonuses", /movement\.crouched/.test(stealthUpdate) && /STEALTH\.darknessVisibilityBonus/.test(stealthUpdate) && /STEALTH\.stillnessVisibilityBonus/.test(stealthUpdate) && /effectiveVisibility = 1/.test(stealthUpdate), "stealth bonuses must apply only to the crouched stance so standing detection keeps its authored baseline");
-check("55 stealth sight gating", /effectiveSightRangeMeters\(\)/.test(section("canSeePlayerAct()", "beginPursuit(")) && /STEALTH\.sightRangeFloorMeters/.test(mansion), "Mr. Feast's witnessed-sight check does not consume the stealth-scaled range with a fairness floor");
+check("55 stealth sight gating", /effectiveSightRangeMeters\(\)/.test(section("    canSeePlayerAct(options = {}) {", "    beginPursuit(info = {}) {")) && /STEALTH\.sightRangeFloorMeters/.test(mansion), "Mr. Feast's witnessed-sight check does not consume the stealth-scaled range with a fairness floor");
 check("55 stealth camera consumption", /state\.stealth\.effectiveVisibility/.test(cameraSecuritySystem), "camera acquisition does not consume the stealth effective visibility");
 check("55 stealth diagnostics", /meter:/.test(section("stealth: {", "}", diagnostics)) && /getStealth/.test(mansion) && /setStealthLightOverrideForQA/.test(mansion), "stealth diagnostics or QA controls are missing");
+
+// 56. The basement flashlight is a discoverable carried tool with one
+// shader-resident, shadow-free beam; turning it on trades concealment for
+// visibility without becoming a camera offense by itself.
+const flashlightConfig = section("const FLASHLIGHT = Object.freeze({", "const CAMERA_SECURITY_MODE");
+const flashlightSystem = section("class FlashlightSystem", "class CameraSecuritySystem");
+const flashlightUpdate = section("    update(dt) {", "    placePlayerNearForQA()", flashlightSystem);
+const flashlightInput = section("function bindInput()", "function bindTouchControls()");
+const flashlightStealth = section("function updateStealth(", "function syncCamera()");
+check("56 flashlight tuning", /pickup:/.test(flashlightConfig) && /beam:/.test(flashlightConfig) && /stealthExposureFloor:/.test(flashlightConfig), "flashlight lacks named placement, beam, or stealth tuning");
+check("56 flashlight pickup", /itemId:\s*"basement-flashlight"/.test(flashlightConfig) && /Take flashlight/.test(flashlightSystem) && /addInteractionTarget/.test(flashlightSystem) && /removeInteractionTarget/.test(flashlightSystem), "flashlight is not a one-time physical E/touch pickup");
+check("56 flashlight redundant locations", /kitchen-under-sink/.test(flashlightConfig) && /upper-east-front-closet/.test(flashlightConfig) && /basement-archive/.test(flashlightConfig) && /this\.pickups = FLASHLIGHT\.locations\.map/.test(flashlightSystem), "the fresh mansion does not stage the shared flashlight in the kitchen, upstairs closet, and basement");
+check("56 flashlight simple loose model", /simple-flashlight-body/.test(flashlightSystem) && /simple-flashlight-head/.test(flashlightSystem) && /simple-flashlight-lens/.test(flashlightSystem) && !/brass-cradle/.test(flashlightSystem), "the pickup is not a simple loose household flashlight");
+check("56 flashlight input", /code === "KeyF"/.test(flashlightInput) && /event\.repeat/.test(flashlightInput) && /flashlightSystem\?\.toggle/.test(flashlightInput) && /mansion-flashlight-button/.test(page), "flashlight does not share one non-repeating F/touch toggle path");
+check("56 flashlight hidden control", /\.mansion-tool\[hidden\]\s*\{\s*display:\s*none/.test(page), "the coarse-pointer toolbar overrides the fresh run's hidden Light control");
+check("56 flashlight beam", /new THREE\.SpotLight/.test(flashlightSystem) && /castShadow = false/.test(flashlightSystem) && /intensity = this\.isEmitting\(\)/.test(flashlightSystem), "flashlight beam is not a shadow-free, actual-output-toggled spotlight");
+check(
+  "56 flashlight light-only presentation",
+  /intensity:\s*112\b/.test(flashlightConfig)
+    && /distance:\s*11\.2\b/.test(flashlightConfig)
+    && /angle:\s*0\.39\b/.test(flashlightConfig)
+    && /penumbra:\s*0\.68\b/.test(flashlightConfig)
+    && /decay:\s*1\.85\b/.test(flashlightConfig)
+    && !/carried-flashlight-(?:body|head|lens)/.test(flashlightSystem),
+  "flashlight must use the brighter, texture-readable focused tuning without drawing a carried model",
+);
+check("56 flashlight inactive cost", /if \(!this\.state\.on\) \{[\s\S]*this\.beam\.intensity = 0;[\s\S]*return;[\s\S]*\}[\s\S]*this\.syncPose\(\)/.test(flashlightUpdate), "the inactive flashlight still updates its camera pose or raycasts against the mansion");
+check("56 flashlight stealth cost", /FLASHLIGHT\.stealthExposureFloor/.test(flashlightStealth) && /state\.flashlight\.on/.test(flashlightStealth), "active flashlight does not explicitly lower crouched concealment");
+check("56 flashlight policy gate", !/reportFlashlightUse/.test(mansion) && !/observeCamera\(cameraState\)/.test(flashlightSystem) && !/flashlight-use/.test(cameraSecuritySystem), "flashlight visibility still creates its own camera offense");
+check("56 flashlight independent consequences", /observed-sabotage/.test(cameraSecuritySystem) && /restricted-trespass/.test(cameraSecuritySystem) && !/respondToCameraAlarm/.test(flashlightSystem) && !/beginPursuit/.test(flashlightSystem), "flashlight must leave sabotage, basement, and direct-threat policy authoritative");
+check("56 flashlight persistence", /basement-flashlight/.test(contestant13Quest) && /flashlightSystem\?\.restoreFromInventory/.test(mansion), "flashlight possession is not restored from Bag inventory with transient state reset");
+check("56 flashlight diagnostics", /flashlight:/.test(diagnostics) && /getFlashlightState/.test(qaHooks) && /collectFlashlightForQA/.test(qaHooks) && /setFlashlightForQA/.test(qaHooks) && /placePlayerNearFlashlightForQA/.test(qaHooks), "flashlight diagnostics and focused QA controls are incomplete");
+
+// 57. Mr. Feast's audible gait is planted to his real animation, while a
+// chase remembers only genuinely observed locations and takes the straight
+// collision-aware lane whenever he can still see the runner.
+const mrFeastFootstepConfig = section("const MR_FEAST_FOOTSTEPS = Object.freeze({", "const MR_FEAST_PURSUIT");
+const pursuitUpdate = section("    updatePursuit(dt) {", "    updateTrespassWatch(dt)", mrFeastWanderer);
+const pursuitTrespassWatch = section("    updateTrespassWatch(dt) {", "    updatePursuitApproach(dt)", mrFeastWanderer);
+const mrFeastTalkInteraction = section("    registerTalkInteraction(model)", "    converse()", mrFeastWanderer);
+const pursuitRepath = section("    repathPursuit(", "    updatePursuit(dt)", mrFeastWanderer);
+const pursuitApproach = section("    updatePursuitApproach(dt)", "    resolveCatch(", mrFeastWanderer);
+check("57 host footstep tuning", /stalk:/.test(mrFeastFootstepConfig) && /run:/.test(mrFeastFootstepConfig) && /phase:\s*0\.025/.test(mrFeastFootstepConfig) && /phase:\s*0\.542/.test(mrFeastFootstepConfig) && /phase:\s*0\.333/.test(mrFeastFootstepConfig) && /phase:\s*0\.817/.test(mrFeastFootstepConfig), "Mr. Feast footstep contacts are not pinned to the sampled stalk/run phases");
+check("57 host footstep animation wiring", /updateMrFeastFootsteps\(dt\)/.test(section("stepAnimationAndFace(dt", "setFaceForQA", mrFeastWanderer)) && /mrFeastFootstep\(/.test(mansionAudio), "host animation contacts are not routed through MansionAudio");
+check("57 host spatial surface mix", /mrFeastFootstepSurface\(/.test(mansionAudio) && /camera\.getWorldDirection/.test(mansionAudio) && /mrFeastFootsteps:/.test(mansionAudio), "Mr. Feast footsteps lack host-owned surface, distance, pan, or diagnostics");
+check("57 last-known pursuit memory", /pursuitLastKnownPosition/.test(mrFeastWanderer) && /pursuitTrackingSource/.test(mrFeastWanderer) && /targetPosition = this\.pursuitLastKnownPosition/.test(pursuitRepath) && !/physics\.playerPosition/.test(pursuitRepath), "pursuit still replans from the unseen live player instead of last-known information");
+check("57 bounded pursuit loss", /unseenGiveUpSeconds:/.test(section("const MR_FEAST_PURSUIT", "const STEALTH")) && /hiddenGiveUpSeconds:/.test(section("const MR_FEAST_PURSUIT", "const STEALTH")) && /this\.pursuit\.giveUpRemaining -= dt/.test(pursuitUpdate) && !/if \(!progressing\)[\s\S]*giveUpRemaining -= dt/.test(pursuitUpdate), "unseen or hidden escape still pauses while Mr. Feast moves");
+check("57 meaningful stale-clue search", /unseenGiveUpSeconds:\s*12\b/.test(section("const MR_FEAST_PURSUIT", "const STEALTH")) && /hiddenGiveUpSeconds:\s*6\.5\b/.test(section("const MR_FEAST_PURSUIT", "const STEALTH")), "pursuit loss windows no longer preserve the tested meaningful stale-clue search");
+check("57 post-loss reacquisition", !/pursuit\.cooldownActive/.test(pursuitTrespassWatch) && /pursuit\.cooldownActive/.test(section("    canAcceptHousekeeping()", "    respondToHousekeepingTask", mrFeastWanderer)), "the housekeeping cooldown grants basement camera or proximity detection immunity");
+check("57 threat prompt ownership", /resolve:\s*\(\)\s*=>\s*this\.pursuit\.active\s*\|\|\s*this\.pursuit\.cooldownActive\s*\?\s*null\s*:\s*interaction/.test(mrFeastTalkInteraction), "the ordinary Mr. Feast conversation prompt remains selectable during pursuit or its loss aftermath");
+check("57 clear-line direct steering", /pursuitDirectSight/.test(pursuitUpdate) && /updatePursuitApproach\(dt\)/.test(pursuitUpdate) && /pursuitDirectSteeringFrames/.test(pursuitApproach) && /moveWithCollision/.test(pursuitApproach), "visible pursuit does not prefer straight collision-aware steering");
+check("57 pursuit diagnostics", /lastKnownPosition:/.test(mrFeastWanderer) && /trackingSource:/.test(mrFeastWanderer) && /unseenSeconds:/.test(mrFeastWanderer) && /directSteeringFrames:/.test(mrFeastWanderer) && /advanceMrFeastPursuitForQA/.test(qaHooks), "pursuit memory/path diagnostics or deterministic short-step QA are missing");
 
 // The page must request a new asset URL or browsers can keep the pre-renovation
 // script despite all source fixes.

@@ -6,7 +6,7 @@ Give infractions real consequences: when Mr. Feast personally sees the player ta
 
 ## Acceptance criteria
 
-- Tilting a portrait or pulling a chair (deliberate mischief; ordinary fridge opening is exempt) reports an infraction. It triggers a pursuit only when witnessed: either Mr. Feast has the player within his sight range, forward cone, and an unoccluded line of sight, or the camera system is actively recording the player exactly as the existing `Being recorded` HUD pill defines it.
+- Tilting a portrait or pulling a chair (deliberate mischief; ordinary fridge opening is exempt) reports an infraction. It triggers a pursuit only when witnessed: either Mr. Feast has the player within his sight range, forward cone, and an unoccluded line of sight, or the camera system is actively recording the player exactly as the existing `Being recorded` HUD pill defines it. His sight ray shares the camera system's walls, doors, hedges, and exact opaque furniture surfaces, so substantial visible furnishings provide cover without turning their broad movement colliders into invisible walls.
 - Pursuit speed is hard-capped below the player's walk speed (`1.95` vs `2.2` m/s) so walking away always works while crouching does not; he uses the run animation while pursuing and never teleports.
 - Pursuit follows the authored response graph with periodic re-pathing toward the player, a short direct approach inside the same room, a bounded give-up timer that ends with a frustrated line and the normal search-and-return flow, and no catches while the player is inside a hiding spot.
 - Catching the player (within reach, same floor, not hidden) on the main or second floor delivers a bubble warning from a dedicated pool while he faces the player, then he returns to patrol; warnings and catches are counted in diagnostics.
@@ -24,6 +24,7 @@ Give infractions real consequences: when Mr. Feast personally sees the player ta
 - `node scripts/test-mr-feast-caught-pursuit.mjs` — passed speed cap under walk speed, real E-key witnessed trigger, unwitnessed and straighten non-triggers, recorded trigger from live camera tracking, run-animation pursuit with zero teleports, main-floor warning catch with a clean uninterrupted state trace and the caught object silently resolved with no later re-dispatch, hidden-player give-up with an equally uninterrupted sweep followed by a normal separate later fix, basement catch game over with working load recovery, frozen simulation under the overlay, desktop/mobile layout, and zero console errors
 - `node scripts/test-mr-feast-tamper-distractions.mjs` — passed adjacent tamper/housekeeping behavior
 - `node scripts/test-mr-feast-camera-security.mjs` — passed unchanged alarm behavior
+- `node scripts/test-mr-feast-furniture-occlusion.mjs` — passed exact furniture and large-prop occlusion through both real sight paths, including cabinet/refrigerator door meshes attached to their live pivots, plus clear-above-table anti-phantom-cover proof
 - `node scripts/test-mr-feast-contestant-13.mjs` — passed full story progression
 - `node scripts/test-mr-feast-player-systems.mjs` — passed adjacent input/menu/save behavior
 - `node scripts/test-mr-feast-renovation.mjs` — passed

@@ -1,0 +1,75 @@
+{
+  "generatedAt": "2026-07-25T22:28:57.962085+00:00",
+  "pipeline": "approved concept -> Meshy image-to-3D -> Meshy auto-rig -> Blender 4.5 demon browser preparation",
+  "blenderVersion": "4.5.11 LTS",
+  "source": "/Volumes/External SSD/Projects/RainbotGaming/assets/models/mr-feast/source/demon-prototypes/meshy/banquet-saint-rigged.glb",
+  "output": "banquet-saint.glb",
+  "slug": "banquet-saint",
+  "rigged": true,
+  "boneCount": 24,
+  "skinnedMeshCount": 1,
+  "normalizationStrategy": "baked-scene-roots",
+  "normalizationScale": 1.000000541637193,
+  "targetHeightMeters": 2.34,
+  "height": 2.340369,
+  "groundY": -0.000342,
+  "targetTriangles": 30000,
+  "triangles": 30000,
+  "textureMaxSize": 768,
+  "maxTextureDimension": 768,
+  "sourceBounds": {
+    "min": [
+      -0.550963,
+      -0.321759,
+      1e-06
+    ],
+    "max": [
+      0.550963,
+      0.321759,
+      2.339999
+    ]
+  },
+  "boundsMin": [
+    -0.550963,
+    -0.321585,
+    -0.000342
+  ],
+  "boundsMax": [
+    0.551251,
+    0.321841,
+    2.340026
+  ],
+  "fileBytes": 3180516,
+  "sourceTriangles": 60720,
+  "meshes": [
+    "Demon_Banquet_Saint_Mesh_01"
+  ],
+  "materials": [
+    "Demon_Banquet_Saint_Material_01"
+  ],
+  "images": [
+    {
+      "name": "texture_0",
+      "width": 768,
+      "height": 768
+    }
+  ],
+  "warnings": [],
+  "shading": {
+    "smoothPolygons": 30000,
+    "weldedVertices": 15576,
+    "weldDistanceMeters": 0.0001
+  },
+  "previews": [
+    "/Volumes/External SSD/Projects/RainbotGaming/output/iterate/demon-prototypes/blender/banquet-saint-neutral-front.png",
+    "/Volumes/External SSD/Projects/RainbotGaming/output/iterate/demon-prototypes/blender/banquet-saint-neutral-right.png",
+    "/Volumes/External SSD/Projects/RainbotGaming/output/iterate/demon-prototypes/blender/banquet-saint-neutral-back.png"
+  ],
+  "features": {
+    "animations": false,
+    "skins": true,
+    "draco": false,
+    "meshopt": false,
+    "validatedFor": "Three.js r128"
+  }
+}

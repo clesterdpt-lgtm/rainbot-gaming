@@ -355,6 +355,22 @@
     : new URL("../assets/js/tardigrade-micro-mayhem.js", window.location.href).href;
   const ASSET_ROOT = new URL("../", SCRIPT_URL).href;
   const RAPIER_URL = new URL("vendor/rapier/rapier-0.19.3.mjs", ASSET_ROOT).href;
+  const MODEL_MANIFEST_PATH = "assets/models/tardigrade/manifest.json";
+  const MODEL_ROOT_URL = new URL("models/tardigrade/", ASSET_ROOT).href;
+  const MODEL_MANIFEST_URL = new URL("manifest.json", MODEL_ROOT_URL).href;
+  const MODEL_SPECS = [
+    { id: "hero-tardigrade", role: "hero", file: "hero-tardigrade.glb", animated: true, clips: ["idle", "scuttle", "dash", "curl", "airborne"] },
+    { id: "creature-rotifer", role: "creature", file: "creature-rotifer.glb", animated: true, creatureType: "rotifer", clips: ["idle", "locomotion", "startled"] },
+    { id: "creature-ciliate", role: "creature", file: "creature-ciliate.glb", animated: true, creatureType: "ciliate", clips: ["idle", "locomotion", "startled"] },
+    { id: "creature-waterbearling", role: "creature", file: "creature-waterbearling.glb", animated: true, creatureType: "waterbearling", clips: ["idle", "locomotion", "startled"] },
+    { id: "prop-algae", role: "prop", file: "prop-algae.glb", propType: "algae", clips: [] },
+    { id: "prop-bacteria", role: "prop", file: "prop-bacteria.glb", propType: "bacteria", clips: [] },
+    { id: "prop-droplet", role: "prop", file: "prop-droplet.glb", propType: "droplet", clips: [] },
+    { id: "prop-pollen", role: "prop", file: "prop-pollen.glb", propType: "pollen", clips: [] },
+  ];
+  const MODEL_SPEC_BY_ID = new Map(MODEL_SPECS.map((spec) => [spec.id, spec]));
+  const MODEL_ID_BY_CREATURE = new Map(MODEL_SPECS.filter((spec) => spec.creatureType).map((spec) => [spec.creatureType, spec.id]));
+  const MODEL_ID_BY_PROP = new Map(MODEL_SPECS.filter((spec) => spec.propType).map((spec) => [spec.propType, spec.id]));
   const TEXTURE_ASSETS = {
     floor: new URL("img/tardigrade/micro-floor-speckles.svg", ASSET_ROOT).href,
     algae: new URL("img/tardigrade/algae-cell-tile.svg", ASSET_ROOT).href,
@@ -542,7 +558,7 @@
       id: "zones",
       stage: 5,
       title: "Tour the space station",
-      text: "Visit four orbital research zones while wearing a camera smaller than the grant budget.",
+      text: "Visit four orbital research zones on a budget that would make a grant officer cry.",
       target: GOAL_TARGETS.stationZones,
       progress: () => state.zonesVisited.size,
       hint: "Use the radar to map the airlock grid, lab bench, vent maze, and observation window.",
@@ -552,10 +568,10 @@
       id: "scans",
       stage: 5,
       title: "Transmit research scans",
-      text: "Use the tiny camera to scan four station landmarks for extremely serious science.",
+      text: "Scan four station landmarks for extremely serious science.",
       target: GOAL_TARGETS.stationScans,
       progress: () => state.stageResearchScans,
-      hint: "Find station landmarks. The attached camera scans each one automatically.",
+      hint: "Find station landmarks. Research scans trigger automatically.",
       mobileHint: "Find four station scan landmarks.",
     },
     {
@@ -823,6 +839,7 @@
     promptTimer: 5,
     dashCooldown: 0,
     dashPulse: 0,
+    dashStartedAirborne: false,
     maxCombo: 0,
     goalsCleared: 0,
     stageChaos: 0,
@@ -908,6 +925,9 @@
     petri: null,
     terrain: null,
     researchCamera: null,
+    heroSockets: {},
+    cosmeticAttachments: [],
+    modelQaFrame: null,
     physics: {
       RAPIER: null,
       world: null,
@@ -917,6 +937,36 @@
       fixedStep: 1 / 60,
       boundaryBodies: [],
     },
+  };
+
+  const modelSystem = {
+    manifestPath: MODEL_MANIFEST_PATH,
+    manifestUrl: MODEL_MANIFEST_URL,
+    manifestStatus: "pending",
+    manifestError: "",
+    manifest: null,
+    entries: new Map(),
+    cache: new Map(),
+    sources: new Map(),
+    instances: new Set(),
+    diagnostics: new Map(MODEL_SPECS.map((spec) => [spec.id, {
+      id: spec.id,
+      role: spec.role,
+      file: spec.file,
+      status: "pending",
+      source: "procedural",
+      fallbackActive: true,
+      clips: [],
+      activeClip: "",
+      triangles: 0,
+      materials: 0,
+      textures: 0,
+      bounds: null,
+      error: "",
+    }])),
+    started: false,
+    settled: false,
+    settlePromise: null,
   };
 
   const audio = {
@@ -937,6 +987,475 @@
     const remainder = safeSeconds % 60;
     return `${minutes}:${String(remainder).padStart(2, "0")}`;
   };
+
+  function manifestAssetEntries(manifest) {
+    if (Array.isArray(manifest && manifest.assets)) return manifest.assets;
+    if (manifest && manifest.assets && typeof manifest.assets === "object") {
+      return Object.entries(manifest.assets).map(([id, entry]) => ({ id, ...entry }));
+    }
+    return [];
+  }
+
+  function manifestRuntimeFile(entry) {
+    return entry && (entry.runtimeFile || entry.file || entry.model || "");
+  }
+
+  function roundModelNumber(value) {
+    return Number(Number(value || 0).toFixed(4));
+  }
+
+  function vectorDiagnostic(vector) {
+    return {
+      x: roundModelNumber(vector.x),
+      y: roundModelNumber(vector.y),
+      z: roundModelNumber(vector.z),
+    };
+  }
+
+  function boxDiagnostic(box) {
+    const THREE = window.THREE;
+    const size = box.getSize(new THREE.Vector3());
+    const center = box.getCenter(new THREE.Vector3());
+    return {
+      min: vectorDiagnostic(box.min),
+      max: vectorDiagnostic(box.max),
+      size: vectorDiagnostic(size),
+      center: vectorDiagnostic(center),
+    };
+  }
+
+  function modelResourceStats(root) {
+    const geometries = new Set();
+    const materials = new Set();
+    const textures = new Set();
+    let triangles = 0;
+    root.traverse((child) => {
+      if (!child.isMesh || !child.geometry) return;
+      if (!geometries.has(child.geometry)) {
+        geometries.add(child.geometry);
+        const indexCount = child.geometry.index && child.geometry.index.count;
+        const positionCount = child.geometry.attributes && child.geometry.attributes.position && child.geometry.attributes.position.count;
+        triangles += Math.floor((Number(indexCount) || Number(positionCount) || 0) / 3);
+      }
+      const meshMaterials = Array.isArray(child.material) ? child.material : [child.material];
+      meshMaterials.filter(Boolean).forEach((material) => {
+        materials.add(material);
+        Object.values(material).forEach((value) => {
+          if (value && value.isTexture) textures.add(value);
+        });
+      });
+    });
+    return { triangles, materials: materials.size, textures: textures.size };
+  }
+
+  function createProceduralFallback(owner, label) {
+    const THREE = window.THREE;
+    const fallback = new THREE.Group();
+    fallback.name = `${label}-procedural-fallback`;
+    fallback.userData.kind = "proceduralFallback";
+    owner.children.slice().forEach((child) => fallback.add(child));
+    owner.add(fallback);
+    fallback.updateMatrixWorld(true);
+    const box = new THREE.Box3().setFromObject(fallback);
+    return {
+      root: fallback,
+      box: box.clone(),
+      diagnostic: boxDiagnostic(box),
+    };
+  }
+
+  function modelEntryYaw(entry, sourceBox, targetBox) {
+    const candidates = [
+      entry && entry.rotationY,
+      entry && entry.facingYaw,
+      entry && entry.runtime && entry.runtime.rotationY,
+      entry && entry.runtime && entry.runtime.facingYaw,
+      entry && entry.orientation && entry.orientation.rotationY,
+      entry && entry.blender && entry.blender.rotationY,
+    ];
+    const explicit = candidates.find((value) => Number.isFinite(Number(value)));
+    if (explicit !== undefined) return Number(explicit);
+    const degrees = entry && (entry.rotationDegrees || entry.runtime && entry.runtime.rotationDegrees);
+    if (Number.isFinite(Number(degrees))) return Number(degrees) * Math.PI / 180;
+
+    const THREE = window.THREE;
+    const sourceSize = sourceBox.getSize(new THREE.Vector3());
+    const targetSize = targetBox.getSize(new THREE.Vector3());
+    const fitAtZero = Math.min(
+      targetSize.x / Math.max(0.0001, sourceSize.x),
+      targetSize.z / Math.max(0.0001, sourceSize.z)
+    );
+    const fitAtQuarterTurn = Math.min(
+      targetSize.x / Math.max(0.0001, sourceSize.z),
+      targetSize.z / Math.max(0.0001, sourceSize.x)
+    );
+    return fitAtQuarterTurn > fitAtZero * 1.08 ? Math.PI / 2 : 0;
+  }
+
+  function fitModelToFallback(modelRoot, sourceBox, targetBox, entry) {
+    const THREE = window.THREE;
+    modelRoot.rotation.y = modelEntryYaw(entry, sourceBox, targetBox);
+    modelRoot.updateMatrixWorld(true);
+    const orientedBox = new THREE.Box3().setFromObject(modelRoot);
+    const sourceSize = orientedBox.getSize(new THREE.Vector3());
+    const targetSize = targetBox.getSize(new THREE.Vector3());
+    const ratios = [
+      targetSize.x / Math.max(0.0001, sourceSize.x),
+      targetSize.y / Math.max(0.0001, sourceSize.y),
+      targetSize.z / Math.max(0.0001, sourceSize.z),
+    ].filter((value) => Number.isFinite(value) && value > 0);
+    if (!ratios.length) throw new Error("model bounds could not be fitted");
+    const entryScale = Number(entry && (entry.scaleMultiplier || entry.runtime && entry.runtime.scaleMultiplier));
+    const scale = Math.min(...ratios) * (Number.isFinite(entryScale) && entryScale > 0 ? entryScale : 1);
+    modelRoot.scale.setScalar(scale);
+    modelRoot.updateMatrixWorld(true);
+
+    const fittedBox = new THREE.Box3().setFromObject(modelRoot);
+    const fittedCenter = fittedBox.getCenter(new THREE.Vector3());
+    const targetCenter = targetBox.getCenter(new THREE.Vector3());
+    modelRoot.position.x += targetCenter.x - fittedCenter.x;
+    modelRoot.position.y += targetBox.min.y - fittedBox.min.y;
+    modelRoot.position.z += targetCenter.z - fittedCenter.z;
+    modelRoot.updateMatrixWorld(true);
+    return {
+      scale,
+      rotationY: modelRoot.rotation.y,
+      bounds: new THREE.Box3().setFromObject(modelRoot),
+    };
+  }
+
+  function cloneHeroMaterials(root) {
+    root.traverse((child) => {
+      if (!child.isMesh || !child.material) return;
+      const cloneMaterial = (material) => {
+        const cloned = material.clone();
+        cloned.userData = { ...material.userData, modelOwnedMaterial: true };
+        if (cloned.color) cloned.userData.originalColor = cloned.color.getHex();
+        if (cloned.emissive) cloned.userData.originalEmissive = cloned.emissive.getHex();
+        return cloned;
+      };
+      child.material = Array.isArray(child.material)
+        ? child.material.map(cloneMaterial)
+        : cloneMaterial(child.material);
+    });
+  }
+
+  function markSharedModelResources(root) {
+    root.traverse((child) => {
+      if (!child.isMesh) return;
+      child.userData.sharedModelResource = true;
+      child.castShadow = true;
+      child.receiveShadow = true;
+    });
+  }
+
+  function createModelActions(binding, clips) {
+    if (!binding.spec.animated || !clips.length) return;
+    const THREE = window.THREE;
+    binding.mixer = new THREE.AnimationMixer(binding.model);
+    clips.forEach((clip) => {
+      binding.actions[String(clip.name || "").toLowerCase()] = binding.mixer.clipAction(clip);
+    });
+    setModelAction(binding, "idle", 0);
+  }
+
+  function setModelAction(binding, semantic, fadeSeconds = 0.16) {
+    if (!binding || !binding.mixer || binding.activeClip === semantic) return;
+    const next = binding.actions[String(semantic).toLowerCase()];
+    if (!next) return;
+    if (binding.activeAction) binding.activeAction.fadeOut(fadeSeconds);
+    next.reset().setEffectiveTimeScale(1).setEffectiveWeight(1).fadeIn(fadeSeconds).play();
+    binding.activeAction = next;
+    binding.activeClip = semantic;
+    const diagnostic = modelSystem.diagnostics.get(binding.spec.id);
+    if (diagnostic && binding.spec.role === "hero") diagnostic.activeClip = semantic;
+  }
+
+  function findHeroSocket(model, slot) {
+    const socketName = `${slot}socket`;
+    let exactSocket = null;
+    let exactAnchor = null;
+    let loose = null;
+    model.traverse((child) => {
+      const normalized = String(child.name || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+      if (!exactSocket && normalized === socketName) exactSocket = child;
+      if (!exactAnchor && normalized === slot) exactAnchor = child;
+      if (!loose && (normalized.endsWith(socketName) || normalized.endsWith(slot))) loose = child;
+    });
+    return exactSocket || exactAnchor || loose;
+  }
+
+  function mountObjectToSocketPreservingPlacement(object, socket) {
+    if (!object || !socket || object.parent === socket) return;
+    if (world.scene) world.scene.updateMatrixWorld(true);
+    if (typeof socket.attach === "function") socket.attach(object);
+    else socket.add(object);
+  }
+
+  function mountHeroAttachmentsToSockets() {
+    world.cosmeticAttachments.forEach((attachment) => {
+      const socket = world.heroSockets[attachment.userData.slot];
+      if (socket) mountObjectToSocketPreservingPlacement(attachment, socket);
+    });
+  }
+
+  function applyAuthoredHeroSkin() {
+    const binding = world.tardigrade && world.tardigrade.userData && world.tardigrade.userData.modelBinding;
+    if (!binding || !binding.model) return;
+    const skinId = state.store.equipped.skin || "skin-classic";
+    const palette = STORE_SKINS[skinId] || STORE_SKINS["skin-classic"];
+    const colorBySlot = {
+      skinprimary: world.materials[palette[1]] && world.materials[palette[1]].color,
+      skinsecondary: world.materials[palette[4]] && world.materials[palette[4]].color,
+      belly: world.materials[palette[0]] && world.materials[palette[0]].color,
+    };
+    const authoredMaterials = new Set();
+    binding.model.traverse((child) => {
+      if (!child.isMesh || !child.material || !child.userData.sharedModelResource) return;
+      const materials = Array.isArray(child.material) ? child.material : [child.material];
+      materials.filter((material) => material && material.color).forEach((material) => authoredMaterials.add(material));
+    });
+    const materialSlots = new Map();
+    authoredMaterials.forEach((material) => {
+      const normalized = String(material.name || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+      materialSlots.set(material, Object.keys(colorBySlot).find((name) => normalized.includes(name)) || "");
+    });
+    const hasNamedSkinSlots = Array.from(materialSlots.values()).some(Boolean);
+    let tintedMaterials = 0;
+    authoredMaterials.forEach((material) => {
+      const slot = materialSlots.get(material);
+      if (skinId === "skin-classic") {
+        if (Number.isFinite(material.userData.originalColor)) material.color.setHex(material.userData.originalColor);
+      } else {
+        const tint = slot && colorBySlot[slot]
+          ? colorBySlot[slot]
+          : !hasNamedSkinSlots
+            ? colorBySlot.skinprimary
+            : null;
+        if (tint) {
+          material.color.copy(tint);
+          tintedMaterials += 1;
+        }
+      }
+      material.needsUpdate = true;
+    });
+    binding.skinDiagnostics = {
+      id: skinId,
+      materialCount: authoredMaterials.size,
+      tintedMaterials,
+      namedSlots: hasNamedSkinSlots,
+    };
+  }
+
+  function applyModelSourceToBinding(binding, source) {
+    if (!binding || binding.disposed || binding.modelRoot) return;
+    const THREE = window.THREE;
+    try {
+      const model = binding.spec.animated
+        ? THREE.SkeletonUtils.clone(source.scene)
+        : source.scene.clone(true);
+      const modelRoot = new THREE.Group();
+      modelRoot.name = `${binding.spec.id}-authored-visual`;
+      modelRoot.userData.kind = "authoredModel";
+      modelRoot.userData.modelAssetId = binding.spec.id;
+      modelRoot.add(model);
+      markSharedModelResources(model);
+      if (binding.spec.role === "hero") cloneHeroMaterials(model);
+      const fit = fitModelToFallback(modelRoot, source.bounds, binding.targetBox, binding.entry);
+      binding.fit = {
+        scale: roundModelNumber(fit.scale),
+        rotationY: roundModelNumber(fit.rotationY),
+        bounds: boxDiagnostic(fit.bounds),
+      };
+      binding.owner.add(modelRoot);
+      binding.model = model;
+      binding.modelRoot = modelRoot;
+      binding.fallback.visible = false;
+      binding.status = "active";
+      createModelActions(binding, source.clips);
+      if (binding.spec.role === "hero") {
+        world.heroSockets = {
+          head: findHeroSocket(model, "head"),
+          face: findHeroSocket(model, "face"),
+          back: findHeroSocket(model, "back"),
+          camera: findHeroSocket(model, "camera"),
+        };
+        applyAuthoredHeroSkin();
+        mountHeroAttachmentsToSockets();
+      }
+    } catch (error) {
+      binding.error = error && error.message ? error.message : String(error);
+      binding.status = "fallback";
+      binding.fallback.visible = true;
+    }
+  }
+
+  function registerModelInstance(id, owner, fallbackInfo) {
+    const spec = MODEL_SPEC_BY_ID.get(id);
+    if (!spec || !owner || !fallbackInfo) return null;
+    const binding = {
+      spec,
+      owner,
+      fallback: fallbackInfo.root,
+      fallbackBounds: fallbackInfo.diagnostic,
+      targetBox: fallbackInfo.box,
+      entry: modelSystem.entries.get(id) || null,
+      status: "fallback",
+      error: "",
+      model: null,
+      modelRoot: null,
+      mixer: null,
+      actions: {},
+      activeAction: null,
+      activeClip: "",
+      disposed: false,
+    };
+    owner.userData.modelBinding = binding;
+    modelSystem.instances.add(binding);
+    const source = modelSystem.sources.get(id);
+    if (source) {
+      binding.entry = modelSystem.entries.get(id) || source.entry;
+      applyModelSourceToBinding(binding, source);
+    }
+    return binding;
+  }
+
+  function modelUrlForEntry(spec, entry, manifest) {
+    const runtimeFile = manifestRuntimeFile(entry);
+    if (runtimeFile !== spec.file) {
+      throw new Error(`manifest runtime file for ${spec.id} must be ${spec.file}`);
+    }
+    const url = new URL(runtimeFile, MODEL_ROOT_URL);
+    const cacheToken = entry.cacheKey || entry.hash || entry.sha256 || manifest.cacheKey || manifest.version;
+    if (cacheToken) url.searchParams.set("v", String(cacheToken).slice(0, 24));
+    return url.href;
+  }
+
+  function loadModelSource(spec, entry, manifest) {
+    if (modelSystem.cache.has(spec.id)) return modelSystem.cache.get(spec.id);
+    const promise = new Promise((resolve, reject) => {
+      if (!window.THREE || !window.THREE.GLTFLoader) {
+        reject(new Error("vendored Three.js GLTFLoader is unavailable"));
+        return;
+      }
+      let url;
+      try {
+        url = modelUrlForEntry(spec, entry, manifest);
+      } catch (error) {
+        reject(error);
+        return;
+      }
+      const loader = new window.THREE.GLTFLoader();
+      loader.load(url, (gltf) => {
+        try {
+          const scene = gltf.scene || gltf.scenes && gltf.scenes[0];
+          if (!scene) throw new Error(`${spec.file} contains no scene`);
+          scene.updateMatrixWorld(true);
+          const bounds = new window.THREE.Box3().setFromObject(scene);
+          const size = bounds.getSize(new window.THREE.Vector3());
+          if (![size.x, size.y, size.z].every((value) => Number.isFinite(value)) || Math.max(size.x, size.y, size.z) <= 0.0001) {
+            throw new Error(`${spec.file} has invalid measured bounds`);
+          }
+          const clips = Array.isArray(gltf.animations) ? gltf.animations : [];
+          const clipNames = clips.map((clip) => String(clip.name || ""));
+          spec.clips.forEach((clip) => {
+            if (!clipNames.includes(clip)) throw new Error(`${spec.file} is missing ${clip}`);
+          });
+          resolve({
+            spec,
+            entry,
+            url,
+            scene,
+            clips,
+            bounds,
+            boundsDiagnostic: boxDiagnostic(bounds),
+            stats: modelResourceStats(scene),
+          });
+        } catch (error) {
+          reject(error);
+        }
+      }, undefined, (error) => {
+        reject(new Error(`failed to load ${spec.file}: ${error && error.message ? error.message : error || "network error"}`));
+      });
+    });
+    modelSystem.cache.set(spec.id, promise);
+    return promise;
+  }
+
+  function activateCurrentModelInstances(id, source) {
+    modelSystem.instances.forEach((binding) => {
+      if (binding.spec.id !== id || binding.disposed || binding.modelRoot) return;
+      binding.entry = modelSystem.entries.get(id) || source.entry;
+      applyModelSourceToBinding(binding, source);
+    });
+  }
+
+  function markManifestFallback(error) {
+    const message = error && error.message ? error.message : String(error || "manifest unavailable");
+    modelSystem.manifestStatus = "fallback";
+    modelSystem.manifestError = message;
+    MODEL_SPECS.forEach((spec) => {
+      const diagnostic = modelSystem.diagnostics.get(spec.id);
+      diagnostic.status = "failed-with-fallback";
+      diagnostic.source = "procedural";
+      diagnostic.fallbackActive = true;
+      diagnostic.error = message;
+    });
+  }
+
+  function initializeModelAssets() {
+    if (modelSystem.started) return modelSystem.settlePromise;
+    modelSystem.started = true;
+    modelSystem.settlePromise = (async () => {
+      try {
+        const response = await fetch(MODEL_MANIFEST_URL, { cache: "no-store" });
+        if (!response.ok) throw new Error(`${MODEL_MANIFEST_PATH} returned HTTP ${response.status}`);
+        const manifest = await response.json();
+        const entries = manifestAssetEntries(manifest);
+        modelSystem.manifest = manifest;
+        modelSystem.manifestStatus = "loaded";
+        entries.forEach((entry) => {
+          if (entry && entry.id) modelSystem.entries.set(entry.id, entry);
+        });
+
+        await Promise.all(MODEL_SPECS.map(async (spec) => {
+          const diagnostic = modelSystem.diagnostics.get(spec.id);
+          const entry = modelSystem.entries.get(spec.id);
+          diagnostic.status = "loading";
+          if (!entry) {
+            diagnostic.status = "failed-with-fallback";
+            diagnostic.error = `manifest is missing ${spec.id}`;
+            return;
+          }
+          try {
+            const source = await loadModelSource(spec, entry, manifest);
+            modelSystem.sources.set(spec.id, source);
+            diagnostic.status = "ready";
+            diagnostic.source = source.url;
+            diagnostic.clips = source.clips.map((clip) => clip.name);
+            diagnostic.triangles = source.stats.triangles;
+            diagnostic.materials = source.stats.materials;
+            diagnostic.textures = source.stats.textures;
+            diagnostic.bounds = { source: source.boundsDiagnostic };
+            diagnostic.error = "";
+            activateCurrentModelInstances(spec.id, source);
+          } catch (error) {
+            diagnostic.status = "failed-with-fallback";
+            diagnostic.source = "procedural";
+            diagnostic.error = error && error.message ? error.message : String(error);
+            console.warn(`[Micro Mayhem] ${spec.id} kept its procedural fallback: ${diagnostic.error}`);
+          }
+        }));
+      } catch (error) {
+        markManifestFallback(error);
+        console.warn(`[Micro Mayhem] Authored model manifest unavailable; procedural visuals remain active. ${modelSystem.manifestError}`);
+      } finally {
+        modelSystem.settled = true;
+      }
+      return getModelDiagnostics();
+    })();
+    return modelSystem.settlePromise;
+  }
 
   function cloneLevelEntries(entries) {
     return entries.map((entry) => ({ ...entry }));
@@ -1435,6 +1954,7 @@
     await initPhysics();
     bindInputs();
     resetGame(false);
+    initializeModelAssets();
     resize();
     updateHUD();
     syncStoreUi();
@@ -4180,51 +4700,21 @@
     tailNub.rotation.x = Math.PI / 2;
     group.add(tailNub);
 
+    const fallbackInfo = createProceduralFallback(group, "hero-tardigrade");
+
     const cosmeticRoot = new THREE.Group();
     cosmeticRoot.userData.kind = "cosmetics";
     group.add(cosmeticRoot);
     world.cosmeticRoot = cosmeticRoot;
-
-    const researchCamera = makeResearchCameraAttachment();
-    researchCamera.visible = false;
-    group.add(researchCamera);
-    world.researchCamera = researchCamera;
+    world.researchCamera = null;
 
     group.traverse((child) => {
       if (child.isMesh) child.castShadow = false;
     });
     group.scale.setScalar(1.14);
+    registerModelInstance("hero-tardigrade", group, fallbackInfo);
     applyStoreCosmetics();
     return group;
-  }
-
-  function makeResearchCameraAttachment() {
-    const THREE = window.THREE;
-    const mount = new THREE.Group();
-    mount.userData.kind = "research-camera";
-    mount.position.set(0.42, 2.36, 0.92);
-    mount.rotation.set(-0.12, -0.08, -0.18);
-
-    const strap = new THREE.Mesh(new THREE.TorusGeometry(0.58, 0.035, 5, 18), world.materials.cameraBody);
-    strap.position.set(-0.08, -0.08, 0);
-    strap.rotation.x = Math.PI / 2;
-    strap.scale.set(1.22, 0.72, 1);
-    mount.add(strap);
-
-    const body = new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.42, 0.5), world.materials.cameraBody);
-    body.castShadow = false;
-    mount.add(body);
-
-    const lens = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.2, 0.18, 12), world.materials.cameraLens);
-    lens.position.z = -0.34;
-    lens.rotation.x = Math.PI / 2;
-    mount.add(lens);
-
-    const light = new THREE.Mesh(new THREE.SphereGeometry(0.08, 8, 6), world.materials.cameraLens);
-    light.position.set(0.22, 0.12, -0.28);
-    mount.add(light);
-    mount.userData.light = light;
-    return mount;
   }
 
   // What the locals have to say when the tardigrade wanders past.
@@ -4631,7 +5121,10 @@
       }
     }
 
+    const modelId = MODEL_ID_BY_CREATURE.get(route.type);
+    const fallbackInfo = modelId ? createProceduralFallback(group, modelId) : null;
     group.scale.setScalar(creatureBaseScale(route.type));
+    if (modelId) registerModelInstance(modelId, group, fallbackInfo);
     return group;
   }
 
@@ -4679,7 +5172,9 @@
       }
       creature.rotation.x = Math.sin(state.clock * 1.4 + data.phase) * 0.05;
       creature.rotation.z = Math.cos(state.clock * 1.7 + data.phase) * 0.08;
-      creature.children.forEach((child, childIndex) => {
+      let proceduralChildIndex = 0;
+      creature.traverse((child) => {
+        const childIndex = proceduralChildIndex++;
         if (child.userData.kind === "crown") child.rotation.z += dt * 4.2;
         if (child.userData.kind === "fin") child.rotation.y = Math.sin(state.clock * 6 + childIndex) * 0.26;
         if (child.userData.kind === "tail") child.rotation.z = Math.sin(state.clock * 5 + data.phase) * 0.32;
@@ -4710,10 +5205,20 @@
         }
       }
 
+      const modelBinding = data.modelBinding;
+      if (active) {
+        data.modelStartledTimer = Math.max(0, (data.modelStartledTimer || 0) - dt);
+        if (modelBinding && modelBinding.modelRoot) {
+          setModelAction(modelBinding, data.modelStartledTimer > 0 ? "startled" : "locomotion");
+        }
+      }
+
       if (!active || data.bonkCooldown > 0) return;
       const playerSpeed = Math.hypot(player.vx, player.vz);
       if (distance < 3.2 && playerSpeed > 8) {
         data.bonkCooldown = 2.5;
+        data.modelStartledTimer = 0.7;
+        if (data.modelBinding) setModelAction(data.modelBinding, "startled", 0.08);
         creature.scale.setScalar(baseScale * 1.22);
         sayCreatureLine(creature, pick(CREATURE_STARTLES), 2.4);
         data.chatterCooldown = Math.max(data.chatterCooldown, 5);
@@ -5056,6 +5561,8 @@
     mesh.castShadow = true;
     mesh.receiveShadow = true;
     group.add(mesh);
+    const modelId = MODEL_ID_BY_PROP.get(type);
+    const fallbackInfo = modelId ? createProceduralFallback(group, modelId) : null;
     const baseY = config.y + terrainOffsetAt(point.x, point.z);
     group.position.set(point.x, baseY, point.z);
     group.rotation.y = rand(0, Math.PI * 2);
@@ -5078,6 +5585,7 @@
       baseHeight: config.y,
       baseY,
     };
+    if (modelId) registerModelInstance(modelId, group, fallbackInfo);
     if (type === "disco") {
       // The disco ball hangs in place and just spins, waiting to be discovered.
       group.userData.spin.set(0, 2.2, 0);
@@ -5142,8 +5650,17 @@
   }
 
   function disposeObject(object) {
+    const binding = object && object.userData && object.userData.modelBinding;
+    if (binding && !binding.disposed) {
+      binding.disposed = true;
+      if (binding.mixer) {
+        binding.mixer.stopAllAction();
+        if (binding.model) binding.mixer.uncacheRoot(binding.model);
+      }
+      modelSystem.instances.delete(binding);
+    }
     object.traverse((child) => {
-      if (child.geometry) child.geometry.dispose();
+      if (child.geometry && !(child.userData && child.userData.sharedModelResource)) child.geometry.dispose();
     });
   }
 
@@ -5298,10 +5815,16 @@
         if (index === 1) child.material = world.materials[palette[0]] || child.material;
       });
     });
+    applyAuthoredHeroSkin();
   }
 
   function rebuildStoreAttachments() {
     if (!world.cosmeticRoot) return;
+    world.cosmeticAttachments.forEach((attachment) => {
+      if (attachment.parent) attachment.parent.remove(attachment);
+      disposeObject(attachment);
+    });
+    world.cosmeticAttachments.length = 0;
     while (world.cosmeticRoot.children.length) {
       const child = world.cosmeticRoot.children[0];
       world.cosmeticRoot.remove(child);
@@ -5314,6 +5837,9 @@
       if (!attachment) return;
       attachment.userData.slot = slot;
       world.cosmeticRoot.add(attachment);
+      world.cosmeticAttachments.push(attachment);
+      const socket = world.heroSockets[slot];
+      if (socket) mountObjectToSocketPreservingPlacement(attachment, socket);
     });
   }
 
@@ -6066,6 +6592,7 @@
       promptTimer: run ? 5 : 8,
       dashCooldown: 0,
       dashPulse: 0,
+      dashStartedAirborne: false,
       discoTimer: 0,
       maxCombo: 0,
       goalsCleared: 0,
@@ -6198,6 +6725,7 @@
     state.hydrate = Math.max(82, state.hydrate);
     state.dashCooldown = 0;
     state.dashPulse = 0;
+    state.dashStartedAirborne = false;
     state.promptTimer = 4.2;
 
     updatePlayerTransform(0);
@@ -6361,9 +6889,35 @@
     player.vz += forwardZ * 25;
     state.dashCooldown = 1.1;
     state.dashPulse = 0.44;
+    state.dashStartedAirborne = !player.grounded;
     addChaos(45, "Hydro bonk armed");
     showPrompt("Bonk velocity online.");
     playTone("dash");
+  }
+
+  function updateModelAnimations(dt) {
+    if (!state.running || state.paused || state.gameOver) return;
+    const heroBinding = world.tardigrade && world.tardigrade.userData && world.tardigrade.userData.modelBinding;
+    if (heroBinding && heroBinding.modelRoot) {
+      const speed = Math.hypot(state.player.vx, state.player.vz);
+      const hasMovementInput = Math.abs(state.input.forward + state.input.virtualForward) > 0.01
+        || Math.abs(state.input.right + state.input.virtualRight) > 0.01;
+      const action = state.curlHeld
+        ? "curl"
+        : state.dashPulse > 0 && state.dashStartedAirborne
+          ? "dash"
+          : !state.player.grounded
+            ? "airborne"
+            : state.dashPulse > 0
+            ? "dash"
+            : hasMovementInput && speed > 0.25
+              ? "scuttle"
+              : "idle";
+      setModelAction(heroBinding, action);
+    }
+    modelSystem.instances.forEach((binding) => {
+      if (!binding.disposed && binding.mixer) binding.mixer.update(dt);
+    });
   }
 
   function loop(now) {
@@ -6377,6 +6931,7 @@
     } else {
       updateIdle(dt);
     }
+    updateModelAnimations(dt);
     renderWorld(dt);
   }
 
@@ -6406,6 +6961,7 @@
     if (state.scoreDeltaTimer <= 0) state.scoreDelta = 0;
     state.dashCooldown = Math.max(0, state.dashCooldown - dt);
     state.dashPulse = Math.max(0, state.dashPulse - dt);
+    if (state.dashPulse <= 0) state.dashStartedAirborne = false;
     updateHUD();
 
     if (state.hydrate <= 0) {
@@ -7319,20 +7875,12 @@
       feeler.rotation.z = (index ? 0.22 : -0.22) + Math.sin(state.clock * 4 + index) * 0.16;
     });
 
-    if (world.researchCamera) {
-      world.researchCamera.visible = state.researchCameraUnlocked || state.stage >= 3;
-      world.researchCamera.rotation.z = -0.18 + Math.sin(state.clock * 3.2) * 0.035;
-      if (world.researchCamera.userData.light) {
-        world.researchCamera.userData.light.scale.setScalar(0.9 + Math.sin(state.clock * 6.8) * 0.16);
-      }
-    }
-
     updateStoreCosmeticMotion(dt, speed);
   }
 
   function updateStoreCosmeticMotion(dt, speed) {
-    if (world.cosmeticRoot) {
-      world.cosmeticRoot.children.forEach((attachment, index) => {
+    if (world.cosmeticAttachments.length) {
+      world.cosmeticAttachments.forEach((attachment, index) => {
         attachment.rotation.z = Math.sin(state.clock * 2.4 + index) * 0.035;
         attachment.children.forEach((child) => {
           if (child.userData.kind === "rocketFlame") {
@@ -7607,6 +8155,29 @@
 
   function updateCamera(dt) {
     const THREE = window.THREE;
+    if (world.modelQaFrame && world.modelQaFrame.objects.length) {
+      const box = new THREE.Box3();
+      world.modelQaFrame.objects.forEach((object) => box.expandByObject(object));
+      if (!box.isEmpty()) {
+        const center = box.getCenter(new THREE.Vector3());
+        const size = box.getSize(new THREE.Vector3());
+        const radius = Math.max(1.2, Math.max(size.x, size.y, size.z) * 0.58);
+        const verticalFov = THREE.MathUtils.degToRad(world.camera.fov);
+        const horizontalFov = 2 * Math.atan(Math.tan(verticalFov / 2) * Math.max(0.4, world.camera.aspect));
+        const distance = Math.max(
+          radius / Math.tan(verticalFov / 2),
+          radius / Math.tan(horizontalFov / 2)
+        ) * 1.22;
+        world.camera.position.set(
+          center.x + distance * 0.72,
+          center.y + distance * 0.48,
+          center.z + distance * 0.92
+        );
+        world.camera.lookAt(center);
+        world.camera.userData.ready = true;
+        return;
+      }
+    }
     const p = state.player;
     state.camera.yaw = lerpAngle(state.camera.yaw, state.camera.targetYaw, Math.min(1, dt * 6));
     state.camera.pitch = lerp(state.camera.pitch, state.camera.targetPitch, Math.min(1, dt * 6));
@@ -7853,6 +8424,179 @@
     `;
   }
 
+  function liveModelBindings(id) {
+    return Array.from(modelSystem.instances).filter((binding) => (
+      !binding.disposed && binding.spec.id === id
+    ));
+  }
+
+  function getModelDiagnostics() {
+    const assets = MODEL_SPECS.map((spec) => {
+      const sourceDiagnostic = modelSystem.diagnostics.get(spec.id);
+      const bindings = liveModelBindings(spec.id);
+      const activeBindings = bindings.filter((binding) => binding.modelRoot && binding.status === "active");
+      const fallbackBindings = bindings.filter((binding) => binding.fallback && binding.fallback.visible);
+      const sample = activeBindings[0] || bindings[0] || null;
+      const failed = String(sourceDiagnostic.status || "").includes("failed");
+      const bounds = sourceDiagnostic.bounds ? { ...sourceDiagnostic.bounds } : {};
+      if (sample) bounds.fallback = sample.fallbackBounds;
+      if (sample && sample.fit) bounds.fitted = sample.fit.bounds;
+      return {
+        ...sourceDiagnostic,
+        status: sourceDiagnostic.status,
+        fallbackActive: failed || fallbackBindings.length > 0,
+        totalInstances: bindings.length,
+        activeInstances: activeBindings.length,
+        fallbackInstances: fallbackBindings.length,
+        activeClip: spec.role === "hero" && sample ? sample.activeClip : sourceDiagnostic.activeClip,
+        animationTime: sample && sample.mixer ? roundModelNumber(sample.mixer.time) : null,
+        instanceClips: Array.from(new Set(activeBindings.map((binding) => binding.activeClip).filter(Boolean))),
+        bounds: Object.keys(bounds).length ? bounds : null,
+        fitScale: sample && sample.fit ? sample.fit.scale : null,
+        rotationY: sample && sample.fit ? sample.fit.rotationY : null,
+      };
+    });
+    const heroAsset = assets.find((asset) => asset.id === "hero-tardigrade");
+    const heroBinding = liveModelBindings("hero-tardigrade")[0] || null;
+    return {
+      settled: modelSystem.settled,
+      manifest: {
+        path: modelSystem.manifestPath,
+        status: modelSystem.manifestStatus,
+        error: modelSystem.manifestError,
+      },
+      assets,
+      hero: {
+        status: heroAsset && heroAsset.status,
+        activeClip: heroAsset && heroAsset.activeClip || "",
+        fallbackActive: heroAsset ? heroAsset.fallbackActive : true,
+        skin: heroBinding && heroBinding.skinDiagnostics
+          ? { ...heroBinding.skinDiagnostics }
+          : { id: state.store.equipped.skin || "skin-classic", materialCount: 0, tintedMaterials: 0, namedSlots: false },
+        sockets: Object.fromEntries(["head", "face", "back", "camera"].map((slot) => [
+          slot,
+          world.heroSockets[slot] ? world.heroSockets[slot].name || slot : "",
+        ])),
+      },
+    };
+  }
+
+  function renderGameToText() {
+    const goal = activeGoal();
+    const nearbyCreatures = world.creatures
+      .map((creature) => ({
+        type: creature.userData.type,
+        x: roundModelNumber(creature.position.x),
+        y: roundModelNumber(creature.position.y),
+        z: roundModelNumber(creature.position.z),
+        distance: roundModelNumber(Math.hypot(creature.position.x - state.player.x, creature.position.z - state.player.z)),
+      }))
+      .sort((a, b) => a.distance - b.distance)
+      .slice(0, 6);
+    const nearbyProps = world.props
+      .map((prop) => ({
+        type: prop.userData.type,
+        x: roundModelNumber(prop.position.x),
+        y: roundModelNumber(prop.position.y),
+        z: roundModelNumber(prop.position.z),
+        radius: prop.userData.radius,
+        distance: roundModelNumber(Math.hypot(prop.position.x - state.player.x, prop.position.z - state.player.z)),
+      }))
+      .sort((a, b) => a.distance - b.distance)
+      .slice(0, 10);
+    return JSON.stringify({
+      coords: "Three.js world coordinates: +X right/east, +Y up, -Z is the hero's authored forward direction at yaw 0.",
+      mode: state.gameOver ? "game-over" : state.paused ? "paused" : state.running ? "playing" : "title",
+      stage: state.stage,
+      environment: levelConfig().name,
+      player: {
+        x: roundModelNumber(state.player.x),
+        y: roundModelNumber(state.player.y),
+        z: roundModelNumber(state.player.z),
+        yaw: roundModelNumber(state.player.yaw),
+        speed: roundModelNumber(Math.hypot(state.player.vx, state.player.vz)),
+        grounded: state.player.grounded,
+        curl: state.curlHeld,
+      },
+      goal: goal ? {
+        id: goal.id,
+        title: goal.title,
+        progress: roundModelNumber(goal.progress()),
+        target: targetValue(goal),
+      } : null,
+      nearbyCreatures,
+      nearbyProps,
+      models: getModelDiagnostics(),
+    });
+  }
+
+  function advanceTime(milliseconds) {
+    let remaining = clamp((Number(milliseconds) || 0) / 1000, 0, 30);
+    const fixedStep = 1 / 60;
+    while (remaining > 0.000001) {
+      const dt = Math.min(fixedStep, remaining);
+      remaining -= dt;
+      state.clock += dt;
+      if (state.ready && state.running && !state.paused && !state.gameOver) updateGame(dt);
+      else updateIdle(dt);
+      updateModelAnimations(dt);
+    }
+    state.lastTime = performance.now();
+    renderWorld(0);
+    return getModelDiagnostics();
+  }
+
+  function frameModelObjects(objects, label) {
+    const valid = objects.filter((object) => object && object.visible !== false);
+    if (!valid.length) return null;
+    world.modelQaFrame = { objects: valid, label };
+    if (world.camera && world.camera.userData) world.camera.userData.ready = false;
+    renderWorld(0);
+    const THREE = window.THREE;
+    const box = new THREE.Box3();
+    valid.forEach((object) => box.expandByObject(object));
+    return { label, bounds: boxDiagnostic(box), count: valid.length };
+  }
+
+  function frameModelAsset(id, instanceIndex = 0) {
+    const bindings = liveModelBindings(id);
+    const binding = bindings[Math.max(0, Math.min(bindings.length - 1, Number(instanceIndex) || 0))];
+    if (!binding) return null;
+    return frameModelObjects([binding.modelRoot || binding.fallback], id);
+  }
+
+  function frameTutorialAssets() {
+    const ids = ["hero-tardigrade", "prop-algae", "prop-bacteria", "prop-droplet", "prop-pollen"];
+    const objects = ids.map((id) => {
+      const binding = liveModelBindings(id)[0];
+      return binding && (binding.modelRoot || binding.fallback);
+    }).filter(Boolean);
+    return frameModelObjects(objects, "tutorial-assets");
+  }
+
+  function frameCreatureAssets() {
+    const ids = ["hero-tardigrade", "creature-rotifer", "creature-ciliate", "creature-waterbearling"];
+    const objects = ids.map((id) => {
+      const binding = liveModelBindings(id)[0];
+      return binding && (binding.modelRoot || binding.fallback);
+    }).filter(Boolean);
+    return frameModelObjects(objects, "creature-assets");
+  }
+
+  function clearModelFrame() {
+    world.modelQaFrame = null;
+    if (world.camera && world.camera.userData) world.camera.userData.ready = false;
+    renderWorld(0);
+    return true;
+  }
+
+  function previewHeroSkin(skinId) {
+    if (!STORE_SKINS[skinId]) return null;
+    state.store.equipped.skin = skinId;
+    applyStoreSkin();
+    return getModelDiagnostics().hero.skin;
+  }
+
   function resize() {
     if (!world.renderer || !world.camera) return;
     const rect = canvas.getBoundingClientRect();
@@ -7869,9 +8613,19 @@
     return a + delta * t;
   }
 
+  window.render_game_to_text = renderGameToText;
+  window.advanceTime = advanceTime;
   window.__MICRO_MAYHEM_DEBUG = {
     state,
     world,
+    getModelDiagnostics,
+    waitForModels: () => modelSystem.settlePromise,
+    frameModelAsset,
+    frameHero: () => frameModelAsset("hero-tardigrade"),
+    frameTutorialAssets,
+    frameCreatureAssets,
+    clearModelFrame,
+    previewHeroSkin,
     levelConfig,
     playableRadius,
     levelAreaRatio,

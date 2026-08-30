@@ -1,0 +1,638 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#efeade" />
+  <title>INKBLOOD 血墨 — Night Parade of One Hundred Demons</title>
+  <link rel="manifest" href="../site.webmanifest" />
+  <link rel="canonical" href="https://clesterdpt-lgtm.github.io/rainbot-gaming/games/inkblood.html" />
+  <meta name="description" content="A black-and-white manga horde survivor. Ink, screentone and speed lines — the only colour is blood and the things you cut with. Outlast the Night Parade of One Hundred Demons." />
+  <meta property="og:title" content="INKBLOOD 血墨" />
+  <meta property="og:description" content="A hand-inked manga horde survivor. Fifteen minutes against the Night Parade of One Hundred Demons." />
+  <meta property="og:image" content="https://clesterdpt-lgtm.github.io/rainbot-gaming/assets/img/inkblood/card-inkblood-ai.jpg?v=20260802-ai-1" />
+  <meta property="og:image:alt" content="Inkblood cover art: a lone manga swordsman faces a yokai horde beneath a colossal skeleton and crimson ink slashes" />
+  <meta property="og:type" content="website" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="INKBLOOD 血墨" />
+  <meta name="twitter:description" content="A hand-inked manga horde survivor against the Night Parade of One Hundred Demons." />
+  <meta name="twitter:image" content="https://clesterdpt-lgtm.github.io/rainbot-gaming/assets/img/inkblood/card-inkblood-ai.jpg?v=20260802-ai-1" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anton&family=Bebas+Neue&family=Noto+Sans+JP:wght@700;900&display=swap" />
+  <link rel="stylesheet" href="../assets/css/styles.css?v=20260812-game-chrome-2" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' fill='%23efeade'/%3E%3Cpath d='M20 78 Q50 8 80 78 Q50 58 20 78Z' fill='%23101014'/%3E%3Ccircle cx='50' cy='42' r='11' fill='%23c01421'/%3E%3C/svg%3E" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      overflow: hidden;
+      overscroll-behavior: none;
+    }
+
+    .inkblood-page .rb-standalone-stage {
+      background: #111116;
+      border-color: rgba(239, 234, 222, 0.2);
+    }
+
+    .inkblood-page .rb-standalone-surface {
+      --game-aspect: 1.7778;
+      --game-aspect-ratio: 16 / 9;
+      --game-max-width: 1180px;
+      background: #efeade;
+      border-color: rgba(239, 234, 222, 0.24);
+    }
+
+    .inkblood-page .game-side__panel--inkblood {
+      color: var(--ink-dim);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .inkblood-page .game-side__panel--inkblood p { margin: 0; }
+    .inkblood-page .game-side__panel--inkblood p + p { margin-top: 8px; }
+
+    #ink-root {
+      --inkblood-ink: #101014;
+      --inkblood-paper: #efeade;
+      --inkblood-paper-lit: #f8f5ec;
+      --inkblood-blood: #c01421;
+      --inkblood-display: "Bebas Neue", "Arial Narrow", Impact, sans-serif;
+      --inkblood-impact: "Anton", Impact, "Arial Black", sans-serif;
+      --inkblood-jp: "Noto Sans JP", "Hiragino Sans", "Yu Gothic", sans-serif;
+      position: absolute;
+      inset: 0;
+      overflow: hidden;
+      background: var(--inkblood-paper);
+      color: var(--inkblood-ink);
+      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+      touch-action: none;
+      -webkit-user-select: none;
+      user-select: none;
+    }
+
+    #ink-canvas {
+      position: absolute;
+      inset: 0;
+      display: block;
+      width: 100%;
+      height: 100%;
+      touch-action: none;
+      cursor: crosshair;
+    }
+
+    /* One quiet menu trigger owns pause, controls and screen size. */
+    .ink-menu-trigger {
+      position: absolute;
+      top: max(10px, env(safe-area-inset-top));
+      right: max(10px, env(safe-area-inset-right));
+      z-index: 48;
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      min-width: 68px;
+      height: 34px;
+      padding: 0 10px;
+      border: 1px solid rgba(248, 245, 236, 0.72);
+      border-radius: 0;
+      clip-path: polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px);
+      background: rgba(8, 8, 12, 0.86);
+      color: #f8f5ec;
+      font: 14px/1 var(--inkblood-display);
+      letter-spacing: 0.06em;
+      cursor: pointer;
+      touch-action: manipulation;
+      transition: background 120ms ease, transform 90ms ease;
+    }
+    .ink-menu-trigger[hidden] { display: none; }
+    .ink-menu-trigger:hover { background: rgba(8, 8, 12, 0.98); }
+    .ink-menu-trigger:active { transform: translateY(1px); }
+    .ink-menu-trigger__key {
+      color: rgba(248, 245, 236, 0.62);
+      font-size: 10px;
+      letter-spacing: 0.08em;
+    }
+    .ink-menu-trigger:focus-visible,
+    .ink-menu__action:focus-visible {
+      outline: 2px solid #c01421;
+      outline-offset: 3px;
+    }
+
+    /* The game-specific Escape menu is deliberately small: four decisions,
+       no duplicated pause screen, and controls only when requested. */
+    .ink-menu {
+      position: absolute;
+      inset: 0;
+      z-index: 100;
+      display: grid;
+      place-items: center;
+      padding: max(18px, env(safe-area-inset-top)) max(18px, env(safe-area-inset-right))
+        max(18px, env(safe-area-inset-bottom)) max(18px, env(safe-area-inset-left));
+      background: rgba(10, 10, 14, 0.76);
+      backdrop-filter: blur(5px);
+      -webkit-backdrop-filter: blur(5px);
+    }
+    .ink-menu[hidden] { display: none; }
+    .ink-menu__panel {
+      width: min(360px, 100%);
+      max-height: 100%;
+      overflow: auto;
+      padding: 24px;
+      border: 2px solid #101014;
+      clip-path: polygon(12px 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%, 0 12px);
+      background: rgba(248, 245, 236, 0.98);
+      color: #101014;
+      box-shadow: 8px 9px 0 rgba(0, 0, 0, 0.34);
+    }
+    .ink-menu__eyebrow {
+      color: #7d0a13;
+      font: 11px/1 var(--inkblood-display);
+      letter-spacing: 0.16em;
+    }
+    .ink-menu__title {
+      margin: 6px 0 0;
+      font: 42px/0.95 var(--inkblood-display);
+      letter-spacing: 0.02em;
+    }
+    .ink-menu__copy {
+      margin: 8px 0 20px;
+      color: #55545b;
+      font-size: 13px;
+    }
+    .ink-menu__actions {
+      display: grid;
+      gap: 8px;
+    }
+    .ink-menu__action {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      min-height: 42px;
+      padding: 0 14px;
+      border: 1px solid #101014;
+      border-radius: 0;
+      background: transparent;
+      color: #101014;
+      font: 16px/1 var(--inkblood-display);
+      letter-spacing: 0.05em;
+      text-decoration: none;
+      cursor: pointer;
+      touch-action: manipulation;
+      transition: color 100ms ease, background 100ms ease, transform 90ms ease;
+    }
+    .ink-menu__action::after { content: "→"; opacity: 0.42; }
+    .ink-menu__action:hover { background: rgba(16, 16, 20, 0.07); }
+    .ink-menu__action:active { transform: translateY(1px); }
+    .ink-menu__action--primary {
+      border-color: #7d0a13;
+      background: #7d0a13;
+      color: #f8f5ec;
+    }
+    .ink-menu__action--primary:hover { background: #a40f1c; }
+    .ink-menu__action--quiet { margin-top: 4px; border-color: rgba(16, 16, 20, 0.3); }
+    .ink-menu__controls {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 9px 16px;
+      margin-top: 18px;
+      padding-top: 17px;
+      border-top: 1px solid rgba(16, 16, 20, 0.28);
+    }
+    .ink-menu__controls[hidden] { display: none; }
+    .ink-menu__controls > div {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+      color: #4a4950;
+      font-size: 12px;
+    }
+    .ink-menu__controls kbd {
+      min-width: 42px;
+      padding: 4px 6px;
+      border: 1px solid #101014;
+      background: #101014;
+      color: #f8f5ec;
+      font: 11px/1 var(--inkblood-display);
+      letter-spacing: 0.04em;
+      text-align: center;
+    }
+    .ink-menu__controls p {
+      grid-column: 1 / -1;
+      margin: 3px 0 0;
+      color: #66656b;
+      font-size: 11px;
+      line-height: 1.4;
+    }
+
+    /* ---------- player actions ----------
+       These are manga seals, never a toolbar. The clipped paper shapes keep
+       the battlefield visible while the rising fill communicates cooldown or
+       earned blood at a glance. */
+    .ink-action-dock {
+      position: absolute;
+      right: max(12px, env(safe-area-inset-right));
+      bottom: max(12px, env(safe-area-inset-bottom));
+      z-index: 46;
+      display: flex;
+      flex-direction: row;
+      align-items: center;
+      gap: 7px;
+      opacity: 0;
+      visibility: hidden;
+      transform: translateY(10px);
+      transition: opacity 160ms ease, transform 160ms ease, visibility 160ms;
+      pointer-events: none;
+      filter: drop-shadow(2px 3px 0 rgba(16, 16, 20, 0.2));
+    }
+    .ink-action-dock.is-visible {
+      opacity: 1;
+      visibility: visible;
+      transform: translateY(0);
+    }
+    .ink-action {
+      --action-progress: 0;
+      position: relative;
+      display: grid;
+      place-items: center;
+      isolation: isolate;
+      overflow: hidden;
+      width: 54px;
+      height: 54px;
+      padding: 0;
+      border: 2px solid var(--inkblood-ink, #101014);
+      border-radius: 0;
+      clip-path: polygon(9px 0, 100% 0, 100% calc(100% - 9px), calc(100% - 9px) 100%, 0 100%, 0 9px);
+      background: rgba(248, 245, 236, 0.9);
+      color: var(--inkblood-ink, #101014);
+      pointer-events: auto;
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
+      cursor: pointer;
+    }
+    .ink-action::after {
+      content: "";
+      position: absolute;
+      inset: 4px;
+      z-index: -1;
+      border: 1px solid currentColor;
+      opacity: 0.24;
+      pointer-events: none;
+    }
+    .ink-action__fill {
+      position: absolute;
+      z-index: -2;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      height: calc(var(--action-progress) * 100%);
+      background: rgba(16, 16, 20, 0.72);
+      transition: height 110ms linear;
+    }
+    .ink-action__sigil {
+      font-family: var(--inkblood-jp, "Noto Sans JP", sans-serif);
+      font-weight: 900;
+      line-height: 0.9;
+      text-shadow: 1px 0 #f8f5ec, -1px 0 #f8f5ec, 0 1px #f8f5ec, 0 -1px #f8f5ec;
+      transform: rotate(-5deg);
+    }
+    .ink-action__label {
+      position: absolute;
+      left: 4px;
+      right: 4px;
+      bottom: 3px;
+      font-family: var(--inkblood-display, Impact, sans-serif);
+      font-size: 8px;
+      letter-spacing: 0.065em;
+      line-height: 1;
+      text-align: center;
+      text-shadow: 1px 1px #f8f5ec, -1px -1px #f8f5ec;
+    }
+    .ink-action__key {
+      position: absolute;
+      top: 2px;
+      right: 3px;
+      min-width: 15px;
+      padding: 1px 3px;
+      border: 1px solid currentColor;
+      background: rgba(248, 245, 236, 0.82);
+      font: 10px/1 var(--inkblood-display, Impact, sans-serif);
+      text-align: center;
+    }
+    .ink-action--special .ink-action__fill {
+      background: linear-gradient(to top, rgba(125, 10, 19, 0.98), rgba(255, 58, 58, 0.84));
+    }
+    .ink-action--special .ink-action__sigil { font-size: 28px; }
+    .ink-action--dodge .ink-action__sigil {
+      font-family: var(--inkblood-impact, Impact, sans-serif);
+      font-size: 27px;
+      font-style: italic;
+    }
+    .ink-action:disabled {
+      opacity: 0.82;
+      cursor: default;
+    }
+    .ink-action.is-ready {
+      color: #f8f5ec;
+      background: rgba(16, 16, 20, 0.94);
+    }
+    .ink-action.is-ready .ink-action__sigil {
+      text-shadow: 2px 2px #101014, -1px 0 #101014, 0 -1px #101014;
+    }
+    .ink-action--special.is-ready {
+      border-color: #f8f5ec;
+      background: #7d0a13;
+      animation: eclipse-ready 1.3s steps(2, end) infinite;
+    }
+    .ink-action.is-active { animation: action-impact 280ms cubic-bezier(.2,.9,.22,1); }
+    .ink-action.is-pressed { animation: action-press 170ms ease-out; }
+    .ink-action:focus-visible {
+      outline: 3px solid #c01421;
+      outline-offset: 3px;
+    }
+    @keyframes eclipse-ready {
+      50% { filter: drop-shadow(0 0 8px rgba(192, 20, 33, 0.8)); transform: scale(1.03); }
+    }
+    @keyframes action-impact {
+      45% { transform: scale(0.86) rotate(-4deg); }
+      75% { transform: scale(1.1) rotate(2deg); }
+    }
+    @keyframes action-press {
+      45% { transform: translate(2px, 3px) scale(0.92); filter: none; }
+    }
+
+    @media (pointer: coarse) {
+      .ink-action__key { display: none; }
+      .ink-action { width: 58px; height: 58px; }
+    }
+
+    /* ---------- boot screen ---------- */
+    #ink-boot {
+      position: absolute;
+      inset: 0;
+      z-index: 90;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 22px;
+      background: var(--inkblood-paper-lit);
+      transition: opacity 0.55s ease;
+    }
+    #ink-boot.is-hidden { opacity: 0; pointer-events: none; }
+
+    /* A rotating ring of ink strokes, drawn in CSS so it shows up
+       before a single line of the game engine has parsed. */
+    .ink-boot__mark {
+      position: relative;
+      width: 132px;
+      height: 132px;
+      display: grid;
+      place-items: center;
+    }
+    .ink-boot__ring {
+      position: absolute;
+      inset: 0;
+      border-radius: 50%;
+      border: 5px solid transparent;
+      border-top-color: var(--inkblood-ink);
+      border-right-color: var(--inkblood-ink);
+      animation: ink-spin 1.5s cubic-bezier(0.6, 0.1, 0.3, 0.9) infinite;
+    }
+    .ink-boot__ring:nth-child(2) {
+      inset: 16px;
+      border-top-color: var(--inkblood-blood);
+      border-right-color: transparent;
+      border-left-color: var(--inkblood-blood);
+      animation-duration: 2.4s;
+      animation-direction: reverse;
+    }
+    .ink-boot__glyph {
+      font-family: var(--inkblood-jp);
+      font-weight: 900;
+      font-size: 46px;
+      color: var(--inkblood-ink);
+      line-height: 1;
+    }
+    @keyframes ink-spin { to { transform: rotate(360deg); } }
+
+    .ink-boot__title {
+      margin: 0;
+      font-family: var(--inkblood-impact);
+      font-size: clamp(38px, 8vw, 74px);
+      letter-spacing: 0.03em;
+      line-height: 0.94;
+      text-align: center;
+    }
+    .ink-boot__sub {
+      margin: -12px 0 0;
+      font-family: var(--inkblood-display);
+      font-size: clamp(12px, 2.4vw, 17px);
+      letter-spacing: 0.34em;
+      color: #4a4a52;
+      text-align: center;
+    }
+    .ink-boot__bar {
+      width: min(380px, 76%);
+      height: 8px;
+      border: 2px solid var(--inkblood-ink);
+      background: transparent;
+      overflow: hidden;
+    }
+    .ink-boot__fill {
+      height: 100%;
+      width: 2%;
+      background: var(--inkblood-blood);
+      transition: width 0.28s ease;
+    }
+    .ink-boot__status {
+      font-family: var(--inkblood-display);
+      font-size: 14px;
+      letter-spacing: 0.2em;
+      color: #4a4a52;
+      min-height: 1.2em;
+      text-transform: uppercase;
+    }
+    .ink-boot__err {
+      display: none;
+      max-width: min(620px, 88%);
+      font-size: 13px;
+      line-height: 1.6;
+      color: #7d0a13;
+      white-space: pre-wrap;
+      text-align: center;
+    }
+    #ink-boot.has-error .ink-boot__err { display: block; }
+    #ink-boot.has-error .ink-boot__ring { animation-play-state: paused; }
+
+    .ink-boot__back {
+      position: absolute;
+      left: 20px;
+      top: 18px;
+      font-family: var(--inkblood-display);
+      font-size: 13px;
+      letter-spacing: 0.22em;
+      text-transform: uppercase;
+      color: #4a4a52;
+      text-decoration: none;
+    }
+    .ink-boot__back:hover { color: var(--inkblood-ink); }
+
+    @media (max-width: 900px) {
+      .inkblood-page .rb-standalone-surface:not(.is-maxed) {
+        --game-aspect: 0.75;
+        --game-aspect-ratio: 3 / 4;
+        aspect-ratio: var(--game-aspect-ratio);
+        height: auto;
+        max-height: none;
+        min-height: 0;
+      }
+      .ink-menu-trigger {
+        top: max(8px, env(safe-area-inset-top));
+        right: max(8px, env(safe-area-inset-right));
+        min-width: 62px;
+        height: 32px;
+        padding-inline: 8px;
+      }
+      .ink-menu__panel { padding: 20px; }
+      .ink-menu__title { font-size: 36px; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .ink-boot__ring { animation: none; }
+      .ink-menu-trigger,
+      .ink-menu__action { transition: none; }
+      .ink-action { animation: none !important; transition: none; }
+      .ink-action__fill { transition: none; }
+    }
+  </style>
+</head>
+<body class="rb-standalone-shell inkblood-page" data-rb-native-escape-menu="true">
+  <nav class="nav"><div id="nav-slot"></div></nav>
+
+  <main class="game-page">
+    <div class="game-page__header">
+      <div>
+        <h1 class="game-page__title">INKBLOOD 血墨</h1>
+        <div class="game-page__sub">Manga horde survival · open Menu when you want the full frame</div>
+      </div>
+      <a href="../games.html" class="btn btn--ghost" style="font-size:14px;padding:8px 14px;">All games</a>
+    </div>
+
+    <div class="game-layout">
+      <div class="game-stage rb-standalone-stage">
+        <div class="canvas-wrap rb-standalone-surface">
+          <div id="ink-root">
+            <canvas id="ink-canvas" tabindex="0" aria-label="Inkblood playfield"></canvas>
+
+            <div id="ink-boot">
+              <a class="ink-boot__back" href="../games.html">&larr; Rainbot</a>
+              <div class="ink-boot__mark">
+                <div class="ink-boot__ring"></div>
+                <div class="ink-boot__ring"></div>
+                <div class="ink-boot__glyph">血</div>
+              </div>
+              <h2 class="ink-boot__title">INKBLOOD</h2>
+              <p class="ink-boot__sub">NIGHT PARADE OF ONE HUNDRED DEMONS</p>
+              <div class="ink-boot__bar"><div class="ink-boot__fill" id="ink-boot-fill"></div></div>
+              <div class="ink-boot__status" id="ink-boot-status">Grinding the ink stick</div>
+              <div class="ink-boot__err" id="ink-boot-error"></div>
+            </div>
+          </div>
+
+          <button class="ink-menu-trigger" id="ink-menu-trigger" type="button"
+            aria-label="Open game menu" aria-keyshortcuts="Escape" aria-controls="ink-game-menu"
+            aria-expanded="false" title="Game menu (Escape)" hidden>
+            <span class="ink-menu-trigger__key" aria-hidden="true">ESC</span>
+            <span aria-hidden="true">MENU</span>
+          </button>
+
+          <div class="ink-menu" id="ink-game-menu" role="dialog" aria-modal="true"
+            aria-labelledby="ink-menu-title" hidden>
+            <section class="ink-menu__panel">
+              <div class="ink-menu__eyebrow">INKBLOOD · NIGHT PARADE</div>
+              <h2 class="ink-menu__title" id="ink-menu-title">Paused</h2>
+              <p class="ink-menu__copy">The ink can wait.</p>
+
+              <div class="ink-menu__actions">
+                <button class="ink-menu__action ink-menu__action--primary" type="button"
+                  data-ink-menu-action="resume">Resume</button>
+                <button class="ink-menu__action" type="button"
+                  data-ink-menu-action="maximize">Maximize screen</button>
+                <button class="ink-menu__action" type="button" data-ink-menu-action="controls"
+                  aria-expanded="false" aria-controls="ink-menu-controls">Show controls</button>
+                <a class="ink-menu__action ink-menu__action--quiet" href="../games.html">All games</a>
+              </div>
+
+              <div class="ink-menu__controls" id="ink-menu-controls" hidden>
+                <div><kbd>WASD</kbd><span>Move</span></div>
+                <div><kbd>SPACE</kbd><span>Ink Step</span></div>
+                <div><kbd>Q</kbd><span>Blood Eclipse</span></div>
+                <div><kbd>ESC</kbd><span>Menu</span></div>
+                <p>Touch anywhere to steer. Use the two seals for abilities.</p>
+              </div>
+            </section>
+          </div>
+
+          <div class="ink-action-dock" id="ink-action-dock" role="group" aria-label="Combat abilities">
+            <button class="ink-action ink-action--special" id="btn-special" type="button"
+              aria-keyshortcuts="Q" aria-label="Blood Eclipse charge 0 percent." disabled>
+              <span class="ink-action__fill" aria-hidden="true"></span>
+              <span class="ink-action__sigil" aria-hidden="true">蝕</span>
+              <span class="ink-action__label" aria-hidden="true">ECLIPSE</span>
+              <span class="ink-action__key" aria-hidden="true">Q</span>
+            </button>
+            <button class="ink-action ink-action--dodge" id="btn-dodge" type="button"
+              aria-keyshortcuts="Space Shift" aria-label="Ink Step dodge ready." disabled>
+              <span class="ink-action__fill" aria-hidden="true"></span>
+              <span class="ink-action__sigil" aria-hidden="true">≫</span>
+              <span class="ink-action__label" aria-hidden="true">INK STEP</span>
+              <span class="ink-action__key" aria-hidden="true">SPC</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <aside class="game-side">
+        <div class="game-side__panel">
+          <img class="game-side__poster" src="../assets/img/inkblood/card-inkblood-ai.jpg?v=20260802-ai-1" alt="Inkblood cover art: a lone manga swordsman faces a yokai horde beneath a colossal skeleton and crimson ink slashes" />
+        </div>
+
+        <div class="game-side__panel game-side__panel--inkblood">
+          <h3 class="game-side__title">NIGHT PARADE</h3>
+          <p>Move with WASD, arrow keys, or touch. Space/Shift performs an Ink Step; Q releases Blood Eclipse when its seal is full.</p>
+          <p>Open Menu or press Escape whenever you want to maximize the frame or review the controls.</p>
+        </div>
+
+        <details class="game-side__howto">
+          <summary>How to play</summary>
+          <ul>
+            <li>Choose your slayer, then survive the fifteen-minute Night Parade.</li>
+            <li>Move to evade yokai; your equipped weapons attack automatically.</li>
+            <li>Dodge with Space or Shift. Ink Step has brief invulnerability and a short cooldown.</li>
+            <li>Kills fill the Blood Eclipse seal. Press Q when it turns crimson to cut every nearby yokai.</li>
+            <li>Collect ink shards, level up, and build a stronger loadout.</li>
+            <li>Press Escape or Menu to maximize the frame, review controls, or return to the page.</li>
+          </ul>
+        </details>
+      </aside>
+    </div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer__links">
+      <a href="../">Home</a>
+      <a href="../games.html">All games</a>
+      <a href="../legal/privacy.html">Privacy</a>
+    </div>
+    <div>&copy; 2026 Rainbot Network. Parody.</div>
+  </footer>
+
+  <script src="../assets/js/ads.js?v=20260627-profile-stats-1"></script>
+  <script src="../assets/js/inkblood/boot.js?v=20260803-ui-minimal-1"></script>
+  <script src="../assets/js/main.js?v=20260826-no-ads-1"></script>
+</body>
+</html>

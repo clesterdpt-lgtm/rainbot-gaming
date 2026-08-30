@@ -4,9 +4,21 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Looksmaxxing Grindset — Rainbot Network</title>
+  <link rel="manifest" href="../site.webmanifest" />
+  <meta name="theme-color" content="#05070d" />
+  <link rel="canonical" href="https://clesterdpt-lgtm.github.io/rainbot-gaming/games/looksmaxxing-grindset.html" />
+  <meta property="og:title" content="Looksmaxxing Grindset — Rainbot Network" />
+  <meta property="og:description" content="Daily looksmax routine simulator. Keep clicking or your score drains, survive random setbacks, and unlock a ridiculous sculpted jawline final form." />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://clesterdpt-lgtm.github.io/rainbot-gaming/games/looksmaxxing-grindset.html" />
+  <meta property="og:image" content="https://clesterdpt-lgtm.github.io/rainbot-gaming/assets/img/rainbot-network-social-v1.png" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Looksmaxxing Grindset — Rainbot Network" />
+  <meta name="twitter:description" content="Daily looksmax routine simulator. Keep clicking or your score drains, survive random setbacks, and unlock a ridiculous sculpted jawline final form." />
+  <meta name="twitter:image" content="https://clesterdpt-lgtm.github.io/rainbot-gaming/assets/img/rainbot-network-social-v1.png" />
   <meta name="description" content="Daily looksmax routine simulator. Keep clicking or your score drains, survive random setbacks, and unlock a ridiculous sculpted jawline final form." />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bungee&family=Inter:wght@400;600;800;900&family=JetBrains+Mono:wght@400;700;800&family=Press+Start+2P&display=swap" />
-  <link rel="stylesheet" href="../assets/css/styles.css?v=20260717-max-ui" />
+  <link rel="stylesheet" href="../assets/css/styles.css?v=20260812-game-chrome-2" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%23ff2e88'/%3E%3Ctext x='50' y='70' font-family='Arial Black' font-size='60' fill='%230a0a14' text-anchor='middle'%3E10%3C/text%3E%3C/svg%3E" />
 </head>
 <body>
@@ -16,7 +28,7 @@
     <div class="game-page__header">
       <div>
         <h1 class="game-page__title">💪 Looksmaxxing Grindset</h1>
-        <div class="game-page__sub">Tap GRIND through the 30-day mirror arc · stop clicking and your score bleeds</div>
+        <div class="game-page__sub">Tap GRIND through a 30-day mirror arc · one routine per day · peak too early and you still have to lock it in</div>
       </div>
       <a href="../games.html" class="btn btn--ghost" style="font-size:14px;padding:8px 14px;">← All games</a>
     </div>
@@ -41,11 +53,11 @@
             <p class="overlay__sub" id="overlay-sub">
               You woke up at 1% looksmax. Time to grind.
               <br><br>
-              Hit <strong>GRIND</strong> to rotate through push day, mirror reps, serum stack, sleepmaxx, hydration arc, and silent walk.
+              Hit <strong>GRIND</strong> to run today's routine. The calendar rotates: push day, mirror reps, serum stack, sleepmaxx, hydration arc, silent walk.
               <br><br>
-              Stats now have a bigger runway, your score drains if you stop clicking, and random setbacks can wreck the glow-up.
+              Each day only really trains two stats. Neglected stats fade, late-game gains slow down, and a lucky pump on day 8 is not a win.
               <br><br>
-              <strong>Reach 10/10 to unlock the absurd sculpted-jaw final form.</strong>
+              <strong>Hit 10/10 and hold the glow-up through day 26 to unlock the absurd sculpted-jaw final form.</strong>
             </p>
             <div class="overlay__score" id="overlay-score"></div>
             <button class="btn btn--primary" id="btn-primary">Start the grind</button>
@@ -74,17 +86,15 @@
           <div class="powerups" id="powerups"></div>
         </div>
 
-        <div id="ad-leaderboard"></div>
-        <div id="ad-rectangle" style="display:flex; justify-content:center;"></div>
-
         <details class="game-side__howto">
           <summary>How to play</summary>
           <ul>
-            <li><strong style="color:var(--ink);">Tap GRIND</strong> (or press <kbd>Space</kbd>) to run the current routine. Focused stats get the biggest bump.</li>
-            <li><strong style="color:var(--ink);">Keep clicking.</strong> After a short pause, idle drain starts lowering stats and score.</li>
-            <li><strong style="color:var(--ink);">Random events</strong> can help, but bad lighting, doomscrolling, bloat, and group chat incidents can lower your score.</li>
-            <li><strong style="color:var(--ink);">Tier up</strong> through 10 mirror stages. Combos add momentum.</li>
-            <li><strong style="color:var(--ink);">Power-ups (ad):</strong> Mewing Masterclass (2× 45s), Looksmaxx Guru (+18 all), Cope Harder (45s decay immunity).</li>
+            <li><strong style="color:var(--ink);">Tap GRIND</strong> (or press <kbd>Space</kbd>) to run <em>today's</em> routine. Only those two stats get a real bump.</li>
+            <li><strong style="color:var(--ink);">Live the calendar.</strong> Routines change each day. You cannot max every stat on day 3.</li>
+            <li><strong style="color:var(--ink);">Keep clicking.</strong> After a short pause, idle drain starts lowering stats and score. Peak looks decay faster.</li>
+            <li><strong style="color:var(--ink);">Random events</strong> get meaner as you climb. Bad lighting, doomscrolling, bloat, and group chat incidents wreck pumps.</li>
+            <li><strong style="color:var(--ink);">Win condition:</strong> reach 10/10 and hold it through day 26. A day-8 gigachad is still mid.</li>
+            <li><strong style="color:var(--ink);">Power-ups (ad):</strong> Mewing Masterclass (2× 45s), Looksmaxx Guru (+7 all), Cope Harder (45s decay immunity).</li>
           </ul>
           <p style="color: var(--ink-dim); font-size: 11px; margin-top: 10px; font-style: italic;">
             <strong>Parody.</strong> Satirical sendup of "looksmaxxing" / gym-bro internet culture. Not affiliated with any real program. The advice is fake. Mewing does not work.
@@ -104,11 +114,7 @@
   </footer>
 
   <script src="../assets/js/ads.js?v=20260627-profile-stats-1"></script>
-  <script src="../assets/js/main.js?v=20260717-max-ui"></script>
-  <script src="../assets/js/looksmaxxing.js?v=20260616-save-1"></script>
-  <script>
-    renderAdSlot(document.getElementById("ad-leaderboard"), "leaderboard");
-    renderAdSlot(document.getElementById("ad-rectangle"), "rectangle");
-  </script>
+  <script src="../assets/js/main.js?v=20260826-no-ads-1"></script>
+  <script src="../assets/js/looksmaxxing.js?v=20260814-grind-1"></script>
 </body>
 </html>

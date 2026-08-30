@@ -111,11 +111,13 @@ const RB_GAME_META = {
   "dont-look-gym-girl": { title: "Don't Look at the Gym Girl", scoreIds: ["dont-look-gym-girl"] },
   "doorcrash-no-tip-nitro": { title: "DoorCrash: No Tip Nitro", scoreIds: ["doorcrash"] },
   "drone-hunter": { title: "Drone Hunter", scoreIds: ["dronehunter"] },
+  "inkblood": { title: "Inkblood", scoreIds: ["inkblood"] },
   "escape-poop-cruise": { title: "Escape the Poop Cruise", scoreIds: ["escape-poop-cruise"] },
   "flappy-stonks": { title: "Flappy Stonks", scoreIds: ["flappy-stonks"] },
   "gen-z-driving-simulator": { title: "Gen Z Driving Simulator", scoreIds: ["gen-z-driving-simulator"] },
   "karen-merger": { title: "Complaint Chain", scoreIds: ["karen-merger"] },
   "looksmaxxing-grindset": { title: "Looksmaxxing Grindset", scoreIds: ["looksmax"] },
+  "mr-feast-mansion": { title: "Mr Feast: Last to Eat", scoreIds: ["mr-feast-mansion"] },
   "recursive-reward-labyrinth": { title: "Recursive Reward Labyrinth", scoreIds: ["recursive-reward-labyrinth"] },
   "rizz-craft": { title: "Rizz-Craft", scoreIds: ["rizz-craft"] },
   "scrap-circuit": { title: "Scrap Circuit: Last Chassis Standing", scoreIds: ["scrap-circuit", "scrap-circuit-full"] },
@@ -127,11 +129,15 @@ const RB_GAME_META = {
       "skibidi_toilet_tower_defense_rooftop",
     ],
   },
+  saintfall: { title: "Saintfall", scoreIds: ["saintfall"] },
+  blacksand: { title: "BLACKSAND", scoreIds: ["blacksand"] },
+  "quiet-quitting": { title: "Quiet Quitting", scoreIds: ["quiet-quitting"] },
   "smooth-brain-snacker": { title: "Smooth Brain Snacker", scoreIds: ["smoothbrain"] },
   "storm-area-51": { title: "Storm Area 51: Raid The Base", scoreIds: ["storm-area-51"] },
   "strait-of-hormuz": { title: "Escape the Straight", scoreIds: ["hormuz"] },
   "super-slop-brothers": { title: "Super Slop Brothers", scoreIds: ["super-slop-brothers"] },
   "tardigrade-micro-mayhem": { title: "Tardigrade: Micro Mayhem", scoreIds: ["tardigrade-micro-mayhem"] },
+  "tardigrade-simulator": { title: "Tardigrade Simulator", scoreIds: ["tardigrade-micro-mayhem"] },
   "the-last-signal": { title: "The Last Signal", scoreIds: ["the-last-signal"] },
   "the-optimizer": { title: "The Optimizer", scoreIds: ["the-optimizer"] },
   "the-weight": { title: "The Weight", scoreIds: ["the-weight"] },
@@ -150,7 +156,7 @@ const RB_SCORE_TITLE_OVERRIDES = {
 const RB_GAME_VISUALS = {
   "again": { image: "assets/img/mockup/card-again.jpg?v=20260712-jpg", kind: "Horror" },
   "ai-slop-factory": { image: "assets/img/mockup/card-ai-slop-factory.jpg?v=20260712-jpg", kind: "Arcade" },
-  "apop-demon-hunters": { image: "assets/img/mockup/card-apop-moggers-v3.jpg?v=20260712-jpg", kind: "Side-scroller" },
+  "apop-demon-hunters": { image: "assets/img/mockup/card-apop-moggers-v3.jpg?v=20260712-jpg", kind: "3D Platformer" },
   "big-baby-bum": { image: "assets/img/mockup/card-big-baby-bum-ai-v4.jpg?v=20260712-jpg", kind: "3D Katamari", alt: "Big Baby Bum cover art — a realistic cartoon diapered baby rolls through a sunny neighborhood while broccoli flees" },
   "billionaire-space-race": { image: "assets/img/mockup/card-billionaire-space-race.jpg?v=20260712-jpg", kind: "Lander" },
   "boomer-monopoly": { image: "assets/img/mockup/card-boomer-monopoly.jpg?v=20260712-jpg", kind: "Board" },
@@ -166,27 +172,62 @@ const RB_GAME_VISUALS = {
   "dont-look-gym-girl": { image: "assets/img/mockup/card-gym-girl.jpg?v=20260712-jpg", kind: "Stealth" },
   "doorcrash-no-tip-nitro": { image: "assets/img/mockup/card-doorcrash-no-tip-nitro.jpg?v=20260712-jpg", kind: "3D Runner" },
   "drone-hunter": { image: "assets/img/mockup/card-drone-hunter.jpg?v=20260712-jpg", kind: "Shooter" },
+  "inkblood": {
+    image: "assets/img/inkblood/card-inkblood-ai.jpg?v=20260802-ai-1",
+    kind: "Horde Survivor",
+    alt: "Inkblood cover art: a lone manga swordsman faces a yokai horde beneath a colossal skeleton and crimson ink slashes",
+  },
   "escape-poop-cruise": { image: "assets/img/mockup/card-escape-poop-cruise-v2.jpg?v=20260712-jpg", kind: "Horror FPS" },
   "flappy-stonks": { image: "assets/img/mockup/card-flappy-stonks-funny.jpg?v=20260712-jpg", kind: "Arcade" },
   "gen-z-driving-simulator": { image: "assets/img/mockup/card-gen-z-driving-simulator.jpg?v=20260712-jpg", kind: "3D Driving" },
   "karen-merger": { image: "assets/img/mockup/card-karen-merger.jpg?v=20260712-jpg", kind: "Bubble Merge" },
   "looksmaxxing-grindset": { image: "assets/img/mockup/card-looksmaxxing.png?v=20260611-7", kind: "Sim / Idle" },
-  "mr-feast-mansion": { image: "assets/img/mockup/card-mr-feast.png?v=20260611-7", kind: "Horror" },
+  "mr-feast-mansion": {
+    image: "assets/img/mr-feast/card-mr-feast-last-to-eat-ai-v1.jpg?v=20260825-1",
+    kind: "Stealth Horror",
+    alt: "Mr Feast: Last to Eat cover art with the uncanny host, surveillance cameras, and a banquet feast table",
+  },
   "recursive-reward-labyrinth": { image: "assets/img/agent-games/recursive-reward-labyrinth.jpg?v=20260712-jpg", kind: "Agent Protocol" },
   "rizz-craft": { image: "assets/img/mockup/card-rizz-craft.jpg?v=20260712-jpg", kind: "Sandbox" },
   "scrap-circuit": { image: "assets/img/scrap-circuit/card-scrap-circuit.png?v=20260703-scrap-cover-1", kind: "Retro Car Combat" },
   "skibidi-toilet-tower-defense": { image: "assets/img/mockup/card-skibidi-toilet-tower-defense.jpg?v=20260712-jpg", kind: "Defense" },
+  saintfall: {
+    image: "assets/img/saintfall/card-saintfall.jpg?v=20260805-1",
+    kind: "3D Adventure",
+    alt: "Saintfall cover art: a winged ivory reliquary knight battles a cyan-lit Bloom Matriarch on the road to a storm-wreathed desert cathedral",
+  },
+  blacksand: { image: "assets/img/blacksand/card-blacksand.jpg?v=20260803-1", kind: "Multiplayer FPS", alt: "BLACKSAND cover art: a desert Conquest theatre with armour on a highway and a low sun" },
+  "quiet-quitting": { image: "assets/img/mockup/card-quiet-quitting.jpg", kind: "Arcade", alt: "Quiet Quitting cover art — worker fleeing corporate managers through neon cubicles" },
   "smooth-brain-snacker": { image: "assets/img/mockup/card-smooth-brain-snacker.jpg?v=20260712-jpg", kind: "Arcade" },
   "storm-area-51": { image: "assets/img/storm-area-51/card-storm-area-51.jpg?v=20260712-jpg", kind: "Crowd Heist" },
   "strait-of-hormuz": { image: "assets/img/mockup/card-escape-straight-wide.png?v=20260611-7", kind: "Action" },
   "super-slop-brothers": { image: "assets/img/mockup/card-super-slop-brothers.jpg?v=20260712-jpg", kind: "Fighter" },
   "tardigrade-micro-mayhem": { image: "assets/img/mockup/card-tardigrade-micro-mayhem.jpg?v=20260712-jpg", kind: "3D Sandbox" },
+  "tardigrade-simulator": { image: "assets/img/mockup/card-tardigrade-micro-mayhem.jpg?v=20260712-jpg", kind: "3D Sandbox" },
   "the-last-signal": { image: "assets/img/the-last-signal/poster-ai-v4-title.jpg?v=20260712-jpg", kind: "RTS" },
   "the-optimizer": { image: "assets/img/the-optimizer/card-the-optimizer-ai-v1.jpg?v=20260712-jpg", kind: "Idle Sim", alt: "The Optimizer cover art with a mint terminal and fabricator watched by a giant pink machine eye" },
   "the-weight": { image: "assets/img/mockup/card-the-weight-wide-v2.jpg?v=20260712-jpg", kind: "Horror" },
   "to-the-moon": { image: "assets/img/to-the-moon/card-to-the-moon-hq.jpg?v=20260712-jpg", kind: "Survival" },
   "unhoused-and-unhinged": { image: "assets/img/mockup/card-unhoused-and-unhinged.jpg?v=20260712-jpg", kind: "3D Sandbox" },
 };
+
+const RB_OPTIMIZED_CARD_SLUGS = new Set([
+  "again", "ai-slop-factory", "apop-demon-hunters", "big-baby-bum", "billionaire-space-race",
+  "boomer-monopoly", "brainrot-2048", "consensus-collapse", "crescendo", "debt-breakout",
+  "dont-become-pizza", "dont-fck-with-cats", "dont-look-gym-girl", "doorcrash-no-tip-nitro",
+  "drone-hunter", "echo-loop", "echo-loop-3d", "escape-poop-cruise", "flappy-stonks",
+  "gen-z-driving-simulator", "incident-commander", "inkblood", "karen-merger",
+  "looksmaxxing-grindset", "mr-feast-mansion", "recursive-reward-labyrinth", "rizz-craft",
+  "saintfall", "scrap-circuit", "skibidi-toilet-tower-defense", "smooth-brain-snacker",
+  "storm-area-51", "strait-of-hormuz", "super-slop-brothers", "tardigrade-simulator",
+  "the-last-signal", "the-optimizer", "the-weight", "to-the-moon", "unhoused-and-unhinged",
+]);
+
+RB_OPTIMIZED_CARD_SLUGS.forEach((slug) => {
+  if (!RB_GAME_VISUALS[slug]) return;
+  const cardVersion = slug === "saintfall" ? "20260810-cover-2" : "20260806-1";
+  RB_GAME_VISUALS[slug].image = `assets/img/cards/${slug}.avif?v=${cardVersion}`;
+});
 
 const RB_SLOPWIRE_ARTICLES = [
   { href: "articles/smart-toaster-giving-life-advice.html", label: "Smart Toaster Starts Giving Life Advice After Firmware Update", search: "Smart Toaster Starts Giving Life Advice After Firmware Update fake news satire slopwire toaster breakfast firmware therapy" },
@@ -211,6 +252,7 @@ const RB_GAME_SEARCH_TEXT = {
   "consensus-collapse": "Consensus Collapse agent games ai benchmark treaty negotiation council matrix hidden preferences quorum protocol observation action DSL",
   "recursive-reward-labyrinth": "Recursive Reward Labyrinth agent games ai benchmark json protocol graph planning reward vector command language observation action DSL",
   "drone-hunter": "Drone Hunter duck hunt parody light gun shooting gallery crosshair shoot drones delivery surveillance camera ad-drone peace dove robo dog quota arcade",
+  "inkblood": "Inkblood 血墨 manga horde survivor vampire survivors like black and white ink screentone yokai night parade hundred demons katana greatsword gaki oni gashadokuro nurarihyon blood crimson bullet heaven roguelite",
   "storm-area-51": "Storm Area 51 RSVP Raid alien rescue crowd heist top down stealth tactics searchlights hype alert raider squads fictional sci fi base",
   "dont-become-pizza": "Don't Become Pizza horror private island pizza conspiracy stealth masked elites oven after dark",
   "super-slop-brothers": "Super Slop Brothers platform fighter smash bros parody online multiplayer local multiplayer cpu ai slop rainbot gigachad mr feast skibidi sigma percent knockback stocks blast zone hazards online brawl room codes",
@@ -220,6 +262,7 @@ const RB_GAME_SEARCH_TEXT = {
   "gen-z-driving-simulator": "Gen Z Driving Simulator driving phone road curves steering vibe check distracted driver",
   "again": "Again horror hallway after dark",
   "the-weight": "The Weight sleep paralysis horror after dark entity bedroom 3am wake body",
+  "quiet-quitting": "Quiet Quitting pacman pac-man parody office cubicle maze worker coffee paychecks micromanager hr consultant arcade",
   "smooth-brain-snacker": "Smooth Brain Snacker snake parody brain worm eat smart ideas poop brainrot skibidi rizz gyatt sigma grow tail arcade",
   "brainrot-2048": "Brainrot 2048 merge puzzle sliding tiles npc skibidi rizz sigma gyatt ohio gigachad galaxy brain",
   "unhoused-and-unhinged": "Unhoused and Unhinged low poly 3D sandbox street antics cop chase Tweeker Zombies plunger survival",
@@ -228,20 +271,18 @@ const RB_GAME_SEARCH_TEXT = {
   "tardigrade-micro-mayhem": "Tardigrade Micro Mayhem 3D sandbox low poly microscopic tardigrade",
   "doorcrash-no-tip-nitro": "DoorCrash No Tip Nitro 3D delivery runner food car obstacles",
   "strait-of-hormuz": "Escape the Straight action tanker mines drones",
-  "mr-feast-mansion": "Mr Feast Last to Leave the Mansion horror challenge",
+  "mr-feast-mansion": "Mr Feast Last to Eat reality show competition stealth horror mansion investigation sabotage cameras banquet",
   "looksmaxxing-grindset": "Looksmaxxing Grindset idle sim gym mewing water",
   "boomer-monopoly": "Boomer Monopoly housing board game parody",
-  "apop-demon-hunters": "Apop Demon Moggers side-scroller platformer pop action boyz ii hell",
+  "apop-demon-hunters": "Apop Demon Moggers 3D platformer collectathon pop action boyz ii hell moggadonna lucifer lipsync",
   "skibidi-toilet-tower-defense": "Skibidi Toilet Tower Defense toilets towers camera speaker plunger",
+  saintfall: "Saintfall Vesper IX gilded silence open level third person desert pilgrimage cathedral reliquary fallen colossus gothic sci fi action exploration",
   "dont-look-gym-girl": "Don't Look at the Gym Girl stealth awkward parody",
 };
 
 const RB_SEARCH_SECTIONS = [
-  { href: "search.html", label: "Search Rainbot", search: "search find games articles clips pages slopwire vault directory", type: "page" },
+  { href: "search.html", label: "Search Rainbot", search: "search find games pages vault directory", type: "page" },
   { href: "games.html", label: "Games Vault", search: "games arcade browser free play vault catalog multiplayer agent after dark", type: "page" },
-  { href: "articles.html", label: "The Slopwire", search: "slopwire fake news satire headlines articles feed", type: "page" },
-  { href: "videos.html", label: "Slopwire Clips", search: "slopwire clips video parody reels short form", type: "video" },
-  { href: "videos.html#featured", label: "Area 51 Raid: Clap Alien Cheeks", search: "Area 51 Raid Clap Alien Cheeks slopwire clip funny video aliens found footage", type: "video" },
   { href: "community.html", label: "Community Forum", search: "community forum topics discussion leaderboard scores", type: "page" },
   { href: "after-dark.html", label: "After Dark", search: "after dark horror games vault sleep paralysis", type: "page" },
   { href: "agent-games.html", label: "Agent Games", search: "agent games ai benchmark protocol dsl observation action", type: "page" },
@@ -250,10 +291,19 @@ const RB_SEARCH_SECTIONS = [
 const RB_SEARCH_TYPE_FILTERS = [
   { key: "all", label: "All" },
   { key: "game", label: "Games" },
-  { key: "article", label: "Articles" },
-  { key: "video", label: "Clips" },
   { key: "page", label: "Pages" },
 ];
+
+// Playable routes kept for direct links or in-progress QA, but intentionally
+// omitted from the public discovery surfaces until they are a catalog release.
+const RB_UNLISTED_GAME_SLUGS = new Set([
+  "again",
+  "apop-demon-hunters",
+  "blacksand",
+  "drowned-orrery",
+  "tardigrade-micro-mayhem",
+  "the-weight",
+]);
 
 let rbSearchIndexCache = null;
 let rbSearchDocBound = false;
@@ -272,6 +322,7 @@ function getSearchIndex() {
   if (rbSearchIndexCache) return rbSearchIndexCache;
   const items = [];
   Object.entries(RB_GAME_SEARCH_TEXT).forEach(([slug, search]) => {
+    if (RB_UNLISTED_GAME_SLUGS.has(slug)) return;
     const visuals = RB_GAME_VISUALS[slug];
     items.push({
       href: `games/${slug}.html`,
@@ -279,14 +330,6 @@ function getSearchIndex() {
       search: normalizeSearchText(search),
       type: "game",
       kind: visuals?.kind || "Game",
-    });
-  });
-  RB_SLOPWIRE_ARTICLES.forEach((article) => {
-    items.push({
-      href: article.href,
-      label: article.label,
-      search: normalizeSearchText(article.search),
-      type: "article",
     });
   });
   RB_SEARCH_SECTIONS.forEach((section) => {
@@ -396,6 +439,13 @@ function navigateToSearchPage(query, options = {}) {
 
 const RB_DAILY_CHALLENGES = [
   {
+    slug: "quiet-quitting",
+    metric: "score",
+    target: 2500,
+    title: "Consultant Invoice",
+    objective: "Bill $2,500+ severance payout in Quiet Quitting.",
+  },
+  {
     slug: "brainrot-2048",
     metric: "score",
     target: 2048,
@@ -440,11 +490,12 @@ const RB_DAILY_CHALLENGES = [
 ];
 
 const HOME_COMMUNITY_COMMENT_TARGETS = [
+  { contentType: "game", contentId: "quiet-quitting", title: "Quiet Quitting", href: "games/quiet-quitting.html", kicker: "Game thread" },
+  { contentType: "game", contentId: "inkblood", title: "Inkblood", href: "games/inkblood.html", kicker: "Game thread" },
   { contentType: "game", contentId: "escape-poop-cruise", title: "Escape the Poop Cruise", href: "games/escape-poop-cruise.html", kicker: "Game thread" },
   { contentType: "game", contentId: "rizz-craft", title: "Rizz-Craft", href: "games/rizz-craft.html", kicker: "Game thread" },
   { contentType: "game", contentId: "brainrot-2048", title: "Brainrot 2048", href: "games/brainrot-2048.html", kicker: "Game thread" },
-  { contentType: "article", contentId: "local-man-shadowbanned-by-own-fridge", title: "Shadowbanned By Own Refrigerator", href: "articles/local-man-shadowbanned-by-own-fridge.html", kicker: "Slopwire" },
-  { contentType: "video", contentId: "area-51-raid-clap-alien-cheeks", title: "Area 51 Raid", href: "videos.html#featured", kicker: "The Slopwire" },
+  { contentType: "game", contentId: "ai-slop-factory", title: "AI Slop Factory", href: "games/ai-slop-factory.html", kicker: "Game thread" },
 ];
 
 function getLocalSaveCount() {
@@ -542,6 +593,21 @@ window.RBProfileAvatars = {
   },
 };
 
+function rainbotRandomGameCandidates() {
+  const current = currentGameSlug();
+  return Object.keys(RB_GAME_META).filter((slug) => slug !== current && !RB_UNLISTED_GAME_SLUGS.has(slug));
+}
+
+function openRandomRainbotGame() {
+  const candidates = rainbotRandomGameCandidates();
+  if (!candidates.length) return;
+  const randomValue = window.crypto && typeof window.crypto.getRandomValues === "function"
+    ? window.crypto.getRandomValues(new Uint32Array(1))[0]
+    : Math.floor(Math.random() * 0xffffffff);
+  const slug = candidates[randomValue % candidates.length];
+  window.location.href = `${RB_BASE}games/${slug}.html`;
+}
+
 function renderNav(state = RB.state) {
   const slot = document.getElementById("nav-slot");
   if (!slot) return;
@@ -552,25 +618,20 @@ function renderNav(state = RB.state) {
     : "";
   const path = location.pathname;
   const isHome = path.endsWith("/") || path.endsWith("/index.html") || path === "";
-  const isSlopwire = path.endsWith("/articles.html") || path.includes("/articles/") || path.endsWith("/videos.html") || path.includes("/videos/");
   const isAgentGamesRoute = path.endsWith("/agent-games.html") || path.includes("/recursive-reward-labyrinth") || path.includes("/consensus-collapse") || path.includes("/incident-commander");
   const isAfterDarkRoute = path.endsWith("/after-dark.html") || path.includes("/again.html") || path.includes("/mr-feast-mansion");
   const isForum = path.endsWith("/community.html");
-  const isGames = !isSlopwire && !isForum && (
+  const isGames = !isForum && (
     path.endsWith("/games.html") ||
     path.includes("/games/") ||
     isAgentGamesRoute ||
     isAfterDarkRoute
   );
-  const localProfile = RB && typeof RB.getLocalProfile === "function" ? RB.getLocalProfile() : {};
-  const localName = cleanVisibleGameTitle(localProfile.displayName || "");
-  const localProfileLabel = localName && localName !== "Rainbot Player" ? localName : "Profile";
-  const authLabel = backendState.user ? escapeHtml(getBackendDisplayName(backendState)) : escapeHtml(localProfileLabel);
+  const authLabel = backendState.user ? escapeHtml(getBackendDisplayName(backendState)) : "Log in";
 
   const navLinksMarkup = `
       <a href="${RB_BASE}" class="${isHome ? "is-active" : ""}">Home</a>
       <a href="${RB_BASE}games.html" class="${isGames ? "is-active" : ""}">Games</a>
-      <a href="${RB_BASE}articles.html" class="${isSlopwire ? "is-active" : ""}">The Slopwire</a>
       <a href="${RB_BASE}community.html" class="${isForum ? "is-active" : ""}">Community</a>
   `;
 
@@ -590,7 +651,7 @@ function renderNav(state = RB.state) {
       <div class="nav__search-wrap">
         <form class="nav__search" role="search">
           <label class="sr-only" for="rb-search">Search Rainbot</label>
-          <input id="rb-search" type="search" placeholder="Search games, articles..." autocomplete="off" aria-autocomplete="list" aria-controls="rb-search-results" />
+          <input id="rb-search" type="search" placeholder="Search games..." autocomplete="off" aria-autocomplete="list" aria-controls="rb-search-results" />
           <button type="button" class="nav__search-toggle" id="rb-search-toggle" aria-label="Open search" aria-expanded="false" aria-controls="rb-search">
             <svg class="nav__search-icon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false">
               <circle cx="10.5" cy="10.5" r="5.5" fill="none" stroke="currentColor" stroke-width="2"></circle>
@@ -601,26 +662,35 @@ function renderNav(state = RB.state) {
         <div class="nav__search-results" id="rb-search-results" hidden role="listbox" aria-label="Search results"></div>
       </div>
       <div class="nav__actions">
+        <button type="button" id="rb-chaos-game" class="nav__cta nav__cta--chaos" title="Launch a random game">
+          <span aria-hidden="true">↻</span><span>Chaos</span>
+        </button>
         ${proBadge}
         ${
           state.isPro
-            ? `<a href="#" id="rb-manage-pro" class="nav__cta nav__cta--pro">Manage</a>`
-            : `<a href="#" id="rb-go-pro" class="nav__cta nav__cta--pro">Pro Preview</a>`
+            ? `<button type="button" id="rb-manage-pro" class="nav__cta nav__cta--pro">Manage</button>`
+            : `<button type="button" id="rb-go-pro" class="nav__cta nav__cta--pro">Pro Preview</button>`
         }
-        <a href="#" id="rb-login" class="nav__cta nav__cta--login">${authLabel}</a>
+        <button type="button" id="rb-login" class="nav__cta nav__cta--login">${authLabel}</button>
       </div>
     </div>
     <nav class="nav__drawer" id="rb-nav-drawer" aria-label="Site sections" hidden>
       ${navLinksMarkup}
       <div class="nav__drawer-actions">
-        <a href="#" id="rb-drawer-pro">${state.isPro ? "Manage Pro" : "Pro Preview"}</a>
-        <a href="#" id="rb-drawer-profile">${authLabel}</a>
+        <button type="button" id="rb-drawer-chaos">Random game</button>
+        <button type="button" id="rb-drawer-pro">${state.isPro ? "Manage Pro" : "Pro Preview"}</button>
+        <button type="button" id="rb-drawer-profile">${authLabel}</button>
       </div>
     </nav>
   `;
 
   bindSearch(slot);
   bindNavMenu(slot);
+
+  const chaosGame = document.getElementById("rb-chaos-game");
+  if (chaosGame) chaosGame.addEventListener("click", openRandomRainbotGame);
+  const drawerChaos = document.getElementById("rb-drawer-chaos");
+  if (drawerChaos) drawerChaos.addEventListener("click", openRandomRainbotGame);
 
   const goPro = document.getElementById("rb-go-pro");
   if (goPro) goPro.addEventListener("click", (e) => {
@@ -677,8 +747,8 @@ function bindNavMenu(root) {
     setDrawerOpen(drawer.hidden);
   });
 
-  drawer.querySelectorAll("a").forEach((link) => {
-    link.addEventListener("click", () => setDrawerOpen(false));
+  drawer.querySelectorAll("a, button").forEach((control) => {
+    control.addEventListener("click", () => setDrawerOpen(false));
   });
 
   if (!rbNavMenuDocBound) {
@@ -968,6 +1038,15 @@ function initSearchPage() {
   const typeButtons = Array.from(page.querySelectorAll("[data-search-type-filter]"));
   if (!form || !input || !resultsEl) return;
 
+  const searchIndex = getSearchIndex();
+  const searchStats = page.querySelectorAll(".search-hero__stats span b");
+  const indexedCounts = ["game", "article", "video"].map((type) => (
+    searchIndex.filter((item) => item.type === type).length
+  ));
+  searchStats.forEach((element, index) => {
+    if (Number.isFinite(indexedCounts[index])) element.textContent = String(indexedCounts[index]);
+  });
+
   const readStateFromUrl = () => {
     const params = new URLSearchParams(location.search);
     const type = params.get("type") || "all";
@@ -1139,7 +1218,10 @@ const RBGameActivity = (() => {
     try {
       const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
       return {
-        favorites: Array.isArray(saved?.favorites) ? saved.favorites : [],
+        favorites: Array.from(new Set(
+          (Array.isArray(saved?.favorites) ? saved.favorites : [])
+            .filter((slug) => typeof slug === "string" && slug.trim())
+        )),
         games: saved?.games && typeof saved.games === "object" ? saved.games : {},
       };
     } catch (error) {
@@ -1190,6 +1272,8 @@ const RBGameActivity = (() => {
   };
 
   const isFavorite = (slug) => read().favorites.includes(slug);
+  const favoriteSlugs = () => read().favorites.slice();
+  const lastPlayedAtFor = (slug) => Date.parse(read().games[slug]?.lastPlayedAt || "") || 0;
   const toggleFavorite = (slug) => {
     const activity = read();
     const favorites = new Set(activity.favorites);
@@ -1197,11 +1281,15 @@ const RBGameActivity = (() => {
     else favorites.add(slug);
     activity.favorites = Array.from(favorites);
     write(activity);
-    return favorites.has(slug);
+    const isNowFavorite = favorites.has(slug);
+    window.dispatchEvent(new CustomEvent("rainbot:favoriteschange", {
+      detail: { slug, isFavorite: isNowFavorite },
+    }));
+    return isNowFavorite;
   };
   const secondsFor = (slug) => Math.max(0, Number(read().games[slug]?.seconds) || 0);
 
-  return { init, isFavorite, toggleFavorite, secondsFor };
+  return { init, isFavorite, favoriteSlugs, lastPlayedAtFor, toggleFavorite, secondsFor, storageKey: STORAGE_KEY };
 })();
 
 function formatGamePlayTime(seconds) {
@@ -1222,6 +1310,9 @@ function initGamesCatalog() {
   const sortSelect = catalog.querySelector("[data-games-sort]");
   const searchInput = catalog.querySelector("[data-games-search]");
   const resetButton = catalog.querySelector("[data-games-reset]");
+  const favoritesButton = catalog.querySelector("[data-games-favorites]");
+  const favoritesCountEl = catalog.querySelector("[data-games-favorites-count]");
+  const favoritesIconEl = catalog.querySelector("[data-games-favorites-icon]");
   const modeButtons = Array.from(catalog.querySelectorAll("[data-games-section-filter]"));
   const countEl = catalog.querySelector("[data-games-count]");
   const totalEl = document.querySelector("[data-games-total]");
@@ -1264,8 +1355,6 @@ function initGamesCatalog() {
   const afterDarkGameHrefs = new Set([
     "games/escape-poop-cruise.html",
     "games/dont-become-pizza.html",
-    "games/again.html",
-    "games/the-weight.html",
     "games/mr-feast-mansion.html",
   ]);
   const multiplayerGameHrefs = new Set([
@@ -1293,7 +1382,8 @@ function initGamesCatalog() {
       || text.includes("online brawl")) {
       tags.add("multiplayer");
     }
-    if (afterDarkGameHrefs.has(href) || text.includes("rainbot after dark") || text.includes(" after dark")) {
+    const metaDetail = card.querySelector(".directory-card__meta em")?.textContent.trim() || "";
+    if (afterDarkGameHrefs.has(href) || text.includes("rainbot after dark") || metaDetail.includes("After Dark")) {
       tags.add("after-dark");
     }
     return tags;
@@ -1425,41 +1515,59 @@ function initGamesCatalog() {
       multiplayerBadge.textContent = "Multiplayer";
       badges.append(multiplayerBadge);
     }
-    if (body && !body.querySelector(".directory-card__activity")) {
-      const activity = document.createElement("span");
+    let activity = body?.querySelector(".directory-card__activity");
+    if (body && !activity) {
+      activity = document.createElement("span");
       activity.className = "directory-card__activity";
-      const favorite = document.createElement("span");
-      favorite.className = "directory-card__favorite";
-      favorite.setAttribute("role", "button");
-      favorite.setAttribute("tabindex", "0");
-      const syncFavorite = (isFavorite = RBGameActivity.isFavorite(slug)) => {
-        favorite.classList.toggle("is-favorite", isFavorite);
-        favorite.setAttribute("aria-pressed", String(isFavorite));
-        favorite.setAttribute("aria-label", `${isFavorite ? "Remove" : "Add"} ${title} ${isFavorite ? "from" : "to"} favorites`);
-        favorite.textContent = isFavorite ? "♥ Favorite" : "♡ Favorite";
-      };
-      const toggleFavorite = (event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        syncFavorite(RBGameActivity.toggleFavorite(slug));
-      };
-      favorite.addEventListener("click", toggleFavorite);
-      favorite.addEventListener("keydown", (event) => {
-        if (event.key === "Enter" || event.key === " ") toggleFavorite(event);
-      });
-      syncFavorite();
+      body.append(activity);
+    }
+    activity?.querySelector(".directory-card__favorite")?.remove();
+    if (activity && !activity.querySelector(".directory-card__playtime")) {
       const playTime = document.createElement("span");
       playTime.className = "directory-card__playtime";
       playTime.textContent = `◷ ${formatGamePlayTime(RBGameActivity.secondsFor(slug))}`;
-      activity.append(favorite, playTime);
-      body.append(activity);
+      activity.append(playTime);
     }
+
+    const sectionKey = card.dataset.gameSection || card.closest("[data-games-section]")?.dataset.gamesSection || sectionForCard(card);
+    let cardShell = card.parentElement?.classList.contains("directory-card-shell") ? card.parentElement : null;
+    if (!cardShell) {
+      cardShell = document.createElement("article");
+      cardShell.className = "directory-card-shell";
+      card.parentNode?.insertBefore(cardShell, card);
+      cardShell.append(card);
+    }
+    let favoriteButton = cardShell.querySelector(":scope > .directory-card__favorite");
+    if (!favoriteButton) {
+      favoriteButton = document.createElement("button");
+      favoriteButton.type = "button";
+      favoriteButton.className = "directory-card__favorite";
+      favoriteButton.innerHTML = '<span aria-hidden="true">♡</span>';
+      cardShell.append(favoriteButton);
+      favoriteButton.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        RBGameActivity.toggleFavorite(slug);
+      });
+    }
+    const syncFavorite = (isFavorite = RBGameActivity.isFavorite(slug)) => {
+      favoriteButton.classList.toggle("is-favorite", isFavorite);
+      favoriteButton.setAttribute("aria-pressed", String(isFavorite));
+      favoriteButton.setAttribute("aria-label", `${isFavorite ? "Remove" : "Add"} ${title} ${isFavorite ? "from" : "to"} favorites`);
+      favoriteButton.title = `${isFavorite ? "Remove from" : "Add to"} favorites`;
+      const icon = favoriteButton.querySelector("span");
+      if (icon) icon.textContent = isFavorite ? "♥" : "♡";
+    };
+    syncFavorite();
 
     return {
       card,
+      node: cardShell,
+      slug,
+      syncFavorite,
       order,
       title: title || `Game ${order + 1}`,
-      sectionKey: card.dataset.gameSection || card.closest("[data-games-section]")?.dataset.gamesSection || sectionForCard(card),
+      sectionKey,
       filterTags,
       category,
       categoryKey: categoryKey(category),
@@ -1471,6 +1579,25 @@ function initGamesCatalog() {
   });
   if (!cards.length) return;
   if (totalEl) totalEl.textContent = String(cards.length);
+  const sectionCounts = {
+    all: cards.length,
+    human: cards.filter((item) => item.sectionKey === "human").length,
+    agent: cards.filter((item) => item.sectionKey === "agent").length,
+    multiplayer: cards.filter((item) => item.filterTags.has("multiplayer")).length,
+    "after-dark": cards.filter((item) => item.filterTags.has("after-dark")).length,
+  };
+  modeButtons.forEach((button) => {
+    const key = button.dataset.gamesSectionFilter;
+    const count = sectionCounts[key] || 0;
+    let badge = button.querySelector(".games-modebar__count");
+    if (!badge) {
+      badge = document.createElement("em");
+      badge.className = "games-modebar__count";
+      button.append(badge);
+    }
+    badge.textContent = String(count);
+    button.setAttribute("aria-label", `${button.querySelector("b")?.textContent || key}: ${count} games`);
+  });
 
   const categoryLabels = new Map();
   cards.forEach((item) => {
@@ -1485,13 +1612,34 @@ function initGamesCatalog() {
       categorySelect.append(option);
     });
 
+  const initialCatalogParams = new URLSearchParams(location.search);
+  const initialCategory = initialCatalogParams.get("category") || "all";
+  const initialSort = initialCatalogParams.get("sort") || "featured";
+  const allowedSorts = new Set(["featured", "recent", "favorites", "new", "popular", "category", "az"]);
   const state = {
     section: sectionKeyFromHash(),
-    category: "all",
-    sort: "featured",
-    search: normalize(new URLSearchParams(location.search).get("q") || ""),
+    category: categorySelect.querySelector(`option[value="${CSS.escape(initialCategory)}"]`) ? initialCategory : "all",
+    sort: allowedSorts.has(initialSort) ? initialSort : "featured",
+    search: normalize(initialCatalogParams.get("q") || ""),
+    favoritesOnly: initialCatalogParams.get("favorites") === "1",
   };
+  categorySelect.value = state.category;
+  sortSelect.value = state.sort;
   if (searchInput) searchInput.value = state.search;
+
+  const syncCatalogUrl = () => {
+    if (!history.replaceState) return;
+    const url = new URL(location.href);
+    if (state.category !== "all") url.searchParams.set("category", state.category);
+    else url.searchParams.delete("category");
+    if (state.sort !== "featured") url.searchParams.set("sort", state.sort);
+    else url.searchParams.delete("sort");
+    if (state.search) url.searchParams.set("q", state.search);
+    else url.searchParams.delete("q");
+    if (state.favoritesOnly) url.searchParams.set("favorites", "1");
+    else url.searchParams.delete("favorites");
+    history.replaceState(null, "", url);
+  };
 
   const syncModeButtons = () => {
     modeButtons.forEach((button) => {
@@ -1501,8 +1649,29 @@ function initGamesCatalog() {
     });
   };
 
-  const sortCards = () => {
+  const syncFavoritesControl = (favoriteSet) => {
+    if (favoritesCountEl) favoritesCountEl.textContent = String(favoriteSet.size);
+    if (favoritesIconEl) favoritesIconEl.textContent = state.favoritesOnly ? "♥" : "♡";
+    if (favoritesButton) {
+      favoritesButton.classList.toggle("is-active", state.favoritesOnly);
+      favoritesButton.setAttribute("aria-pressed", String(state.favoritesOnly));
+      favoritesButton.setAttribute(
+        "aria-label",
+        `${state.favoritesOnly ? "Show all games" : "Show favorite games"}. ${favoriteSet.size} saved.`
+      );
+    }
+  };
+
+  const sortCards = (favoriteSet) => {
     const sorted = cards.slice().sort((a, b) => {
+      if (state.sort === "favorites") {
+        const favoriteDifference = Number(favoriteSet.has(b.slug)) - Number(favoriteSet.has(a.slug));
+        return favoriteDifference || (a.order - b.order);
+      }
+      if (state.sort === "recent") {
+        const recentDifference = RBGameActivity.lastPlayedAtFor(b.slug) - RBGameActivity.lastPlayedAtFor(a.slug);
+        return recentDifference || (a.order - b.order);
+      }
       if (state.sort === "new") {
         return (b.newRank - a.newRank) || (a.order - b.order);
       }
@@ -1520,14 +1689,15 @@ function initGamesCatalog() {
 
     sorted.forEach((item) => {
       const sectionGrid = sectionGrids.get(item.sectionKey) || grid;
-      sectionGrid.append(item.card);
+      sectionGrid.append(item.node);
     });
   };
 
   const applyFilters = () => {
     state.category = categorySelect.value;
     state.sort = sortSelect.value;
-    sortCards();
+    const favoriteSet = new Set(RBGameActivity.favoriteSlugs());
+    sortCards(favoriteSet);
 
     let visible = 0;
     const sectionVisible = new Map(sectionEls.map((section) => [section.key, 0]));
@@ -1539,13 +1709,29 @@ function initGamesCatalog() {
         || (state.section === "after-dark" && item.filterTags.has("after-dark"));
       const categoryMatch = state.category === "all" || item.categoryKey === state.category;
       const searchMatch = !state.search || item.searchText.includes(state.search);
-      const show = sectionMatch && categoryMatch && searchMatch;
-      item.card.toggleAttribute("hidden", !show);
+      const favoriteMatch = !state.favoritesOnly || favoriteSet.has(item.slug);
+      const show = sectionMatch && categoryMatch && searchMatch && favoriteMatch;
+      item.node.toggleAttribute("hidden", !show);
+      item.syncFavorite(favoriteSet.has(item.slug));
       if (show) {
         visible += 1;
         sectionVisible.set(item.sectionKey, (sectionVisible.get(item.sectionKey) || 0) + 1);
       }
     });
+
+    const humanSection = sectionEls.find((item) => item.key === "human");
+    if (humanSection) {
+      const visibleConfig = state.section === "multiplayer" || state.section === "after-dark"
+        ? sectionConfigByKey.get(state.section)
+        : sectionConfigByKey.get("human");
+      const eyebrow = humanSection.section.querySelector(".games-section__eyebrow");
+      const heading = humanSection.section.querySelector("h3");
+      const deck = humanSection.section.querySelector(".games-section__header p");
+      if (eyebrow) eyebrow.textContent = visibleConfig.eyebrow;
+      if (heading) heading.textContent = visibleConfig.title;
+      if (deck) deck.textContent = visibleConfig.deck;
+      humanSection.section.classList.toggle("games-section--filter-view", state.section === "multiplayer" || state.section === "after-dark");
+    }
 
     sectionEls.forEach((item) => {
       const sectionCount = sectionVisible.get(item.key) || 0;
@@ -1554,12 +1740,23 @@ function initGamesCatalog() {
     });
 
     if (countEl) {
-      countEl.textContent = visible === cards.length
+      countEl.textContent = state.favoritesOnly
+        ? `${visible} favorite ${visible === 1 ? "game" : "games"}`
+        : visible === cards.length
         ? `${cards.length} games online`
         : `${visible} of ${cards.length} games`;
     }
-    if (emptyEl) emptyEl.hidden = visible !== 0;
+    if (emptyEl) {
+      emptyEl.hidden = visible !== 0;
+      emptyEl.textContent = state.favoritesOnly && favoriteSet.size === 0
+        ? "No favorites yet. Tap a heart on any game to save it here."
+        : state.favoritesOnly
+          ? "No favorite games match those filters."
+          : "No games match those filters.";
+    }
+    syncFavoritesControl(favoriteSet);
     syncModeButtons();
+    syncCatalogUrl();
   };
 
   window.RBGamesCatalog = {
@@ -1577,6 +1774,7 @@ function initGamesCatalog() {
     },
     reset() {
       state.section = "all";
+      state.favoritesOnly = false;
       categorySelect.value = "all";
       sortSelect.value = "featured";
       state.search = "";
@@ -1586,6 +1784,9 @@ function initGamesCatalog() {
       if (history.replaceState) {
         const url = new URL(location.href);
         url.searchParams.delete("q");
+        url.searchParams.delete("category");
+        url.searchParams.delete("sort");
+        url.searchParams.delete("favorites");
         url.hash = "";
         history.replaceState(null, "", url);
       }
@@ -1595,7 +1796,7 @@ function initGamesCatalog() {
 
   modeButtons.forEach((button) => {
     button.addEventListener("click", () => {
-      window.RBGamesCatalog.setSection(button.dataset.gamesSectionFilter);
+      window.RBGamesCatalog.setSection(button.dataset.gamesSectionFilter, true);
     });
   });
   window.addEventListener("hashchange", () => {
@@ -1608,8 +1809,52 @@ function initGamesCatalog() {
     applyFilters();
   });
   if (resetButton) resetButton.addEventListener("click", () => window.RBGamesCatalog.reset());
+  if (favoritesButton) favoritesButton.addEventListener("click", () => {
+    state.favoritesOnly = !state.favoritesOnly;
+    applyFilters();
+  });
+  window.addEventListener("rainbot:favoriteschange", applyFilters);
+  window.addEventListener("storage", (event) => {
+    if (event.key === RBGameActivity.storageKey) applyFilters();
+  });
 
   applyFilters();
+}
+
+function restoreModalFocus(preferred, fallbackSelector) {
+  const focusBestTarget = () => {
+    const target = preferred?.isConnected ? preferred : document.querySelector(fallbackSelector);
+    if (target && typeof target.focus === "function") target.focus();
+  };
+  focusBestTarget();
+  window.setTimeout(() => {
+    if (document.activeElement === document.body) focusBestTarget();
+  }, 120);
+}
+
+function keepModalFocus(event, root, close) {
+  if (event.key === "Escape") {
+    event.preventDefault();
+    close();
+    return;
+  }
+  if (event.key !== "Tab") return;
+  const focusable = Array.from(root.querySelectorAll(
+    "a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex='-1'])"
+  )).filter((element) => !element.hidden && element.getClientRects().length);
+  if (!focusable.length) {
+    event.preventDefault();
+    return;
+  }
+  const first = focusable[0];
+  const last = focusable[focusable.length - 1];
+  if (event.shiftKey && document.activeElement === first) {
+    event.preventDefault();
+    last.focus();
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault();
+    first.focus();
+  }
 }
 
 function openProModal(defaultPlan = "monthly") {
@@ -1622,7 +1867,7 @@ function openProModal(defaultPlan = "monthly") {
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="rb-pro-preview-title">
       <div class="modal__title" id="rb-pro-preview-title">Rainbot Pro Preview</div>
       <div class="modal__body">
-        Pro is still in the lab. The plan is an ad-free arcade, early access, and supporter perks—but checkout is not live yet.
+        Pro is still in the lab. The plan is early access and supporter perks—but checkout is not live yet.
       </div>
       <div class="modal__actions">
         <a class="btn btn--primary" id="rb-pro-updates" href="mailto:hello@rainbotgaming.com?subject=Rainbot%20Pro%20launch%20updates">Get launch updates</a>
@@ -1633,18 +1878,14 @@ function openProModal(defaultPlan = "monthly") {
   document.body.appendChild(backdrop);
   const closePreview = () => {
     backdrop.remove();
-    if (returnFocus && typeof returnFocus.focus === "function") returnFocus.focus();
+    restoreModalFocus(returnFocus, "#rb-go-pro");
   };
   backdrop.querySelector("#rb-pro-updates")?.focus();
   backdrop.querySelector("#rb-close-pro").addEventListener("click", closePreview);
   backdrop.addEventListener("click", (event) => {
     if (event.target === backdrop) closePreview();
   });
-  backdrop.addEventListener("keydown", (event) => {
-    if (event.key !== "Escape") return;
-    event.preventDefault();
-    closePreview();
-  });
+  backdrop.addEventListener("keydown", (event) => keepModalFocus(event, backdrop, closePreview));
 }
 
 function setModalStatus(root, message, kind = "") {
@@ -1654,129 +1895,155 @@ function setModalStatus(root, message, kind = "") {
   status.dataset.kind = kind;
 }
 
-function openAuthModal() {
-  if (document.getElementById("rb-auth-modal")) return;
+function openAuthModal(initialMode = "login") {
+  const existingModal = document.getElementById("rb-auth-modal");
+  if (existingModal) {
+    existingModal.querySelector("input:not([type='hidden']), button")?.focus();
+    return;
+  }
   const backendState = getBackendState();
-  const localProfile = getLocalProfileSnapshot();
-  const localProfileName = cleanVisibleGameTitle(localProfile.displayName || "");
-  const signupNameValue = localProfileName && localProfileName !== "Rainbot Player" ? localProfileName : "";
+  const returnFocus = document.activeElement;
   const backdrop = document.createElement("div");
   backdrop.className = "modal-backdrop modal-backdrop--open";
   backdrop.id = "rb-auth-modal";
   const setupBody = `
-    <div class="modal__body">
-      Rainbot accounts are staged, but Supabase is not connected yet. Add your project URL and anon key in <code>assets/js/supabase-config.js</code>, then run the SQL in <code>supabase/migrations</code>.
-    </div>
-    <div class="modal__actions">
-      <button class="btn btn--secondary" id="rb-close-auth">Got it</button>
+    <div class="rb-auth-unavailable">
+      <strong>Account login is temporarily unavailable.</strong>
+      <span>You can still play every Rainbot game while we reconnect cloud accounts.</span>
     </div>
   `;
   const loginBody = `
-    <div class="rb-auth-tabs" role="tablist" aria-label="Login method">
-      <button class="rb-auth-tab is-active" type="button" role="tab" aria-selected="true" data-auth-mode="password">Password</button>
-      <button class="rb-auth-tab" type="button" role="tab" aria-selected="false" data-auth-mode="magic">Magic Link</button>
+    <div class="rb-auth-heading">
+      <span class="rb-auth-kicker">Player account</span>
+      <h2 data-auth-heading>Welcome back</h2>
+      <p data-auth-copy>Log in to sync your saves, scores, and community profile.</p>
     </div>
-    <form class="rb-auth-form rb-auth-panel" id="rb-password-auth-form" data-auth-panel="password">
-      <label class="rb-form-field" for="rb-signup-display-name">
-        <span>Player Name</span>
-        <input id="rb-signup-display-name" type="text" autocomplete="nickname" maxlength="32" placeholder="Rainbot Player" value="${escapeHtml(signupNameValue)}" />
+    <div class="rb-auth-tabs" role="tablist" aria-label="Account options">
+      <button class="rb-auth-tab is-active" id="rb-auth-login-tab" type="button" role="tab" aria-selected="true" aria-controls="rb-login-form" data-auth-mode="login">Log in</button>
+      <button class="rb-auth-tab" id="rb-auth-create-tab" type="button" role="tab" aria-selected="false" aria-controls="rb-create-form" data-auth-mode="create">Create account</button>
+    </div>
+    <form class="rb-auth-form rb-auth-panel" id="rb-login-form" role="tabpanel" aria-labelledby="rb-auth-login-tab" data-auth-panel="login">
+      <label class="rb-form-field" for="rb-login-identifier">
+        <span>Username</span>
+        <input id="rb-login-identifier" type="text" autocomplete="username" inputmode="email" placeholder="you@example.com" required />
+        <small>Use the email connected to your Rainbot username.</small>
       </label>
-      <label class="rb-form-field" for="rb-password-email">
-        <span>Email</span>
-        <input id="rb-password-email" type="email" autocomplete="email" placeholder="you@example.com" required />
+      <label class="rb-form-field" for="rb-login-password">
+        <span class="rb-auth-password-label"><span>Password</span><button id="rb-reset-password" type="button">Forgot password?</button></span>
+        <input id="rb-login-password" type="password" autocomplete="current-password" minlength="8" placeholder="Enter your password" required />
       </label>
-      <label class="rb-form-field" for="rb-auth-password">
-        <span>Password</span>
-        <input id="rb-auth-password" type="password" autocomplete="current-password" minlength="8" required />
-      </label>
-      <div class="rb-auth-actions">
-        <button class="btn btn--primary" type="submit">Sign In</button>
-        <button class="btn btn--secondary" id="rb-create-account" type="button">Create Account</button>
-        <button class="btn btn--ghost" id="rb-reset-password" type="button">Reset Password</button>
-      </div>
+      <button class="btn btn--primary rb-auth-submit" type="submit">Log in</button>
     </form>
-    <form class="rb-auth-form rb-auth-panel" id="rb-magic-auth-form" data-auth-panel="magic" hidden>
-      <label class="rb-form-field" for="rb-magic-email">
-        <span>Email</span>
-        <input id="rb-magic-email" type="email" autocomplete="email" placeholder="you@example.com" required />
+    <form class="rb-auth-form rb-auth-panel" id="rb-create-form" role="tabpanel" aria-labelledby="rb-auth-create-tab" data-auth-panel="create" hidden>
+      <label class="rb-form-field" for="rb-create-username">
+        <span>Username</span>
+        <input id="rb-create-username" type="text" autocomplete="nickname" minlength="2" maxlength="32" placeholder="Choose a player name" required />
       </label>
-      <button class="btn btn--primary" type="submit">Send Magic Link</button>
+      <label class="rb-form-field" for="rb-create-email">
+        <span>Email</span>
+        <input id="rb-create-email" type="email" autocomplete="email" placeholder="you@example.com" required />
+      </label>
+      <label class="rb-form-field" for="rb-create-password">
+        <span>Password</span>
+        <input id="rb-create-password" type="password" autocomplete="new-password" minlength="8" placeholder="At least 8 characters" required />
+      </label>
+      <button class="btn btn--primary rb-auth-submit" type="submit">Create account</button>
     </form>
     <div class="rb-auth-divider"><span>or</span></div>
-    <button class="btn btn--secondary rb-google-button" id="rb-google-auth" type="button">Continue with Google</button>
-    <p class="modal__body rb-modal-note">Use the same login later for cloud saves, high scores, profile, forum posts, and comments.</p>
-    <div class="modal__actions">
-      <button class="btn btn--ghost" id="rb-close-auth" type="button">Close</button>
-    </div>
+    <button class="rb-google-button" id="rb-google-auth" type="button">
+      <img src="${RB_BASE}assets/img/google-g.svg" alt="" width="20" height="20" />
+      <span>Sign in with Google</span>
+    </button>
+    <p class="rb-modal-note">One account keeps your cloud saves, high scores, profile, and community activity together.</p>
   `;
   backdrop.innerHTML = `
-    <div class="modal rb-account-modal" role="dialog" aria-modal="true" aria-labelledby="rb-auth-title">
-      <div class="modal__title" id="rb-auth-title">Rainbot Account</div>
+    <div class="modal rb-account-modal rb-auth-modal" role="dialog" aria-modal="true" aria-labelledby="rb-auth-title">
+      <div class="rb-auth-topbar">
+        <div class="rb-auth-brand">
+          <span aria-hidden="true">RB</span>
+          <strong id="rb-auth-title">Rainbot Account</strong>
+        </div>
+        <button class="rb-auth-close" id="rb-close-auth" type="button" aria-label="Close account window">&times;</button>
+      </div>
       ${backendState.configured ? loginBody : setupBody}
-      <p class="rb-modal-status" data-modal-status></p>
+      <p class="rb-modal-status" data-modal-status aria-live="polite"></p>
     </div>
   `;
   document.body.appendChild(backdrop);
-  const close = () => backdrop.remove();
+  const close = () => {
+    backdrop.remove();
+    restoreModalFocus(returnFocus, "#rb-login");
+  };
   backdrop.querySelector("#rb-close-auth").addEventListener("click", close);
   backdrop.addEventListener("click", (event) => {
     if (event.target === backdrop) close();
   });
+  backdrop.addEventListener("keydown", (event) => keepModalFocus(event, backdrop, close));
 
-  const passwordForm = backdrop.querySelector("#rb-password-auth-form");
-  const magicForm = backdrop.querySelector("#rb-magic-auth-form");
+  const loginForm = backdrop.querySelector("#rb-login-form");
+  const createForm = backdrop.querySelector("#rb-create-form");
   const googleButton = backdrop.querySelector("#rb-google-auth");
-  if (passwordForm && magicForm) {
-    const signupDisplayName = passwordForm.querySelector("#rb-signup-display-name");
-    const passwordEmail = passwordForm.querySelector("#rb-password-email");
-    const passwordInput = passwordForm.querySelector("#rb-auth-password");
-    const magicEmail = magicForm.querySelector("#rb-magic-email");
+  if (loginForm && createForm) {
+    const loginIdentifier = loginForm.querySelector("#rb-login-identifier");
+    const loginPassword = loginForm.querySelector("#rb-login-password");
+    const createUsername = createForm.querySelector("#rb-create-username");
+    const createEmail = createForm.querySelector("#rb-create-email");
+    const createPassword = createForm.querySelector("#rb-create-password");
+    const heading = backdrop.querySelector("[data-auth-heading]");
+    const copy = backdrop.querySelector("[data-auth-copy]");
     const setMode = (mode) => {
-      const usePassword = mode === "password";
-      passwordForm.hidden = !usePassword;
-      magicForm.hidden = usePassword;
+      const useLogin = mode !== "create";
+      loginForm.hidden = !useLogin;
+      createForm.hidden = useLogin;
+      heading.textContent = useLogin ? "Welcome back" : "Create your player account";
+      copy.textContent = useLogin
+        ? "Log in to sync your saves, scores, and community profile."
+        : "Choose a username and keep your Rainbot progress on every device.";
       backdrop.querySelectorAll("[data-auth-mode]").forEach((button) => {
-        const isActive = button.dataset.authMode === mode;
+        const isActive = button.dataset.authMode === (useLogin ? "login" : "create");
         button.classList.toggle("is-active", isActive);
         button.setAttribute("aria-selected", isActive ? "true" : "false");
+        button.tabIndex = isActive ? 0 : -1;
       });
       setModalStatus(backdrop, "", "");
-      (usePassword ? passwordEmail : magicEmail).focus();
+      (useLogin ? loginIdentifier : createUsername).focus();
     };
     backdrop.querySelectorAll("[data-auth-mode]").forEach((button) => {
       button.addEventListener("click", () => setMode(button.dataset.authMode));
     });
-    passwordEmail.focus();
-    passwordForm.addEventListener("submit", async (event) => {
+    setMode(initialMode);
+    loginForm.addEventListener("submit", async (event) => {
       event.preventDefault();
-      const button = passwordForm.querySelector("button[type='submit']");
+      const button = loginForm.querySelector("button[type='submit']");
       button.disabled = true;
-      setModalStatus(backdrop, "Signing in...", "");
+      setModalStatus(backdrop, "Logging in...", "");
       try {
-        await window.RBBackend.signInWithPassword(passwordEmail.value, passwordInput.value);
-        setModalStatus(backdrop, "Signed in.", "good");
-        RB.toast("Signed in", "good");
+        await window.RBBackend.signInWithPassword(loginIdentifier.value, loginPassword.value);
+        setModalStatus(backdrop, "Logged in.", "good");
+        RB.toast("Logged in", "good");
         close();
       } catch (error) {
-        setModalStatus(backdrop, error.message || "Sign-in failed.", "bad");
+        setModalStatus(backdrop, error.message || "Login failed.", "bad");
       } finally {
         button.disabled = false;
       }
     });
-    backdrop.querySelector("#rb-create-account").addEventListener("click", async () => {
-      const button = backdrop.querySelector("#rb-create-account");
-      const displayName = signupDisplayName.value.trim();
-      if (displayName.length < 2) {
-        setModalStatus(backdrop, "Enter a player name before creating an account.", "bad");
-        signupDisplayName.focus();
-        return;
-      }
+    createForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const button = createForm.querySelector("button[type='submit']");
       button.disabled = true;
       setModalStatus(backdrop, "Creating account...", "");
       try {
-        await window.RBBackend.signUpWithPassword(passwordEmail.value, passwordInput.value, { display_name: displayName });
-        setModalStatus(backdrop, "Account created. Check your email if confirmation is required.", "good");
+        const result = await window.RBBackend.signUpWithPassword(createEmail.value, createPassword.value, {
+          display_name: createUsername.value,
+        });
+        setModalStatus(
+          backdrop,
+          result && result.session ? "Account created. You're logged in." : "Account created. Check your email to confirm it, then log in.",
+          "good"
+        );
         RB.toast("Account created", "good");
+        if (result && result.session) close();
       } catch (error) {
         setModalStatus(backdrop, error.message || "Account creation failed.", "bad");
       } finally {
@@ -1788,26 +2055,11 @@ function openAuthModal() {
       button.disabled = true;
       setModalStatus(backdrop, "Sending reset email...", "");
       try {
-        await window.RBBackend.requestPasswordReset(passwordEmail.value);
+        await window.RBBackend.requestPasswordReset(loginIdentifier.value);
         setModalStatus(backdrop, "Check your email for the password reset link.", "good");
         RB.toast("Reset email sent", "good");
       } catch (error) {
         setModalStatus(backdrop, error.message || "Reset failed.", "bad");
-      } finally {
-        button.disabled = false;
-      }
-    });
-    magicForm.addEventListener("submit", async (event) => {
-      event.preventDefault();
-      const button = magicForm.querySelector("button[type='submit']");
-      button.disabled = true;
-      setModalStatus(backdrop, "Sending sign-in link...", "");
-      try {
-        await window.RBBackend.signInWithMagicLink(magicEmail.value);
-        setModalStatus(backdrop, "Check your email for the Rainbot sign-in link.", "good");
-        RB.toast("Magic link sent", "good");
-      } catch (error) {
-        setModalStatus(backdrop, error.message || "Sign-in failed.", "bad");
       } finally {
         button.disabled = false;
       }
@@ -2090,7 +2342,7 @@ function achievementEntries() {
 }
 
 function achievementBadgeImageSrc(id) {
-  return `${RB_BASE}assets/img/badges/achievement-${id}.png?v=20260701-badge-art-1`;
+  return `${RB_BASE}assets/img/badges/achievement-${id}.avif?v=20260806-performance-1`;
 }
 
 function achievementBadgeMarkup(entry) {
@@ -2333,7 +2585,7 @@ function gameHubRecommendations(meta, limit = 3) {
   const currentKind = currentVisual.kind || "";
   const recent = new Set(recentHomeGameEntries(6).map((entry) => canonicalGameSlug(entry.gameId)));
   return Object.entries(RB_GAME_META)
-    .filter(([slug]) => slug !== meta.slug && RB_GAME_VISUALS[slug])
+    .filter(([slug]) => slug !== meta.slug && RB_GAME_VISUALS[slug] && !RB_UNLISTED_GAME_SLUGS.has(slug))
     .map(([slug, item], index) => {
       const visual = RB_GAME_VISUALS[slug] || {};
       const sameKind = currentKind && visual.kind === currentKind ? 1 : 0;
@@ -2361,6 +2613,86 @@ function gameHubRecommendationsMarkup(meta) {
   }).join("");
 }
 
+const RB_GAME_VIBE_STORAGE_KEY = "rainbot_game_vibes:v1";
+const RB_GAME_VIBES = [
+  { key: "fire", icon: "🔥", label: "Fire" },
+  { key: "chaos", icon: "🤡", label: "Chaos" },
+  { key: "cursed", icon: "💀", label: "Cursed" },
+];
+
+function readGameVibes() {
+  try {
+    const stored = JSON.parse(localStorage.getItem(RB_GAME_VIBE_STORAGE_KEY) || "{}");
+    return stored && typeof stored === "object" ? stored : {};
+  } catch (error) {
+    return {};
+  }
+}
+
+function setGameVibe(slug, vibe) {
+  const stored = readGameVibes();
+  if (vibe) stored[slug] = vibe;
+  else delete stored[slug];
+  try {
+    localStorage.setItem(RB_GAME_VIBE_STORAGE_KEY, JSON.stringify(stored));
+  } catch (error) {}
+}
+
+function gameHubPlayMode(meta) {
+  if (["scrap-circuit", "super-slop-brothers", "rizz-craft", "the-last-signal", "blacksand"].includes(meta.slug)) {
+    return "Multiplayer ready";
+  }
+  if (["incident-commander", "consensus-collapse", "recursive-reward-labyrinth"].includes(meta.slug)) {
+    return "Agent protocol";
+  }
+  return "Solo arcade";
+}
+
+function gameHubInputMode() {
+  const touchReady = Boolean(document.querySelector(
+    ".touch-controls, .mobile-controls, [class*='touch-controls'], [data-touch-controls], [data-mobile-controls]"
+  ));
+  const pointerReady = Boolean(document.querySelector("canvas, .game-stage"));
+  if (touchReady) return "Keyboard + touch";
+  if (pointerReady) return "Keyboard + pointer";
+  return "Keyboard / controls shown in game";
+}
+
+function gameHubDetailsMarkup(meta) {
+  const visual = gameVisualForHome(meta.slug);
+  const selectedVibe = readGameVibes()[meta.slug] || "";
+  return `
+    <section class="rb-game-hub__panel rb-game-hub__panel--details" aria-label="Game details and vibe rating">
+      <div class="rb-game-hub__panel-title">
+        <small>Game Details</small>
+        <strong>Free · No Install</strong>
+      </div>
+      <dl class="rb-game-hub__facts">
+        <div><dt>Genre</dt><dd>${escapeHtml(visual.kind)}</dd></div>
+        <div><dt>Mode</dt><dd>${escapeHtml(gameHubPlayMode(meta))}</dd></div>
+        <div><dt>Controls</dt><dd>${escapeHtml(gameHubInputMode())}</dd></div>
+        <div><dt>Platform</dt><dd>Modern browser</dd></div>
+      </dl>
+      <div class="rb-game-hub__vibe">
+        <span><small>Vibe Check</small><em>Saved on this device</em></span>
+        <div role="group" aria-label="Rate this game's vibe">
+          ${RB_GAME_VIBES.map((vibe) => `
+            <button
+              type="button"
+              class="${selectedVibe === vibe.key ? "is-active" : ""}"
+              data-rb-game-hub-action="vibe"
+              data-rb-vibe="${vibe.key}"
+              aria-pressed="${selectedVibe === vibe.key}"
+              aria-label="Rate ${escapeHtml(meta.title)} ${vibe.label}"
+              title="${vibe.label}"
+            ><span aria-hidden="true">${vibe.icon}</span><b>${vibe.label}</b></button>
+          `).join("")}
+        </div>
+      </div>
+    </section>
+  `;
+}
+
 function gameHubChallengeMarkup(meta) {
   const challenge = currentDailyChallenge();
   const progress = dailyChallengeProgress(challenge);
@@ -2382,6 +2714,7 @@ function gameHubChallengeMarkup(meta) {
 function gameHubMarkup(meta) {
   const visual = gameVisualForHome(meta.slug);
   const summary = gameHubSummary(meta);
+  const isFavorite = RBGameActivity.isFavorite(meta.slug);
   const savedAt = summary.saved && summary.saved.saved ? Number(summary.saved.saved.savedAt) || 0 : 0;
   const hasSave = Boolean(summary.saved);
   const lastText = summary.lastActivity ? formatRelativeActivity(summary.lastActivity) : "Not played yet";
@@ -2396,6 +2729,7 @@ function gameHubMarkup(meta) {
         <button type="button" data-rb-game-hub-action="play">${hasSave ? "Resume" : "Play"}</button>
         <button type="button" data-rb-game-hub-action="leaderboard">Scores</button>
         <button type="button" data-rb-game-hub-action="comments">Comments</button>
+        <button type="button" data-rb-game-hub-action="favorite" aria-pressed="${isFavorite}">${isFavorite ? "♥ Saved" : "♡ Favorite"}</button>
         <button type="button" data-rb-game-hub-action="share">Share</button>
       </div>
     </header>
@@ -2419,6 +2753,7 @@ function gameHubMarkup(meta) {
         </div>
         ${gameHubChallengeMarkup(meta)}
       </section>
+      ${gameHubDetailsMarkup(meta)}
       <section class="rb-game-hub__panel rb-game-hub__panel--more" aria-label="More games">
         <div class="rb-game-hub__panel-title">
           <small>More Like This</small>
@@ -2511,6 +2846,17 @@ function bindGameHub(root) {
     if (action === "leaderboard") handleGameHubLeaderboard();
     if (action === "comments") handleGameHubComments();
     if (action === "share") handleGameHubShare(meta);
+    if (action === "favorite") {
+      RBGameActivity.toggleFavorite(meta.slug);
+      renderGameHub(root);
+    }
+    if (action === "vibe") {
+      const vibe = actionTarget.dataset.rbVibe || "";
+      const selected = readGameVibes()[meta.slug] === vibe ? "" : vibe;
+      setGameVibe(meta.slug, selected);
+      renderGameHub(root);
+      RB.toast(selected ? `Vibe saved: ${selected}` : "Vibe cleared", selected ? "good" : "");
+    }
   });
 }
 
@@ -2518,13 +2864,14 @@ function initGameHub() {
   if (!location.pathname.includes("/games/")) return;
   const page = document.querySelector(".game-page");
   const layout = document.querySelector(".game-layout");
-  if (!page || !layout) return;
+  if (!page) return;
   let root = document.querySelector("[data-rb-game-hub]");
   if (!root) {
     root = document.createElement("section");
     root.className = "rb-game-hub";
     root.dataset.rbGameHub = "";
-    layout.insertAdjacentElement("afterend", root);
+    if (layout) layout.insertAdjacentElement("afterend", root);
+    else page.append(root);
   }
   bindGameHub(root);
   renderGameHub(root);
@@ -2656,6 +3003,7 @@ function homeAchievementsMarkup() {
   const entries = achievementEntries();
   const unlocked = entries.filter((entry) => entry.unlocked).length;
   const levelInfo = playerLevelInfo();
+  const signedIn = Boolean(getBackendState().user);
   return `
     <div class="home-achievements-card">
       <div class="home-level-card">
@@ -2675,7 +3023,7 @@ function homeAchievementsMarkup() {
           <small>Profile Progress</small>
           <strong>${formatStatNumber(unlocked)}/${formatStatNumber(entries.length)} unlocked</strong>
         </span>
-        <button type="button" data-home-profile>Profile</button>
+        <button type="button" data-home-profile>${signedIn ? "Profile" : "Log in"}</button>
       </div>
       <div class="home-achievement-grid">
         ${entries.slice(0, 6).map((entry) => `
@@ -2774,16 +3122,16 @@ function homeCommunityFallbackActivity() {
       href: "games/escape-poop-cruise.html",
     },
     {
-      title: "The Slopwire",
-      body: "Area 51 footage is sitting in the occasional clips slot.",
-      meta: "Clip",
-      href: "videos.html#featured",
+      title: "Inkblood",
+      body: "Manga horde survivor runs are hitting the leaderboard.",
+      meta: "Horde Survivor",
+      href: "games/inkblood.html",
     },
     {
-      title: "The Slopwire",
-      body: "Fresh fake-news dispatches are open for comments.",
-      meta: "Read",
-      href: "articles.html",
+      title: "Big Baby Bum",
+      body: "3D katamari chaos rolling through the neighborhood.",
+      meta: "3D Katamari",
+      href: "games/big-baby-bum.html",
     },
   ];
 }
@@ -2849,7 +3197,7 @@ function homeCommunityPanelMarkup(data = {}) {
           <small>${data.hotLabel || "Hot Now"}</small>
           <strong>${data.hotTitle || "Activity Feed"}</strong>
         </span>
-        <a href="articles.html">Feed</a>
+        <a href="community.html">Feed</a>
       </div>
       <div class="home-community-list">${homeCommunityTextRowsMarkup(activityRows, "No activity yet.")}</div>
     </article>
@@ -2960,7 +3308,7 @@ function renderHomeProgressPanel() {
   const achievementRoot = root.querySelector("[data-home-achievements-content]");
   const profileButton = root.querySelector(".arcade-panel__header [data-home-profile]");
   const signedIn = Boolean(getBackendState().user);
-  if (profileButton) profileButton.textContent = signedIn ? "Achievements" : "Sign in";
+  if (profileButton) profileButton.textContent = signedIn ? "Achievements" : "Log in";
   if (challengeRoot) challengeRoot.innerHTML = homeDailyChallengeMarkup();
   if (achievementRoot) achievementRoot.innerHTML = homeAchievementsMarkup();
 }
@@ -2989,7 +3337,7 @@ function renderHomeRecentPanel() {
   const signedIn = Boolean(backendState.user);
   const entries = recentHomeGameEntries(3);
   root.classList.toggle("is-empty", entries.length === 0);
-  if (profileButton) profileButton.textContent = signedIn ? "Profile" : "Sign in";
+  if (profileButton) profileButton.textContent = signedIn ? "Profile" : "Log in";
 
   if (entries.length) {
     content.innerHTML = `<div class="home-recent-grid">${entries.map(homeRecentCardMarkup).join("")}</div>`;
@@ -2998,7 +3346,7 @@ function renderHomeRecentPanel() {
 
   const emptyKicker = signedIn
     ? `Welcome back, ${getBackendDisplayName(backendState)}`
-    : "Sign in to sync";
+    : "Log in to sync";
   content.innerHTML = `
     <div class="home-recent-empty">
       <span>
@@ -3007,7 +3355,7 @@ function renderHomeRecentPanel() {
         <em>Start a run and it will land here.</em>
       </span>
       <a href="${RB_BASE}games.html">Browse games</a>
-      <button type="button" data-home-profile>${signedIn ? "Profile" : "Sign in"}</button>
+      <button type="button" data-home-profile>${signedIn ? "Profile" : "Log in"}</button>
     </div>
   `;
 }
@@ -3027,22 +3375,22 @@ function initHomeRecentPanel() {
 
 function openProfileModal() {
   const backendState = getBackendState();
+  if (!backendState.user) {
+    openAuthModal();
+    return;
+  }
   if (document.getElementById("rb-profile-modal")) return;
-  const signedIn = Boolean(backendState.user);
-  const localProfile = getLocalProfileSnapshot();
-  const profile = signedIn ? (backendState.profile || {}) : localProfile;
-  const displayName = signedIn ? getBackendDisplayName(backendState) : (localProfile.displayName || "Rainbot Player");
-  const email = signedIn ? (backendState.user.email || "") : "Saved on this device";
-  const role = signedIn
-    ? profile.is_bot ? profileBotLabel(profile) : profile.role === "admin" ? "Admin" : profile.role === "moderator" ? "Moderator" : "Player"
-    : "Local Player";
+  const profile = backendState.profile || {};
+  const displayName = getBackendDisplayName(backendState);
+  const email = backendState.user.email || "";
+  const role = profile.is_bot ? profileBotLabel(profile) : profile.role === "admin" ? "Admin" : profile.role === "moderator" ? "Moderator" : "Player";
   const profileTitle = profileField(profile, "profile_title", "profileTitle", "Arcade Regular");
   const bio = profile.bio || "";
   const favoriteGame = profileField(profile, "favorite_game", "favoriteGame", "");
   const avatarStyle = cleanProfileUiChoice(profileField(profile, "avatar_style", "avatarStyle", "bot"), RB_PROFILE_AVATARS, "bot");
   const accentColor = cleanProfileUiChoice(profileField(profile, "accent_color", "accentColor", "cyan"), RB_PROFILE_ACCENTS, "cyan");
-  const accountState = signedIn ? "Cloud Sync" : "Local Profile";
-  const accountDetail = signedIn ? (email || "Connected") : "Saved on this device";
+  const accountState = "Cloud Sync";
+  const accountDetail = email || "Connected";
   const avatarOptions = RB_PROFILE_AVATARS.map((option) => `
     <label class="rb-avatar-choice">
       <input type="radio" name="avatar_style" value="${option.value}"${option.value === avatarStyle ? " checked" : ""} />
@@ -3127,13 +3475,9 @@ function openProfileModal() {
         </form>
       </div>
       <div class="modal__actions rb-profile-actions">
-        ${
-          signedIn
-            ? `<button class="btn btn--secondary" id="rb-sync-now" type="button">Sync Now</button>
-               <button class="btn btn--ghost" id="rb-change-password" type="button">Change Password</button>
-               <button class="btn btn--ghost" id="rb-sign-out" type="button">Sign Out</button>`
-            : `<button class="btn btn--secondary" id="rb-sign-in-profile" type="button">Sign In to Sync</button>`
-        }
+        <button class="btn btn--secondary" id="rb-sync-now" type="button">Sync Now</button>
+        <button class="btn btn--ghost" id="rb-change-password" type="button">Change Password</button>
+        <button class="btn btn--ghost" id="rb-sign-out" type="button">Sign Out</button>
         <button class="btn btn--ghost" id="rb-close-profile" type="button">Close</button>
       </div>
       <p class="rb-modal-status" data-modal-status></p>
@@ -3184,29 +3528,18 @@ function openProfileModal() {
     event.preventDefault();
     const button = form.querySelector("button[type='submit']");
     button.disabled = true;
-    setModalStatus(backdrop, signedIn ? "Saving profile..." : "Saving local profile...", "");
+    setModalStatus(backdrop, "Saving profile...", "");
     try {
-      if (signedIn) {
-        await window.RBBackend.updateProfile({
-          display_name: displayInput.value,
-          profile_title: titleInput.value,
-          favorite_game: favoriteInput.value,
-          bio: bioInput.value,
-          avatar_style: selectedAvatar(),
-          accent_color: selectedAccent(),
-        });
-      } else if (RB && typeof RB.updateLocalProfile === "function") {
-        RB.updateLocalProfile({
-          displayName: displayInput.value,
-          profileTitle: titleInput.value,
-          favoriteGame: favoriteInput.value,
-          bio: bioInput.value,
-          avatarStyle: selectedAvatar(),
-          accentColor: selectedAccent(),
-        });
-      }
-      setModalStatus(backdrop, signedIn ? "Profile saved." : "Local profile saved.", "good");
-      RB.toast(signedIn ? "Profile saved" : "Local profile saved", "good");
+      await window.RBBackend.updateProfile({
+        display_name: displayInput.value,
+        profile_title: titleInput.value,
+        favorite_game: favoriteInput.value,
+        bio: bioInput.value,
+        avatar_style: selectedAvatar(),
+        accent_color: selectedAccent(),
+      });
+      setModalStatus(backdrop, "Profile saved.", "good");
+      RB.toast("Profile saved", "good");
       renderNav(RB.state);
       updatePreview();
     } catch (error) {
@@ -3233,13 +3566,6 @@ function openProfileModal() {
       } catch (error) {
         setModalStatus(backdrop, error.message || "Sync failed.", "bad");
       }
-    });
-  }
-  const signInButton = backdrop.querySelector("#rb-sign-in-profile");
-  if (signInButton) {
-    signInButton.addEventListener("click", () => {
-      close();
-      openAuthModal();
     });
   }
   const signOutButton = backdrop.querySelector("#rb-sign-out");
@@ -4455,6 +4781,7 @@ const RBSfx = (() => {
 window.RBSfx = RBSfx;
 
 function initGameEscapeMenu() {
+  if (document.body?.dataset.rbNativeEscapeMenu === "true") return;
   const isGamePage = location.pathname.includes("/games/") && document.querySelector(".game-stage");
   if (!isGamePage || document.getElementById("rb-escape-menu")) return;
 
@@ -4600,6 +4927,7 @@ function initGameEscapeMenu() {
     if (isMaxed() && maxButton && !maxButton.disabled) maxButton.click();
     document.querySelectorAll(".is-maxed").forEach((element) => element.classList.remove("is-maxed"));
     document.body.classList.remove("rb-game-maxed");
+    document.documentElement.classList.remove("sf-maximised");
   };
   const closeMenu = ({ resume = false } = {}) => {
     if (resume) resumeGameIfPossible();
@@ -4684,6 +5012,10 @@ function bindMaxScreenButton(fsButton, surface) {
   const setMaxed = (active) => {
     surface.classList.toggle("is-maxed", active);
     document.body.classList.toggle("rb-game-maxed", active);
+    if (!active) {
+      document.documentElement.classList.remove("sf-maximised");
+      document.querySelectorAll(".is-maxed").forEach((el) => el.classList.remove("is-maxed"));
+    }
     updateButton();
     scheduleGameCanvasFit();
   };
@@ -4714,11 +5046,185 @@ function bindMaxScreenButton(fsButton, surface) {
   document.addEventListener("fullscreenchange", syncFullscreenState);
   document.addEventListener("webkitfullscreenchange", syncFullscreenState);
   document.addEventListener("keydown", (event) => {
+    if (document.body?.dataset.rbNativeEscapeMenu === "true" || document.querySelector(".saintfall-stage-shell")) return;
     if (event.key === "Escape" && surface.classList.contains("is-maxed") && !isNativeFullscreen()) {
       setMaxed(false);
     }
   });
   updateButton();
+}
+
+function findPlaySurface() {
+  return document.querySelector(
+    ".game-stage .rb-standalone-surface, .game-stage .canvas-wrap, .game-stage .merge-board, .game-stage .rb-max-surface"
+  ) || document.querySelector(".game-stage");
+}
+
+function isPlayMaxed(surface) {
+  return Boolean(
+    document.fullscreenElement ||
+    document.webkitFullscreenElement ||
+    document.body.classList.contains("rb-game-maxed") ||
+    document.documentElement.classList.contains("sf-maximised") ||
+    surface?.classList.contains("is-maxed") ||
+    surface?.closest(".game-stage")?.classList.contains("is-maxed") ||
+    document.querySelector(".is-maxed")
+  );
+}
+
+function findExistingMaxButton() {
+  return document.querySelector(
+    "#btn-fullscreen:not([data-rb-game-chrome]), .fullscreen-btn:not([data-rb-game-chrome]), [data-menu-action='maximize']"
+  );
+}
+
+function togglePlayMax(surface) {
+  const existing = findExistingMaxButton();
+  if (existing && !existing.disabled) {
+    existing.click();
+    return;
+  }
+  if (!surface) return;
+  const next = !isPlayMaxed(surface);
+  surface.classList.toggle("is-maxed", next);
+  document.body.classList.toggle("rb-game-maxed", next);
+  if (!next) {
+    document.documentElement.classList.remove("sf-maximised");
+    document.querySelectorAll(".is-maxed").forEach((el) => el.classList.remove("is-maxed"));
+  }
+  scheduleGameCanvasFit();
+  try {
+    if (next) {
+      const request = surface.requestFullscreen || surface.webkitRequestFullscreen;
+      const result = request && request.call(surface);
+      if (result && typeof result.catch === "function") result.catch(() => {});
+    } else if (document.fullscreenElement || document.webkitFullscreenElement) {
+      const exit = document.exitFullscreen || document.webkitExitFullscreen;
+      const result = exit && exit.call(document);
+      if (result && typeof result.catch === "function") result.catch(() => {});
+    }
+  } catch (error) {}
+}
+
+function initGameChromeBar() {
+  if (!location.pathname.includes("/games/")) return;
+  const stage = document.querySelector(".game-stage");
+  if (!stage || document.querySelector(".rb-game-chrome")) return;
+
+  const surface = findPlaySurface();
+  const meta = getGameMeta();
+  const icon = {
+    favorite: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20.25C12 20.25 3.75 14.7 3.75 8.85 3.75 6.15 5.85 4.5 8.1 4.5 9.75 4.5 11.1 5.4 12 6.9 12.9 5.4 14.25 4.5 15.9 4.5 18.15 4.5 20.25 6.15 20.25 8.85 20.25 14.7 12 20.25 12 20.25Z"/></svg>',
+    share: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="18" cy="5" r="2.4"/><circle cx="6" cy="12" r="2.4"/><circle cx="18" cy="19" r="2.4"/><path d="m8.2 10.8 7.6-4.4M8.2 13.2l7.6 4.4"/></svg>',
+    maximize: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4H4v5M15 4h5v5M20 15v5h-5M4 15v5h5"/></svg>',
+    muteOn: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 10v4h3l5 4V6L7 10H4Z"/><path d="M16 9.5a4.5 4.5 0 0 1 0 5"/><path d="M18.2 7a7.5 7.5 0 0 1 0 10"/></svg>',
+    muteOff: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 10v4h3l5 4V6L7 10H4Z"/><path d="m16 10 6 6M22 10l-6 6"/></svg>',
+  };
+
+  const bar = document.createElement("nav");
+  bar.className = "rb-game-chrome";
+  bar.setAttribute("aria-label", "Game actions");
+  bar.innerHTML = `
+    <button type="button" class="rb-game-chrome__btn" data-rb-game-chrome="favorite" aria-pressed="false">
+      <span class="rb-game-chrome__icon">${icon.favorite}</span>
+      <span class="rb-game-chrome__label">Favorite</span>
+    </button>
+    <button type="button" class="rb-game-chrome__btn" data-rb-game-chrome="share">
+      <span class="rb-game-chrome__icon">${icon.share}</span>
+      <span class="rb-game-chrome__label">Share</span>
+    </button>
+    <button type="button" class="rb-game-chrome__btn" data-rb-game-chrome="maximize" aria-pressed="false">
+      <span class="rb-game-chrome__icon">${icon.maximize}</span>
+      <span class="rb-game-chrome__label">Maximize</span>
+    </button>
+    <button type="button" class="rb-game-chrome__btn" data-rb-game-chrome="mute" aria-pressed="false">
+      <span class="rb-game-chrome__icon" data-rb-chrome-mute-icon>${icon.muteOn}</span>
+      <span class="rb-game-chrome__label" data-rb-chrome-mute-label>Mute</span>
+    </button>
+  `;
+
+  const host = surface && surface !== stage ? surface : null;
+  if (host && host.parentElement === stage) host.insertAdjacentElement("afterend", bar);
+  else stage.append(bar);
+
+  const favoriteBtn = bar.querySelector('[data-rb-game-chrome="favorite"]');
+  const maximizeBtn = bar.querySelector('[data-rb-game-chrome="maximize"]');
+  const muteBtn = bar.querySelector('[data-rb-game-chrome="mute"]');
+  const muteIcon = bar.querySelector("[data-rb-chrome-mute-icon]");
+  const muteLabel = bar.querySelector("[data-rb-chrome-mute-label]");
+
+  const syncWidth = () => {
+    if (!host || host === stage) return;
+    const width = Math.round(host.getBoundingClientRect().width);
+    if (width > 0) bar.style.setProperty("--rb-chrome-width", `${width}px`);
+  };
+  const syncFavorite = () => {
+    const saved = RBGameActivity.isFavorite(meta.slug);
+    favoriteBtn.classList.toggle("is-active", saved);
+    favoriteBtn.setAttribute("aria-pressed", String(saved));
+    favoriteBtn.setAttribute("aria-label", saved ? `Remove ${meta.title} from favorites` : `Add ${meta.title} to favorites`);
+    favoriteBtn.querySelector(".rb-game-chrome__label").textContent = saved ? "Favorited" : "Favorite";
+  };
+  const syncMute = () => {
+    const muted = Boolean(window.RBSfx?.isMuted?.());
+    muteBtn.classList.toggle("is-active", muted);
+    muteBtn.setAttribute("aria-pressed", String(muted));
+    muteBtn.setAttribute("aria-label", muted ? "Unmute game audio" : "Mute game audio");
+    muteLabel.textContent = muted ? "Unmute" : "Mute";
+    muteIcon.innerHTML = muted ? icon.muteOff : icon.muteOn;
+  };
+  const syncMax = () => {
+    const maxed = isPlayMaxed(host || stage);
+    maximizeBtn.classList.toggle("is-active", maxed);
+    maximizeBtn.setAttribute("aria-pressed", String(maxed));
+    maximizeBtn.setAttribute("aria-label", maxed ? "Exit max screen" : "Maximize game");
+    maximizeBtn.querySelector(".rb-game-chrome__label").textContent = maxed ? "Exit" : "Maximize";
+    bar.hidden = maxed;
+  };
+  const refresh = () => {
+    syncFavorite();
+    syncMute();
+    syncMax();
+    syncWidth();
+  };
+
+  bar.addEventListener("click", (event) => {
+    const action = event.target.closest("[data-rb-game-chrome]")?.dataset.rbGameChrome;
+    if (!action) return;
+    event.preventDefault();
+    if (action === "favorite") {
+      const saved = RBGameActivity.toggleFavorite(meta.slug);
+      syncFavorite();
+      renderGameHub();
+      if (window.RB?.toast) RB.toast(saved ? "Saved to favorites" : "Removed from favorites", saved ? "good" : "");
+    }
+    if (action === "share") handleGameHubShare(meta);
+    if (action === "maximize") {
+      togglePlayMax(host || stage);
+      syncMax();
+      window.setTimeout(syncMax, 80);
+    }
+    if (action === "mute" && window.RBSfx) {
+      window.RBSfx.toggleMuted();
+      syncMute();
+    }
+  });
+
+  window.addEventListener("rainbot:favoriteschange", syncFavorite);
+  document.addEventListener("rainbot:sfx-muted", syncMute);
+  document.addEventListener("fullscreenchange", syncMax);
+  document.addEventListener("webkitfullscreenchange", syncMax);
+  const observer = new MutationObserver(syncMax);
+  observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
+  observer.observe(document.body, { attributes: true, attributeFilter: ["class"] });
+  if (host && host !== stage) observer.observe(host, { attributes: true, attributeFilter: ["class"] });
+  if (typeof ResizeObserver === "function" && host && host !== stage) {
+    new ResizeObserver(syncWidth).observe(host);
+  }
+  window.addEventListener("resize", syncWidth, { passive: true });
+
+  refresh();
+  scheduleGameCanvasFit();
 }
 
 function initStandaloneGameShell() {
@@ -4844,6 +5350,86 @@ function initSkipLink() {
   document.body.insertAdjacentElement("afterbegin", link);
 }
 
+function ensureRuntimeMetadata() {
+  if (!document.head.querySelector('link[rel="manifest"]')) {
+    const manifest = document.createElement("link");
+    manifest.rel = "manifest";
+    manifest.href = `${RB_BASE}site.webmanifest`;
+    document.head.append(manifest);
+  }
+  const description = document.querySelector('meta[name="description"]')?.content
+    || "Free browser games, satirical headlines, community scores, and deeply unserious internet culture from Rainbot Network.";
+  const values = [
+    ["property", "og:title", document.title],
+    ["property", "og:description", description],
+    ["property", "og:type", location.pathname.includes("/articles/") ? "article" : "website"],
+    ["property", "og:image", new URL(`${RB_BASE}assets/img/rainbot-network-social-v1.png`, location.href).href],
+    ["name", "twitter:card", "summary_large_image"],
+    ["name", "twitter:title", document.title],
+    ["name", "twitter:description", description],
+    ["name", "twitter:image", new URL(`${RB_BASE}assets/img/rainbot-network-social-v1.png`, location.href).href],
+    ["name", "theme-color", "#05070d"],
+  ];
+  values.forEach(([attribute, key, content]) => {
+    if (document.head.querySelector(`meta[${attribute}="${key}"]`)) return;
+    const meta = document.createElement("meta");
+    meta.setAttribute(attribute, key);
+    meta.content = content;
+    document.head.append(meta);
+  });
+}
+
+function initSitePolish() {
+  document.documentElement.classList.add("rb-js");
+  ensureRuntimeMetadata();
+
+  const progress = document.createElement("div");
+  progress.className = "rb-scroll-progress";
+  progress.setAttribute("aria-hidden", "true");
+  progress.innerHTML = "<i></i>";
+  document.body.append(progress);
+
+  const backToTop = document.createElement("button");
+  backToTop.type = "button";
+  backToTop.className = "rb-back-to-top";
+  backToTop.setAttribute("aria-label", "Back to top");
+  backToTop.title = "Back to top";
+  backToTop.innerHTML = '<span aria-hidden="true">↑</span>';
+  backToTop.hidden = true;
+  backToTop.addEventListener("click", () => window.scrollTo({ top: 0, behavior: "smooth" }));
+  document.body.append(backToTop);
+
+  let updateFrame = 0;
+  const updateScrollUi = () => {
+    updateFrame = 0;
+    const maxScroll = Math.max(1, document.documentElement.scrollHeight - window.innerHeight);
+    const percent = Math.max(0, Math.min(1, window.scrollY / maxScroll));
+    progress.style.setProperty("--rb-scroll", String(percent));
+    backToTop.hidden = window.scrollY < Math.max(640, window.innerHeight * 0.9);
+  };
+  window.addEventListener("scroll", () => {
+    if (!updateFrame) updateFrame = requestAnimationFrame(updateScrollUi);
+  }, { passive: true });
+  window.addEventListener("resize", updateScrollUi, { passive: true });
+  updateScrollUi();
+
+  document.addEventListener("keydown", (event) => {
+    const target = event.target;
+    if (event.key !== "/" || event.metaKey || event.ctrlKey || event.altKey) return;
+    if (target && target.closest && target.closest("input, textarea, select, [contenteditable='true']")) return;
+    const searchToggle = document.getElementById("rb-search-toggle");
+    if (!searchToggle) return;
+    event.preventDefault();
+    searchToggle.click();
+  });
+
+  document.querySelectorAll("img").forEach((img) => {
+    const markLoaded = () => img.classList.add("rb-image-loaded");
+    if (img.complete) markLoaded();
+    else img.addEventListener("load", markLoaded, { once: true });
+  });
+}
+
 document.addEventListener("DOMContentLoaded", () => {
   initSkipLink();
   RBSfx.init();
@@ -4852,6 +5438,7 @@ document.addEventListener("DOMContentLoaded", () => {
   initGamesCatalog();
   initStandaloneGameShell();
   initAutoMaxScreenButtons();
+  initGameChromeBar();
   initGameEscapeMenu();
   initHomeRecentPanel();
   initHomeProgressPanel();
@@ -4872,6 +5459,7 @@ document.addEventListener("DOMContentLoaded", () => {
   });
   window.addEventListener("rainbot:authchange", handleBackendAuthChange);
   initRainbotBackend();
+  initSitePolish();
   scheduleGameCanvasFit();
 });
 

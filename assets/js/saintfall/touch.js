@@ -17,23 +17,24 @@ export const TOUCH_CONFIG = Object.freeze({
 
 const HOLD_ACTIONS = Object.freeze({
   fire: "firing",
+  furnace: "furnace",
   aim: "ads",
   shield: "block",
   jet: "jetpack",
-  crouch: "crouch",
+  /* The glide is a HYBRID on touch, exactly as it is on the keyboard:
+     the press ignites it and the hold sustains it. Anything else would
+     make the sustained glide - the whole point of the rebind - reachable
+     only with a keyboard. */
+  boost: "boostHeld",
 });
+
+/** Hold buttons that also fire a one-shot on the way down. */
+const HOLD_PRESS_EVENTS = Object.freeze({ boost: "boost" });
 
 const TAP_ACTIONS = Object.freeze({
   vault: ["jump", null],
-  boost: ["boost", null],
   melee: ["melee", null],
   vent: ["vent", null],
-  strat: ["stratOpen", null],
-  cancel: ["stratCancel", null],
-  up: ["dir", { dir: "up" }],
-  down: ["dir", { dir: "down" }],
-  left: ["dir", { dir: "left" }],
-  right: ["dir", { dir: "right" }],
 });
 
 function actionButton(action, glyph, label, mode, extra = "") {
@@ -63,13 +64,19 @@ function buildMarkup() {
 
     <div class="sf-touch__stack" data-touch-actions aria-label="Combat controls">
       <div class="sf-touch__utility">
-        ${actionButton("crouch", "⌄", "CROUCH", "hold")}
         ${actionButton("vent", "↻", "VENT", "tap")}
-        ${actionButton("strat", "⌁", "STRAT", "tap")}
+        ${actionButton("furnace", "◆", "LANCE", "hold")}
+        <button class="sf-touch__button sf-touch__button--command" type="button"
+          data-touch-command aria-label="Hold and drag to select battlefield support"
+          aria-haspopup="dialog" style="min-width:48px;min-height:48px">
+          <b aria-hidden="true">⌁</b>
+          <span>CALL</span>
+          <small>hold + drag</small>
+        </button>
       </div>
       <div class="sf-touch__mobility">
         ${actionButton("vault", "↑", "VAULT", "tap")}
-        ${actionButton("boost", "»", "BOOST", "tap")}
+        ${actionButton("boost", "»", "GLIDE", "hold")}
         ${actionButton("jet", "✦", "JET", "hold")}
       </div>
       <div class="sf-touch__actions">
@@ -78,15 +85,6 @@ function buildMarkup() {
         ${actionButton("melee", "╱", "MELEE", "tap")}
         ${actionButton("fire", "●", "FIRE", "hold", "sf-touch__button--fire")}
       </div>
-    </div>
-
-    <div class="sf-touch__strat" data-touch-strat aria-label="Stratagem direction pad">
-      <div class="sf-touch__strat-title">STRATAGEM CODE</div>
-      ${actionButton("up", "↑", "UP", "tap", "sf-touch__dir sf-touch__dir--up")}
-      ${actionButton("left", "←", "LEFT", "tap", "sf-touch__dir sf-touch__dir--left")}
-      ${actionButton("cancel", "×", "CANCEL", "tap", "sf-touch__dir sf-touch__dir--cancel")}
-      ${actionButton("right", "→", "RIGHT", "tap", "sf-touch__dir sf-touch__dir--right")}
-      ${actionButton("down", "↓", "DOWN", "tap", "sf-touch__dir sf-touch__dir--down")}
     </div>`;
 }
 
@@ -128,7 +126,7 @@ export function buildTouchControls(ctx, player, host, stage) {
   let lookPointer = null;
   let lookX = 0;
   let lookY = 0;
-  let stratEntry = false;
+  let lookHintCleared = false;
   let wasDead = false;
   const holdPointers = new Map();
 
@@ -136,13 +134,21 @@ export function buildTouchControls(ctx, player, host, stage) {
     if (event.cancelable) event.preventDefault();
   };
 
-  function pulse(ms = 7) {
+  function pulse(pattern = 7) {
     try {
-      if (navigator.vibrate) navigator.vibrate(ms);
+      if (enabled && navigator.vibrate) navigator.vibrate(pattern);
     } catch (_) {
       // Vibration is optional and may be blocked outside a user gesture.
     }
   }
+
+  ctx.guardReadability?.bus?.on?.("threatReady", (event = {}) => {
+    pulse(event.guardType === "unblockable" ? [10, 34, 14] : 10);
+  });
+  ctx.combat?.bus?.on?.("shieldBlock", (event = {}) => {
+    pulse(event.perfect ? [8, 24, 16] : 12);
+  });
+  ctx.combat?.bus?.on?.("shieldRejected", () => pulse([14, 30, 14]));
 
   function setHeld(button, action, held) {
     input.setTouchHold(HOLD_ACTIONS[action], held);
@@ -196,7 +202,7 @@ export function buildTouchControls(ctx, player, host, stage) {
   }
 
   stick.addEventListener("pointerdown", (event) => {
-    if (!enabled || stickPointer !== null || stratEntry) return;
+    if (!enabled || stickPointer !== null) return;
     prevent(event);
     stickPointer = event.pointerId;
     stick.classList.add("is-held");
@@ -235,6 +241,10 @@ export function buildTouchControls(ctx, player, host, stage) {
     const dy = event.clientY - lookY;
     lookX = event.clientX;
     lookY = event.clientY;
+    if (!lookHintCleared && Math.hypot(dx, dy) > 2) {
+      lookHintCleared = true;
+      host.classList.add("sf-touch-looked");
+    }
     input.addTouchLook(dx * TOUCH_CONFIG.lookScaleX, dy * TOUCH_CONFIG.lookScaleY);
   }, { passive: false });
   for (const type of ["pointerup", "pointercancel", "lostpointercapture"]) {
@@ -246,12 +256,13 @@ export function buildTouchControls(ctx, player, host, stage) {
     if (!button) continue;
     void inputName;
     button.addEventListener("pointerdown", (event) => {
-      if (!enabled || holdPointers.has(action) || stratEntry) return;
+      if (!enabled || holdPointers.has(action)) return;
       prevent(event);
       holdPointers.set(action, event.pointerId);
       try { button.setPointerCapture(event.pointerId); } catch (_) { /* best effort */ }
       setHeld(button, action, true);
-      pulse();
+      if (HOLD_PRESS_EVENTS[action]) input.pressTouch(HOLD_PRESS_EVENTS[action], {});
+      pulse(HOLD_PRESS_EVENTS[action] ? 12 : 7);
     }, { passive: false });
     for (const type of ["pointerup", "pointercancel", "lostpointercapture"]) {
       button.addEventListener(type, (event) => releaseHold(action, event.pointerId));
@@ -261,6 +272,7 @@ export function buildTouchControls(ctx, player, host, stage) {
       prevent(event);
       holdPointers.set(action, `key:${action}`);
       setHeld(button, action, true);
+      if (HOLD_PRESS_EVENTS[action]) input.pressTouch(HOLD_PRESS_EVENTS[action], {});
     });
     button.addEventListener("keyup", (event) => {
       if (!["Enter", " "].includes(event.key)) return;
@@ -275,15 +287,13 @@ export function buildTouchControls(ctx, player, host, stage) {
     if (!button) continue;
     const press = (event) => {
       if (!enabled) return;
-      if (stratEntry && !["up", "down", "left", "right", "cancel"].includes(action)) return;
-      if (!stratEntry && ["up", "down", "left", "right", "cancel"].includes(action)) return;
       prevent(event);
       input.pressTouch(eventType, detail || {});
       button.classList.remove("is-tapped");
       // Restarting the class makes repeated code-pad taps visible.
       void button.offsetWidth;
       button.classList.add("is-tapped");
-      pulse(action === "boost" || action === "melee" ? 12 : 7);
+      pulse(action === "melee" ? 12 : 7);
     };
     button.addEventListener("pointerdown", press, { passive: false });
     button.addEventListener("animationend", () => button.classList.remove("is-tapped"));
@@ -310,7 +320,6 @@ export function buildTouchControls(ctx, player, host, stage) {
     enabled = value;
     if (!enabled) releaseAll();
     stage.classList.toggle("sf-touch-enabled", enabled);
-    stage.classList.toggle("sf-touch-strat", enabled && stratEntry);
     surface?.classList.toggle("sf-touch-surface", enabled);
     host.setAttribute("aria-hidden", enabled ? "false" : "true");
     return enabled;
@@ -354,30 +363,29 @@ export function buildTouchControls(ctx, player, host, stage) {
   }
 
   function update() {
-    const nextEntry = !!ctx.mission?.entry?.active;
-    if (nextEntry !== stratEntry) {
-      stratEntry = nextEntry;
-      host.classList.toggle("is-strat-entry", stratEntry);
-      stage.classList.toggle("sf-touch-strat", stratEntry && !!enabled);
-      if (stratEntry) {
-        // Keyboard code entry suppresses movement while V is held. A
-        // modal touch pad should make the same promise and must also
-        // release any combat hold hidden underneath it.
-        releaseAll();
-      }
-    }
-
     const fuel = ctx.jetpack?.state?.fuel || 0;
+    /* MELEE doubles as the slam trigger in the air, so it lights up
+       for a slam - but it must never read as unavailable on the
+       ground, where it is still the swing and has no cooldown. */
+    setButtonState("melee", ctx.slam?.state?.active ? "active" : "ready");
     setButtonState("boost", ctx.boost?.state?.active
       ? "active"
-      : fuel + 1e-6 < (ctx.boost?.config?.fuelCost || 0) ? "low" : "ready");
+      : fuel + 1e-6 < (ctx.boost?.config?.ignitionCost || 0) ? "low" : "ready");
     setButtonState("jet", ctx.jetpack?.state?.active
       ? "active"
       : ctx.jetpack?.state?.inFlight ? "glide" : fuel <= 0 ? "low" : "ready");
-    setButtonState("shield", ctx.shield?.state?.active
-      ? "active"
+    const shield = ctx.shield?.status?.();
+    setButtonState("shield", shield?.active
+      ? (shield.activeFor <= shield.perfectWindow ? "timed" : "active")
       : fuel <= 0 ? "low" : "ready");
     setButtonState("fire", ctx.weapons?.carry?.overheated ? "low" : "ready");
+    const furnaceRank = ctx.progression?.rank?.("censer_furnace_reprieve") || 0;
+    const furnaceButton = actionButtons.get("furnace");
+    if (furnaceButton) furnaceButton.hidden = furnaceRank <= 0;
+    const furnaceState = ctx.weapons?.furnaceChargeState?.();
+    setButtonState("furnace", furnaceState?.charging
+      ? (furnaceState.ready ? "ready" : "active")
+      : furnaceRank <= 0 || fuel <= 0 || ctx.weapons?.carry?.overheated ? "low" : "ready");
     setButtonState("vent", (ctx.weapons?.carry?.venting || 0) > 0 ? "active" : "ready");
     const dead = !!ctx.combat?.player?.dead;
     if (dead && !wasDead) releaseAll();
@@ -397,12 +405,11 @@ export function buildTouchControls(ctx, player, host, stage) {
       },
       holds: {
         fire: input.touch.firing,
+        furnace: input.touch.furnace,
         aim: input.touch.ads,
         shield: input.touch.block,
         jet: input.touch.jetpack,
-        crouch: input.touch.crouch,
       },
-      stratEntry,
       pointers: {
         stick: stickPointer,
         look: lookPointer,

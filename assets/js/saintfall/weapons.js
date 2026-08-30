@@ -23,9 +23,12 @@
    of what makes the silhouette readable.
    ============================================================ */
 
-import { TAU, clamp, clamp01, lerp, damp, makeRng, makeRamp } from "saintfall/core.js";
-import { PALETTE, paintByHeight, paintFlat } from "saintfall/art.js";
+import { TAU, clamp, clamp01, lerp, damp, makeBus, makeRng, makeRamp } from "saintfall/core.js";
+import {
+  PALETTE, paintByHeight, paintFlat, patchMaterial, patchBasicMaterial,
+} from "saintfall/art.js";
 import { makeKit } from "saintfall/structures.js";
+import { FURNACE_LANCE_RULES } from "saintfall/progression-config.js";
 
 /* The reliquary lamp at rest, and how fast a shot's flash decays off
    it. 1/0.045s: long enough to be caught at 60fps from any frame the
@@ -33,7 +36,30 @@ import { makeKit } from "saintfall/structures.js";
    stutter of separate discharges rather than one continuous glow. */
 const LAMP_REST_INTENSITY = 0.62;
 const LAMP_REST_DISTANCE = 2.1;
-const MUZZLE_FLASH_RATE = 1 / 0.060;
+/* 45ms, not 60. The bolt now clears the near field in a fifth of
+   the time it used to, and a flash that outlives its own shot reads
+   as the lance glowing rather than discharging. */
+const MUZZLE_FLASH_RATE = 1 / 0.045;
+const LAMP_REST_COLOR = 0xff9f3c;
+/* The discharge light matches the BOLT. It used to ionise toward a
+   cool ivory-cyan, which was left over from when the bolt itself was
+   cyan - so the one frame the weapon lights the trooper, it lit them
+   the colour of the thing shooting back. Gold going white-hot. */
+const LAMP_FLASH_COLOR = 0xfff0c0;
+
+/* WHERE THE LANCE ACTUALLY ENDS.
+
+   Derived from the same three numbers `buildGlaive` builds the head
+   from, so the emitter cannot drift off the needle when the head is
+   re-proportioned. The socket sits at `haft * HEAD`, the needle is
+   mounted `NEEDLE_BASE` beyond it and runs `NEEDLE_LEN` further, so
+   the point of the thing is at all three added together - 1.598m on
+   a 1.92m haft, which is 0.10m past the aim node and 0.32m past
+   where the flare used to be drawn. */
+const LANCE_HEAD = 0.59;
+const LANCE_NEEDLE_BASE = 0.18;
+const LANCE_NEEDLE_LEN = 0.285;
+const lanceTipX = (haft) => haft * LANCE_HEAD + LANCE_NEEDLE_BASE + LANCE_NEEDLE_LEN;
 
 const IRON = makeRamp([
   [0.00, "#191412"], [0.28, "#31261f"], [0.58, "#4f4033"],
@@ -82,6 +108,39 @@ const AMBER = makeRamp([
 const WOOD = makeRamp([
   [0.00, "#3a3a33"], [0.45, "#5a584c"], [0.80, "#7d7a6b"], [1.00, "#a3a08e"],
 ]);
+
+/* The muzzle flare's falloff, built once and shared.
+
+   A flat quad of solid colour is a CARD: additive or not, it has a
+   hard square edge and the eye reads the edge before the light. The
+   first version of the parented flare was exactly that and looked
+   like a gold sticky note taped to the lance. A radial ramp with a
+   hot centre is what turns the same two triangles into a glow, and
+   it costs one 64px texture for the whole game. */
+let _flareTex = null;
+export function flareTexture(THREE) {
+  if (_flareTex) return _flareTex;
+  const size = 64;
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  // `willReadFrequently`, because three reads this canvas back when
+  // it uploads the texture and Chrome logs a console warning for an
+  // un-hinted readback - which the gameplay suite counts as an error.
+  const g = canvas.getContext("2d", { willReadFrequently: true });
+  const grd = g.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+  // Hot core, quick shoulder, long soft skirt - the skirt is what the
+  // bloom pass finds, and the bloom is most of what sells it.
+  grd.addColorStop(0.00, "rgba(255,255,255,1)");
+  grd.addColorStop(0.16, "rgba(255,238,190,0.92)");
+  grd.addColorStop(0.42, "rgba(255,170,60,0.38)");
+  grd.addColorStop(1.00, "rgba(255,120,20,0)");
+  g.fillStyle = grd;
+  g.fillRect(0, 0, size, size);
+  _flareTex = new THREE.CanvasTexture(canvas);
+  _flareTex.colorSpace = THREE.SRGBColorSpace;
+  return _flareTex;
+}
 
 /* ============================================================
    PATTERNS
@@ -161,6 +220,7 @@ export const PATTERNS = {
 export function buildWeapons(ctx) {
   const { THREE, scene, materials } = ctx;
   const kit = makeKit(THREE);
+  const bus = makeBus();
   const group = new THREE.Group();
   group.name = "weapons";
   scene.add(group);
@@ -337,7 +397,7 @@ export function buildWeapons(ctx) {
     brass.push(kit.prism({ h: 0.024, rBottom: 0.041, rTop: 0.037, sides: 7 })
       .rotateZ(Math.PI).translate(-L * 0.25, 0.008, 0));
 
-    const headX = L * 0.59;
+    const headX = L * LANCE_HEAD;
     // A short socket feeds an OPEN reliquary cage.  The previous
     // "hoops" were capped cylinders: three solid disks plus a cone
     // inevitably read as a missile/drill, even though the code called
@@ -359,8 +419,9 @@ export function buildWeapons(ctx) {
     amber.push(kit.prism({
       h: 0.155, rBottom: 0.024, rTop: 0.019, sides: 6, twist: 0.35,
     }).rotateZ(-Math.PI / 2).translate(headX + 0.008, 0, 0));
-    blade.push(kit.prism({ h: 0.285, rBottom: 0.022, rTop: 0.0025, sides: 6 })
-      .rotateZ(-Math.PI / 2).translate(headX + 0.18, 0, 0));
+    blade.push(kit.prism({
+      h: LANCE_NEEDLE_LEN, rBottom: 0.022, rTop: 0.0025, sides: 6,
+    }).rotateZ(-Math.PI / 2).translate(headX + LANCE_NEEDLE_BASE, 0, 0));
 
     // A clipped rear fork gives the head an asymmetric read without
     // borrowing the knight's signature crescent.
@@ -458,6 +519,8 @@ export function buildWeapons(ctx) {
        for recoil or aiming. */
     const gripRear = new THREE.Object3D();
     const gripFront = new THREE.Object3D();
+    gripRear.name = "grip-rear";
+    gripFront.name = "grip-front";
     if (isPolearm) {
       /* The rear hand takes the dedicated under-haft fire-control grip.
 
@@ -500,17 +563,109 @@ export function buildWeapons(ctx) {
     /* The muzzle. Shots leave from HERE, not from the camera: a ray
        cast from the eye starts behind the weapon and passes straight
        through whatever the barrel is poking around, so the player
-       shoots through their own cover and cannot work out why. */
+       shoots through their own cover and cannot work out why.
+
+       DO NOT MOVE THIS TO MAKE THE FLASH LOOK BETTER. It is not just
+       an emitter position: the aim solve rotates the whole weapon to
+       keep THIS node parallel to the camera ray, while main.js uses it
+       as the near end of the converged reticle shot. Sliding it back
+       23cm onto the censer cage - which does look
+       better - swung `saintfall-weapon-gait-proof`'s reticle sweep
+       from 0.000deg/0.00px to 29.2deg/137px of miss at 1080p. The
+       cosmetic offset belongs on the flare below, which is drawn
+       rather than aimed. */
     const muzzle = new THREE.Object3D();
+    muzzle.name = "aim-muzzle";
     muzzle.position.set(isPolearm
       ? spec.haft * 0.78
       : spec.receiver.l * 0.5 + spec.barrel.l + 0.035, 0, 0);
     root.add(muzzle);
 
+    /* WHERE THE SHOT IS SEEN TO LEAVE FROM.
+
+       Separate from `muzzle` on purpose. `muzzle` is the node the aim
+       solve is calibrated around and must not move (see the warning
+       above); this one is the physical point of the needle, and it is
+       what the bolt, the flare and the discharge light all use.
+
+       They were 32cm apart: the flare was pulled back onto the
+       reliquary cage on the theory that the spike in front of it is a
+       bayonet rather than a bore. On a weapon whose whole silhouette
+       converges on that spike, a discharge that happens behind it
+       reads as the lance leaking rather than firing.
+
+       It sits 10cm forward of the aim node along the same axis. The
+       visible shaft stays close to the reticle line, while ballistics
+       converges this physical tip onto the reticle-selected world
+       point so the lower third-person origin cannot pass under it. */
+    const emitter = new THREE.Object3D();
+    emitter.name = "bolt-emitter";
+    emitter.position.set(isPolearm
+      ? lanceTipX(spec.haft)
+      : spec.receiver.l * 0.5 + spec.barrel.l + 0.035, 0, 0);
+    root.add(emitter);
+
+    /* THE FLASH ITSELF, PARENTED TO THE EMITTER.
+       This is the fix for "the shot does not come from the lance",
+       and it is a fix to WHERE THE EFFECT LIVES rather than to a
+       number. `shoot()` reads the muzzle's world position and hands
+       it to the world-space particle pool - but it reads it BEFORE
+       `weapons.update()` has applied this frame's recoil, sway and
+       carry pose, so the flash is stamped into the world at last
+       frame's muzzle position and then the weapon moves out from
+       under it. During a burst the weapon is moving every frame and
+       the flashes stay where they were put, which is why they read
+       as lights hanging in the air beside the lance.
+
+       A child of the muzzle cannot be in the wrong place. Two
+       crossed billboards rather than one, so the flare has volume
+       from any bearing instead of vanishing edge-on when the camera
+       swings round the shoulder. */
+    /* Small. Seen end-on from a chase camera - the common case -
+       these crossed cards are a disc, and at 0.34 that disc covered
+       the trooper's whole chest and read as the armour glowing rather
+       than as the weapon firing. */
+    const flashGeo = new THREE.PlaneGeometry(0.20, 0.20);
+    const flashMat = new THREE.MeshBasicMaterial({
+      color: 0xffc24a,
+      map: flareTexture(THREE),
+      transparent: true,
+      opacity: 0,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      depthTest: false,
+      toneMapped: false,
+      side: THREE.DoubleSide,
+    });
+    const flashRig = new THREE.Group();
+    flashRig.name = "muzzle-flare";
+    for (let i = 0; i < 3; i += 1) {
+      const quad = new THREE.Mesh(flashGeo, flashMat);
+      quad.rotation.set(0, Math.PI * 0.5, (i / 3) * Math.PI);
+      quad.renderOrder = 900;
+      flashRig.add(quad);
+    }
+    /* A LANCE of flare down the shot axis, in front of the star.
+       Crossed billboards alone are a round puff, and a round puff on
+       the end of a spike reads as a lamp switching on. The stretched
+       card gives the discharge a DIRECTION, which is the difference
+       between "it is glowing" and "it just fired". */
+    const spikeGeo = new THREE.PlaneGeometry(1.05, 0.115);
+    spikeGeo.translate(0.42, 0, 0);
+    for (let i = 0; i < 2; i += 1) {
+      const spike = new THREE.Mesh(spikeGeo, flashMat);
+      spike.rotation.x = i * Math.PI * 0.5;
+      spike.renderOrder = 901;
+      flashRig.add(spike);
+    }
+    flashRig.visible = false;
+    emitter.add(flashRig);
+
     /* The business end, for measuring a swing. A blow is judged on
        what the TIP does, not on what the grip does - the grip barely
        moves in a good swing, which is the whole point of leverage. */
     const tip = new THREE.Object3D();
+    tip.name = "weapon-tip";
     /* A ranged weapon's tip sat at (0,0,0) - the weapon's own origin,
        which is the mount. Any probe that measured a rifle animation
        therefore measured a lever of zero length and reported that
@@ -529,6 +684,7 @@ export function buildWeapons(ctx) {
     // prove that the complete haft stays beside the torso rather
     // than checking only the glowing head.
     const butt = new THREE.Object3D();
+    butt.name = "weapon-butt";
     butt.position.set(isPolearm ? -spec.haft * 0.40 : -spec.receiver.l * 0.75, 0, 0);
     root.add(butt);
 
@@ -536,14 +692,38 @@ export function buildWeapons(ctx) {
     // short-range, shadowless light gives the cage and the knight's
     // hands readable amber bounce during Vespers/night while adding
     // no shadow pass and virtually nothing beyond the hero radius.
+    //
+    // SCENE-PARENTED, WITH A SOCKET ON THE HAFT. The carried lance
+    // lives inside the trooper rig, and the drop cinematic hides that
+    // whole rig until the egress beat - three collects lights with
+    // traverseVisible, so a lamp inside the hidden rig is missing
+    // from every program the boot warm-up compiles, and the frame
+    // that reveals the trooper would change the scene's light count
+    // and recompile every lit material in the level (the Aegis-freeze
+    // mechanism; multi-second on Windows/ANGLE). The lamp is
+    // therefore a permanent scene light; the update loop pins it to
+    // this socket every frame and drives it dark whenever the figure
+    // is hidden (free camera, first person), which is exactly what
+    // the old rig-parented lamp did by vanishing with the body.
+    // (Replica lances from cloneVisual get their own rig-parented
+    // light back - see cloneVisual - because their owners manage
+    // light prewarming themselves.)
     let reliquaryLight = null;
+    let reliquarySocket = null;
     if (isPolearm) {
       reliquaryLight = new THREE.PointLight(
-        0xff9f3c, LAMP_REST_INTENSITY, LAMP_REST_DISTANCE, 2
+        LAMP_REST_COLOR, LAMP_REST_INTENSITY, LAMP_REST_DISTANCE, 2
       );
-      reliquaryLight.position.set(spec.haft * 0.675, 0, 0);
+      reliquaryLight.name = "weapon-reliquary-lamp";
       reliquaryLight.castShadow = false;
-      root.add(reliquaryLight);
+      reliquaryLight.userData.restColour = new THREE.Color(LAMP_REST_COLOR);
+      reliquaryLight.userData.flashColour = new THREE.Color(LAMP_FLASH_COLOR);
+      reliquarySocket = new THREE.Object3D();
+      reliquarySocket.name = "weapon-reliquary-socket";
+      reliquarySocket.position.set(spec.haft * 0.74, 0, 0);
+      root.add(reliquarySocket);
+      ctx.scene.add(reliquaryLight);
+      reliquaryLight.position.set(spec.haft * 0.74, 0, 0);
     }
 
     // The censer hangs under the blade and swings on its own pivot.
@@ -563,7 +743,9 @@ export function buildWeapons(ctx) {
 
     const record = {
       key, spec, mode: spec.mode || key, root, seal, rng,
-      gripRear, gripFront, muzzle, tip, butt, censer, reliquaryLight,
+      gripRear, gripFront, muzzle, emitter, tip, butt, censer,
+      reliquaryLight, reliquarySocket,
+      flashRig, flashMat,
       /* Where the hands sit along the haft when nothing is sliding
          them. An authored THRUST runs the shaft forward through the
          grip, so the action code writes these positions absolutely
@@ -625,7 +807,96 @@ export function buildWeapons(ctx) {
     stowWant: 0,
     stow: 0,
     handRelease: 0,
+    furnaceCharge: {
+      charging: false,
+      time: 0,
+      maxTime: FURNACE_LANCE_RULES.ranks[1].chargeSeconds,
+      progress: 0,
+      ready: false,
+    },
   };
+
+  function currentHeatSpec() {
+    const spec = carry.record?.spec || PATTERNS.autogun;
+    return spec.polearm ? PATTERNS.autogun : spec;
+  }
+
+  function weaponEvent(extra = {}) {
+    return {
+      weaponKey: carry.key,
+      mode: carry.record?.mode || null,
+      melee: !!carry.record?.spec?.melee,
+      heat: carry.heat,
+      overheated: carry.overheated,
+      venting: carry.venting > 0,
+      ...extra,
+    };
+  }
+
+  /**
+   * Authoritative heat mutation for progression and future weapon rites.
+   * Invalid values are ignored, valid values are clamped to 0..1, and the
+   * overheat latch follows the same threshold rules as natural cooling.
+   */
+  function setHeat(value, detail = {}) {
+    if (!Number.isFinite(value)) return carry.heat;
+    const boon = ctx.mission?.boon?.();
+    if (boon?.active && (!boon.heat || boon.heat <= 0)) {
+      value = 0;
+      detail.clearOverheat = true;
+    }
+    const before = carry.heat;
+    const wasOverheated = carry.overheated;
+    carry.heat = clamp01(value);
+    const resetAt = currentHeatSpec().overheatReset ?? 0.25;
+    if (detail.clearOverheat === true || detail.overheated === false) {
+      carry.overheated = false;
+    } else if (detail.overheated === true || carry.heat >= 1) {
+      carry.overheated = true;
+    } else if (carry.overheated && carry.heat <= resetAt) {
+      carry.overheated = false;
+    }
+
+    if (carry.heat !== before || carry.overheated !== wasOverheated) {
+      const payload = weaponEvent({
+        reason: detail.reason || "external",
+        before,
+        after: carry.heat,
+        delta: carry.heat - before,
+        wasOverheated,
+      });
+      bus.emit("heat", payload);
+      if (!wasOverheated && carry.overheated) bus.emit("overheat", payload);
+      if (wasOverheated && !carry.overheated) bus.emit("heatReady", payload);
+    }
+    return carry.heat;
+  }
+
+  /** Add a non-negative amount of heat, returning the amount accepted. */
+  function addHeat(amount, detail = {}) {
+    if (!Number.isFinite(amount) || amount <= 0) return 0;
+    const before = carry.heat;
+    setHeat(before + amount, detail);
+    return carry.heat - before;
+  }
+
+  /** Remove a non-negative amount of heat, returning the amount removed. */
+  function coolHeat(amount, detail = {}) {
+    if (!Number.isFinite(amount) || amount < 0) return 0;
+    const before = carry.heat;
+    const wasOverheated = carry.overheated;
+    setHeat(before - amount, detail);
+    const removed = before - carry.heat;
+    if (removed > 0 || wasOverheated !== carry.overheated) {
+      bus.emit("cool", weaponEvent({
+        reason: detail.reason || "external",
+        amount: removed,
+        before,
+        after: carry.heat,
+      }));
+    }
+    return removed;
+  }
 
   function equip(key, mount) {
     const record = build(key);
@@ -634,6 +905,10 @@ export function buildWeapons(ctx) {
     const samePhysicalWeapon = carry.record === record;
     if (carry.record && !samePhysicalWeapon && carry.record.root.parent) {
       carry.record.root.parent.remove(carry.record.root);
+      /* The outgoing record's lamp is scene-parented and would keep
+         glowing at its last position; the update loop only drives the
+         CURRENT record's lamp. */
+      if (carry.record.reliquaryLight) carry.record.reliquaryLight.intensity = 0;
     }
     carry.key = key;
     carry.record = record;
@@ -650,7 +925,82 @@ export function buildWeapons(ctx) {
     if (!samePhysicalWeapon || !record.root.parent) {
       (carry.mount || group).add(record.root);
     }
+    bus.emit("equip", weaponEvent({ key }));
     return record;
+  }
+
+  /** A presentation-only copy for a character that carries the same rite.
+   *  Geometry remains shared; mutable materials, lights and transforms do not.
+   *  Nothing in the returned record is connected to player heat/recoil state. */
+  function cloneVisual(key = "autogun") {
+    const source = build(key);
+    if (!source) return null;
+    const root = source.root.clone(true);
+    root.name = `weapon-${key}-replica`;
+    root.position.set(0, 0, 0);
+    root.rotation.set(0, 0, 0);
+    root.scale.set(1, 1, 1);
+    /* The live lamp is scene-parented (see build), so the cloned tree
+       only carries its empty socket. A replica is presentation-only
+       and its owner manages its own light prewarming (the Apostate
+       hoists every authored light out to the scene at boot), so hand
+       it back a real rig-parented lamp at the socket; the traverse
+       below then applies the standard replica dimming to it exactly
+       as it did when the lamp lived in the source tree. */
+    const replicaSocket = root.getObjectByName("weapon-reliquary-socket");
+    if (replicaSocket && source.reliquaryLight) {
+      const lamp = new THREE.PointLight(
+        LAMP_REST_COLOR, LAMP_REST_INTENSITY, LAMP_REST_DISTANCE, 2
+      );
+      lamp.name = "weapon-reliquary-lamp";
+      lamp.castShadow = false;
+      lamp.userData.restColour = new THREE.Color(LAMP_REST_COLOR);
+      lamp.userData.flashColour = new THREE.Color(LAMP_FLASH_COLOR);
+      replicaSocket.add(lamp);
+    }
+    root.traverse((node) => {
+      if (node.material) {
+        const cloneMaterial = (sourceMaterial) => {
+          if (!sourceMaterial?.clone) return sourceMaterial;
+          const material = sourceMaterial.clone();
+          const sf = sourceMaterial.userData || {};
+          if (sf.sfPatched) {
+            material.userData = { ...material.userData };
+            delete material.userData.sfPatched;
+            delete material.userData.sfShader;
+            delete material.onBeforeCompile;
+            delete material.customProgramCacheKey;
+            if (sf.sfBasic || sourceMaterial.isMeshBasicMaterial) {
+              patchBasicMaterial(material, ctx.atmos,
+                Number.isFinite(sf.sfFade) ? sf.sfFade : 0.7,
+                sf.sfAdditive ?? sourceMaterial.blending === THREE.AdditiveBlending);
+            } else {
+              patchMaterial(material, ctx.atmos, {
+                rim: sf.sfRim, glitter: sf.sfGlitter,
+                bio: sf.sfBio, dunes: sf.sfDunes,
+              });
+            }
+          }
+          return material;
+        };
+        node.material = Array.isArray(node.material)
+          ? node.material.map(cloneMaterial) : cloneMaterial(node.material);
+      }
+      if (node.isLight) {
+        node.color = node.color.clone();
+        node.intensity *= 0.78;
+      }
+    });
+    return {
+      root,
+      gripRear: root.getObjectByName("grip-rear"),
+      gripFront: root.getObjectByName("grip-front"),
+      muzzle: root.getObjectByName("aim-muzzle"),
+      emitter: root.getObjectByName("bolt-emitter"),
+      tip: root.getObjectByName("weapon-tip"),
+      butt: root.getObjectByName("weapon-butt"),
+      flash: root.getObjectByName("muzzle-flare"),
+    };
   }
 
   function setMode(mode) {
@@ -665,15 +1015,31 @@ export function buildWeapons(ctx) {
 
   function fire() {
     if (!carry.record || carry.cooldown > 0) return false;
+    const boon = ctx.mission?.boon?.();
+    if (boon?.active && (!boon.heat || boon.heat <= 0)) {
+      carry.heat = 0;
+      carry.overheated = false;
+      carry.venting = 0;
+    }
     if (carry.venting > 0 || carry.overheated) return false;
     const spec = carry.record.spec;
-    carry.heat = clamp01(carry.heat + (spec.heatPerShot || 0));
+    const heatBefore = carry.heat;
+    const overheatBefore = carry.overheated;
+    /* A gilded lance runs cool. The multiplier is read here rather than
+       baked into the weapon spec because it is a property of the
+       BEARER, not of the pattern - the same lance overheats normally
+       thirty seconds later. */
+    /* ...and of the ROAD: the difficulty tier scales heat per shot too -
+       Martyr's barrel locks after 24 rounds instead of 30, which is a
+       ranged-only tax that costs no health (see difficulty.js). */
+    const tierHeat = Number(ctx.difficulty?.current?.heat) || 1;
+    const heatScale = (boon?.active ? Math.max(0, Number.isFinite(boon.heat) ? boon.heat : 0) : 1) * tierHeat;
+    const heatAdded = addHeat((spec.heatPerShot || 0) * heatScale, { reason: "fire" });
     carry.sinceShot = 0;
     // Latches AFTER the shot, so the round that fills the gauge
     // still leaves the barrel. Stopping it a shot early makes the
     // readout and the weapon disagree at exactly the moment the
     // player is watching the readout.
-    if (carry.heat >= 1) carry.overheated = true;
     const r = carry.record.spec.recoil;
     carry.cooldown = 1 / carry.record.spec.rof;
     // Impulse, not a set: repeated shots accumulate, which is what
@@ -681,6 +1047,68 @@ export function buildWeapons(ctx) {
     carry.recoil.back = Math.min(carry.recoil.back + r.kick, r.kick * 2.4);
     carry.recoil.rise = Math.min(carry.recoil.rise + r.rise, r.rise * 2.8);
     carry.recoil.roll += (Math.random() - 0.5) * r.roll * 2;
+    const payload = weaponEvent({
+      heatBefore,
+      heatAfter: carry.heat,
+      heatAdded,
+      becameOverheated: !overheatBefore && carry.overheated,
+      cooldown: carry.cooldown,
+    });
+    bus.emit("fire", payload);
+    ctx.progression?.onWeaponFire?.(payload);
+    return true;
+  }
+
+  function startFurnaceCharge(maxTime = FURNACE_LANCE_RULES.ranks[1].chargeSeconds) {
+    if (!carry.record || carry.venting > 0 || carry.overheated || carry.record.spec?.melee) return false;
+    carry.furnaceCharge.charging = true;
+    carry.furnaceCharge.time = 0;
+    carry.furnaceCharge.maxTime = Math.max(
+      0.1,
+      Number(maxTime) || FURNACE_LANCE_RULES.ranks[1].chargeSeconds
+    );
+    carry.furnaceCharge.progress = 0;
+    carry.furnaceCharge.ready = false;
+    return true;
+  }
+
+  function updateFurnaceCharge(dt) {
+    if (!carry.furnaceCharge.charging) return false;
+    carry.furnaceCharge.time += Math.max(0, Number(dt) || 0);
+    carry.furnaceCharge.progress = clamp01(carry.furnaceCharge.time / carry.furnaceCharge.maxTime);
+    carry.furnaceCharge.ready = carry.furnaceCharge.progress >= 1.0;
+    return carry.furnaceCharge.ready;
+  }
+
+  function cancelFurnaceCharge() {
+    carry.furnaceCharge.charging = false;
+    carry.furnaceCharge.time = 0;
+    carry.furnaceCharge.progress = 0;
+    carry.furnaceCharge.ready = false;
+  }
+
+  function dischargeFurnaceLance(opts = {}) {
+    if (!carry.record || carry.venting > 0 || carry.overheated) return false;
+    const rank = Math.max(1, Number(opts.rank) || 1);
+    const rule = FURNACE_LANCE_RULES.ranks[rank >= 2 ? 2 : 1];
+    const spec = carry.record.spec;
+    const r = spec?.recoil || { kick: 0.08, rise: 0.04, roll: 0.02 };
+    carry.sinceShot = 0;
+    carry.cooldown = Math.max(carry.cooldown, rule.cooldownSeconds);
+    carry.recoil.back = Math.min(carry.recoil.back + r.kick * 3.2, r.kick * 4.6);
+    carry.recoil.rise = Math.min(carry.recoil.rise + r.rise * 3.4, r.rise * 5.2);
+    carry.recoil.roll += (Math.random() - 0.5) * r.roll * 3.6;
+    carry.flash = 1;
+    cancelFurnaceCharge();
+    if (rule.heatDelta > 0) addHeat(rule.heatDelta, { reason: "furnace-lance" });
+    const payload = weaponEvent({
+      charged: true,
+      rank,
+      heatAfter: carry.heat,
+      cooldown: carry.cooldown,
+    });
+    bus.emit("furnaceLance", payload);
+    ctx.progression?.onFurnaceLanceDischarge?.(payload);
     return true;
   }
 
@@ -699,15 +1127,61 @@ export function buildWeapons(ctx) {
     if (carry.heat <= 0.001) return false;
     const spec = carry.record.spec.polearm ? PATTERNS.autogun : carry.record.spec;
     carry.venting = spec.ventTime || 1.4;
+    const ps = ctx.player?.state;
+    const payload = weaponEvent({
+      source: "manual",
+      startHeat: carry.heat,
+      duration: carry.venting,
+      x: ps?.x,
+      y: ps?.y,
+      z: ps?.z,
+      yaw: ps?.yaw,
+    });
+    bus.emit("vent", payload);
+    ctx.progression?.onVent?.(payload);
     return true;
   }
 
   /** A resupply drop cools the barrel and clears any lockout. */
   function resupply() {
     if (!carry.record) return;
-    carry.heat = 0;
-    carry.overheated = false;
+    const before = carry.heat;
+    setHeat(0, { reason: "resupply", clearOverheat: true });
     carry.venting = 0;
+    bus.emit("resupply", weaponEvent({ before, amount: before }));
+  }
+
+  function snapshotState() {
+    return {
+      mode: carry.record?.spec?.melee ? "melee" : "ranged",
+      heat: Number(carry.heat.toFixed(4)),
+      overheated: carry.overheated,
+      venting: Number(carry.venting.toFixed(4)),
+      sinceShot: Number(carry.sinceShot.toFixed(4)),
+      cooldown: Number(carry.cooldown.toFixed(4)),
+    };
+  }
+
+  function restoreState(saved = {}) {
+    /* A save can be taken during the borrowed melee rite. Restore the
+       durable barrel state but normalize the physical lance to its
+       ranged carry so main.js never inherits a half-finished combo. */
+    setMode("ranged");
+    carry.heat = clamp01(Number(saved.heat) || 0);
+    carry.overheated = !!saved.overheated && carry.heat > 0;
+    carry.venting = Math.max(0, Number(saved.venting) || 0);
+    carry.sinceShot = Math.max(0, Number(saved.sinceShot) || 0);
+    carry.cooldown = Math.max(0, Number(saved.cooldown) || 0);
+    carry.ads = 0;
+    carry.flash = 0;
+    carry.recoil.back = 0;
+    carry.recoil.rise = 0;
+    carry.recoil.roll = 0;
+    carry.sway.set(0, 0);
+    carry.stowWant = 0;
+    carry.stow = 0;
+    carry.handRelease = 0;
+    return snapshotState();
   }
 
   /**
@@ -760,6 +1234,9 @@ export function buildWeapons(ctx) {
    * attitude with anywhere to be. */
   const STOW_POS = { x: -0.492, y: -0.450, z: 0.270 };
   const STOW_ROT = { x: 0.0, y: 0.0, z: Math.PI / 2 };
+  // Scratch for the vent emitter's world position; a firefight is no
+  // place to be allocating a Vector3 every frame.
+  const _ventAt = new THREE.Vector3();
   const _aimPivotBefore = new THREE.Vector3();
   const _aimPivotAfter = new THREE.Vector3();
   const _aimButt = new THREE.Vector3();
@@ -797,6 +1274,14 @@ export function buildWeapons(ctx) {
     const spec = carry.record.spec;
 
     carry.cooldown = Math.max(0, carry.cooldown - dt);
+    const boon = ctx.mission?.boon?.();
+    if (boon?.active && (!boon.heat || boon.heat <= 0)) {
+      if (carry.heat > 0 || carry.overheated || carry.venting > 0) {
+        carry.heat = 0;
+        carry.overheated = false;
+        carry.venting = 0;
+      }
+    }
 
     /* HEAT. A vent drains the whole gauge over `ventTime` regardless
        of how full it was, so an early vent is quick in practice and
@@ -806,18 +1291,57 @@ export function buildWeapons(ctx) {
        elapsed since the last shot. */
     carry.sinceShot += dt;
     const heatSpec = spec.polearm ? PATTERNS.autogun : spec;
+    const ventingBefore = carry.venting;
     if (carry.venting > 0) {
       const ventTime = heatSpec.ventTime || 1.4;
       carry.venting = Math.max(0, carry.venting - dt);
       carry.heat = Math.max(0, carry.heat - dt / ventTime);
       if (carry.venting === 0) carry.heat = 0;
+      /* Steam for as long as the purge actually lasts, from the
+         weapon's own emitter socket, so the effect ends exactly when
+         the lance becomes usable again. A one-shot puff at the key
+         press would be over long before the vulnerability window is,
+         which is the part the player needs to be able to see. The
+         jet thins as the gauge falls, so the picture reports how far
+         through the purge it is. */
+      const port = carry.record?.emitter || carry.record?.muzzle;
+      if (port && ctx.vfx?.weaponVent) {
+        port.updateWorldMatrix(true, false);
+        _ventAt.setFromMatrixPosition(port.matrixWorld);
+        const remaining = carry.venting / ventTime;
+        ctx.vfx.weaponVent(_ventAt.x, _ventAt.y, _ventAt.z,
+          ctx.player?.state?.yaw || 0, 0.25 + remaining * 0.75);
+      }
     } else if (carry.sinceShot >= (heatSpec.coolDelay || 0)) {
       carry.heat = Math.max(0, carry.heat - (heatSpec.coolRate || 0) * dt);
+    }
+    /* OVERHEAT is visible on the weapon, not only on the gauge: heat
+       haze and a thin bleed of steam off the ports while the lockout
+       holds, so a player looking at their hands knows why the trigger
+       is dead. Sparse - a few motes a second, not a vent. */
+    if (carry.overheated && carry.venting <= 0 && ctx.vfx?.weaponVent) {
+      carry.overheatBleed = (carry.overheatBleed || 0) + dt;
+      if (carry.overheatBleed >= 0.12) {
+        carry.overheatBleed = 0;
+        const port = carry.record.emitter || carry.record.muzzle;
+        if (port) {
+          port.updateWorldMatrix(true, false);
+          _ventAt.setFromMatrixPosition(port.matrixWorld);
+          ctx.vfx.weaponVent(_ventAt.x, _ventAt.y, _ventAt.z,
+            ctx.player?.state?.yaw || 0, 0.26);
+        }
+      }
     }
     // The lockout clears on the way DOWN, at a threshold well below
     // full. See `carry.overheated`.
     if (carry.overheated && carry.heat <= (heatSpec.overheatReset ?? 0.25)) {
       carry.overheated = false;
+      bus.emit("heatReady", weaponEvent({ reason: "natural-cooling" }));
+    }
+    if (ventingBefore > 0 && carry.venting === 0) {
+      const payload = weaponEvent({ source: "manual" });
+      bus.emit("ventComplete", payload);
+      ctx.progression?.onVentComplete?.(payload);
     }
     const rec = spec.recoil.recover;
     carry.recoil.back = damp(carry.recoil.back, 0, rec, dt);
@@ -837,8 +1361,42 @@ export function buildWeapons(ctx) {
     const lamp = carry.record.reliquaryLight;
     if (lamp) {
       const f = carry.flash * carry.flash;
-      lamp.intensity = LAMP_REST_INTENSITY + f * 11.5;
+      /* Dark when the figure is. The lamp is scene-parented (see the
+         note at its construction), so hiding has to be an intensity
+         write - a visibility flip would change the scene's light
+         count and recompile every lit material in the level. The old
+         rig-parented lamp got this for free by vanishing with the
+         body it was inside. */
+      const figureShown = player?.figure?.root?.visible !== false;
+      lamp.intensity = figureShown ? LAMP_REST_INTENSITY + f * 11.5 : 0;
       lamp.distance = LAMP_REST_DISTANCE + f * 7.0;
+      // The chamber stays amber at rest, then ionises toward cool
+      // ivory-cyan on discharge so the light on the trooper matches
+      // the bolt instead of looking like a separate muzzle fire.
+      lamp.color.copy(lamp.userData.restColour)
+        .lerp(lamp.userData.flashColour, f);
+      const socket = carry.record.reliquarySocket;
+      if (socket) {
+        socket.updateWorldMatrix(true, false);
+        lamp.position.setFromMatrixPosition(socket.matrixWorld);
+      }
+    }
+
+    /* The flare rides the same decay as the lamp. Scaled as well as
+       faded: a flash that only fades reads as a decal being turned
+       down, while one that punches out and shrinks reads as gas
+       leaving under pressure. Hidden outright at zero so three
+       transparent quads are not in the sort every frame between
+       shots. */
+    const flare = carry.record.flashRig;
+    if (flare) {
+      const f = carry.flash;
+      const on = f > 0.02;
+      if (flare.visible !== on) flare.visible = on;
+      if (on) {
+        carry.record.flashMat.opacity = Math.min(1, f * 1.15);
+        flare.scale.setScalar(0.62 + (1 - f) * 0.55);
+      }
     }
 
     /* Sway lags the look. The weapon is heavy and the soldier is
@@ -915,10 +1473,12 @@ export function buildWeapons(ctx) {
        left support-arm pose exactly: only the weapon rotates around its
        support-hand contact, then the right-arm IK follows the rear grip.
 
-       The shaft is parallel to the live camera ray because ballistics
-       also leave the muzzle along that ray.  This keeps the visible bore,
-       reticle and projectile honest instead of making the model converge
-       on a point the shot itself would miss. */
+       The shaft stays parallel to the live camera ray as the stable
+       two-hand visual solve. Ballistics independently converges the
+       physical emitter onto the reticle-selected world point; at normal
+       combat distances that correction is only a few degrees, while
+       avoiding the much larger lie of a parallel low-origin shot passing
+       under the reticle or entering the ground. */
     if (sideCarry && camera && root.parent) {
       root.updateWorldMatrix(true, true);
       carry.record.gripFront.getWorldPosition(_aimPivotBefore);
@@ -955,9 +1515,10 @@ export function buildWeapons(ctx) {
 
            Below full commitment the shaft eases back to a low-ready
            carry along the BODY's own facing, tipped slightly down.
-           Ballistics are unaffected: shots leave along the camera ray
-           either way, and by the time a shot exists the commitment is
-           1 and the shaft is on the ray. */
+           Ballistics are unaffected: shots resolve the camera reticle
+           target and converge from the emitter either way, and by the
+           time a shot exists the commitment is 1 and the shaft is close
+           to that ray. */
         /* A stowed lance does not chase the reticle. Without this the
            weapon would still swing to the camera ray while slung on
            the back, which is both nonsense and a clipping hazard. */
@@ -1057,14 +1618,23 @@ export function buildWeapons(ctx) {
 
   return {
     group,
+    bus,
     patterns: PATTERNS,
     build,
+    cloneVisual,
     equip,
     setMode,
     fire,
     flashMuzzle,
     vent,
     resupply,
+    setHeat,
+    addHeat,
+    coolHeat,
+    // Short alias for doctrine code that reads as an action.
+    cool: coolHeat,
+    snapshot: snapshotState,
+    restore: restoreState,
     spread,
     update,
     carry,
@@ -1080,6 +1650,19 @@ export function buildWeapons(ctx) {
         melee: !!carry.record.spec.melee,
       };
     },
+    furnaceChargeState() {
+      return {
+        charging: carry.furnaceCharge.charging,
+        time: carry.furnaceCharge.time,
+        maxTime: carry.furnaceCharge.maxTime,
+        progress: carry.furnaceCharge.progress,
+        ready: carry.furnaceCharge.ready,
+      };
+    },
+    startFurnaceCharge,
+    updateFurnaceCharge,
+    cancelFurnaceCharge,
+    dischargeFurnaceLance,
     setAds(v) { carry.ads = clamp01(v); },
     /** Ask for the lance to be slung or drawn. The travel is animated
      *  from here; callers may set this every frame. */

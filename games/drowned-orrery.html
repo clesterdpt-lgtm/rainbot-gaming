@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#081821" />
+  <meta name="description" content="The Drowned Orrery is an original cinematic Three.js action-adventure set in a valley where astronomy took root." />
+  <meta property="og:title" content="The Drowned Orrery — A Rainbot Original" />
+  <meta property="og:description" content="Wake three meridian lenses, master the prism bracer, and face the Hollow Astronomer." />
+  <meta property="og:type" content="website" />
+  <meta property="og:image" content="../assets/img/drowned-orrery/drowned-orrery-key-art.png" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <title>The Drowned Orrery — A Rainbot Original</title>
+  <link rel="stylesheet" href="drowned-orrery/css/game.css?v=20260805-7" />
+</head>
+<body>
+  <main id="game-shell" class="game-shell is-booting" aria-label="The Drowned Orrery game">
+    <canvas id="game-canvas" tabindex="0" aria-label="The Drowned Orrery three-dimensional playfield"></canvas>
+
+    <div class="screen-fx screen-fx--grade" aria-hidden="true"></div>
+    <div class="screen-fx screen-fx--vignette" aria-hidden="true"></div>
+    <div class="screen-fx screen-fx--grain" aria-hidden="true"></div>
+    <div class="screen-fx screen-fx--damage" id="damage-flash" aria-hidden="true"></div>
+    <div class="screen-fx screen-fx--pulse" id="prism-flash" aria-hidden="true"></div>
+    <div class="cinema-bars" aria-hidden="true"><i></i><i></i></div>
+
+    <section class="boot-screen" id="boot-screen" aria-live="polite">
+      <div class="boot-mark" aria-hidden="true"><i></i><i></i><i></i><b></b></div>
+      <p class="eyebrow">RAINBOT ORIGINAL // CELESTIAL ARCHIVE 03</p>
+      <h1>THE DROWNED<br /><span>ORRERY</span></h1>
+      <div class="boot-meter"><i id="boot-meter"></i></div>
+      <p class="boot-status" id="boot-status">CHARTING THE VALLEY</p>
+    </section>
+
+    <section class="menu-screen" id="menu-screen" aria-labelledby="game-title">
+      <div class="menu-screen__shade"></div>
+      <a class="back-link" href="../games.html"><span aria-hidden="true">←</span> RAINBOT ARCADE</a>
+      <div class="menu-screen__content">
+        <p class="eyebrow">AN ORIGINAL THIRD-PERSON ADVENTURE</p>
+        <h1 id="game-title"><span>THE DROWNED</span> ORRERY</h1>
+        <p class="menu-screen__tagline">THE SKY WAS MAPPED.<br />THE ROOTS REMEMBERED.</p>
+        <p class="menu-screen__copy">Wake the three meridian lenses. Refract the buried light. Face what has been watching from the center of the instrument.</p>
+        <div class="menu-actions">
+          <button class="primary-button" id="start-button" type="button"><span>ENTER THE VALLEY</span><small>BEGIN EXPEDITION</small></button>
+          <button class="quiet-button" id="controls-button" type="button">FIELD NOTES</button>
+        </div>
+        <div class="menu-meta"><span>8–12 MINUTE VERTICAL SLICE</span><span>HEADPHONES RECOMMENDED</span><span>DESKTOP + GAMEPAD + TOUCH</span></div>
+      </div>
+      <div class="menu-chapter"><small>CHART 01</small><strong>MERIDIAN<br />VALLEY</strong><span>17:42 // STORMBREAK</span></div>
+    </section>
+
+    <section class="dialog-screen" id="controls-screen" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="controls-title">
+      <div class="panel panel--wide">
+        <p class="eyebrow">SKY-CARTOGRAPHER // FIELD NOTES</p>
+        <h2 id="controls-title">READ THE INSTRUMENT</h2>
+        <div class="control-grid">
+          <article><kbd>W A S D</kbd><h3>TRAVERSE</h3><p>Move through the valley. Hold Shift to sprint; Space clears low roots.</p></article>
+          <article><kbd>MOUSE</kbd><h3>OBSERVE</h3><p>Turn the camera. Tab focuses the nearest visible threat.</p></article>
+          <article><kbd>LEFT CLICK</kbd><h3>STAR-SPEAR</h3><p>Chain three measured strikes. Direction follows your focus.</p></article>
+          <article><kbd>RIGHT CLICK</kbd><h3>BRACE</h3><p>Guard a blow. Catch the flash at the last moment to parry.</p></article>
+          <article><kbd>CTRL</kbd><h3>SLIPSTEP</h3><p>Dodge in your movement direction with a brief prism veil.</p></article>
+          <article><kbd>Q</kbd><h3>PRISM PULSE</h3><p>Spend bracer charge to stagger threats and expose the Astronomer.</p></article>
+          <article><kbd>E</kbd><h3>REFRACT</h3><p>Wake meridian lenses when the bracer begins to answer.</p></article>
+          <article><kbd>ESC</kbd><h3>SUSPEND</h3><p>Pause the expedition, adjust sound, or release the pointer.</p></article>
+        </div>
+        <button class="primary-button panel-close" id="controls-close" type="button">UNDERSTOOD</button>
+      </div>
+    </section>
+
+    <section class="hud" id="hud" aria-label="Expedition status">
+      <div class="hud-top">
+        <div class="objective-block"><small>CURRENT BEARING</small><strong id="objective-text">WAKE THE MERIDIAN LENSES</strong></div>
+        <div class="lens-progress" aria-label="Meridian lens progress">
+          <i id="lens-1"></i><i id="lens-2"></i><i id="lens-3"></i>
+          <span id="lens-count">0 / 3</span>
+        </div>
+      </div>
+
+      <div class="orbit-vitals" aria-label="Vitality and prism charge">
+        <div class="orbit-disc" id="health-orbit" aria-label="Five vitality segments">
+          <i></i><i></i><i></i><i></i><i></i><b></b>
+        </div>
+        <div class="vital-copy"><small>VEY // VITAL</small><strong id="health-number">5</strong></div>
+        <div class="charge"><span>PRISM</span><i><b id="charge-meter"></b></i><strong id="charge-number">100</strong></div>
+      </div>
+
+      <div class="bearing-arc" aria-hidden="true"><i></i><i></i><i></i><b id="bearing-marker"></b></div>
+      <p class="context-prompt" id="context-prompt"></p>
+      <p class="subtitle" id="subtitle" aria-live="polite" aria-atomic="true"></p>
+      <div class="objective-card" id="objective-card"><small>BEARING UPDATED</small><strong id="objective-card-text">WAKE THE FIRST LENS</strong></div>
+      <div class="toast-feed" id="toast-feed"></div>
+      <div class="boss-hud" id="boss-hud">
+        <div><span>THE HOLLOW ASTRONOMER</span><small>WARDEN OF THE DROWNED AXIS</small></div>
+        <div class="boss-meter"><i id="boss-meter"></i></div>
+        <p id="boss-instruction">WAIT FOR THE CORE TO CONVERGE</p>
+      </div>
+      <div class="lock-reticle" id="lock-reticle" aria-hidden="true"><i></i><i></i><i></i></div>
+      <div class="performance-readout" id="performance-readout" aria-hidden="true"></div>
+    </section>
+
+    <section class="dialog-screen pause-screen" id="pause-screen" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="pause-title">
+      <div class="panel">
+        <p class="eyebrow">INSTRUMENT SUSPENDED</p>
+        <h2 id="pause-title">THE VALLEY<br />HOLDS STILL</h2>
+        <button class="primary-button" id="resume-button" type="button">RETURN</button>
+        <button class="quiet-button panel-button" id="restart-button" type="button">RESTART EXPEDITION</button>
+        <label class="range-control"><span>MASTER VOLUME</span><input id="volume-slider" type="range" min="0" max="1" step="0.01" value="0.76" /></label>
+        <label class="toggle-control"><span>REDUCED CAMERA MOTION</span><input id="motion-toggle" type="checkbox" /></label>
+        <a class="abort-link" href="../games.html">LEAVE THE VALLEY</a>
+      </div>
+    </section>
+
+    <section class="end-screen" id="end-screen" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="end-title">
+      <div class="end-screen__content">
+        <p class="eyebrow">THE AXIS REMEMBERS</p>
+        <h2 id="end-title">LIGHT<br />TAKES ROOT.</h2>
+        <p>The meridian turns again. Water falls. The sky has somewhere to go.</p>
+        <div class="debrief">
+          <div><span>EXPEDITION</span><strong id="end-time">00:00</strong></div>
+          <div><span>LENSES</span><strong>3 / 3</strong></div>
+          <div><span>ASTRONOMER</span><strong>STILLED</strong></div>
+        </div>
+        <button class="primary-button" id="replay-button" type="button">RETURN TO THE OVERLOOK</button>
+        <a class="quiet-link" href="../games.html">BACK TO RAINBOT</a>
+      </div>
+    </section>
+
+    <div class="touch-ui" id="touch-ui" aria-label="Touch controls">
+      <button class="touch-pause" data-action="pause" type="button" aria-label="Pause expedition">PAUSE</button>
+      <div class="touch-stick" id="touch-stick"><i id="touch-knob"></i></div>
+      <div class="touch-actions">
+        <button data-action="pulse" aria-label="Prism pulse">Q</button>
+        <button data-action="dodge" aria-label="Dodge">↗</button>
+        <button data-action="attack" class="touch-primary" aria-label="Attack">✦</button>
+        <button data-action="interact" aria-label="Interact">E</button>
+      </div>
+    </div>
+
+    <button class="fullscreen-button" id="fullscreen-button" type="button" aria-label="Toggle fullscreen"><i></i><i></i><i></i><i></i></button>
+    <p class="quality-badge" id="quality-badge">CELESTIAL // HIGH</p>
+  </main>
+
+  <script src="../assets/vendor/three/three-r128.min.js"></script>
+  <script src="../assets/vendor/three/examples/js/loaders/GLTFLoader.js"></script>
+  <script src="../assets/vendor/three/examples/js/utils/SkeletonUtils.js"></script>
+  <script src="drowned-orrery/js/gold-assets.js?v=20260805-14"></script>
+  <script src="drowned-orrery/js/world.js?v=20260805-9"></script>
+  <script src="drowned-orrery/js/actors.js?v=20260805-2"></script>
+  <script src="drowned-orrery/js/audio.js?v=20260804-1"></script>
+  <script src="drowned-orrery/js/game.js?v=20260805-29"></script>
+</body>
+</html>

@@ -3,10 +3,23 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Apop Demon Moggers — Rainbot Network</title>
-  <meta name="description" content="K-pop had demon hunters. America has demon MOGGERS. A five-stage 2D side-scroller parody — run, jump, sign cursed record deals, beat opening-act mini-bosses, and disband Boyz II Hell." />
+  <title>Apop Demon Moggers 3D — Rainbot Network</title>
+  <link rel="manifest" href="../site.webmanifest" />
+  <meta name="theme-color" content="#05070d" />
+  <link rel="canonical" href="https://clesterdpt-lgtm.github.io/rainbot-gaming/games/apop-demon-hunters.html" />
+  <meta property="og:title" content="Apop Demon Moggers 3D — Rainbot Network" />
+  <meta property="og:description" content="K-pop had demon hunters. America has demon MOGGERS. A 3D collectathon platformer — triple jump, wall kick and ground pound across five neon courses, collect Platinum Records, and disband Boyz II Hell." />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://clesterdpt-lgtm.github.io/rainbot-gaming/games/apop-demon-hunters.html" />
+  <meta property="og:image" content="https://clesterdpt-lgtm.github.io/rainbot-gaming/assets/img/rainbot-network-social-v1.png" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Apop Demon Moggers 3D — Rainbot Network" />
+  <meta name="twitter:description" content="A 3D collectathon platformer. Triple jump, wall kick and ground pound across five neon courses." />
+  <meta name="twitter:image" content="https://clesterdpt-lgtm.github.io/rainbot-gaming/assets/img/rainbot-network-social-v1.png" />
+  <meta name="description" content="K-pop had demon hunters. America has demon MOGGERS. A 3D collectathon platformer — triple jump, wall kick and ground pound across five neon courses, collect Platinum Records, and disband Boyz II Hell." />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bungee&family=Inter:wght@400;600;800;900&family=JetBrains+Mono:wght@400;700;800&family=Press+Start+2P&display=swap" />
-  <link rel="stylesheet" href="../assets/css/styles.css?v=20260712-uiux" />
+  <link rel="stylesheet" href="../assets/css/styles.css?v=20260812-game-chrome-2" />
+  <link rel="stylesheet" href="../assets/css/apop3d.css?v=20260821-spawn-1" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%23ec1a5e'/%3E%3Ctext x='50' y='72' font-family='Arial Black' font-size='60' fill='%23fff' text-anchor='middle'%3EA%3C/text%3E%3C/svg%3E" />
 </head>
 <body>
@@ -15,60 +28,50 @@
   <main class="game-page">
     <div class="game-page__header">
       <div>
-        <h1 class="game-page__title">🎤 Apop Demon Moggers</h1>
-        <div class="game-page__sub">Five-stage run-and-gun pop parody · Sign record deals · Cut the opening acts · Disband Boyz II Hell</div>
+        <h1 class="game-page__title">🎤 Apop Demon Moggers 3D</h1>
+        <div class="game-page__sub">Five 3D courses · Collect Platinum Records · Triple jump, wall kick, ground pound · Disband Boyz II Hell</div>
       </div>
       <a href="../games.html" class="btn btn--ghost" style="font-size:14px;padding:8px 14px;">← All games</a>
     </div>
 
     <div class="game-layout">
       <div class="game-stage" style="position:relative;">
-        <div class="hud">
-          <div class="hud__item"><span class="hud__label">SCORE</span><span class="hud__value" id="hud-score">0</span></div>
-          <div class="hud__item"><span class="hud__label">STAGE</span><span class="hud__value" id="hud-stage">1/5</span></div>
-          <div class="hud__item"><span class="hud__label">HP</span><span class="hud__value" id="hud-hp">100</span></div>
-          <div class="hud__item"><span class="hud__label">COMBO</span><span class="hud__value" id="hud-combo">0x</span></div>
-          <div class="hud__item"><span class="hud__label">HIGH</span><span class="hud__value" id="hud-high">0</span></div>
-        </div>
+        <div class="canvas-wrap canvas-wrap--ar-16-9 ap-stage">
+          <canvas id="apopCanvas" width="1280" height="720" tabindex="0"></canvas>
 
-        <div class="canvas-wrap canvas-wrap--ar-750-500">
-          <canvas id="gameCanvas" width="750" height="500" tabindex="0"></canvas>
+          <!-- Boot overlay. boot.js drives these ids. -->
+          <div class="ap-boot" id="ap-boot">
+            <div class="ap-boot__logo">APOP DEMON MOGGERS <span>3D</span></div>
+            <div class="ap-boot__bar"><div class="ap-boot__fill" id="ap-boot-fill"></div></div>
+            <div class="ap-boot__status" id="ap-boot-status">Warming up the stage</div>
+            <div class="ap-boot__tip" id="ap-boot-tip"></div>
+            <pre class="ap-boot__error" id="ap-boot-error"></pre>
+          </div>
+
+          <!-- In-world HUD. hud.js owns everything inside. -->
+          <div class="ap-hud" id="ap-hud" aria-live="polite"></div>
+
+          <!-- Menus, pause, results. hud.js owns this too. -->
+          <div class="ap-overlay" id="ap-overlay"></div>
 
           <button class="fs-btn" id="btn-fullscreen" type="button" aria-label="Max screen" title="Max screen">⛶</button>
 
-          <div class="touch-pad" aria-label="Touch controls">
-            <!-- Left thumb: invisible joystick — push to run, up to aim up, down to crouch -->
+          <div class="touch-pad ap-touch" id="ap-touch" aria-label="Touch controls">
             <div class="touch-pad__side touch-pad__side--move">
-              <div class="joystick" id="joystick" role="button" aria-label="Move, aim up, crouch"></div>
+              <div class="joystick" id="joystick" role="button" aria-label="Move"></div>
             </div>
-            <!-- Right thumb: jump + attacks -->
             <div class="touch-pad__side touch-pad__side--right">
-              <button class="touch-btn touch-btn--aura" id="btn-special" type="button" aria-label="Mog Aura">💅</button>
+              <button class="touch-btn touch-btn--aura" id="btn-special" type="button" aria-label="Mog Beam">💅</button>
               <button class="touch-btn touch-btn--jump" id="btn-jump" type="button" aria-label="Jump">↑</button>
-              <button class="touch-btn touch-btn--beam" id="btn-mog" type="button" aria-label="Mog Beam">BEAM</button>
+              <button class="touch-btn touch-btn--beam" id="btn-pound" type="button" aria-label="Ground pound">▼</button>
             </div>
-          </div>
-
-          <div class="overlay overlay--apop overlay--show" id="overlay">
-            <h2 class="overlay__title" id="overlay-title">🎤 APOP DEMON MOGGERS</h2>
-            <p class="overlay__sub" id="overlay-sub">
-              K-pop had demon <em>hunters</em>. America has demon <strong>MOGGERS</strong>.
-              <br><br>
-              Play <strong>Moggadonna</strong>'s frontwoman: clear five neon stages, dodge spotlight traps,
-              and blast a demon boy band
-              off the charts — then disband <strong>Boyz II Hell</strong> and out-mog
-              <strong>Lucifer Lipsync</strong>.
-            </p>
-            <div class="overlay__score" id="overlay-score"></div>
-            <button class="btn btn--primary" id="btn-primary">Take the stage</button>
           </div>
         </div>
-
       </div>
 
       <aside class="game-side">
         <div class="game-side__panel">
-          <img class="game-side__poster game-side__poster--wide" src="../assets/img/mockup/card-apop-moggers-v3.jpg?v=20260712-jpg" alt="Apop Demon Moggers updated cartoon poster art" />
+          <img class="game-side__poster game-side__poster--wide" src="../assets/img/mockup/card-apop-moggers-v3.jpg?v=20260712-jpg" alt="Apop Demon Moggers poster art" />
         </div>
 
         <div class="game-side__panel game-side__panel--controls">
@@ -78,46 +81,37 @@
             <button class="btn btn--ghost" id="btn-restart" style="font-size:13px;padding:8px 12px;">Restart</button>
           </div>
           <p style="font-family: var(--font-mono); font-size: 12px; color: var(--ink-dim); margin: 10px 0 0; line-height: 1.5;">
-            <kbd>←</kbd>/<kbd>→</kbd> or <kbd>A</kbd>/<kbd>D</kbd> · run<br>
-            <kbd>↑</kbd>/<kbd>W</kbd> · aim up · <kbd>↓</kbd>/<kbd>S</kbd> · crouch<br>
-            <kbd>Space</kbd> · jump (tap again = double jump)<br>
-            <kbd>E</kbd> · Mog Beam (on beat = bonus)<br>
-            <kbd>F</kbd> · Mog Aura (when meter is full)<br>
+            <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> · move<br>
+            <kbd>Space</kbd> · jump — time three in a row for the triple<br>
+            <kbd>Shift</kbd> · crouch · <kbd>Shift</kbd>+<kbd>Space</kbd> running · long jump<br>
+            <kbd>Space</kbd> at a wall · wall kick<br>
+            <kbd>Ctrl</kbd> in the air · ground pound<br>
+            <kbd>E</kbd> · Mog Beam (on beat = bonus) · <kbd>F</kbd> · Mog Aura<br>
+            <kbd>Q</kbd>/<kbd>E</kbd> hold · swing the camera · mouse · look<br>
             <kbd>⛶</kbd> top-right · max screen<br>
-            <span style="opacity:0.8;">Touch: left stick runs / aims up / crouches · jump &amp; blast on the right</span>
+            <span style="opacity:0.8;">Touch: left stick moves · jump and pound on the right</span>
           </p>
         </div>
 
         <div class="game-side__panel game-side__panel--powerups">
-          <h3 class="game-side__title">POWER-UPS</h3>
-          <div class="powerups" id="powerups"></div>
-        </div>
-
-        <div class="game-side__panel game-side__panel--deals">
           <h3 class="game-side__title">RECORD DEALS</h3>
-          <div class="apop-deals" id="record-deals" aria-live="polite"></div>
+          <div class="powerups" id="record-deals"></div>
         </div>
 
-        <div class="game-side__panel game-side__panel--tour-pass">
-          <h3 class="game-side__title">TOUR PASS</h3>
-          <div class="apop-tour-pass" id="tour-pass" aria-live="polite"></div>
+        <div class="game-side__panel">
+          <h3 class="game-side__title">PLATINUM RECORDS</h3>
+          <div class="apop-tour-pass" id="record-board" aria-live="polite"></div>
         </div>
-
-        <div id="ad-leaderboard"></div>
-        <div id="ad-rectangle" style="display:flex; justify-content:center;"></div>
 
         <details class="game-side__howto">
           <summary>How to play</summary>
           <ul>
-            <li><strong style="color:var(--ink);">Run</strong> with ←/→ (or A/D). <strong style="color:var(--ink);">Jump</strong> with Space — tap again mid-air for a double jump.</li>
-            <li><strong style="color:var(--ink);">Aim up</strong> with ↑/W to blast flying demons; <strong style="color:var(--ink);">crouch</strong> with ↓/S to duck under projectiles. On touch, the left stick does all four.</li>
-            <li><strong style="color:var(--ink);">Press E</strong> to fire your Mog Beam. Fire when the beat dot flashes <strong style="color:var(--accent-3);">green</strong> for bonus damage.</li>
-            <li><strong style="color:var(--ink);">Mog demons</strong> to build your MOG meter. When it's full, press F for a screen-clearing <strong style="color:var(--accent);">Mog Aura</strong>.</li>
-            <li><strong style="color:var(--ink);">Reach the EXIT flag</strong> to clear stages 1–4. Stage 5 is the boss: Lucifer Lipsync (3 phases).</li>
-            <li><strong style="color:var(--ink);">Record Deals:</strong> after each cleared stage, pick one ridiculous upgrade for the rest of the run.</li>
-            <li><strong style="color:var(--ink);">Opening Acts:</strong> stages 2 and 4 end with mini-bosses. The Algorithm Twins reward on-beat shots; the Payola Phantom only takes real damage when its contract window opens.</li>
-            <li><strong style="color:var(--ink);">Tour Pass:</strong> clear challenge badges to unlock profile-flex titles and a gold stage-fit cosmetic.</li>
-            <li><strong style="color:var(--ink);">Power-ups (ad):</strong> Crowd Surf (6s invincible), Power Note (2× damage 8s), Encore Blast (wipe demons on screen).</li>
+            <li><strong style="color:var(--ink);">It is a collectathon.</strong> Each of the five courses hides <strong style="color:var(--ink);">seven Platinum Records</strong>. Records unlock the doors deeper into the Label Lobby.</li>
+            <li><strong style="color:var(--ink);">The moveset is the game.</strong> Triple jump for height, long jump for distance, wall kick to climb a corner, ground pound to crack a stage, dive to cover ground fast.</li>
+            <li><strong style="color:var(--ink);">Clout</strong> is scattered everywhere. 100 in a single course is a Record on its own; it also tops your health back up.</li>
+            <li><strong style="color:var(--ink);">Mog Beam</strong> (E) is your ranged answer. Fire it on the beat — the HUD pulses — for bonus damage.</li>
+            <li><strong style="color:var(--ink);">Record Deals</strong> are the cap power-ups: temporary flight, a shield, invincibility, a speed burst. Each one is hidden behind a specific move.</li>
+            <li><strong style="color:var(--ink);">Bosses:</strong> the Algorithm Twins mirror your inputs, the Payola Phantom only takes damage while its contract window is open, and Lucifer Lipsync closes the game across three phases.</li>
           </ul>
           <p style="color: var(--ink-dim); font-size: 11px; margin-top: 10px; font-style: italic;">
             <strong>Parody.</strong> Apop Demon Moggers is fictional satire of American pop culture and internet "mogging" slang. The demon "boy band" and every character are invented parodies — not based on any real person, group, or organization.
@@ -138,11 +132,7 @@
   </footer>
 
   <script src="../assets/js/ads.js?v=20260627-profile-stats-1"></script>
-  <script src="../assets/js/main.js?v=20260712-uiux"></script>
-  <script src="../assets/js/apop-demon-hunters.js?v=20260628-apop-tour-pass-1"></script>
-  <script>
-    renderAdSlot(document.getElementById("ad-leaderboard"), "leaderboard");
-    renderAdSlot(document.getElementById("ad-rectangle"), "rectangle");
-  </script>
+  <script src="../assets/js/main.js?v=20260826-no-ads-1"></script>
+  <script src="../assets/js/apop3d/boot.js?v=20260821-spawn-1"></script>
 </body>
 </html>

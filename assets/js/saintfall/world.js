@@ -35,11 +35,12 @@ import {
 import {
   PALETTE, ROCK_RAMP, BASALT_RAMP, BONE_RAMP, BRONZE_RAMP, GLASS_RAMP,
   CHITIN_RAMP, SAND_RAMP, ASH_RAMP,
-  paintByHeight, paintFlat, paintGeometry, srgbTransfer as srgb,
+  paintByHeight, paintFlat, paintGeometry, patchMaterial, srgbTransfer as srgb,
 } from "saintfall/art.js";
 import { makeKit, mergeGeometries, cleanGeometry } from "saintfall/structures.js";
 import {
   DISTRICTS, ROAD_PATH, FOSSE_PATH, MAP_HALF, DROP_SITE,
+  CHUNK_SIZE, LOD_CELLS, GARNER_PIT, MATRIARCH_ARENA, STYLITE_ARENA, CENSER_WORKS,
 } from "saintfall/terrain.js";
 import { makeRamp } from "saintfall/core.js";
 
@@ -51,13 +52,34 @@ function makeBatcher(ctx, root) {
   const { THREE, materials } = ctx;
   const bins = new Map();
   return {
-    /** Queue a painted geometry into (district, material). */
+    /** Queue a painted geometry into (district, material).
+     *
+     * `opts.chunk` additionally bins by 256m grid cell, and it exists
+     * because ONE merged mesh is only the right shape for a LOCAL
+     * district. The road, the fosse and the map-wide boulder scatter
+     * each merged into a single mesh whose bounding sphere spanned
+     * the basin - which is inside every camera frustum from every
+     * standpoint AND intersects the sun's ~250m shadow box from
+     * everywhere, so every triangle of all three was vertex-shaded
+     * every frame and re-rasterised on every shadow redraw (measured
+     * together: ~240k of the shadow pass's 612k triangles, from
+     * every point on the map). Cell-binned they cull like terrain
+     * chunks do. Opt-in, so a real district keeps its single-unit
+     * cull and its draw-call count. */
     add(district, matName, geo, opts = {}) {
       if (!geo) return;
-      const key = `${district}|${matName}|${opts.tag || ""}`;
+      let cell = "";
+      if (opts.chunk) {
+        if (!geo.boundingBox) geo.computeBoundingBox();
+        const bb = geo.boundingBox;
+        const cx = clamp(Math.floor(((bb.min.x + bb.max.x) * 0.5 + MAP_HALF) / CHUNK_SIZE), -2, 9);
+        const cz = clamp(Math.floor(((bb.min.z + bb.max.z) * 0.5 + MAP_HALF) / CHUNK_SIZE), -2, 9);
+        cell = `c${cx}z${cz}`;
+      }
+      const key = `${district}|${matName}|${opts.tag || ""}|${cell}`;
       let bin = bins.get(key);
       if (!bin) {
-        bin = { district, matName, geos: [], opts };
+        bin = { district, matName, geos: [], opts, cell };
         bins.set(key, bin);
       }
       bin.geos.push(geo);
@@ -76,11 +98,25 @@ function makeBatcher(ctx, root) {
         const geo = cleanGeometry(THREE, merged);
         if (geo !== merged) merged.dispose?.();
         const mesh = new THREE.Mesh(geo, mat);
-        mesh.name = bin.opts.tag
+        /* The cell suffix goes LAST: collide.js exempts road paving by
+           the name prefix "road-surface-", and the collision audit
+           aggregates by the same base names. */
+        const base = bin.opts.tag
           ? `${bin.district}-${bin.opts.tag}-${bin.matName}`
           : `${bin.district}-${bin.matName}`;
+        mesh.name = bin.cell ? `${base}-${bin.cell}` : base;
         mesh.castShadow = bin.opts.castShadow !== false;
         mesh.receiveShadow = bin.opts.receiveShadow !== false;
+        /* See collide.js's own rasterMesh comment: a triangle whose
+           XZ footprint is under half a metre is dropped as clutter
+           UNLESS the mesh opts out of that filter here. A finely
+           subdivided hull - a rock arch's legs, sixty rings of it -
+           is built from exactly that many small triangles even
+           though the assembled shape stands metres tall, and every
+           one of them individually failed the footprint test: the
+           collider registered a few stray slivers and nothing else,
+           while the render mesh stood there solid. */
+        if (bin.opts.collisionSolid) mesh.userData.collisionSolid = true;
         mesh.matrixAutoUpdate = false;
         mesh.updateMatrix();
         mesh.userData.district = bin.district;
@@ -94,12 +130,54 @@ function makeBatcher(ctx, root) {
   };
 }
 
+/* Partition an ALREADY-PAINTED merged geometry into cell-sized
+   pieces for the batcher's `chunk` path. The split happens after the
+   paint on purpose: paintByHeight normalises its ramp to the
+   geometry's own bounding box, so painting per-piece would move every
+   colour. Triangles are assigned by centroid, attributes are copied
+   verbatim, so the union renders byte-identical to the original -
+   only the cull granularity changes. */
+function splitByCell(THREE, geo, cellSize) {
+  const src = geo.index ? geo.toNonIndexed() : geo;
+  const pos = src.attributes.position;
+  const names = Object.keys(src.attributes);
+  const buckets = new Map();
+  const triCount = pos.count / 3;
+  for (let t = 0; t < triCount; t += 1) {
+    const i = t * 3;
+    const cx = Math.floor(((pos.getX(i) + pos.getX(i + 1) + pos.getX(i + 2)) / 3 + MAP_HALF) / cellSize);
+    const cz = Math.floor(((pos.getZ(i) + pos.getZ(i + 1) + pos.getZ(i + 2)) / 3 + MAP_HALF) / cellSize);
+    const key = `${cx}:${cz}`;
+    let list = buckets.get(key);
+    if (!list) { list = []; buckets.set(key, list); }
+    list.push(t);
+  }
+  const out = [];
+  for (const tris of buckets.values()) {
+    const g = new THREE.BufferGeometry();
+    for (const name of names) {
+      const a = src.attributes[name];
+      const size = a.itemSize;
+      const arr = new a.array.constructor(tris.length * 3 * size);
+      let w = 0;
+      for (const t of tris) {
+        const base = t * 3 * size;
+        for (let k = 0; k < 3 * size; k += 1) arr[w++] = a.array[base + k];
+      }
+      g.setAttribute(name, new THREE.BufferAttribute(arr, size, a.normalized));
+    }
+    out.push(g);
+  }
+  if (src !== geo) src.dispose?.();
+  return out;
+}
+
 /* ============================================================
    BUILD
    ============================================================ */
 
 export async function buildWorld(ctx, onProgress) {
-  const { THREE, scene, terrain } = ctx;
+  const { THREE, scene, terrain, atmos } = ctx;
   const kit = makeKit(THREE);
   const field = terrain.field;
   const H = (x, z) => field.heightAt(x, z);
@@ -109,9 +187,248 @@ export async function buildWorld(ctx, onProgress) {
   scene.add(root);
   const batch = makeBatcher(ctx, root);
 
+  /* The approved Meshy landmarks own both their visible silhouette and
+     their collision silhouette. Keeping the old procedural objects as
+     hidden proxies looked harmless, but their shapes diverge sharply at
+     this scale: the old head reached tens of metres beyond the new veil,
+     which left solid walls in visibly empty sand. The collision raster
+     still reduces these detailed surfaces to one-metre cells, so the
+     player's normal radius provides a stable contact margin without a
+     second, drifting version of each object. */
+  const authoredMeshes = [];
+  const authoredLandmarks = [];
+  const landmarkSources = Object.create(null);
+  const landmarkAssetsReady = (async () => {
+    const specs = [
+      ["fallenSaintHead", "fallen-saint-head-veiled-oracle.glb"],
+      ["fallenSaintHand", "fallen-saint-hand-benediction.glb"],
+      /* The wheel is placed sixteen-plus times and costs 17,712
+         triangles per copy; the far build (scripts/
+         saintfall-build-far-lod.mjs) is 3,006 triangles inside a
+         measured 0.52%-of-extent error. The head and hand are the
+         map's ONE landmark pair, placed once each - they stay full
+         detail at every distance on purpose. */
+      ["gildedReachCross", "gilded-reach-choir-wheel.glb", "gilded-reach-choir-wheel-far.glb"],
+    ];
+    try {
+      const { GLTFLoader } = await import("three/addons/loaders/GLTFLoader.js");
+      const loader = new GLTFLoader();
+      await Promise.all(specs.map(async ([key, file, farFile]) => {
+        const url = new URL(`../../../assets/models/saintfall/meshy/${file}`, import.meta.url);
+        if (ctx.build) url.searchParams.set("v", ctx.build);
+        try {
+          const gltf = await loader.loadAsync(url.href);
+          const source = gltf.scene;
+          source.updateMatrixWorld(true);
+          const box = new THREE.Box3().setFromObject(source);
+          const size = box.getSize(new THREE.Vector3());
+          if (!(size.y > 1e-6)) throw new Error("model has no measurable height");
+          const seenMaterials = new Set();
+          const materialsByName = new Map();
+          source.traverse((node) => {
+            if (!node.isMesh) return;
+            const list = Array.isArray(node.material) ? node.material : [node.material];
+            for (const material of list) {
+              if (!material || seenMaterials.has(material)) continue;
+              seenMaterials.add(material);
+              material.envMapIntensity = 0.82;
+              patchMaterial(material, atmos, { rim: 0.78, glitter: 0 });
+              if (material.name) materialsByName.set(material.name, material);
+            }
+          });
+          landmarkSources[key] = { source, box, size };
+          if (!farFile) return;
+          /* The far variant is a RENDER stand-in only: it never
+             seats, never collides, never registers as an authored
+             mesh. Its meshes are re-pointed at the FULL model's
+             already-patched materials (matched by name), so no
+             second texture set uploads and no new shader program
+             exists - the two levels differ in geometry alone. A
+             far material with no name-match is patched in place as
+             the fallback so it still shades like the world. */
+          try {
+            const farUrl = new URL(`../../../assets/models/saintfall/meshy/${farFile}`, import.meta.url);
+            if (ctx.build) farUrl.searchParams.set("v", ctx.build);
+            const farGltf = await loader.loadAsync(farUrl.href);
+            const farSource = farGltf.scene;
+            farSource.updateMatrixWorld(true);
+            const farSeen = new Set();
+            farSource.traverse((node) => {
+              if (!node.isMesh) return;
+              const list = Array.isArray(node.material) ? node.material : [node.material];
+              const swapped = list.map((material) => {
+                if (!material) return material;
+                const shared = material.name && materialsByName.get(material.name);
+                if (shared) return shared;
+                if (!farSeen.has(material)) {
+                  farSeen.add(material);
+                  material.envMapIntensity = 0.82;
+                  patchMaterial(material, atmos, { rim: 0.78, glitter: 0 });
+                }
+                return material;
+              });
+              node.material = Array.isArray(node.material) ? swapped : swapped[0];
+            });
+            landmarkSources[key].far = farSource;
+          } catch (error) {
+            console.warn(`[saintfall] far variant for "${key}" failed to load; full detail at every distance`, error);
+          }
+        } catch (error) {
+          console.warn(`[saintfall] landmark "${key}" failed to load; using procedural fallback`, error);
+        }
+      }));
+    } catch (error) {
+      console.warn("[saintfall] landmark loader unavailable; using procedural fallbacks", error);
+    }
+  })();
+
+  /* Height multiple at which a landmark swaps to its far variant.
+     At 20 heights, the whole object spans ~3 degrees - about 64 css
+     pixels of a 60-degree, 720-line frame - and the far build's
+     measured error bound (0.52% of extent, saintfall-build-far-lod)
+     projects to under one DEVICE pixel at that range. Sub-pixel by
+     construction is the claim "no visible LOD pop" actually rests
+     on; a fixed metre threshold could not make it for both a 12m
+     avenue wheel and the 44m arena cross. The hysteresis keeps a
+     camera strafing the boundary from flickering levels. */
+  const LANDMARK_FAR_SWAP_HEIGHTS = 20;
+  const LANDMARK_FAR_HYSTERESIS = 0.06;
+
+  const addAuthoredLandmark = (asset, opts) => {
+    const pivot = new THREE.Group();
+    pivot.name = opts.name;
+    pivot.position.set(opts.pos[0], opts.pos[1], opts.pos[2]);
+    if (opts.rotOrder) pivot.rotation.order = opts.rotOrder;
+    if (opts.rot) pivot.rotation.set(opts.rot[0], opts.rot[1], opts.rot[2]);
+
+    const fitted = new THREE.Group();
+    const visual = asset.source.clone(true);
+    const scale = opts.height / asset.size.y;
+    fitted.scale.setScalar(scale);
+    fitted.position.set(
+      -((asset.box.min.x + asset.box.max.x) * 0.5) * scale,
+      -asset.box.min.y * scale,
+      -((asset.box.min.z + asset.box.max.z) * 0.5) * scale
+    );
+    if (asset.far) {
+      /* Seating, collision and the authored-mesh registry below all
+         walk `visual` - the FULL level - so the far clone changes
+         nothing but what the rasteriser is handed past the swap
+         distance. three's LOD picks a level against the camera that
+         renders the frame, and the shadow pass then rasterises the
+         SAME level, so a swapped-out wheel also stops feeding its
+         17k triangles to every shadow redraw. */
+      const lod = new THREE.LOD();
+      const far = asset.far.clone(true);
+      far.traverse((node) => {
+        if (!node.isMesh) return;
+        node.name = `${opts.name}-far-mesh`;
+        node.castShadow = true;
+        node.receiveShadow = true;
+        node.userData.district = opts.district;
+      });
+      lod.addLevel(visual, 0);
+      lod.addLevel(far, opts.height * LANDMARK_FAR_SWAP_HEIGHTS, LANDMARK_FAR_HYSTERESIS);
+      fitted.add(lod);
+    } else {
+      fitted.add(visual);
+    }
+    pivot.add(fitted);
+
+    const meshes = [];
+    visual.traverse((node) => {
+      if (!node.isMesh) return;
+      node.name = `${opts.name}-mesh`;
+      node.castShadow = true;
+      node.receiveShadow = true;
+      node.userData.district = opts.district;
+      /* Meshy triangulates curved panels finely enough that most faces
+         are smaller than collide.js's ordinary clutter threshold. This
+         tag keeps those faces as one structural surface; collision is
+         now baked from the same transformed vertices the player sees. */
+      node.userData.collisionSolid = true;
+      node.userData.authoredLandmark = opts.key;
+      authoredMeshes.push(node);
+      meshes.push(node);
+    });
+    root.add(pivot);
+
+    let terrainSeat = null;
+    if (opts.seatOnTerrain) {
+      /* Seat the transformed MODEL, not its unrotated bounding box. The
+         Choir wheel has a 7-10m square footing at its authored sizes,
+         so a centre-point height leaves its downhill corners hanging in
+         open air. Fallen versions make that failure larger: their lower
+         envelope runs along the monument's side after the tilt.
+
+         The support calculation mirrors `restOnTerrain`, but operates on
+         an Object3D hierarchy. It runs after yaw/lean/scale, samples every
+         vertex in the transformed lower band, and chooses the lowest
+         required seat. `embed` then keeps even the lowest support below
+         the sand instead of exposing a flat underside from a low camera. */
+      pivot.position.y = 0;
+      pivot.updateMatrixWorld(true);
+      /* From the FULL level, not the pivot: Box3.setFromObject walks
+         invisible children too, so measuring the pivot would fold the
+         far LOD's approximated envelope (up to ~0.5% of extent lower)
+         into the low band and move every seat a few centimetres from
+         where the pre-LOD build put it. The far clone must change
+         nothing but far-field rasterisation. */
+      const box = new THREE.Box3().setFromObject(visual);
+      const lowBand = box.min.y + Math.max(0.12, (box.max.y - box.min.y) * 0.18);
+      const supports = [];
+      const point = new THREE.Vector3();
+      for (const mesh of meshes) {
+        const pos = mesh.geometry?.attributes?.position;
+        if (!pos) continue;
+        for (let i = 0; i < pos.count; i += 1) {
+          point.fromBufferAttribute(pos, i).applyMatrix4(mesh.matrixWorld);
+          if (point.y <= lowBand) supports.push(H(point.x, point.z) - point.y);
+        }
+      }
+      if (!supports.length) supports.push(H(opts.pos[0], opts.pos[2]) - box.min.y);
+      supports.sort((a, b) => a - b);
+      const quantile = opts.seatOnTerrain.quantile ?? 0.35;
+      const qi = Math.floor((supports.length - 1) * quantile);
+      const maxGap = opts.seatOnTerrain.maxGap ?? 0;
+      const embed = opts.seatOnTerrain.embed ?? 0.10;
+      const y = Math.min(supports[qi], supports[0] + maxGap) - embed;
+      pivot.position.y = y;
+      pivot.updateMatrixWorld(true);
+      terrainSeat = {
+        supportCount: supports.length,
+        y,
+        maxGap: y - supports[0],
+        embed,
+      };
+    }
+
+    const placement = {
+      variant: opts.variant || "upright",
+      targetHeight: opts.height,
+      yaw: opts.rot?.[1] || 0,
+      tiltX: opts.rot?.[0] || 0,
+      tiltZ: opts.rot?.[2] || 0,
+      rotOrder: opts.rotOrder || "XYZ",
+      arenaEdge: !!opts.arenaEdge,
+      terrainSeat,
+    };
+    pivot.userData.landmarkPlacement = placement;
+    authoredLandmarks.push({ key: opts.key, root: pivot, meshes, placement });
+    return pivot;
+  };
+
   const pois = [];
   const lights = [];
   const emitters = [];      // handed to vfx: fires, spores, steam
+  /* The Choir's standing needles, published for the encounter that
+     lives on top of them. The Stylite perches on real rock - the same
+     rock that is in the collision grid and casts the district's light
+     shafts - so its ledges cannot be guessed at, re-derived from a
+     duplicated RNG seed, or quietly drift when the spire field is
+     re-laid. See abbess.js and garner.js for the two encounters that
+     had to hard-code a position because there was nothing to read. */
+  const choirNeedles = [];
   const banners = [];       // geometry with a `wave` attribute, animated in vfx
   /* Exact authored walking surfaces that sit above the height field.
      Terrain alone cannot answer where the player's soles belong on a
@@ -120,6 +437,7 @@ export async function buildWorld(ctx, onProgress) {
      the interpolated terrain mesh. Collision and foot IK consume this
      function after the world is complete. */
   let walkSurfaceAt = () => -Infinity;
+  let walkSurfaceMaxInCircle = () => -Infinity;
 
   const paintH = (geo, ramp, opts) => paintByHeight(THREE, geo, ramp, opts);
   const flat = (geo, hex, jit = 0.08) => paintFlat(THREE, geo, hex, jit);
@@ -289,14 +607,34 @@ export async function buildWorld(ctx, onProgress) {
         }
       }
     }
-    const mesh = new THREE.Mesh(mergeGeometries(THREE, geos), ctx.materials.rock);
-    mesh.name = "rim";
-    mesh.castShadow = false;
-    mesh.receiveShadow = false;
-    mesh.frustumCulled = false;
-    mesh.matrixAutoUpdate = false;
-    mesh.updateMatrix();
-    root.add(mesh);
+    /* Sectored, not one merged ring. The ring surrounds every
+       possible camera, so as a single mesh its 35k triangles were
+       vertex-shaded from every standpoint in the game; a 60-degree
+       fov actually sees three or four sectors of sixteen. A GROUP
+       named "rim" keeps the isolate harness's visibility toggle
+       working on the whole thing. */
+    const SECTORS = 16;
+    const sectorGeos = Array.from({ length: SECTORS }, () => []);
+    for (const g of geos) {
+      g.computeBoundingBox();
+      const bb = g.boundingBox;
+      const a = Math.atan2((bb.min.z + bb.max.z) * 0.5, (bb.min.x + bb.max.x) * 0.5);
+      const s = ((Math.floor((a / TAU) * SECTORS) % SECTORS) + SECTORS) % SECTORS;
+      sectorGeos[s].push(g);
+    }
+    const rimGroup = new THREE.Group();
+    rimGroup.name = "rim";
+    for (let s = 0; s < SECTORS; s += 1) {
+      if (!sectorGeos[s].length) continue;
+      const mesh = new THREE.Mesh(mergeGeometries(THREE, sectorGeos[s]), ctx.materials.rock);
+      mesh.name = `rim-s${s}`;
+      mesh.castShadow = false;
+      mesh.receiveShadow = false;
+      mesh.matrixAutoUpdate = false;
+      mesh.updateMatrix();
+      rimGroup.add(mesh);
+    }
+    root.add(rimGroup);
   }
 
   /* ============================================================
@@ -449,6 +787,10 @@ export async function buildWorld(ctx, onProgress) {
       const len = Math.hypot(b.x - a.x, b.z - a.z);
       if (len < 0.2) continue;
 
+      // The Pilgrim's Road leads up to the Cathedral steps and terminates outside
+      // the south facade (z = -655), leaving the interior nave purely to cathedral flooring.
+      if (Math.min(a.z, b.z) <= -654 || Math.max(a.z, b.z) <= -654) continue;
+
       /* Sand reclaims the road in patches. The gaps are where the
          road stops being a corridor and starts being a ruin.
 
@@ -546,6 +888,34 @@ export async function buildWorld(ctx, onProgress) {
       return best;
     };
 
+    /* Boundary samples cover the sloping face of an authored road
+       quad, but a sharp shared corner can be the maximum INSIDE a
+       flight capsule. Return every indexed quad vertex within the
+       footprint so collision can include those exact interior peaks
+       just as it does for terrain-grid vertices. */
+    walkSurfaceMaxInCircle = (x, z, radius) => {
+      const minBX = Math.floor((x - radius) / WALK_BUCKET);
+      const maxBX = Math.floor((x + radius) / WALK_BUCKET);
+      const minBZ = Math.floor((z - radius) / WALK_BUCKET);
+      const maxBZ = Math.floor((z + radius) / WALK_BUCKET);
+      const radiusSq = radius * radius + 1e-9;
+      let best = -Infinity;
+      for (let bx = minBX; bx <= maxBX; bx += 1) {
+        for (let bz = minBZ; bz <= maxBZ; bz += 1) {
+          const list = walkBuckets.get(`${bx},${bz}`);
+          if (!list) continue;
+          for (const quad of list) {
+            for (const point of quad) {
+              if ((point[0] - x) ** 2 + (point[2] - z) ** 2 <= radiusSq) {
+                best = Math.max(best, point[1]);
+              }
+            }
+          }
+        }
+      }
+      return best;
+    };
+
     // Darker than the sand it crosses. A pale flagstone with an
     // up-facing normal under a 4.75 sun clips to white, and 28k
     // vertices of it turned the causeway into a strip of lit paper
@@ -578,17 +948,17 @@ export async function buildWorld(ctx, onProgress) {
     const DUST = hexToRgb("#c09468");
     for (const { g, t, dust } of stones) {
       flat(g, mixRgb(PAVING.at(t), DUST, dust * 0.75), 0.2);
-      batch.add("road", "stone", g, { tag: "surface" });
+      batch.add("road", "stone", g, { tag: "surface", chunk: true });
     }
     for (const { g, t } of kerbs) {
       flat(g, PAVING.at(0.35 + t * 0.5), 0.1);
-      batch.add("road", "stone", g, { tag: "surface" });
+      batch.add("road", "stone", g, { tag: "surface", chunk: true });
     }
     // The bed is the darkest thing on the road, so the joints between
     // flagstones read as gaps down into it rather than as scratches.
     for (const { g, t } of beds) {
       flat(g, PAVING.at(t), 0.08);
-      batch.add("road", "stone", g, { tag: "surface" });
+      batch.add("road", "stone", g, { tag: "surface", chunk: true });
     }
 
     /* --- the saints of the road --- */
@@ -596,6 +966,7 @@ export async function buildWorld(ctx, onProgress) {
     for (let i = 6; i < furnitureProf.length - 6; i += 7) {
       const a = furnitureProf[i];
       const nxt = furnitureProf[i + 1];
+      if (a.z <= -654 || nxt.z <= -654) continue;
       const yaw = Math.atan2(nxt.z - a.z, nxt.x - a.x);
       for (const side of [-1, 1]) {
         if (rng.chance(0.28)) continue;
@@ -624,7 +995,7 @@ export async function buildWorld(ctx, onProgress) {
         paintH(g, makeRamp([
           [0, "#4a3830"], [0.35, "#7a6150"], [0.7, "#a98a6c"], [1, "#cfb28c"],
         ]), { normalWeight: 0.46, jitter: 0.13, noise: 0.22 });
-        batch.add("road", "stone", g);
+        batch.add("road", "stone", g, { chunk: true });
       }
     }
 
@@ -637,7 +1008,7 @@ export async function buildWorld(ctx, onProgress) {
       ]);
       place(g, a.x - 13, a.z, { rot: [0, rng() * TAU, 0] });
       paintH(g, makeRamp([[0, "#3e332e"], [1, "#8d7660"]]), { normalWeight: 0.5, jitter: 0.1 });
-      batch.add("road", "stone", g);
+      batch.add("road", "stone", g, { chunk: true });
     }
 
     pois.push({ id: "road", name: "The Pilgrim's Road", x: -14, z: 168 });
@@ -725,42 +1096,127 @@ export async function buildWorld(ctx, onProgress) {
       banners.push({ geo: ban, colour: PALETTE.oxblood, accent: PALETTE.gold, district: "threshold" });
     }
 
-    /* --- the drop pod --- */
+    /* --- the drop site ---
+
+       The POD ITSELF is no longer baked here. It is a live, hinged
+       object built by pod.js and placed by main.js, because the
+       cinematic has to fly the same lander it leaves standing:
+       a merged copy in this batch meant the thing the player landed
+       in vanished at the handoff and a different, greyer hexagon
+       took its place one metre away.
+
+       What stays is the ground it landed ON - the crater, the blast
+       ejecta and the burn ring. Those are static, they are terrain,
+       and they are what makes the arrival read as violent after the
+       camera has moved on. */
     {
-      const parts = [];
-      const podH = 6.2;
-      parts.push(kit.prism({ h: podH, rBottom: 2.05, rTop: 1.72, sides: 6, segments: 3 }));
-      parts.push(kit.prism({ h: 1.1, rBottom: 1.72, rTop: 0.55, sides: 6 }).translate(0, podH, 0));
-      parts.push(kit.prism({ h: 0.9, rBottom: 2.25, rTop: 2.1, sides: 6 }).translate(0, -0.5, 0));
-      // Ribs.
-      for (let i = 0; i < 6; i += 1) {
-        const a = (i / 6) * TAU;
-        const rib = kit.slab(0.34, podH, 0.62, 0.05);
-        rib.rotateY(-a);
-        rib.translate(Math.cos(a) * 1.92, 0, Math.sin(a) * 1.92);
-        parts.push(rib);
-        // Retro fins.
-        const fin = kit.slab(0.22, 2.4, 1.5, 0.05);
-        fin.rotateY(-a);
-        fin.translate(Math.cos(a) * 2.25, -0.2, Math.sin(a) * 2.25);
-        parts.push(fin);
+      /* Scorch, draped over the crater's own dish.
+
+         The hole itself is TERRAIN - `craterProfile` is composed into
+         `heightAt` - so the ground mesh, the collision grid and the
+         trooper's soles already agree about it. This adds the burn.
+
+         Sampled off the DRAWN surface, not off `heightAt`. The
+         terrain mesh is a 4m grid that interpolates linearly between
+         its vertices, and inside a concave bowl a straight chord runs
+         ABOVE the curve it is cutting - by half a metre at this
+         depth. A skin floated a few centimetres over the analytic
+         height therefore spends the whole crater buried under the
+         very ground it is supposed to be lying on. Reproducing the
+         mesh's own bilinear read puts it back on the surface, and
+         14cm of float covers the residual: the mesh triangulates each
+         quad rather than interpolating it bilinearly, so the two
+         disagree by a few centimetres along every diagonal. */
+      const GRID = CHUNK_SIZE / LOD_CELLS[0];
+      const drawnY = (x, z) => {
+        const gx = (x + MAP_HALF) / GRID;
+        const gz = (z + MAP_HALF) / GRID;
+        const i = Math.floor(gx);
+        const j = Math.floor(gz);
+        const fx = gx - i;
+        const fz = gz - j;
+        const x0 = -MAP_HALF + i * GRID;
+        const z0 = -MAP_HALF + j * GRID;
+        return lerp(
+          lerp(H(x0, z0), H(x0 + GRID, z0), fx),
+          lerp(H(x0, z0 + GRID), H(x0 + GRID, z0 + GRID), fx),
+          fz);
+      };
+      {
+        const RINGS = [1.1, 2.6, 4.0, 5.3, 6.5, 7.6, 8.6, 9.6, 10.6];
+        const SIDES = 40;
+        const pos = [];
+        const idx = [];
+        pos.push(padX, drawnY(padX, padZ) + 0.14, padZ);
+        for (let ri = 0; ri < RINGS.length; ri += 1) {
+          const r = RINGS[ri];
+          for (let s2 = 0; s2 < SIDES; s2 += 1) {
+            const a = (s2 / SIDES) * TAU;
+            const x = padX + Math.cos(a) * r;
+            const z = padZ + Math.sin(a) * r;
+            pos.push(x, drawnY(x, z) + 0.14, z);
+          }
+        }
+        const ringStart = (ri) => 1 + ri * SIDES;
+        for (let s2 = 0; s2 < SIDES; s2 += 1) {
+          idx.push(0, ringStart(0) + ((s2 + 1) % SIDES), ringStart(0) + s2);
+        }
+        for (let ri = 0; ri < RINGS.length - 1; ri += 1) {
+          for (let s2 = 0; s2 < SIDES; s2 += 1) {
+            const a0 = ringStart(ri) + s2;
+            const a1 = ringStart(ri) + ((s2 + 1) % SIDES);
+            const b0 = ringStart(ri + 1) + s2;
+            const b1 = ringStart(ri + 1) + ((s2 + 1) % SIDES);
+            idx.push(a0, a1, b1, a0, b1, b0);
+          }
+        }
+        const scar = new THREE.BufferGeometry();
+        scar.setAttribute("position",
+          new THREE.BufferAttribute(new Float32Array(pos), 3));
+        scar.setIndex(idx);
+        scar.computeVertexNormals();
+        /* Painted by RADIUS, not by height: the bowl's floor and the
+           rampart's crest are the two extremes of the dish and would
+           otherwise take opposite ends of the ramp, putting the
+           brightest sand at the bottom of the burn. */
+        /* Scorched sand, not a void. A first pass bottomed the ramp
+           out near black and the crater stopped reading as ground at
+           all - it became a hole punched through the render, and it
+           took the lit pod down with it. Burnt sand is a dark WARM
+           grey-brown; there is still a sun on it. */
+        const SCAR = makeRamp([
+          [0, "#33281f"], [0.3, "#4a3728"], [0.62, "#6d543c"],
+          [0.85, "#8e6f51"], [1, "#a8855f"],
+        ]);
+        paintGeometry(THREE, scar, SCAR, (x, y, z) =>
+          clamp01(Math.hypot(x - padX, z - padZ) / 10.6), { jitter: 0.24 });
+        batch.add("threshold", "ash", scar, { castShadow: false });
       }
-      const g = kit.merge(parts);
-      kit.transform(g, {
-        pos: [padX, padY - 1.5, padZ], rot: [0.05, DROP_SITE.podYaw, 0.04],
-      });
-      paintH(g, makeRamp([
-        [0, "#191a1e"], [0.28, "#2f3239"], [0.62, "#4f545d"], [1, "#7e838c"],
-      ]), { normalWeight: 0.5, jitter: 0.16, noise: 0.3 });
-      batch.add("threshold", "iron", g);
 
-      // Blown hatch, lying where it fell.
-      const hatch = kit.prism({ h: 0.35, rBottom: 1.75, rTop: 1.62, sides: 6 });
-      place(hatch, padX + 5.4, padZ + 3.1, { rot: [0.2, 1.1, 0.5] });
-      flat(hatch, "#3a3d44", 0.2);
-      batch.add("threshold", "iron", hatch);
+      /* Ejecta: the crust the impact threw out, thickest on the
+         rampart and thinning outward. Kept SMALL - a first pass
+         scattered two-metre slabs and, seen from a camera down at eye
+         level looking up at the pod, the near ones projected against
+         the sky and read as debris hanging in mid-air. */
+      for (let i = 0; i < 38; i += 1) {
+        const a = rng() * TAU;
+        const r = 8.2 + Math.pow(rng(), 0.6) * 9.0;
+        const slab = kit.slab(0.36 + rng() * 0.8, 0.14 + rng() * 0.26,
+          0.34 + rng() * 0.7, 0.04);
+        place(slab, padX + Math.cos(a) * r, padZ + Math.sin(a) * r, {
+          rot: [rng() * 0.5 - 0.25, rng() * TAU, rng() * 0.5 - 0.25],
+          dy: -0.05,
+        });
+        flat(slab, i % 4 === 0 ? "#4a3a2c" : "#7d6349", 0.22);
+        batch.add("threshold", "rock", slab);
+      }
 
-      emitters.push({ kind: "smoke", x: padX, y: padY + 3.2, z: padZ, scale: 1.5, rate: 0.55 });
+      /* Still cooking. The prow is buried in the floor of its own
+         crater, so the steam comes off DOWN there, not off a skirt
+         standing clear of the sand. */
+      const craterY = H(padX, padZ);
+      emitters.push({ kind: "smoke", x: padX, y: craterY + 2.2, z: padZ, scale: 1.7, rate: 0.66 });
+      emitters.push({ kind: "smoke", x: padX + 4.4, y: craterY + 1.0, z: padZ - 3.4, scale: 1.0, rate: 0.36 });
       pois.push({ id: "threshold", name: "Landing Zone THRESHOLD", x: padX, z: padZ });
     }
 
@@ -847,9 +1303,56 @@ export async function buildWorld(ctx, onProgress) {
      ============================================================ */
 
   await step("Uncovering the Saint", 0.24);
+  await landmarkAssetsReady;
   {
     const d = DISTRICTS.saint;
     const rng = makeRng(0x5a17ff);
+
+    /* ONE PATINA RULE FOR THE WHOLE STATUE.
+
+       The head, the Reaching Hand and the Breastplate are three
+       pieces of ONE bronze, scattered across half the basin, and a
+       player who walks between them will compare them whether or not
+       anyone intended it. They used to carry three separately
+       hand-tuned formulas, and two of them ran the rule backwards -
+       `up * 0.42` and `up * 0.5`, upward faces BRIGHT - so once the
+       head was corrected to pool patina where water actually sits,
+       the fragments stopped reading as the same metal as the head
+       they broke off.
+
+       Both halves of the frame matter, and one of them is a decision
+       rather than a convenience:
+
+       PATINA IS PAINTED IN LOCAL SPACE, BEFORE THE PIECE IS TIPPED.
+       The statue stood for centuries and corroded while it stood;
+       THEN it fell. So "up" for weathering is the statue's own up,
+       not the world's - which is why the head's paint runs before its
+       transform, and why the other two now do the same. Painting a
+       fallen fragment in world space would put fresh verdigris on
+       whatever face happens to point at the sky today, which is a
+       statement that the corrosion happened after the fall. */
+    const saintPatina = ({ up, front, heightFrac, ang, reach = 0, runoffMask = null }) => {
+      // Water SITS on upward faces, so they corrode hardest; steep
+      // faces shed and keep their metal. Strong and narrow rather
+      // than moderate and broad - see the head's own note on why the
+      // distribution has to be bimodal.
+      const pooling = Math.pow(clamp01(up), 1.5) * 0.55;
+      const shed = (1 - Math.abs(up)) * 0.18;
+      // Vertical runoff streaks, cubed so each is a narrow dark line
+      // with clean metal either side.
+      const stripe = Math.pow(
+        Math.abs(Math.sin(ang * 11.0 + Math.sin(ang * 3.0) * 1.6)), 3.0
+      );
+      const mask = runoffMask === null ? clamp01(1 - heightFrac) : runoffMask;
+      const runoff = stripe * clamp01(mask) * 0.55;
+      // Rubbed bright where hands reach.
+      const rubbed = reach * front * 0.16;
+      return clamp01(
+        0.42 + front * 0.34 + shed + rubbed
+        - pooling - runoff
+        + clamp01(heightFrac) * 0.05
+      );
+    };
 
     /* --- the head --- */
     {
@@ -864,6 +1367,7 @@ export async function buildWorld(ctx, onProgress) {
       const g = kit.saintHead({ size: S });
       const hx = d.x + 6;
       const hz = d.z + 18;
+      const headAsset = landmarkSources.fallenSaintHead;
 
       /* Painted in LOCAL space, before the transform, so the face
          can be told apart from the back of the skull. Keyed on
@@ -876,21 +1380,29 @@ export async function buildWorld(ctx, onProgress) {
          the cranium behind it holds its patina; the eye slits go
          to the bottom of the ramp, and that darkness IS the
          expression at this scale. */
-      {
+      if (!headAsset) {
         const nrm = g.attributes.normal;
         paintGeometry(THREE, g, BRONZE_RAMP, (x, y, z, i) => {
-          const up = nrm.getY(i);
-          const front = clamp01(z / (S * 0.55));
           const inEye = Math.abs(x) > S * 0.09 && Math.abs(x) < S * 0.26
             && y > S * 0.50 && y < S * 0.74 && z > S * 0.42;
           if (inEye) return 0.02;
-          const streak = Math.sin(x * 0.09 + z * 0.07) * 0.5 + 0.5;
-          // Rain and dust run DOWN, so patina survives low and
-          // gold survives on the upward and forward faces.
-          return clamp01(
-            0.28 + up * 0.26 + front * 0.30
-            + clamp01(y / (S * 1.05)) * 0.12 + streak * 0.09
-          );
+          const front = clamp01(z / (S * 0.55));
+          /* The head names its own runoff sources rather than taking
+             the generic "everything below the top" mask: the laurel
+             band and the eye sockets are the two real water traps on
+             a face, and streaking from THEM is what makes the patina
+             look like it was placed by rain instead of by a falloff. */
+          const belowLaurel = clamp01((0.80 * S - y) / (S * 0.55));
+          const belowEyes = clamp01((0.60 * S - y) / (S * 0.42)) * clamp01(front * 1.4);
+          return saintPatina({
+            up: nrm.getY(i),
+            front,
+            heightFrac: clamp01(y / (S * 1.05)),
+            ang: Math.atan2(x, z),
+            // The hand-height band pilgrims can actually touch.
+            reach: 1 - clamp01(Math.abs(y - 0.10 * S) / (S * 0.18)),
+            runoffMask: belowLaurel * 0.7 + belowEyes * 0.8,
+          });
         }, { jitter: 0.13 });
       }
       /* Tipped back and rolled, part sunk. Reading as fallen rather
@@ -921,7 +1433,19 @@ export async function buildWorld(ctx, onProgress) {
         pos: [hx, H(hx, hz) - S * 0.10, hz],
         rot: [-0.28, -0.95, 0.26],
       });
-      batch.add("saint", "bronze", g);
+      if (headAsset) {
+        addAuthoredLandmark(headAsset, {
+          key: "fallenSaintHead",
+          name: "saint-meshy-head",
+          district: "saint",
+          pos: [hx, H(hx, hz) - S * 0.24, hz],
+          rot: [-0.28, -0.95, 0.26],
+          // The original head spans -0.14S through 1.22S.
+          height: S * 1.36,
+        });
+      } else {
+        batch.add("saint", "bronze", g);
+      }
       pois.push({ id: "saint", name: "The Fallen Saint", x: hx, z: hz });
 
       // Salvage scaffolding abandoned on the brow.
@@ -945,15 +1469,39 @@ export async function buildWorld(ctx, onProgress) {
       const g = kit.saintHand({ size: S, curl: 0.42 });
       const hx = d.x + 232;
       const hz = d.z - 176;
+      const handAsset = landmarkSources.fallenSaintHand;
+      /* Painted BEFORE the transform - see the patina note above.
+         The hand corroded while the arm was still raised, so its
+         weathering is keyed to the wrist-to-fingertip axis it had
+         then, not to whichever facet points at the sky now. */
+      if (!handAsset) {
+        const nrm = g.attributes.normal;
+        paintGeometry(THREE, g, BRONZE_RAMP, (x, y, z, i) => saintPatina({
+          up: nrm.getY(i),
+          // The palm faces local +Z, and it is the side that stayed
+          // polished - the surface an upturned hand sheds rain off.
+          front: clamp01(z / (S * 0.22)),
+          heightFrac: clamp01(y / (S * 1.5)),
+          ang: Math.atan2(x, z),
+        }), { jitter: 0.12 });
+      }
       kit.transform(g, {
         pos: [hx, H(hx, hz) - S * 0.42, hz],
         rot: [0.30, -0.9, 0.20],
       });
-      paintGeometry(THREE, g, BRONZE_RAMP, (x, y, z, i) => {
-        const nrm = g.attributes.normal;
-        return clamp01(0.20 + nrm.getY(i) * 0.42 + clamp01((y - H(hx, hz)) / (S * 0.9)) * 0.36);
-      }, { jitter: 0.12 });
-      batch.add("saint", "bronze", g);
+      if (handAsset) {
+        addAuthoredLandmark(handAsset, {
+          key: "fallenSaintHand",
+          name: "saint-meshy-hand",
+          district: "saint",
+          pos: [hx, H(hx, hz) - S * 0.82, hz],
+          rot: [0.30, -0.9, 0.20],
+          // Matches the procedural wrist-to-fingertip span.
+          height: S * 1.64,
+        });
+      } else {
+        batch.add("saint", "bronze", g);
+      }
       pois.push({ id: "saint-hand", name: "The Reaching Hand", x: hx, z: hz });
     }
 
@@ -987,37 +1535,80 @@ export async function buildWorld(ctx, onProgress) {
       const g = kit.merge(parts);
       const tx = d.x - 214;
       const tz = d.z + 62;
-      kit.transform(g, { pos: [tx, H(tx, tz) - 20, tz], rot: [0.1, 1.15, 0.34] });
-      paintGeometry(THREE, g, BRONZE_RAMP, (x, y, z, i) => {
+      /* Painted before the transform, on the same reasoning as the
+         hand: this is chest plate, and it weathered hanging on a
+         standing torso. Its outward (convex) face is local +Y here,
+         because the plate is built lying in the XY plane and only
+         stood on its edge by the transform below - so `up` and
+         `front` both key off that, and the concave inner surface
+         (the cave a player walks into) correctly reads as the
+         sheltered, unweathered side. */
+      {
         const nrm = g.attributes.normal;
-        return clamp01(0.14 + nrm.getY(i) * 0.5 + clamp01((y - H(tx, tz)) / 60) * 0.3);
-      }, { jitter: 0.16 });
+        paintGeometry(THREE, g, BRONZE_RAMP, (x, y, z, i) => saintPatina({
+          up: nrm.getY(i),
+          front: clamp01(nrm.getY(i) * 0.5 + 0.5),
+          heightFrac: clamp01((y + R) / (R * 2)),
+          ang: Math.atan2(x, z),
+        }), { jitter: 0.16 });
+      }
+      kit.transform(g, { pos: [tx, H(tx, tz) - 20, tz], rot: [0.1, 1.15, 0.34] });
       batch.add("saint", "bronze", g);
       pois.push({ id: "saint-shell", name: "The Breastplate", x: tx, z: tz });
     }
 
-    /* --- fallen halo arcs --- */
+    /* --- fallen halo arcs ---
+       Sections of the Saint's halo, snapped off and lying in the
+       basin. They are drawn on a circle of radius R about the
+       geometry's origin, which is the centre of that circle and NOT
+       anywhere on the arc - so the piece has to be brought back onto
+       its own origin before anything else is done to it.
+
+       A first pass swept the arc from a random start angle a0 and
+       then did `translate(0, -R, 0)`, which only lands on the origin
+       when a0 happens to be near zero. At the extremes it left the
+       arc up to 110m off its anchor BEFORE the placement rotation,
+       and the rotation then swung that offset into the air. Measured
+       across the four: one hung 55m above the sand beside the head -
+       a bronze rainbow floating over the Saint, visible from the
+       drop - two more hung 9m up, and the fourth was 113m
+       underground. Centre on the real bounds, then let
+       `restOnTerrain` seat what is actually there. */
     for (let i = 0; i < 4; i += 1) {
       const len = rng.range(56, 104);
-      const a0 = rng.range(-0.9, 0.9);
       const outer = [];
       const inner = [];
       const R = len * 1.35;
       const steps = 12;
+      const half = len / R / 2;
       for (let k = 0; k <= steps; k += 1) {
         const t = k / steps;
-        const a = a0 + t * (len / R);
+        const a = lerp(-half, half, t);
         const th = 5.2 * (0.4 + Math.sin(t * Math.PI) * 0.8);
         outer.push([Math.sin(a) * (R + th / 2), Math.cos(a) * (R + th / 2)]);
         inner.push([Math.sin(a) * (R - th / 2), Math.cos(a) * (R - th / 2)]);
       }
       const g = kit.ribbonSolid(outer, inner, rng.range(4, 9));
-      g.translate(0, -R, 0);
+      g.computeBoundingBox();
+      const bb = g.boundingBox;
+      g.translate(
+        -(bb.min.x + bb.max.x) / 2,
+        -(bb.min.y + bb.max.y) / 2,
+        -(bb.min.z + bb.max.z) / 2
+      );
       const ax = d.x + rng.gauss() * 190;
       const az = d.z + rng.gauss() * 190;
-      kit.transform(g, {
-        pos: [ax, H(ax, az) - rng.range(2, 14), az],
-        rot: [rng.range(-0.5, 0.5), rng() * TAU, rng.range(0.4, 1.5) * rng.sign()],
+      /* Roll kept shallow. At up to 1.5rad a 140m-radius ribbon
+         stands on its edge, and a piece of halo standing upright in
+         the sand reads as a sculpture someone installed rather than
+         as something that fell off the sky. These lie down, and the
+         bow in them lifts the middle clear of the ground on its
+         own. */
+      restOnTerrain(g, ax, az, {
+        rot: [rng.range(-0.3, 0.3), rng() * TAU, rng.range(0.18, 0.62) * rng.sign()],
+        embed: rng.range(1.2, 3.6),
+        quantile: 0.55,
+        maxGap: 2.4,
       });
       // Softened from a straight up-facing term. At `0.24 + up*0.48`
       // every arc came out gold on top and near-black underneath -
@@ -1131,6 +1722,10 @@ export async function buildWorld(ctx, onProgress) {
     const NAVE_W = 44;
     const WALL_H = 34;
     const AISLE_W = 13;
+    /* Where the north wall was breached, off the building's axis.
+       The wall reads it, the rubble fan reads it and the chandelier
+       that came down reads it, so it is one number. */
+    const BREACH_X = -6.0;
 
     /* The Cathedral's masonry. Lifted hard from the first pass,
        which bottomed out at #241c22: with the sun in the west, the
@@ -1153,8 +1748,19 @@ export async function buildWorld(ctx, onProgress) {
         for (let b = 0; b < bays; b += 1) {
           const z0 = -NAVE_L / 2 + (b / bays) * NAVE_L;
           const bl = NAVE_L / bays;
-          // North end is blown open: skip the last bay's upper wall.
-          const ruined = b >= bays - 2;
+          /* North end is blown open: the first two bays keep only a
+             stub of their upper wall.
+
+             b counts NORTH to south - b=0 is z -66 - so `b >= bays-2`
+             was knocking the top off the two bays hard against the
+             west front, under the surviving roof and behind the
+             towers where nothing can see them, and leaving the
+             breached end standing at full height with its clerestory
+             intact. Everything else in the district already agrees
+             about which end was hit: the roof covers the southern two
+             thirds, the torn rafters reach north over the open bays,
+             and the rose is in the south front. */
+          const ruined = b < 2;
           const hh = ruined ? WALL_H * rng.range(0.28, 0.55) : WALL_H;
           const w = kit.slab(2.6, hh, bl * 0.98, 0.22);
           w.translate(wx, 0, z0 + bl / 2);
@@ -1535,13 +2141,278 @@ export async function buildWorld(ctx, onProgress) {
       }
     }
 
+    /* --- the north end: what is left of the chancel wall ---
+       The nave had no north wall at all. Everything else in the
+       district says the building was breached at this end - the roof
+       stops, the rafters reach out over nothing, the vault is
+       stripped back to its ribs - but the wall those events happened
+       TO was never built, so the nave ended in a clean rectangular
+       opening and the whole thing read as an unfinished hall rather
+       than as a ruin. A hole is only legible as damage when there is
+       an edge around it.
+
+       Built as vertical strips rather than as a wall with a hole cut
+       in it. Masonry does not fail along a drawn outline: it fails
+       course by course, and what is left is a ragged crest where
+       every strip ended at a different stone. Strips also give the
+       breach a real jamb - you can see the wall's thickness through
+       it, which a single-sided panel can never do.
+
+       The middle is taken to the ground on purpose. The nave has to
+       keep a way out through its own wound, or the fix to the
+       silhouette becomes a wall across a route the player already
+       uses. */
+    {
+      const parts = [];
+      const HW = 38;                                  // out past the aisle walls
+      const DN = 4.2;                                 // wall thickness
+      const zN = -NAVE_L / 2 - DN / 2 + 1.0;          // butted to the flank walls
+      /* Off-centre on purpose: a breach centred exactly on the
+         middle of a symmetrical wall reads as an architectural
+         feature rather than as damage. */
+      const breachX = BREACH_X;
+      const breachR = 16.5;
+
+      /* Strips of varying width, walked across the span rather than
+         stepped at a fixed pitch. Equal widths give the crest a
+         picket rhythm you read as a repeat before you read it as
+         masonry; the depth jitter is what stops the inner and outer
+         faces from being two flat planes. */
+      let cursor = -HW;
+      while (cursor < HW - 0.4) {
+        const sw = Math.min(rng.range(1.7, 4.3), HW - cursor);
+        const x = cursor + sw / 2;
+        cursor += sw;
+        const u = Math.abs(x) / HW;
+        /* What survived. A wall is thickest and best buttressed at
+           its corners and thinnest in the middle of its span, so
+           the corners are what stand. */
+        let h = 5.5 + Math.pow(u, 2.3) * 26
+          + Math.sin(x * 0.43) * 2.1 + rng.range(-2.0, 2.0);
+        const dd = Math.abs(x - breachX) / breachR;
+        if (dd < 1) {
+          h = Math.min(h, 1.0 + Math.pow(dd, 1.8) * 17 - rng.range(0, 2.4));
+        }
+        if (h < 0.6) continue;
+        const dn = DN * rng.range(0.82, 1.14);
+        // Started below the pad so the base is never exposed by the
+        // paving that sits 4cm proud of it.
+        const w = kit.slab(sw * 1.06, h + 0.7, dn, 0.16);
+        w.translate(x, -0.7, zN + rng.jit(DN * 0.16));
+        parts.push(w);
+        // One capping stone per strip, tipped off true: a broken
+        // crest is a line of individual blocks, not a saw cut.
+        if (h > 1.6 && rng.chance(0.72)) {
+          const cap = kit.slab(
+            sw * rng.range(0.45, 0.92), rng.range(0.5, 1.4),
+            dn * rng.range(0.5, 0.92), 0.1
+          );
+          cap.rotateX(rng.jit(0.18));
+          cap.rotateZ(rng.jit(0.14));
+          cap.rotateY(rng.jit(0.45));
+          cap.translate(x + rng.jit(sw * 0.3), h - 0.1, zN + rng.jit(DN * 0.22));
+          parts.push(cap);
+        }
+        /* A surviving length of string course. One strong horizontal
+           is what says the crest above it used to be a designed wall
+           and not a pile. */
+        if (h > 9 && rng.chance(0.75)) {
+          parts.push(kit.slab(sw * 1.18, 0.8, dn + 0.9, 0.12)
+            .translate(x, 8.2, zN));
+        }
+      }
+
+      /* Corner jambs. Two broken teeth, and the tallest things left
+         at this end - they are what stops the crest from reading as
+         a single smooth hill of stone. */
+      for (const s of [-1, 1]) {
+        let y = 0;
+        for (const [sh, r] of [[13.5, 4.6], [8.5, 3.9], [4.5, 3.2]]) {
+          parts.push(kit.slab(r * 2, sh, r * 2, 0.3)
+            .translate(s * (HW - r + 0.8), y, zN - 0.4));
+          y += sh;
+        }
+        // The snapped top, sheared on a slant.
+        const tip = kit.slab(5.4, 3.6, 5.4, 0.24);
+        tip.rotateX(rng.range(0.12, 0.3) * s);
+        tip.rotateZ(rng.range(-0.26, -0.1) * s);
+        tip.translate(s * (HW - 3.4), y - 0.6, zN - 0.4);
+        parts.push(tip);
+      }
+
+      /* The great east window, snapped off at the springing. Two
+         curved stubs reaching in toward each other and stopping in
+         mid-air is the single clearest statement that something
+         used to be there. */
+      {
+        const SILL = 9.5;
+        const WR = 16;
+        for (const s of [-1, 1]) {
+          const pts = [];
+          const cut = rng.range(0.34, 0.46);
+          for (let k = 0; k <= 6; k += 1) {
+            const t = (k / 6) * cut;
+            const a = t * Math.PI * 0.78;
+            pts.push([
+              s * (WR - Math.sin(a) * WR * 0.62),
+              SILL + Math.sin(a) * 20 + t * 7,
+              zN + DN * 0.16,
+            ]);
+          }
+          parts.push(kit.tube(pts, 1.05, 5));
+          // The jamb below it, still standing on the sill.
+          parts.push(kit.slab(2.2, SILL, DN * 0.8, 0.16)
+            .translate(s * WR, 0, zN + DN * 0.1));
+        }
+        // A mullion, snapped at chest height above the sill.
+        parts.push(kit.slab(1.5, SILL + rng.range(3, 7), DN * 0.62, 0.14)
+          .translate(-1.5, 0, zN + DN * 0.12));
+      }
+
+      const g = kit.merge(parts);
+      kit.transform(g, { pos: [cx, plazaY, cz] });
+      paintH(g, stoneRamp, {
+        min: plazaY, max: plazaY + WALL_H, normalWeight: 0.46,
+        jitter: 0.15, noise: 0.26,
+      });
+      batch.add("cathedral", "stone", g);
+
+      /* --- what came down ---
+         Rubble is the other half of the statement. A clean-edged
+         hole with bare floor under it is a doorway; the same hole
+         with a talus of its own wall lying in front of it is
+         damage. Heaviest just inside the breach, thinning south
+         down the nave and north out onto the plateau. */
+      {
+        const rocks = [];
+        /* Inside the nave the walking surface is the flagstone
+           floor, 4cm proud of the pad `restOnTerrain` measures, so
+           interior debris is seated a touch HIGH to sit on the
+           paving instead of half-sunk through it. */
+        const seat = (geo, rx, rz, inside, opts) => restOnTerrain(geo, rx, rz, {
+          ...opts,
+          embed: opts.embed - (inside ? 0.06 : 0),
+        });
+        /* Inside, a piece of rubble is either a BLOCK you walk round
+           or a CHIP lying flush with the paving - never the
+           ankle-height lump in between, and never TILTED.
+
+           Neither rule is an aesthetic preference. The walking
+           surface in the nave is the floor, and collision discards
+           anything under 75cm as too small to stop a soldier, so a
+           20cm stone in here is one the player's boots pass straight
+           through - the same defect the paving itself was fixed for,
+           and `saintfall-collision-audit.mjs` fails the nave on it.
+           Tilt is the same defect wearing a different hat: whatever
+           its height, a tipped slab crosses the floor plane
+           somewhere, and there is always a wedge of it standing at
+           exactly boot height. Square-set blocks clear 75cm on their
+           vertical sides, so collision stores them and the player
+           walks round them instead.
+
+           Cut stone falls as cut stone, so blockiness is the right
+           answer here anyway. Outside the wall there is no floor to
+           be flush with and no such band. */
+        const INTERIOR_MIN_BLOCK = 0.9;
+        for (let i = 0; i < 96; i += 1) {
+          const inside = rng.chance(0.62);
+          // Spread along the breach mouth, fanning away from it.
+          const t = Math.pow(rng(), 1.6);
+          const spread = 9 + t * 22;
+          const rx = cx + breachX + rng.gauss() * spread * 0.5;
+          const throwZ = t * (inside ? 34 : 22);
+          const rz = cz - NAVE_L / 2 + (inside ? throwZ : -throwZ - 3);
+          const reach = inside ? 33 : HW + 16;
+          if (Math.abs(rx - cx) > reach) continue;
+          if (inside && rng.chance(0.42)) {
+            // A chip: spalled facing, laid flat like the paving.
+            const ch = rng.range(0.10, 0.18);
+            const chip = kit.slab(rng.range(0.9, 2.6), ch, rng.range(0.8, 2.2), 0.05);
+            placeOnTerrain(chip, rx, rz, {
+              yaw: rng() * TAU, sample: 1.4, dy: -ch + 0.05, maxTilt: 0.2,
+            });
+            rocks.push(chip);
+            continue;
+          }
+          const s = rng.range(0.7, 2.6) * (1 - t * 0.45);
+          const dim = (k) => (inside ? Math.max(INTERIOR_MIN_BLOCK, s * k) : s * k);
+          const block = kit.slab(
+            dim(rng.range(1.0, 2.2)), dim(rng.range(0.7, 1.3)),
+            dim(rng.range(1.0, 2.0)), 0.12
+          );
+          seat(block, rx, rz, inside, {
+            rot: inside
+              ? [0, rng() * TAU, 0]
+              : [rng.jit(0.55), rng() * TAU, rng.jit(0.55)],
+            embed: inside ? 0.02 : rng.range(0.05, 0.35),
+            maxGap: 0.12,
+          });
+          rocks.push(block);
+        }
+        /* A handful of pieces big enough to read as WALL rather than
+           as scree - a course of ashlar still stuck together, a
+           length of string course, the head of the window's arch. */
+        for (let i = 0; i < 9; i += 1) {
+          const t = rng();
+          const inside = rng.chance(0.6);
+          const rx = cx + breachX + rng.gauss() * 13;
+          const rz = cz - NAVE_L / 2 + (inside ? 4 + t * 26 : -6 - t * 18);
+          const chunk = kit.merge([
+            kit.slab(rng.range(5, 11), rng.range(1.6, 3.0), rng.range(3, 5.5), 0.2),
+            kit.slab(rng.range(3, 7), rng.range(1.2, 2.4), rng.range(2.4, 4.4), 0.18)
+              .translate(rng.jit(2.2), rng.range(1.4, 2.4), rng.jit(1.6)),
+          ]);
+          seat(chunk, rx, rz, inside, {
+            rot: inside
+              ? [0, rng() * TAU, 0]
+              : [rng.jit(0.42), rng() * TAU, rng.jit(0.42)],
+            embed: inside ? 0.05 : rng.range(0.2, 0.7),
+            maxGap: 0.2,
+          });
+          rocks.push(chunk);
+        }
+        /* Two rib sections that came down with the vault. They went
+           OUT with the wall rather than in - a 1.2m tube lying on a
+           paved floor is a ramp from nothing up to knee height, and
+           the nave has no walkable surface between those two. On
+           sand it is just a fallen rib. */
+        for (let i = 0; i < 2; i += 1) {
+          const len = rng.range(15, 24);
+          const pts = [];
+          for (let k = 0; k <= 5; k += 1) {
+            const t = k / 5;
+            pts.push([lerp(-len / 2, len / 2, t), Math.sin(t * Math.PI) * 2.2, 0]);
+          }
+          const rib = kit.tube(pts, 0.62, 5);
+          const rx = cx + breachX + rng.jit(15);
+          const rz = cz - NAVE_L / 2 - rng.range(4, 22);
+          seat(rib, rx, rz, false, {
+            rot: [rng.jit(0.3), rng() * TAU, rng.range(-0.5, 0.5)],
+            embed: 0.3, maxGap: 0.35,
+          });
+          rocks.push(rib);
+        }
+        const rg = kit.merge(rocks);
+        paintH(rg, stoneRamp, {
+          min: plazaY - 1, max: plazaY + 5, normalWeight: 0.55,
+          jitter: 0.18, noise: 0.32,
+        });
+        batch.add("cathedral", "stone", rg);
+        pois.push({
+          id: "cathedral-breach", name: "The Breach",
+          x: cx + breachX, z: cz - NAVE_L / 2 - 6,
+        });
+      }
+    }
+
     /* --- flying buttresses --- */
     {
       const parts = [];
       for (const side of [-1, 1]) {
         for (let b = 0; b < 8; b += 1) {
           const z = -NAVE_L / 2 + 10 + (b / 7) * (NAVE_L - 26);
-          const ruin = b >= 6 ? rng.range(0.35, 0.8) : 0;
+          // Counted from the north, with the rest of the ruin.
+          const ruin = b <= 1 ? rng.range(0.35, 0.8) : 0;
           const fb = kit.flyingButtress({
             reach: AISLE_W + 5.5,
             pierH: 17,
@@ -1614,12 +2485,21 @@ export async function buildWorld(ctx, onProgress) {
           parts.push(col);
         }
       }
-      // Transverse vault ribs. The roof is gone over the north
-      // third, so the ribs there stand open against the sky - the
-      // single best silhouette in the district.
+      /* Transverse vault ribs. The roof is gone over the north
+         third, so the ribs there stand open against the sky - the
+         single best silhouette in the district.
+
+         The test was `b > bays * 0.62`, and b counts from the NORTH:
+         b=0 is z -66, b=9 is z +66. So it was stripping the vault
+         out of the southern bays - the ones the surviving roof
+         covers - and roofing the breached end with an intact stone
+         ceiling. From outside the north end you were looking into a
+         finished building; from inside, the bare ribs were the ones
+         with a roof over them and could never be seen against
+         anything. Counted from the breach instead. */
       for (let b = 0; b <= bays; b += 1) {
         const z = -NAVE_L / 2 + (b / bays) * NAVE_L;
-        const open = b > bays * 0.62;
+        const open = b < bays * 0.38;
         const span = NAVE_W - 5.2;
         const pts = [];
         const steps = 9;
@@ -1676,13 +2556,37 @@ export async function buildWorld(ctx, onProgress) {
     /* --- the plaza --- */
     {
       const parts = [];
-      // Flagstone apron.
+      /* Flagstone apron.
+
+         Two rules here, and both of them are about the depth buffer
+         rather than about paving.
+
+         The apron is scattered over a 118m disc centred 34m north of
+         the front, which reaches 84m PAST the doors - so about forty
+         of these slabs were landing inside the nave and under the
+         front wall itself. The plaza sits on a dead-level pad, the
+         apron puts its top face 4cm above it and so does the nave
+         paving, which means every one of those slabs was exactly
+         coplanar with the floor it landed on. They fought for the
+         depth buffer and, being painted from a much darker ramp,
+         resolved as ragged dark blotches torn across the nave.
+         Keeping them out of the building's own footprint is the
+         fix.
+
+         The same coplanarity applies to the apron against ITSELF -
+         220 slabs on a level pad, all at +4cm, overlapping wherever
+         the scatter puts two together. A few centimetres of spread
+         costs nothing at a walking pace and means no two slabs ever
+         share a plane. */
+      const FOOTPRINT_HALF_W = NAVE_W / 2 + AISLE_W + 8;   // 43, clears the buttresses
+      const FOOTPRINT_Z = NAVE_L / 2 + 8;                  // clears the tower plinths
       for (let i = 0; i < 220; i += 1) {
         const a = rng() * TAU;
         const r = 20 + Math.pow(rng(), 0.5) * 108;
         const px = Math.cos(a) * r;
         const pz = Math.sin(a) * r + NAVE_L / 2 + 34;
         if (Math.hypot(px, pz - NAVE_L / 2 - 34) > 118) continue;
+        if (Math.abs(px) < FOOTPRINT_HALF_W && pz < FOOTPRINT_Z) continue;
         const sw = rng.range(3.4, 6.2);
         const sh = rng.range(0.25, 0.45);
         const sd = rng.range(3.4, 6.2);
@@ -1692,7 +2596,7 @@ export async function buildWorld(ctx, onProgress) {
           sample: Math.max(sw, sd) * 0.45,
           // Four centimetres of relief reads as paving without
           // putting an ankle-height non-walkable slab through boots.
-          dy: -sh + 0.04,
+          dy: -sh + rng.range(0.015, 0.075),
           maxTilt: 0.45,
         });
         parts.push(s);
@@ -1728,6 +2632,99 @@ export async function buildWorld(ctx, onProgress) {
       const sg = kit.merge(saints);
       paintH(sg, stoneRamp, { normalWeight: 0.44, jitter: 0.14, noise: 0.24 });
       batch.add("cathedral", "stone", sg);
+
+      /* --- THE PROCESSIONAL CROSSES --------------------------------
+
+         The wheel-cross is the ONE object the faith carries between
+         worlds. It stands seventeen times across the Gilded Reach and
+         once, forty-four metres tall, on the lip of the Matriarch's
+         pan; the same model marks the Via Sacra on Kenosis. So it has
+         to appear at the order's own cathedral, or the symbol reads as
+         a Reach landmark rather than as the mark of the religion.
+
+         Sited as a WAY rather than as a ring. The plaza already has a
+         ring - thirteen saints on a 96m arc - and a second concentric
+         arrangement inside it would read as decoration around the
+         first. Four pairs march out from the doors along the same axis
+         the braziers climb, and one great cross terminates the plaza a
+         hundred metres out, which is the object you walk toward from
+         the basin before the building itself resolves.
+
+         OUTBOARD OF THE BRAZIERS, not among them. The processional
+         stair's fires stand at cx +/- 14 and a 13m cross carries a
+         plinth some four metres across, so anything inside about 22m
+         of the axis puts masonry through a brazier. 27m clears both
+         and still frames the walk.
+
+         Heights are deliberately modest. The crossing spire is 190m
+         and the front towers 100m; a cross that competes with them
+         flattens the approach, and the whole point of the pair
+         nearest the doors is that the building grows OVER them as you
+         climb. */
+      {
+        const crossAsset = landmarkSources.gildedReachCross;
+        if (crossAsset) {
+          const doorZ = cz + NAVE_L / 2 + 2.6;
+          const crossRng = makeRng(0xc2055);
+
+          // The avenue: four pairs, outboard of the brazier line.
+          for (let i = 0; i < 4; i += 1) {
+            for (const side of [-1, 1]) {
+              const px = cx + side * (27 + i * 1.4);
+              const pz = doorZ + 15 + i * 17;
+              /* Faced ACROSS the way, toward the axis, so the wheel
+                 is presented to someone walking up it rather than
+                 seen edge-on. Local +Z is the model's face. */
+              const yaw = side > 0 ? -Math.PI / 2 : Math.PI / 2;
+              addAuthoredLandmark(crossAsset, {
+                key: `cathedralCross-${i}-${side > 0 ? "e" : "w"}`,
+                name: `cathedral-meshy-choir-wheel-${i}-${side > 0 ? "e" : "w"}`,
+                district: "cathedral",
+                pos: [px, 0, pz],
+                rot: [crossRng.jit(0.02), yaw + crossRng.jit(0.05), crossRng.jit(0.02)],
+                rotOrder: "YXZ",
+                height: crossRng.range(12.2, 14.4),
+                variant: "processional",
+                seatOnTerrain: { maxGap: 0, embed: 0.14 },
+              });
+            }
+          }
+
+          // The great cross at the head of the plaza, on the axis.
+          const gx = cx;
+          const gz = doorZ + 100;
+          addAuthoredLandmark(crossAsset, {
+            key: "cathedralCross-plaza",
+            name: "cathedral-meshy-choir-wheel-plaza",
+            district: "cathedral",
+            pos: [gx, 0, gz],
+            // Faced back at the doors: it is read from the basin side
+            // on the way in and from the porch on the way out.
+            rot: [0.02, Math.PI, -0.018],
+            rotOrder: "YXZ",
+            height: 26,
+            variant: "plaza",
+            seatOnTerrain: { maxGap: 0, embed: 0.18 },
+          });
+          pois.push({ id: "cathedral-cross", name: "The Plaza Cross", x: gx, z: gz });
+
+          /* One down, out by the fallen bell. A district whose every
+             cross stands upright says the order still holds this
+             ground; the bell is on its side ten metres away and the
+             breach is open at the far end. */
+          addAuthoredLandmark(crossAsset, {
+            key: "cathedralCross-fallen",
+            name: "cathedral-meshy-choir-wheel-fallen",
+            district: "cathedral",
+            pos: [cx + 50, 0, cz + NAVE_L / 2 + 54],
+            rot: [1.27, 2.31, 0.19],
+            rotOrder: "YXZ",
+            height: 17,
+            variant: "fallen",
+            seatOnTerrain: { maxGap: 0, embed: 0.22 },
+          });
+        }
+      }
 
       // The fallen bell: cracked, on its side, big enough to stand
       // in. Built as a proper bell profile - a flared lip, a waist,
@@ -1880,6 +2877,206 @@ export async function buildWorld(ctx, onProgress) {
         geo: ban, district: "cathedral",
         colour: rng.pick([PALETTE.oxblood, PALETTE.indigo, PALETTE.crimson]),
         accent: PALETTE.gold, wind: 0.35,
+      });
+    }
+
+    /* --- corona chandeliers ---
+       The nave is 44m wide and 34m to the springing, and until now
+       there was nothing at all in the volume between the floor and
+       the vault. Everything was either underfoot or overhead, so the
+       eye crossed a 30m gap of empty air in one jump and the space
+       read as a corridor with a high ceiling rather than as a room
+       with height. Something hung halfway up is what gives the
+       height a middle to be measured against - and a corona is what
+       would be hanging there.
+
+       Chains are structural here, not decoration: the eye follows
+       them up and finds the vault. A corona with no chain is a ring
+       floating in a church. */
+    {
+      const iron = [];
+      const flames = [];
+
+      /** One corona. `y` is the ring's height above the plaza. */
+      const corona = (x, y, z, opts = {}) => {
+        const R = opts.r || 4.6;
+        const tiers = opts.tiers === undefined ? 2 : opts.tiers;
+        const lit = opts.lit !== false;
+        const parts = [];
+        const flame = [];
+        const hoop = (rr, hy, band) => {
+          parts.push(kit.ringSolid([
+            { y: hy - band, r: rr, sides: 16 },
+            { y: hy + band, r: rr, sides: 16 },
+          ], { capTop: false, capBottom: false }));
+        };
+        const tier = (rr, hy, count) => {
+          hoop(rr, hy, 0.34);
+          for (let i = 0; i < count; i += 1) {
+            const a = (i / count) * TAU;
+            // Pricket and candle, as one iron spike at this scale.
+            const c = kit.prism({ h: 1.5, rBottom: 0.20, rTop: 0.11, sides: 5 });
+            c.translate(Math.cos(a) * rr, hy + 0.3, Math.sin(a) * rr);
+            parts.push(c);
+            if (lit) {
+              const f = kit.prism({ h: 0.85, rBottom: 0.21, rTop: 0.02, sides: 5 });
+              f.translate(Math.cos(a) * rr, hy + 1.85, Math.sin(a) * rr);
+              flame.push(f);
+            }
+          }
+          // Spokes back to the hub.
+          for (let i = 0; i < 4; i += 1) {
+            const a = (i / 4) * TAU + 0.4;
+            const sp = kit.slab(rr, 0.16, 0.30, 0.03);
+            sp.translate(rr / 2, 0, 0);
+            sp.rotateY(-a);
+            sp.translate(0, hy, 0);
+            parts.push(sp);
+          }
+        };
+        tier(R, 0, Math.round(R * 3));
+        if (tiers > 1) tier(R * 0.60, 1.9, Math.round(R * 1.9));
+        // Hub and the collar the stays gather to.
+        parts.push(kit.prism({ h: 1.1, rBottom: 0.55, rTop: 0.40, sides: 6 })
+          .translate(0, -0.5, 0));
+        const collarY = tiers > 1 ? 4.4 : 3.0;
+        parts.push(kit.prism({ h: 0.7, rBottom: 0.45, rTop: 0.34, sides: 6 })
+          .translate(0, collarY, 0));
+        for (let i = 0; i < 4; i += 1) {
+          const a = (i / 4) * TAU + 0.4;
+          parts.push(kit.tube([
+            [Math.cos(a) * R, 0.1, Math.sin(a) * R],
+            [Math.cos(a) * R * 0.45, collarY * 0.55, Math.sin(a) * R * 0.45],
+            [0, collarY, 0],
+          ], 0.09, 4));
+        }
+
+        const g = kit.merge(parts);
+        const fg = flame.length ? kit.merge(flame) : null;
+        if (opts.rot) {
+          kit.transform(g, { rot: opts.rot });
+          if (fg) kit.transform(fg, { rot: opts.rot });
+        }
+        g.translate(x, y, z);
+        if (fg) fg.translate(x, y, z);
+
+        // The chain up to the vault. Snapped ones keep a stub.
+        if (opts.chain !== false) {
+          const top = opts.chainTop === undefined ? plazaY + 33 : opts.chainTop;
+          const cxTop = opts.chainX === undefined ? x : opts.chainX;
+          iron.push(kit.tube([
+            [x, y + collarY, z], [cxTop, top, opts.chainZ === undefined ? z : opts.chainZ],
+          ], 0.10, 4));
+        }
+        iron.push(g);
+        if (fg) flames.push(fg);
+      };
+
+      /* Under the surviving vault: three lit, evenly spaced down
+         the bays so the row itself reads as perspective.
+
+         Hung at 10m, not the 16.5m they started at. The nave's
+         authored review pose stands at eye height at the north end
+         and looks back at the rose, and the rose is only visible
+         through a narrow slot between the vault crown and the
+         gable - a sightline that climbs at about 0.31. At 16.5 the
+         nearest corona sat dead on that line and put a ring of
+         candles across the one window the frame exists for. At 10
+         the row passes under it and the rose reads. Ten metres is
+         also where a corona belongs: they are lit by hand off a
+         ladder, and one hung five storeys up is a light nobody
+         could ever reach. */
+      for (let i = 0; i < 3; i += 1) {
+        const z = cz + 6 + i * 20;
+        corona(cx, plazaY + 9, z, { r: 4.6, lit: true });
+      }
+
+      /* At the edge of the damage, hanging off one stay. Two of its
+         four chains are gone, so it hangs 20 degrees out of true and
+         its candles are long out - the first thing that tells you,
+         from inside, which way the wall went. */
+      corona(cx + 3.5, plazaY + 12.5, cz - 26, {
+        r: 4.2, lit: false, rot: [0.34, 0.5, -0.12],
+        chainX: cx - 1.4, chainZ: cz - 27, chainTop: plazaY + 32,
+      });
+
+      /* And one that did not hold, lying in the rubble under the
+         breach with its ring buckled. */
+      {
+        const cxr = cx + BREACH_X - 4;
+        const czr = cz - NAVE_L / 2 + 15;
+        const wreck = [];
+        const R = 4.4;
+        wreck.push(kit.ringSolid([
+          { y: -0.34, r: R, sides: 16, jitter: 0.22, seed: 0x3c1 },
+          { y: 0.34, r: R, sides: 16, jitter: 0.22, seed: 0x3c2 },
+        ], { capTop: false, capBottom: false }));
+        for (let i = 0; i < 13; i += 1) {
+          const a = (i / 13) * TAU;
+          if (rng.chance(0.3)) continue;        // snapped off in the fall
+          const c = kit.prism({ h: 1.3, rBottom: 0.19, rTop: 0.10, sides: 5 });
+          c.rotateZ(rng.jit(0.5));
+          c.rotateX(rng.jit(0.5));
+          c.translate(Math.cos(a) * R, 0.3, Math.sin(a) * R);
+          wreck.push(c);
+        }
+        for (let i = 0; i < 4; i += 1) {
+          const a = (i / 4) * TAU + 0.4;
+          const sp = kit.slab(R, 0.16, 0.30, 0.03);
+          sp.translate(R / 2, 0, 0);
+          sp.rotateY(-a);
+          wreck.push(sp);
+        }
+        wreck.push(kit.prism({ h: 1.0, rBottom: 0.55, rTop: 0.40, sides: 6 })
+          .translate(0, -0.5, 0));
+        // The chain it came down with, coiled where it landed.
+        const coil = [];
+        for (let k = 0; k <= 9; k += 1) {
+          const t = k / 9;
+          coil.push([
+            Math.cos(t * 9.2) * (1.4 + t * 3.6),
+            0.25 + Math.sin(t * 5.1) * 0.2,
+            Math.sin(t * 9.2) * (1.4 + t * 3.6),
+          ]);
+        }
+        wreck.push(kit.tube(coil, 0.10, 4));
+        const wg = kit.merge(wreck);
+        // Scale flat: a ring that fell 16m onto stone does not stay
+        // round, and a perfect hoop lying in rubble reads as a prop
+        // that was placed there.
+        wg.scale(1, 0.72, 1);
+        restOnTerrain(wg, cxr, czr, {
+          rot: [0.13, 1.1, 0.08], embed: 0.02, maxGap: 0.3,
+        });
+        iron.push(wg);
+      }
+
+      const ig = kit.merge(iron);
+      paintH(ig, makeRamp([
+        [0, "#231a18"], [0.45, "#3b2c25"], [0.8, "#5a4436"], [1, "#7d6146"],
+      ]), { min: plazaY, max: plazaY + 34, normalWeight: 0.5, jitter: 0.16 });
+      batch.add("cathedral", "rust", ig);
+
+      if (flames.length) {
+        const fg = kit.merge(flames);
+        flat(fg, "#ffb45e", 0.22);
+        batch.add("cathedral", "emissive", fg,
+          { castShadow: false, receiveShadow: false });
+      }
+
+      /* One real light, on the middle corona. The nave's only other
+         light sources are the clerestory shafts and the rose, and
+         both of those are DIRECTIONAL - they wash two stripes of
+         floor and leave the columns, the vault springing and
+         everything at head height unlit. A warm point at 16m is what
+         the candles are supposed to be doing, and it is the
+         difference between a lit interior and a lit floor.
+
+         This takes the level to the twelfth and last light. */
+      lights.push({
+        x: cx, y: plazaY + 10.5, z: cz + 26,
+        colour: "#ffb264", intensity: 190, distance: 120,
+        kind: "brazier", flicker: 0.35,
       });
     }
   }
@@ -2068,10 +3265,24 @@ export async function buildWorld(ctx, onProgress) {
     {
       const geos = [];
       for (let i = 0; i < 260; i += 1) {
-        const a = rng() * TAU;
-        const r = Math.pow(rng(), 0.55) * 300;
-        const x = d.x + Math.cos(a) * r;
-        const z = d.z + Math.sin(a) * r;
+        /* KEEP OFF THE GARNER'S PIT.
+           This litter is placed on the SEALED pan and never moves
+           again, and the pit is a hundred and twenty-four metres of
+           that pan which drops away the moment the player walks up to
+           it - so a skull standing there is left hanging in the air
+           over an open mouth. Resampled rather than pushed outward,
+           which would build a ring of bone around the hole that nobody
+           authored and that would give the encounter away from the
+           other side of the district. */
+        let x = d.x;
+        let z = d.z;
+        for (let tries = 0; tries < 12; tries += 1) {
+          const a = rng() * TAU;
+          const r = Math.pow(rng(), 0.55) * 300;
+          x = d.x + Math.cos(a) * r;
+          z = d.z + Math.sin(a) * r;
+          if (Math.hypot(x - GARNER_PIT.x, z - GARNER_PIT.z) > GARNER_PIT.reach + 3) break;
+        }
         const kind = rng();
         let g;
         if (kind < 0.5) {
@@ -2149,7 +3360,7 @@ export async function buildWorld(ctx, onProgress) {
       // western sun, so its interior is lit by sky alone; painted
       // dark on top of that the shards vanish into their own
       // shadow and the district reads as a black hole in the map.
-      paintH(g, GLASS_RAMP, { normalWeight: 0.55, jitter: 0.2, noise: 0.3, bias: 0.22 });
+      paintH(g, GLASS_RAMP, { normalWeight: 0.55, jitter: 0.2, noise: 0.3, bias: 0.30 });
       batch.add("scar", "glassRock", g);
       pois.push({ id: "scar", name: "The Glass Scar", x: d.x, z: d.z });
     }
@@ -2168,7 +3379,7 @@ export async function buildWorld(ctx, onProgress) {
       kit.transform(g, { pos: [d.x, y - 0.4, d.z] });
       paintGeometry(THREE, g, GLASS_RAMP, (x, yy, z) => {
         const rr = Math.hypot(x - d.x, z - d.z) / R;
-        return clamp01(0.06 + rr * 0.34 + Math.sin(x * 0.3 + z * 0.21) * 0.07);
+        return clamp01(0.10 + rr * 0.36 + Math.sin(x * 0.3 + z * 0.21) * 0.07);
       }, { jitter: 0.05 });
       batch.add("scar", "glassRock", g, { castShadow: false });
     }
@@ -2205,7 +3416,7 @@ export async function buildWorld(ctx, onProgress) {
       // the crater floor is 140m across.
       lights.push({
         x: d.x + 4, y: y + 14, z: d.z - 6,
-        colour: "#ff7a3a", intensity: 210, distance: 210, kind: "ember", flicker: 0.5,
+        colour: "#ff7a3a", intensity: 255, distance: 220, kind: "ember", flicker: 0.5,
       });
     }
 
@@ -2230,7 +3441,7 @@ export async function buildWorld(ctx, onProgress) {
         if (pts.length > 2) parts.push(kit.tube(pts, veinR, 4, { taper: 0.72 }));
       }
       const g = kit.merge(parts);
-      paintH(g, GLASS_RAMP, { normalWeight: 0.4, jitter: 0.2, bias: 0.22 });
+      paintH(g, GLASS_RAMP, { normalWeight: 0.4, jitter: 0.2, bias: 0.30 });
       batch.add("scar", "glassRock", g, { castShadow: false });
     }
   }
@@ -2290,8 +3501,19 @@ export async function buildWorld(ctx, onProgress) {
 
     /* --- tanks --- */
     const tankPos = [];
+    const tankGateAngle = Math.asin(CENSER_WORKS.gateHalfWidth / CENSER_WORKS.wallRadius);
     for (let i = 0; i < 11; i += 1) {
-      const a = (i / 11) * TAU + 0.25;
+      let a = (i / 11) * TAU + 0.25;
+      /* Keep the four entrance sightlines free.  A tank centred on the
+         west gate made a technically open wall read as a sealed yard,
+         and sent the header pipe straight across the doorway. */
+      for (const bearing of CENSER_WORKS.gateBearings) {
+        const delta = Math.atan2(Math.sin(a - bearing), Math.cos(a - bearing));
+        if (Math.abs(delta) < tankGateAngle + 0.10) {
+          a += delta >= 0 ? 0.22 : -0.22;
+          break;
+        }
+      }
       const r = 96 + (i % 3) * 22;
       const x = d.x + Math.cos(a) * r;
       const z = d.z + Math.sin(a) * r * 0.8;
@@ -2318,102 +3540,158 @@ export async function buildWorld(ctx, onProgress) {
       batch.add("censer", "gold", boss);
     }
 
-    /* --- pipe runs linking everything, elevated on trestles --- */
+    /* --- pipe runs: one tank loop, then short stack spurs ----------
+       The old graph closed one list containing the perimeter tanks AND
+       the three central stacks.  Its last four edges therefore slashed
+       long chords across the yard.  A refinery reads more deliberately
+       when the storage ring owns the header and each flare stack joins
+       it through its nearest tank. */
     {
       const parts = [];
-      const nodes = tankPos.concat(stackPos.map(([ox, oz]) => [d.x + ox, d.z + oz]));
-      for (let i = 0; i < nodes.length; i += 1) {
-        const a = nodes[i];
-        const b = nodes[(i + 1) % nodes.length];
-        const dx = b[0] - a[0];
-        const dz = b[1] - a[1];
-        const invLen = 1 / Math.max(0.001, Math.hypot(dx, dz));
-        const nx = -dz * invLen;
-        const nz = dx * invLen;
-        const pts = [];
-        const steps = 7;
-        for (let k = 0; k <= steps; k += 1) {
-          const t = k / steps;
-          const x = lerp(a[0], b[0], t);
-          const z = lerp(a[1], b[1], t);
-          const pipeY = H(x, z) + 5.5 + Math.sin(t * Math.PI) * 1.2;
-          pts.push([x, pipeY, z]);
-          if (k > 0 && k < steps && k % 2 === 0) {
-            const ground = H(x, z) - 0.15;
-            const crossY = pipeY - 0.68;
-            parts.push(kit.prism({
-              h: crossY - ground, rBottom: 0.32, rTop: 0.26, sides: 4,
-            }).translate(x, ground, z));
-            // One crossarm cradles both the main and offset pipe.
-            // Their different radii and 0.2m centre-height offset
-            // put both lower surfaces at essentially the same Y.
-            parts.push(kit.tube([
-              [x - nx * 0.48, crossY, z - nz * 0.48],
-              [x + nx * 1.88, crossY, z + nz * 1.88],
-            ], 0.16, 4));
+      const addRun = (nodes, { paired = true } = {}) => {
+        for (let i = 0; i < nodes.length - 1; i += 1) {
+          const a = nodes[i];
+          const b = nodes[i + 1];
+          const dx = b[0] - a[0];
+          const dz = b[1] - a[1];
+          const len = Math.max(0.001, Math.hypot(dx, dz));
+          const nx = -dz / len;
+          const nz = dx / len;
+          const pts = [];
+          const steps = Math.max(4, Math.ceil(len / 16));
+          for (let k = 0; k <= steps; k += 1) {
+            const t = k / steps;
+            const x = lerp(a[0], b[0], t);
+            const z = lerp(a[1], b[1], t);
+            const pipeY = upper + 5.7 + Math.sin(t * Math.PI) * 0.75;
+            pts.push([x, pipeY, z]);
+            if (k > 0 && k < steps && (k % 2 === 0 || steps <= 5)) {
+              const ground = H(x, z) - 0.15;
+              const crossY = pipeY - 0.68;
+              parts.push(kit.prism({
+                h: crossY - ground, rBottom: 0.32, rTop: 0.26, sides: 4,
+              }).translate(x, ground, z));
+              parts.push(kit.tube([
+                [x - nx * 0.55, crossY, z - nz * 0.55],
+                [x + nx * (paired ? 1.95 : 0.55), crossY,
+                  z + nz * (paired ? 1.95 : 0.55)],
+              ], 0.16, 4));
+            }
+          }
+          parts.push(kit.tube(pts, paired ? 0.55 : 0.46, 6));
+          if (paired) {
+            parts.push(kit.tube(pts.map((p) => [
+              p[0] + nx * 1.4, p[1] - 0.2, p[2] + nz * 1.4,
+            ]), 0.34, 5));
           }
         }
-        parts.push(kit.tube(pts, 0.55, 6));
-        parts.push(kit.tube(pts.map((p) => [
-          p[0] + nx * 1.4, p[1] - 0.2, p[2] + nz * 1.4,
-        ]), 0.34, 5));
+      };
+
+      addRun(tankPos.concat([tankPos[0]]));
+      const stacks = stackPos.map(([ox, oz]) => [d.x + ox, d.z + oz]);
+      for (const stack of stacks) {
+        let nearest = tankPos[0];
+        for (const tank of tankPos) {
+          if (Math.hypot(tank[0] - stack[0], tank[1] - stack[1])
+            < Math.hypot(nearest[0] - stack[0], nearest[1] - stack[1])) nearest = tank;
+        }
+        addRun([stack, nearest], { paired: false });
       }
       const g = kit.merge(parts);
       paintH(g, ironRamp, { normalWeight: 0.44, jitter: 0.2, noise: 0.28 });
-      batch.add("censer", "rust", g);
+      batch.add("censer", "rust", g, { tag: "pipes" });
     }
 
-    /* --- the retaining wall between terraces --- */
+    /* --- the perimeter retaining wall --------------------------------
+       Four open gates align with the terrain's approach aprons.  Every
+       wall face, coping stone, buttress and gate pier is authored from
+       the same radius, so there is no remnant slicing through the boss
+       arena and no detached attachment left on the old diagonal. */
     {
       const parts = [];
-      const nx = 0.55;
-      const nz = 0.84;
-      for (let t = -150; t <= 150; t += 9) {
-        const x = d.x + -nz * t;
-        const z = d.z + nx * t;
-        const w = kit.slab(9.4, upper - lower + 2.2, 3.0, 0.14);
-        w.rotateY(-Math.atan2(nx, -nz));
-        w.translate(x, lower - 1.2, z);
+      const radius = CENSER_WORKS.wallRadius;
+      const segments = CENSER_WORKS.wallSegments;
+      const segmentLength = TAU * radius / segments + 0.34;
+      const baseY = lower - 0.85;
+      const wallH = upper - lower + 3.0;
+      const gateAngle = Math.asin(CENSER_WORKS.gateHalfWidth / radius);
+      const angleDelta = (a, b) => Math.abs(Math.atan2(Math.sin(a - b), Math.cos(a - b)));
+      const inGate = (a, pad = 0) => CENSER_WORKS.gateBearings
+        .some((bearing) => angleDelta(a, bearing) < gateAngle + pad);
+
+      for (let i = 0; i < segments; i += 1) {
+        const a = ((i + 0.5) / segments) * TAU;
+        if (inGate(a, 0.012)) continue;
+        const x = d.x + Math.cos(a) * radius;
+        const z = d.z + Math.sin(a) * radius;
+        const yaw = -a - Math.PI * 0.5;
+        const w = kit.slab(segmentLength, wallH, CENSER_WORKS.wallThickness, 0.14);
+        w.rotateY(yaw);
+        w.translate(x, baseY, z);
         parts.push(w);
-        if ((t + 150) % 36 === 0) {
-          const b = kit.slab(3.0, upper - lower + 4.0, 4.4, 0.2);
-          b.rotateY(-Math.atan2(nx, -nz));
-          b.translate(x + nx * 2.2, lower - 1.2, z + nz * 2.2);
+
+        const coping = kit.slab(segmentLength + 0.12, 0.55,
+          CENSER_WORKS.wallThickness + 0.75, 0.12);
+        coping.rotateY(yaw);
+        coping.translate(x, baseY + wallH, z);
+        parts.push(coping);
+
+        if (i % 8 === 0 && !inGate(a, 0.07)) {
+          const b = kit.slab(3.2, wallH + 1.5, 5.4, 0.2);
+          b.rotateY(yaw);
+          b.translate(
+            d.x + Math.cos(a) * (radius + 2.0),
+            baseY,
+            d.z + Math.sin(a) * (radius + 2.0)
+          );
           parts.push(b);
+        }
+      }
+
+      for (const bearing of CENSER_WORKS.gateBearings) {
+        for (const side of [-1, 1]) {
+          const a = bearing + side * (gateAngle + 0.018);
+          const yaw = -a - Math.PI * 0.5;
+          const pier = kit.slab(5.0, wallH + 3.8, 6.2, 0.22);
+          pier.rotateY(yaw);
+          pier.translate(
+            d.x + Math.cos(a) * (radius + 0.8),
+            baseY,
+            d.z + Math.sin(a) * (radius + 0.8)
+          );
+          parts.push(pier);
         }
       }
       const g = kit.merge(parts);
       paintH(g, makeRamp([[0, "#1b1a1c"], [0.5, "#3d3a38"], [1, "#6d6459"]]),
         { normalWeight: 0.44, jitter: 0.14, noise: 0.24 });
-      batch.add("censer", "stone", g);
+      batch.add("censer", "stone", g,
+        { tag: "perimeter-wall", collisionSolid: true });
     }
 
-    /* --- catwalks on the lower terrace --- */
+    /* --- service catwalks follow the wall instead of bisecting it --- */
     {
-      const y = lower + 7.5;
-      const run = [
-        [d.x - 90, y, d.z + 70], [d.x - 20, y, d.z + 84],
-        [d.x + 48, y, d.z + 74], [d.x + 92, y, d.z + 40],
-      ];
-      const parts = [kit.catwalk(run, { width: 2.0 })];
-      for (let i = 0; i < run.length - 1; i += 1) {
-        const a = run[i];
-        const b = run[i + 1];
-        const dx = b[0] - a[0];
-        const dz = b[2] - a[2];
-        const len = Math.hypot(dx, dz);
-        const steps = Math.max(1, Math.ceil(len / 13));
-        const nx = -dz / len;
-        const nz = dx / len;
-        for (let k = 0; k <= steps; k += 1) {
-          // Do not duplicate the shared station between segments.
-          if (i > 0 && k === 0) continue;
-          const t = k / steps;
-          const px = lerp(a[0], b[0], t);
-          const pz = lerp(a[2], b[2], t);
+      const y = upper + 6.8;
+      const radius = CENSER_WORKS.catwalkRadius;
+      const gateAngle = Math.asin(CENSER_WORKS.gateHalfWidth / CENSER_WORKS.wallRadius);
+      const parts = [];
+      for (let quadrant = 0; quadrant < 4; quadrant += 1) {
+        const start = quadrant * Math.PI * 0.5 + gateAngle * 1.65;
+        const end = (quadrant + 1) * Math.PI * 0.5 - gateAngle * 1.65;
+        const run = [];
+        const steps = 9;
+        for (let i = 0; i <= steps; i += 1) {
+          const a = lerp(start, end, i / steps);
+          run.push([d.x + Math.cos(a) * radius, y, d.z + Math.sin(a) * radius]);
+        }
+        parts.push(kit.catwalk(run, { width: 2.0 }));
+
+        for (let i = 0; i < run.length; i += 2) {
+          const a = lerp(start, end, i / steps);
           for (const side of [-1, 1]) {
-            const lx = px + nx * side * 0.72;
-            const lz = pz + nz * side * 0.72;
+            const rr = radius + side * 0.72;
+            const lx = d.x + Math.cos(a) * rr;
+            const lz = d.z + Math.sin(a) * rr;
             const ground = H(lx, lz) - 0.18;
             const legH = y - ground;
             if (legH > 0.25) {
@@ -2426,7 +3704,7 @@ export async function buildWorld(ctx, onProgress) {
       }
       const g = kit.merge(parts);
       paintH(g, ironRamp, { normalWeight: 0.5, jitter: 0.2 });
-      batch.add("censer", "rust", g);
+      batch.add("censer", "rust", g, { tag: "perimeter-catwalk" });
     }
 
     /* --- spill stains and drum litter --- */
@@ -2435,6 +3713,12 @@ export async function buildWorld(ctx, onProgress) {
       for (let i = 0; i < 90; i += 1) {
         const a = rng() * TAU;
         const r = Math.pow(rng(), 0.6) * 190;
+        if (r > CENSER_WORKS.catwalkRadius - 24
+          && CENSER_WORKS.gateBearings.some((bearing) =>
+            Math.abs(Math.atan2(Math.sin(a - bearing), Math.cos(a - bearing)))
+              < Math.asin(CENSER_WORKS.gateHalfWidth / CENSER_WORKS.wallRadius) * 2.4)) {
+          continue;
+        }
         const x = d.x + Math.cos(a) * r;
         const z = d.z + Math.sin(a) * r;
         const g = kit.prism({ h: 1.5, rBottom: 0.52, rTop: 0.52, sides: 8 });
@@ -2446,7 +3730,7 @@ export async function buildWorld(ctx, onProgress) {
       }
       const g = mergeGeometries(THREE, geos);
       paintH(g, ironRamp, { normalWeight: 0.5, jitter: 0.28, noise: 0.4 });
-      batch.add("censer", "rust", g);
+      batch.add("censer", "rust", g, { tag: "spill-litter" });
     }
 
     pois.push({ id: "censer", name: "The Censer Works", x: d.x, z: d.z });
@@ -2474,6 +3758,7 @@ export async function buildWorld(ctx, onProgress) {
     /* --- the needles --- */
     {
       const parts = [];
+      const standing = [];
       const COUNT = 54;
       for (let i = 0; i < COUNT; i += 1) {
         // A loose spiral, densest and tallest at the centre.
@@ -2542,12 +3827,65 @@ export async function buildWorld(ctx, onProgress) {
           embed: fallen ? rad * 0.36 : rad * 0.14,
           maxGap: 0.08,
         });
+        if (!fallen) {
+          const needle = { x, z, h, rad, baseY: g.userData.restY };
+          standing.push(needle);
+          choirNeedles.push(needle);
+        }
         parts.push(g);
       }
       const g = kit.merge(parts);
       paintH(g, spireRamp, { normalWeight: 0.40, jitter: 0.14, noise: 0.24 });
       batch.add("choir", "rock", g);
       pois.push({ id: "choir", name: "The Choir Spires", x: d.x, z: d.z });
+
+      /* --- the light between them ---
+
+         These are the district's whole picture, and they have to be
+         chosen by the SPIRES. The previous set was scattered by the
+         vfx module's own RNG - a random bearing and a random height
+         somewhere inside a 320m circle - which put most of the cones
+         in open sky with no rock near enough to cast one, and gave
+         each of them a direction frozen from the sun at world-build
+         time. Standing in the district you got pale, hard-edged bars
+         ruled across the sky at every hour including midnight.
+
+         Tallest first, then spaced apart, so the light picks out the
+         crowns that already carry the silhouette rather than landing
+         in the flats between them. The cone itself is aimed, offset
+         and cut to length against the live sun by `buildShafts`; all
+         that is fixed here is which needle it belongs to. */
+      const lit = standing.filter((n) => n.h > 62).sort((a, b) => b.h - a.h);
+      const chosen = [];
+      for (const n of lit) {
+        if (chosen.length >= 5) break;
+        if (chosen.some((c) => Math.hypot(c.x - n.x, c.z - n.z) < 115)) continue;
+        chosen.push(n);
+      }
+      for (const n of chosen) {
+        emitters.push({
+          kind: "shaft", sun: true,
+          /* Not from the crown. These needles stand 84m to 128m, and
+             a cone from the top of one down to the sand is a hundred
+             metres of object lying across the district - a fallen
+             column, not a shaft. Entering at two fifths of the way up
+             puts the head of the cone against the needle's own rock,
+             which is the slot, and leaves a 45m fall to the floor. */
+          x: n.x, y: n.baseY + n.h * 0.42, z: n.z,
+          offset: n.rad * 1.6, radius: clamp(n.rad * 0.46, 2.4, 4.8),
+          /* Pale, and only just warm. Saturated warm additive over a
+             desert sky has one channel already at the ceiling, so the
+             extra light lands in the other two and the shaft arrives
+             white anyway - with a hard edge where it clipped. */
+          /* 0.34, and the district is better for it. Outside, a shaft
+             competes with a fully lit desert and has to be almost
+             nothing; the number that matters is not how it reads
+             against the sky but what it does when it crosses a spire,
+             because unlit rock here sits near black and ANY additive
+             of size turns it into a flat grey blade. */
+          colour: "#ffeacb", gain: 0.34,
+        });
+      }
     }
 
     /* --- shattered ground plates --- */
@@ -2581,10 +3919,17 @@ export async function buildWorld(ctx, onProgress) {
       batch.add("choir", "rock", g);
     }
 
-    /* --- the shrine at the foot of the tallest --- */
+    /* --- the shrine at the arena's edge --- */
     {
-      const sx = d.x + 26;
-      const sz = d.z - 14;
+      /* It stood at (d.x+26, d.z-14) - thirty metres from the arena
+         centre, a 5.4m altar and nine plinthed statues exactly where
+         a downed Stylite is meleed. The Glass Scar already taught
+         this lesson (the crater-centre lance blocked every bolt
+         thrown east); the shrine keeps its POI and its fire but
+         moves to the flat pad's edge, inside the arena and clear of
+         the needle-foot crash sites. */
+      const sx = d.x + 72;
+      const sz = d.z + 38;
       const parts = [];
       for (let i = 0; i < 9; i += 1) {
         const a = (i / 9) * TAU;
@@ -2790,6 +4135,10 @@ export async function buildWorld(ctx, onProgress) {
     const bagGeos = [];
     const woodGeos = [];
     const ironGeos = [];
+    const outsideCenserApron = (x, z, margin = 0) => Math.hypot(
+      x - DISTRICTS.censer.x,
+      z - DISTRICTS.censer.z
+    ) >= CENSER_WORKS.wallRadius + 52 + margin;
 
     for (let i = 4; i < prof.length - 4; i += 3) {
       const a = prof[i];
@@ -2801,6 +4150,7 @@ export async function buildWorld(ctx, onProgress) {
       const px = a.x - Math.sin(-yaw) * off;
       const pz = a.z - Math.cos(-yaw) * off;
       if (rng.chance(0.22)) continue;
+      if (!outsideCenserApron(px, pz, 8)) continue;
       const bagLength = rng.range(7, 13);
       const g = kit.sandbagWall(rng, { length: bagLength, courses: rng.int(2, 4) });
       restOnTerrain(g, px, pz, {
@@ -2825,6 +4175,7 @@ export async function buildWorld(ctx, onProgress) {
       const off = 21;
       const px = a.x - Math.sin(-yaw) * off;
       const pz = a.z - Math.cos(-yaw) * off;
+      if (!outsideCenserApron(px, pz, 10)) continue;
       const g = kit.wireRun(rng, { length: 14, height: 1.2, coils: 20 });
       placeOnTerrain(g, px, pz, {
         yaw: -yaw, sample: 7, dy: -0.08, maxTilt: 0.34,
@@ -2840,6 +4191,7 @@ export async function buildWorld(ctx, onProgress) {
       const off = 15;
       const px = a.x - Math.sin(-yaw) * off;
       const pz = a.z - Math.cos(-yaw) * off;
+      if (!outsideCenserApron(px, pz, 12)) continue;
       const g = kit.bunker({ w: rng.range(7, 10), d: rng.range(5, 7), h: 3.0 });
       restOnTerrain(g, px, pz, {
         rot: [0, -yaw + Math.PI, 0], embed: 1.0, maxGap: 0.05,
@@ -2847,30 +4199,39 @@ export async function buildWorld(ctx, onProgress) {
       const painted = paintH(g, makeRamp([
         [0, "#1c1a1b"], [0.4, "#3a3733"], [0.75, "#66604f"], [1, "#948a6f"],
       ]), { normalWeight: 0.46, jitter: 0.14, noise: 0.26 });
-      batch.add("fosse", "stone", painted);
+      batch.add("fosse", "stone", painted, { chunk: true });
       // A skull over the embrasure. There is always a skull.
       const sk = kit.skull({ size: 0.85 });
       sk.rotateY(-yaw + Math.PI);
       sk.translate(px, g.userData.restY + 3.4, pz);
       paintH(sk, makeRamp([[0, "#6a5a2c"], [1, "#e6c47c"]]), { normalWeight: 0.5 });
-      batch.add("fosse", "gold", sk);
+      batch.add("fosse", "gold", sk, { chunk: true });
     }
 
+    /* These three are merged BEFORE painting (the ramp normalises to
+       the whole run's height range), so the chunking has to split the
+       painted result rather than feed the batcher per piece. */
     if (bagGeos.length) {
       const g = mergeGeometries(THREE, bagGeos);
       paintH(g, makeRamp([[0, "#5a4433"], [0.45, "#8a6c4c"], [1, "#bfa079"]]),
         { normalWeight: 0.5, jitter: 0.2, noise: 0.3 });
-      batch.add("fosse", "cloth", g);
+      for (const piece of splitByCell(THREE, g, CHUNK_SIZE)) {
+        batch.add("fosse", "cloth", piece, { chunk: true });
+      }
     }
     if (woodGeos.length) {
       const g = mergeGeometries(THREE, woodGeos);
       paintH(g, makeRamp([[0, "#3a2b20"], [1, "#7b5d42"]]), { normalWeight: 0.5, jitter: 0.2 });
-      batch.add("fosse", "rust", g);
+      for (const piece of splitByCell(THREE, g, CHUNK_SIZE)) {
+        batch.add("fosse", "rust", piece, { chunk: true });
+      }
     }
     if (ironGeos.length) {
       const g = mergeGeometries(THREE, ironGeos);
       paintH(g, makeRamp([[0, "#22242a"], [1, "#6b7078"]]), { normalWeight: 0.5, jitter: 0.2 });
-      batch.add("fosse", "iron", g);
+      for (const piece of splitByCell(THREE, g, CHUNK_SIZE)) {
+        batch.add("fosse", "iron", piece, { chunk: true });
+      }
     }
 
     pois.push({ id: "fosse", name: "The Fosse", x: 64, z: 428 });
@@ -2892,13 +4253,52 @@ export async function buildWorld(ctx, onProgress) {
     {
       const masts = [];
       const sails = [];
+      const crossAsset = landmarkSources.gildedReachCross;
+      /* A separate stream keeps pose variety deterministic without
+         re-timing the Reach's existing mast, sail and statue scatter. */
+      const poseRng = makeRng(0x6c7a55);
+      const fallen = new Map([
+        [3, { tiltX: 1.31, tiltZ: -0.18 }],
+        [13, { tiltX: -1.24, tiltZ: 0.27 }],
+      ]);
+      const leaning = new Map([
+        [6, { tiltX: 0.23, tiltZ: -0.12 }],
+        [14, { tiltX: -0.17, tiltZ: 0.21 }],
+      ]);
       for (let i = 0; i < 17; i += 1) {
         // A line marching across the dunes, perpendicular to the
         // wind, so they read as deliberate rather than scattered.
         const t = i / 16;
-        const x = d.x - 300 + t * 620 + rng.jit(40);
-        const z = d.z - 190 + t * 300 + rng.jit(60);
+        let x = d.x - 300 + t * 620 + rng.jit(40);
+        let z = d.z - 190 + t * 300 + rng.jit(60);
+        /* THE MATRIARCH'S CLEARING. The line used to march straight
+           through her arena - mast 8 stood twenty-five metres from
+           the marker, a hex plinth inside melee reach, and her own
+           masonry probe turned her along it mid-fight. Masts that
+           land inside the keep ring are pushed radially to it rather
+           than skipped: a skip deletes a vane from the line (and
+           re-times every rng draw after it), a push bows the line
+           around the clearing, which reads as the builders having
+           respected the same ground. */
+        {
+          const keep = MATRIARCH_ARENA.bossRadius + 12;
+          const mdx = x - MATRIARCH_ARENA.x;
+          const mdz = z - MATRIARCH_ARENA.z;
+          const md = Math.hypot(mdx, mdz);
+          if (md < keep) {
+            const nx = md > 1e-6 ? mdx / md : 1;
+            const nz = md > 1e-6 ? mdz / md : 0;
+            x = MATRIARCH_ARENA.x + nx * keep;
+            z = MATRIARCH_ARENA.z + nz * keep;
+          }
+        }
         const h = rng.range(14, 26);
+        const yaw = (i * 2.39996323 + poseRng.jit(0.34) + TAU) % TAU;
+        const pose = fallen.get(i) || leaning.get(i) || {
+          tiltX: poseRng.jit(0.035),
+          tiltZ: poseRng.jit(0.035),
+        };
+        const variant = fallen.has(i) ? "fallen" : leaning.has(i) ? "leaning" : "upright";
         masts.push(kit.merge([
           // Terrain-conforming foundation: the visible 1.5m plinth
           // can cross a dune shoulder, but its underside cannot.
@@ -2916,15 +4316,194 @@ export async function buildWorld(ctx, onProgress) {
           blade.translate(x, H(x, z) + h - 1.6, z);
           sails.push(blade);
         }
+        if (crossAsset) {
+          addAuthoredLandmark(crossAsset, {
+            key: `gildedReachCross-${i}`,
+            name: `reach-meshy-choir-wheel-${i}`,
+            district: "reach",
+            pos: [x, 0, z],
+            rot: [pose.tiltX, yaw, pose.tiltZ],
+            rotOrder: "YXZ",
+            // Preserve the old vane's seeded height range and skyline.
+            height: h + 1.6,
+            variant,
+            seatOnTerrain: { maxGap: 0, embed: 0.12 },
+          });
+        }
+      }
+      /* --- The Colossal Cross & Shrine at the Matriarch Arena Edge --- */
+      const crossHeight = 44;
+      const crossBearing = 2.26; // South-West edge, framing the Matriarch arena against the sky
+      const crossEdgeRadius = MATRIARCH_ARENA.flatRadius; // Edge of the flattened arena pad (78m)
+      const crossX = MATRIARCH_ARENA.x + Math.cos(crossBearing) * crossEdgeRadius;
+      const crossZ = MATRIARCH_ARENA.z + Math.sin(crossBearing) * crossEdgeRadius;
+      const crossYaw = crossBearing;
+
+      if (crossAsset) {
+        addAuthoredLandmark(crossAsset, {
+          key: "gildedReachCross-matriarchEdge",
+          name: "reach-meshy-choir-wheel-matriarch-edge",
+          district: "reach",
+          pos: [crossX, 0, crossZ],
+          rot: [0.040, crossYaw, -0.030],
+          rotOrder: "YXZ",
+          height: crossHeight,
+          variant: "arena-edge",
+          arenaEdge: true,
+          seatOnTerrain: { maxGap: 0, embed: 0.16 },
+        });
+      }
+
+      /* Ambient shrine fixtures: stepped prayer altar, pedestals, candle clusters,
+         glowing votives and warm lantern light nestled at the base of the cross */
+      {
+        const shrineStone = [];
+        const shrineCandles = [];
+        const shrineFlames = [];
+        const shrineIron = [];
+
+        // Forward vector pointing into the arena from the cross
+        const fwdX = -Math.cos(crossBearing);
+        const fwdZ = -Math.sin(crossBearing);
+        const rightX = -fwdZ;
+        const rightZ = fwdX;
+
+        // Base altar position slightly forward of the cross footing
+        const ax = crossX + fwdX * 3.4;
+        const az = crossZ + fwdZ * 3.4;
+        const ay = H(ax, az);
+
+        // Stepped stone dais
+        const step1 = kit.slab(5.6, 0.35, 3.2, 0.08);
+        const step2 = kit.slab(4.0, 0.38, 2.0, 0.06).translate(0, 0.35, 0);
+        const altarTable = kit.slab(2.8, 0.60, 1.2, 0.05).translate(0, 0.73, 0);
+        const dais = kit.merge([step1, step2, altarTable]);
+        dais.rotateY(-crossBearing);
+        dais.translate(ax, ay + 0.18, az);
+        shrineStone.push(dais);
+
+        // Flanking prayer pedestals
+        for (const sign of [-1, 1]) {
+          const px = ax + rightX * (sign * 3.4);
+          const pz = az + rightZ * (sign * 3.4);
+          const py = H(px, pz);
+          const ped = kit.prism({ h: 1.15, rBottom: 0.50, rTop: 0.42, sides: 6 });
+          ped.translate(px, py, pz);
+          shrineStone.push(ped);
+
+          // Iron votive bowls on each pedestal
+          const bowl = kit.prism({ h: 0.22, rBottom: 0.20, rTop: 0.36, sides: 8 });
+          bowl.translate(px, py + 1.15, pz);
+          shrineIron.push(bowl);
+
+          // Glowing ember core inside the bowl
+          const ember = kit.prism({ h: 0.04, rBottom: 0.28, rTop: 0.25, sides: 8 });
+          ember.translate(px, py + 1.28, pz);
+          shrineFlames.push(ember);
+        }
+
+        // Helper to place candle cluster
+        const candleRng = makeRng(0x7c41a);
+        const addCandleCluster = (cx, cz, count, radius, baseElevation) => {
+          for (let k = 0; k < count; k += 1) {
+            const ca = candleRng() * TAU;
+            const cr = Math.pow(candleRng(), 0.6) * radius;
+            const kx = cx + Math.cos(ca) * cr;
+            const kz = cz + Math.sin(ca) * cr;
+            const ky = baseElevation !== undefined ? baseElevation : H(kx, kz);
+            const ch = candleRng.range(0.35, 0.95);
+            const cradius = candleRng.range(0.05, 0.09);
+
+            // Candle wax body
+            const wax = kit.prism({ h: ch, rBottom: cradius * 1.1, rTop: cradius, sides: 5 });
+            if (candleRng.chance(0.35)) {
+              wax.rotateZ(candleRng.jit(0.12));
+              wax.rotateX(candleRng.jit(0.12));
+            }
+            wax.translate(kx, ky, kz);
+            shrineCandles.push(wax);
+
+            // Melted wax pool at base
+            const pool = kit.prism({ h: 0.06, rBottom: cradius * 2.2, rTop: cradius * 1.6, sides: 6 });
+            pool.translate(kx, ky, kz);
+            shrineCandles.push(pool);
+
+            // Flickering emissive flame
+            const fh = candleRng.range(0.18, 0.32);
+            const flame = kit.prism({ h: fh, rBottom: cradius * 0.95, rTop: 0.015, sides: 5 });
+            flame.translate(kx, ky + ch, kz);
+            shrineFlames.push(flame);
+          }
+        };
+
+        // Main cluster on altar table
+        addCandleCluster(ax, az, 14, 1.1, ay + 1.33);
+
+        // Tier step candle clusters
+        addCandleCluster(ax + fwdX * 0.9, az + fwdZ * 0.9, 10, 1.4, ay + 0.35);
+        addCandleCluster(ax - fwdX * 0.9, az - fwdZ * 0.9, 8, 1.2, ay + 0.73);
+
+        // Ground votive clusters near cross base footing
+        addCandleCluster(crossX + rightX * 2.0, crossZ + rightZ * 2.0, 7, 0.9);
+        addCandleCluster(crossX - rightX * 2.0, crossZ - rightZ * 2.0, 7, 0.9);
+
+        // Iron offering censers on altar
+        const censerA = kit.prism({ h: 0.30, rBottom: 0.18, rTop: 0.32, sides: 6 });
+        censerA.translate(ax - rightX * 1.1, ay + 1.33, az - rightZ * 1.1);
+        const censerB = kit.prism({ h: 0.30, rBottom: 0.18, rTop: 0.32, sides: 6 });
+        censerB.translate(ax + rightX * 1.1, ay + 1.33, az + rightZ * 1.1);
+        shrineIron.push(censerA, censerB);
+
+        // Merge & paint stone
+        if (shrineStone.length) {
+          const sg = kit.merge(shrineStone);
+          paintH(sg, makeRamp([[0, "#4c382f"], [0.45, "#82644d"], [0.8, "#b8946f"], [1, "#dcbc8e"]]),
+            { normalWeight: 0.44, jitter: 0.14, noise: 0.22 });
+          batch.add("reach", "stone", sg);
+        }
+
+        // Merge & paint iron
+        if (shrineIron.length) {
+          const ig = kit.merge(shrineIron);
+          paintH(ig, makeRamp([[0, "#231a18"], [0.45, "#3b2c25"], [0.8, "#5a4436"], [1, "#7d6146"]]),
+            { normalWeight: 0.5, jitter: 0.16 });
+          batch.add("reach", "rust", ig);
+        }
+
+        // Merge & paint candle wax
+        if (shrineCandles.length) {
+          const cg = kit.merge(shrineCandles);
+          paintH(cg, makeRamp([[0, "#8a755d"], [0.35, "#c8b28a"], [0.7, "#e4d3b2"], [1, "#f7eed9"]]),
+            { normalWeight: 0.35, jitter: 0.10 });
+          batch.add("reach", "bone", cg);
+        }
+
+        // Merge & paint flames (emissive)
+        if (shrineFlames.length) {
+          const fg = kit.merge(shrineFlames);
+          flat(fg, "#ffae48", 0.15);
+          batch.add("reach", "emissive", fg, { castShadow: false, receiveShadow: false });
+        }
+
+        // Atmospheric candle point light
+        lights.push({
+          x: ax, y: ay + 1.8, z: az,
+          colour: "#ffa645", intensity: 130, distance: 48,
+          kind: "brazier", flicker: 0.32,
+        });
+
+        pois.push({ id: "reach-cross", name: "The Gilded Wheel", x: crossX, z: crossZ });
       }
       const mg = kit.merge(masts);
-      paintH(mg, makeRamp([[0, "#3b2c22"], [0.6, "#7b6046"], [1, "#b0906c"]]),
-        { normalWeight: 0.46, jitter: 0.16 });
-      batch.add("reach", "rust", mg);
       const sg = kit.merge(sails);
-      paintH(sg, makeRamp([[0, "#7d3a2c"], [0.5, "#c07a4a"], [1, "#e8c384"]]),
-        { normalWeight: 0.55, jitter: 0.2 });
-      batch.add("reach", "cloth", sg);
+      if (!crossAsset) {
+        paintH(mg, makeRamp([[0, "#3b2c22"], [0.6, "#7b6046"], [1, "#b0906c"]]),
+          { normalWeight: 0.46, jitter: 0.16 });
+        batch.add("reach", "rust", mg);
+        paintH(sg, makeRamp([[0, "#7d3a2c"], [0.5, "#c07a4a"], [1, "#e8c384"]]),
+          { normalWeight: 0.55, jitter: 0.2 });
+        batch.add("reach", "cloth", sg);
+      }
       pois.push({ id: "reach", name: "The Gilded Reach", x: d.x, z: d.z });
     }
 
@@ -3037,6 +4616,43 @@ export async function buildWorld(ctx, onProgress) {
      landmark you can see two of at once is scenery; one at a time is
      a landmark.
      ============================================================ */
+  /* ============================================================
+     THE YARDANGS
+
+     Wind-carved fins standing in the open dune sea: a blunt prow
+     into the wind, a long streamlined tail, a scoured waist and a
+     crest that runs most of the fin's length. Fifteen of them, all
+     on the ripples' own bearing, are what stops the desert between
+     districts reading as empty.
+
+     Three things had to be true here that were not:
+
+     - THE UNDERSIDE MUST BE CLOSED. `ringSolid` was called with
+       `capBottom: false`, so every fin was a hollow shell. That is
+       invisible from every angle except one - and it is the angle a
+       player at the foot of a dune actually has, looking up at the
+       belly and straight in through the open bottom.
+
+     - A 130-METRE OBJECT CANNOT BE PLACED FROM ONE HEIGHT SAMPLE.
+       `place()` takes y from H(x, z) at the centre alone, which
+       over a dune sea leaves a fin resting on its middle like a
+       plank on a pillow. Measured on the fifteen before this pass:
+       the worst base vertex stood ELEVEN METRES clear of the sand,
+       and eight fins had more than a tenth of their base ring in
+       open air. Open shell plus floating base is the whole of the
+       "see-through from underneath" report - neither alone would
+       have shown.
+
+     - A CONE IS NOT A FIN. The old profile ran a full-length base
+       ellipse up to a single apex, so from broadside it read as a
+       squashed paper dart; and nine sides around a 130m ellipse
+       left the flanks as four flat facets twenty metres across,
+       which is where the layer-cake banding came from. The crest
+       now stays a RIDGE - about half the fin's length at the top -
+       the prow is blunt where the tail is drawn out, and flutes
+       rake the flanks so the surface breaks up the slope rather
+       than into horizontal strips.
+     ============================================================ */
   await step("Carving the yardangs", 0.945);
   {
     const rng = makeRng(0x7a4da9);
@@ -3058,8 +4674,79 @@ export async function buildWorld(ctx, onProgress) {
       return best;
     };
 
+    const inDistrictAt = (px, pz) => Object.values(DISTRICTS)
+      .some((d) => Math.hypot(px - d.x, pz - d.z) < d.r * 0.92);
+
+    /* Local (fin) space to world, for a plain Y rotation. Written
+       out rather than reached for through a Matrix4 because the
+       footprint survey below runs it a few hundred times per
+       candidate site and never needs the other eleven terms. */
+    const toWorld = (cx, cz, yaw, lx, lz) => [
+      cx + lx * Math.cos(yaw) + lz * Math.sin(yaw),
+      cz - lx * Math.sin(yaw) + lz * Math.cos(yaw),
+    ];
+
+    /* The ground a fin will actually have to stand on: sampled over
+       its own elliptical footprint, not at its centre. `lo` is what
+       it gets bedded into; `hi - lo` is how much of its height the
+       far end of the dune is going to eat, which the builder then
+       pays for by making it taller. */
+    const survey = (cx, cz, halfL, halfW, yaw) => {
+      let lo = Infinity;
+      let hi = -Infinity;
+      for (let a = 0; a < 16; a += 1) {
+        for (let k = 1; k <= 3; k += 1) {
+          const ang = (a / 16) * TAU;
+          const [wx, wz] = toWorld(cx, cz, yaw,
+            Math.cos(ang) * halfL * (k / 3), Math.sin(ang) * halfW * (k / 3));
+          const y = H(wx, wz);
+          if (y < lo) lo = y;
+          if (y > hi) hi = y;
+        }
+      }
+      return { lo, hi, relief: hi - lo };
+    };
+
+    /* Bed a large rotated mass into the sand by its LOWEST support.
+       `restOnTerrain`'s 35th-percentile-with-a-10cm-clamp is right
+       for a two-metre boulder, where a little burial beats a little
+       gap; on something a hundred metres long the same clamp cannot
+       reach, and the quantile guarantees that roughly a third of
+       the footprint is in open air by construction. Here the whole
+       base ring goes under, with margin - the fin carries a keel
+       below its sand line specifically so it can afford to. */
+    const bedIn = (geo, x, z, yaw, sink) => {
+      kit.transform(geo, { rot: [0, yaw, 0] });
+      geo.computeBoundingBox();
+      const p = geo.attributes.position;
+      const bb = geo.boundingBox;
+      const band = bb.min.y + (bb.max.y - bb.min.y) * 0.45;
+      let lowest = Infinity;
+      for (let i = 0; i < p.count; i += 1) {
+        if (p.getY(i) > band) continue;
+        const g = H(x + p.getX(i), z + p.getZ(i));
+        if (g < lowest) lowest = g;
+      }
+      if (!Number.isFinite(lowest)) lowest = H(x, z);
+      geo.translate(x, lowest - sink, z);
+      return geo;
+    };
+
+    /* Three characters, because fifteen copies of one recipe is a
+       row of identical fins whichever way the recipe is tuned.
+       `tail` is how far the downwind edge sweeps forward as it
+       rises (the streamlining), `widthPow`/`crest` are how fast the
+       flanks fall away and how much back is left at the top - a
+       knife-edged fin, a rounded whaleback, a stubby flat-topped
+       block that has barely started to be carved. */
+    const CHARACTERS = [
+      { w: 0.44, id: "fin", lenK: [4.0, 5.2], widK: [0.55, 0.80], tail: 0.42, brow: 0.11, widthPow: 1.75, crest: 0.09, flutes: 9 },
+      { w: 0.36, id: "whaleback", lenK: [4.6, 6.0], widK: [1.15, 1.70], tail: 0.31, brow: 0.15, widthPow: 2.60, crest: 0.32, flutes: 7 },
+      { w: 0.20, id: "block", lenK: [2.6, 3.4], widK: [0.95, 1.35], tail: 0.20, brow: 0.05, widthPow: 3.40, crest: 0.34, flutes: 6 },
+    ];
+
     let tries = 0;
-    while (placed.length < 15 && tries < 4000) {
+    while (placed.length < 15 && tries < 9000) {
       tries += 1;
       const x = rng.range(-MAP_HALF + 190, MAP_HALF - 190);
       const z = rng.range(-MAP_HALF + 190, MAP_HALF - 190);
@@ -3067,11 +4754,7 @@ export async function buildWorld(ctx, onProgress) {
       const surf = field.surfaceAt(x, z);
       if (surf.sand < 0.72) continue;
       if (nearRoad(x, z) < 78) continue;
-      let inDistrict = false;
-      for (const d of Object.values(DISTRICTS)) {
-        if (Math.hypot(x - d.x, z - d.z) < d.r * 0.92) { inDistrict = true; break; }
-      }
-      if (inDistrict) continue;
+      if (inDistrictAt(x, z)) continue;
       let tooClose = false;
       for (const p of placed) {
         if (Math.hypot(x - p[0], z - p[1]) < 210) { tooClose = true; break; }
@@ -3084,51 +4767,441 @@ export async function buildWorld(ctx, onProgress) {
       );
       if (slope > 0.26) continue;
 
-      const h = rng.range(17, 41);
-      const len = h * rng.range(3.4, 5.6);      // streamlined, not a stack
-      const wid = h * rng.range(0.72, 1.15);
+      const kind = rng.weighted(CHARACTERS);
+      const stand = rng.range(20, 44);            // wanted height above the sand
+      const len = stand * rng.range(kind.lenK[0], kind.lenK[1]);
+      const wid = stand * rng.range(kind.widK[0], kind.widK[1]);
+      const yaw = WIND + rng.jit(0.22);
+
+      /* Yardangs form on flat pans and in interdune corridors, not
+         draped over a dune crest - so a site whose own footprint
+         rolls through more than a dozen metres is simply the wrong
+         landform, and rejecting it is cheaper than trying to build
+         a fin that survives it. */
+      const ground = survey(x, z, len * 0.5, wid * 0.5, yaw);
+      if (ground.relief > 13) continue;
+
+      const sink = 2.2;
+      /* Built tall enough to still stand `stand` metres proud of the
+         HIGHEST ground under it, not the average. Bedding into the
+         lowest support is what makes the fin watertight against the
+         dunes; charging the whole of that back to its height is what
+         stops the fix quietly turning fifteen landmarks into fifteen
+         half-drowned lumps. */
+      const h = stand + sink + ground.relief;
+      const keel = Math.max(9, h * 0.38);
+
+      const LEVELS = 13;
+      // Even, so the prow and the tail both terminate on a vertex
+      // and read as edges rather than as flat cut-off faces; high
+      // enough that a 5:1 ellipse sampled at uniform angle still
+      // puts ten points down each long flank instead of four.
+      const SIDES = 22;
       const rings = [];
-      // Fifteen objects in the whole level, so they can afford to
-      // be properly rounded - a 40m landmark built on 7 sides reads
-      // as a tent from the side it is not facing.
-      const LEVELS = 9;
+
+      // The keel. Below the sand line, full section and mildly
+      // flared: it is what lets `bedIn` bury the base ring outright
+      // without a plinth ever surfacing on the low side.
+      rings.push({ y: -keel, rx: len * 0.53, rz: wid * 0.53, sides: SIDES, jitter: 0.04, seed: rng.int(1, 1e6) });
+      rings.push({ y: -keel * 0.42, rx: len * 0.515, rz: wid * 0.515, sides: SIDES, jitter: 0.05, seed: rng.int(1, 1e6) });
+
       for (let k = 0; k <= LEVELS; k += 1) {
-        const t = k / LEVELS;
-        /* A yardang is a blunt prow and a drawn-out tail, undercut
-           at the base where the wind carries the most sand. The
-           waist at t≈0.22 is that undercut; without it the shape is
-           a loaf. */
-        const taper = Math.cos(t * Math.PI * 0.5) ** 0.62;
-        // Parenthesised deliberately: `-x ** 2` is a SyntaxError in
-        // JS, and it takes the whole module out at parse time.
-        const undercut = 1 - 0.16 * Math.exp(-(((t - 0.20) / 0.13) ** 2));
-        const prow = 1 - 0.34 * t;               // the tail lifts less
+        const t = k / LEVELS;                    // 0 = sand line, 1 = crest
+        /* The two edges are shaped SEPARATELY, and that asymmetry
+           is the whole read: the upwind brow pulls back barely at
+           all, so the prow stands as a near-vertical face, while
+           the downwind edge sweeps a long way forward, so the tail
+           lies down. Half a fin's length is still there at the top,
+           which is what makes a ridge instead of an apex. */
+        const front = 0.5 - kind.brow * Math.pow(t, 1.7);
+        const back = -(0.5 - kind.tail * Math.pow(t, 1.15));
+        // A scoured waist just above the sand. Wind carries its
+        // load lowest, so this is where a real fin is thinnest -
+        // and an overhang at the base is most of what separates
+        // "carved out of" from "set down on".
+        const waist = 1 - 0.15 * Math.exp(-(((t - 0.14) / 0.11) ** 2));
+        const width = Math.max(kind.crest,
+          Math.pow(Math.max(0, 1 - Math.pow(t, kind.widthPow)), 0.62));
         rings.push({
           y: t * h,
-          rx: len * 0.5 * taper * prow * undercut,
-          rz: wid * 0.5 * taper * undercut,
-          // Drifting backwards as it rises gives the fin a lean into
-          // the wind, which is what makes it read as carved BY
-          // something rather than merely eroded.
-          cx: -len * 0.16 * t * t,
-          sides: 9,
-          phase: t * 1.7,
+          rx: len * 0.5 * (front - back) * waist,
+          rz: wid * 0.5 * width * waist,
+          cx: len * 0.5 * (front + back),
+          sides: SIDES,
+          jitter: 0.06,
+          seed: rng.int(1, 1e6),
         });
       }
-      const g = kit.ringSolid(rings, { capBottom: false });
-      kit.roughen(g, h * 0.035, 0.045);
-      place(g, x, z, {
-        rot: [0, WIND + rng.jit(0.22), 0],
-        dy: -h * 0.10,
-      });
-      paintH(g, ROCK_RAMP, {
+
+      const g = kit.ringSolid(rings);
+      /* FLUTES AND NOTCHES, in local space while the fin's length
+         still runs along +X.
+
+         `roughen` alone cannot do this job: it moves every vertex
+         by the same field in all three axes, which rounds the
+         silhouette off and leaves the flanks as the same long
+         horizontal strips the rings drew. A flute has to be a
+         groove IN a face - displacement along the surface, biased
+         by |z| so the crest line and the keel stay exactly where
+         the profile put them and only the flanks between them
+         ripple. That is the term that breaks the layer-cake read,
+         because it runs UP the slope where the ring seams run
+         across it. */
+      const fk = TAU / (len / kind.flutes);
+      const fphase = rng() * TAU;
+      const fluteAmp = wid * 0.15;
+      const nk = TAU / (len * rng.range(0.30, 0.42));
+      const nphase = rng() * TAU;
+      const notchAmp = h * rng.range(0.10, 0.19);
+      const vp = g.attributes.position;
+      for (let i = 0; i < vp.count; i += 1) {
+        const vx = vp.getX(i);
+        const vy = vp.getY(i);
+        const vz = vp.getZ(i);
+        if (vy < 0) continue;                    // the buried keel stays plain
+        const t = clamp01(vy / h);
+        const s = vz < 0 ? -1 : 1;
+        /* Rectified, not a plain sine: a groove is cut INTO a face
+           and the rock between two of them is flat, so the profile
+           wants a flat top and sharp troughs rather than a smooth
+           corrugation. The `vy` term rakes each groove as it climbs,
+           which is what stops the set of them reading as a fluted
+           column. */
+        const rake = vx * fk + vy * 0.055 + fphase;
+        const wave = Math.abs(Math.sin(rake)) ** 0.55 - 0.62
+          + Math.sin(rake * 2.7 + fphase * 1.7) * 0.22;
+        const gain = fluteAmp * sstep(0, 0.20, t) * (1 - 0.7 * sstep(0.60, 1, t));
+        // Saddles along the back. A crest that is one clean arc from
+        // prow to tail is the other half of why the old shape read
+        // as manufactured; real fins are notched where the wind has
+        // found a weakness.
+        const notch = notchAmp * (0.5 + 0.5 * Math.sin(vx * nk + nphase))
+          * sstep(0.52, 1, t);
+        vp.setXYZ(i, vx, vy - notch, vz + s * wave * gain);
+      }
+      vp.needsUpdate = true;
+      g.computeVertexNormals();
+      kit.roughen(g, h * 0.030, 0.048);
+      kit.roughen(g, h * 0.012, 0.14);
+      /* Flat-shaded, and the last step before painting so the vertex
+         colours land per facet too. Twenty-two sides is the density
+         a hundred-metre ellipse needs to stop going polygonal, and
+         at that density SMOOTH normals hand back a beanbag: every
+         crease the flutes and the notches just cut gets averaged
+         into its neighbours and the fin reads as a boulder someone
+         inflated. Faceting is also what puts it in the same visual
+         language as the rim massifs behind it, which are coarse
+         enough to read as planes without needing this. */
+      const solid = kit.facet(g);
+
+      bedIn(solid, x, z, yaw, sink);
+      paintH(solid, ROCK_RAMP, {
         normalWeight: 0.55, jitter: 0.18, noise: 0.3, bias: 0.1,
       });
-      geos.push(g);
+      geos.push(solid);
+
+      /* Talus. The same cue the Windgate's footings use, and the
+         cheapest one there is: a mass this size has been shedding
+         blocks for as long as it has been standing, and a scatter
+         of them where it meets the sand is what a viewer reads as
+         "in the ground" rather than "on it". Set just outside the
+         footprint so none of them are swallowed by the fin. */
+      for (let i = 0; i < rng.int(9, 16); i += 1) {
+        const ang = rng() * TAU;
+        const k = rng.range(1.02, 1.34);
+        const [dx, dz] = toWorld(x, z, yaw,
+          Math.cos(ang) * len * 0.5 * k, Math.sin(ang) * wid * 0.5 * k);
+        if (inDistrictAt(dx, dz)) continue;
+        if (field.surfaceAt(dx, dz).sand < 0.5) continue;
+        const character = rng();
+        const sc = rng.range(0.9, 3.4);
+        const block = kit.crag(rng, {
+          height: sc * rng.range(0.5, 1.2), radius: sc,
+          layers: rng.int(3, 6), sides: rng.int(5, 8), lean: rng.range(0, 0.5), sink: 0.4,
+          spike: character < 0.3 ? rng.range(0.2, 0.5) : 0,
+          cliff: character >= 0.3 && character < 0.58 ? rng.range(0.3, 0.7) : 0,
+        });
+        restOnTerrain(block, dx, dz, { rot: [rng.jit(0.35), rng() * TAU, rng.jit(0.35)], maxGap: 0.08 });
+        paintH(block, ROCK_RAMP, { normalWeight: 0.5, jitter: 0.22, noise: 0.35 });
+        geos.push(block);
+      }
+
       placed.push([x, z]);
     }
-    if (geos.length) {
-      batch.add("scatter", "rock", mergeGeometries(THREE, geos), { castShadow: true });
+    /* Per piece, so the batcher can cell-bin them: every block is
+       already painted individually, and one merged map-wide mesh is
+       in every frustum forever (see the batcher's chunk note). */
+    for (const g of geos) {
+      batch.add("scatter", "rock", g, { castShadow: true, chunk: true });
+    }
+  }
+
+  /* ============================================================
+     THE WINDGATE
+
+     A natural stone arch, wind-carved from one outcrop into two legs
+     and a span, standing alone in open desert well clear of every
+     named district - a found thing rather than a built one, the way
+     a real arch in a real desert is something you come across, not
+     something anyone's civilisation put there.
+
+     It deliberately does NOT compete with the Saint's head for the
+     map's ONE dominant landmark: a third of the height, no
+     minimap-radius announcement, nothing narrative attached. It is
+     the reward for wandering off the road, not a tenth destination.
+     ============================================================ */
+  await step("Raising the Windgate", 0.955);
+  {
+    const rng = makeRng(0xc0da2e);
+
+    const nearRoad = (x, z) => {
+      let best = Infinity;
+      for (let i = 0; i < ROAD_PATH.length - 1; i += 1) {
+        const [ax, az] = ROAD_PATH[i];
+        const [bx, bz] = ROAD_PATH[i + 1];
+        const vx = bx - ax;
+        const vz = bz - az;
+        const t = Math.max(0, Math.min(1,
+          ((x - ax) * vx + (z - az) * vz) / (vx * vx + vz * vz || 1)));
+        best = Math.min(best, Math.hypot(x - (ax + vx * t), z - (az + vz * t)));
+      }
+      return best;
+    };
+    // Every named district plus a wide margin - see the file header:
+    // this is deliberately not a tenth destination competing with
+    // them, so it needs room of its own rather than a corner of
+    // someone else's.
+    const inAnyDistrict = (x, z) => Object.values(DISTRICTS)
+      .some((d) => Math.hypot(x - d.x, z - d.z) < d.r + 100);
+    /* THE SITE IS A SADDLE, NOT A CLEARING.
+
+       An arch standing alone on flat sand reads as a prop set down in
+       the desert. The ones worth photographing sit IN something - a
+       gap between two rises, walls either side of the walk through.
+       So the search does not stop at the first flat, clear point; it
+       samples a ring of bearings around each candidate and scores how
+       much the ground climbs on BOTH opposite sides at once, keeping
+       the best of a batch of tries rather than the first passable
+       one. The span is then laid out ALONG the low corridor between
+       the two rises - the direction perpendicular to where the
+       ground climbs - so a player walking through has higher ground
+       to their left and right the whole way, and the two footings
+       land on the corridor floor rather than on its flanking slope. */
+    const RISE_PROBE = 45;
+    const scoreSaddle = (x, z) => {
+      const centreY = H(x, z);
+      let best = null;
+      for (let bDeg = 0; bDeg < 180; bDeg += 15) {
+        const b = (bDeg * Math.PI) / 180;
+        const dx = Math.cos(b), dz = Math.sin(b);
+        const yA = H(x + dx * RISE_PROBE, z + dz * RISE_PROBE);
+        const yB = H(x - dx * RISE_PROBE, z - dz * RISE_PROBE);
+        const bothRise = Math.min(yA - centreY, yB - centreY);
+        if (!best || bothRise > best.bothRise) best = { bearing: b, bothRise };
+      }
+      return best;
+    };
+
+    let site = null;
+    let bestScore = -Infinity;
+    for (let tries = 0; tries < 90; tries += 1) {
+      const x = 280 + rng.range(-70, 70);
+      const z = 420 + rng.range(-70, 70);
+      if (inAnyDistrict(x, z)) continue;
+      if (nearRoad(x, z) < 140) continue;
+      const surf = field.surfaceAt(x, z);
+      if (surf.sand < 0.5) continue;               // open dune, not rocky floor
+      const saddle = scoreSaddle(x, z);
+      // The span axis runs perpendicular to the rise direction - along
+      // the corridor floor, not up either wall - so the two footings
+      // are what actually needs to stay level, not the raw local slope
+      // at the centre point.
+      const corridorYaw = saddle.bearing + Math.PI / 2;
+      const cyaw = Math.cos(corridorYaw), syaw = Math.sin(corridorYaw);
+      const HALF_SPAN_PROBE = 17;
+      const footingDrop = Math.abs(
+        H(x + cyaw * HALF_SPAN_PROBE, z + syaw * HALF_SPAN_PROBE)
+        - H(x - cyaw * HALF_SPAN_PROBE, z - syaw * HALF_SPAN_PROBE)
+      );
+      if (footingDrop > 6) continue;                // too steep for two stable legs
+      // Rewards a real saddle, penalises an unstable one - the same
+      // trade the refinement probe that found this shape used.
+      const score = saddle.bothRise - footingDrop * 2.5;
+      if (score > bestScore) {
+        bestScore = score;
+        site = { x, z, yaw: corridorYaw, bothRise: saddle.bothRise };
+      }
+    }
+    // A saddle worth the name rises at least a storey on both sides.
+    // Below that, open ground is the honest fallback rather than
+    // forcing a marginal site a terrain reseed might make worse.
+    if (site && site.bothRise < 8) site = null;
+    if (!site) {
+      for (let tries = 0; tries < 120 && !site; tries += 1) {
+        const x = 280 + rng.range(-90, 90);
+        const z = 420 + rng.range(-90, 90);
+        if (inAnyDistrict(x, z)) continue;
+        if (nearRoad(x, z) < 140) continue;
+        const surf = field.surfaceAt(x, z);
+        if (surf.sand < 0.5) continue;
+        const S = 8;
+        const slope = Math.hypot(
+          (H(x + S, z) - H(x - S, z)) / (2 * S), (H(x, z + S) - H(x, z - S)) / (2 * S)
+        );
+        if (slope > 0.22) continue;
+        site = { x, z, yaw: 0.58, bothRise: 0 };
+      }
+    }
+    if (site) {
+      const HALF_SPAN = 17;
+      const yaw = site.yaw;                        // span axis bearing
+      const cy = Math.sin(yaw);
+      const cx = Math.cos(yaw);
+
+      // Real footing heights, not an assumed-flat pair - the whole
+      // reason this is built in world-relative coordinates instead
+      // of a symmetric local template. A hand-tilted template would
+      // have to guess the slope; this reads it.
+      const siteY = H(site.x, site.z);
+      const legAx = site.x - cx * HALF_SPAN;
+      const legAz = site.z - cy * HALF_SPAN;
+      const legBx = site.x + cx * HALF_SPAN;
+      const legBz = site.z + cy * HALF_SPAN;
+      const legAy = H(legAx, legAz) - siteY;
+      const legBy = H(legBx, legBz) - siteY;
+
+      // Asymmetric on purpose - Delicate Arch and every real one like
+      // it has a heavier leg and a more attenuated one, never a
+      // mirror. Leg A is the monument; leg B is the survivor.
+      //
+      // Height cut from 26 to 16 against a wider 17m half-span - a
+      // deliberately LOW, broad silhouette instead of a tall peaked
+      // one. The waypoint layout below is all expressed as fractions
+      // of `archHeight`, so this one number reshapes the whole thing:
+      // the legs now climb through the same fraction of a shorter
+      // rise and the crown sits closer over the footings than above
+      // them, which is what stops a wind-carved arch reading as a
+      // gothic one.
+      const archHeight = 16;
+      const baseRadiusA = 7.6;
+      const baseRadiusB = 6.0;
+      const crownRadius = 2.35;
+      const zWobbleAmp = rng.range(0.6, 1.2);
+      const zWobbleK = rng.range(1.1, 1.5);
+      const zWobblePhase = rng() * TAU;
+
+      /* WAYPOINTS, NOT ONE SMOOTH CURVE.
+
+         A single cubic through two control points is a section of
+         one continuous bend, and no choice of control points ever
+         stopped reading as a slice of a circle - a hoop, not a leg
+         standing up into a span. A real arch's silhouette is closer
+         to three straight-ish runs joined by two tight knuckles: a
+         leg that rises PLUMB, a knuckle where it turns over, a span
+         that runs across closer to level than to round, a second
+         knuckle, a second leg. Catmull-Rom through explicit points
+         gives that directly - each segment can be as straight or as
+         sharp as the two points either side of it say, which a
+         two-control-point bezier cannot express no matter how they
+         are placed. Asymmetric on purpose: leg A is the short, high,
+         near-vertical "monument" side; leg B reaches further out at
+         a shallower angle, the "worn" side a real arch always has. */
+      const W = [
+        [-HALF_SPAN, legAy],
+        [-HALF_SPAN * 0.92, legAy + archHeight * 0.34],
+        [-HALF_SPAN * 0.62, legAy + archHeight * 0.70],
+        [-HALF_SPAN * 0.20, archHeight * 1.02],
+        [HALF_SPAN * 0.18, archHeight * 0.90],
+        [HALF_SPAN * 0.55, archHeight * 0.62],
+        [HALF_SPAN * 0.86, legBy + archHeight * 0.26],
+        [HALF_SPAN, legBy],
+      ];
+      const catmullRom = (p0, p1, p2, p3, t) => {
+        const t2 = t * t, t3 = t2 * t;
+        return 0.5 * ((2 * p1)
+          + (-p0 + p2) * t
+          + (2 * p0 - 5 * p1 + 4 * p2 - p3) * t2
+          + (-p0 + 3 * p1 - 3 * p2 + p3) * t3);
+      };
+      const at = (i) => W[Math.max(0, Math.min(W.length - 1, i))];
+      const sampleU = (segT, seg) => catmullRom(at(seg - 1)[0], at(seg)[0], at(seg + 1)[0], at(seg + 2)[0], segT);
+      const sampleV = (segT, seg) => catmullRom(at(seg - 1)[1], at(seg)[1], at(seg + 1)[1], at(seg + 2)[1], segT);
+
+      /* Sixty segments, not thirty. `rockTube`'s parallel-transport
+         frame only turns as fast as consecutive points make it, so
+         path resolution is what keeps that turn small ring to ring -
+         thirty was coarse enough, over this much curvature, that even
+         a continuous frame still swept several degrees a step near
+         the tightest part of the bend. */
+      const N = 60;
+      const SEGS = W.length - 1;
+      const points = [];
+      const radii = [];
+      for (let i = 0; i <= N; i += 1) {
+        const tGlobal = (i / N) * SEGS;
+        const seg = Math.min(SEGS - 1, Math.floor(tGlobal));
+        const segT = tGlobal - seg;
+        const u = sampleU(segT, seg);
+        const v = sampleV(segT, seg);
+        const t = i / N;
+        const w = zWobbleAmp * Math.sin(t * Math.PI * zWobbleK + zWobblePhase) * Math.sin(t * Math.PI);
+        points.push([u, v, w]);
+        // Thick through roughly a third of each leg, tapering over a
+        // short, clearly-visible middle stretch rather than a long
+        // flat run at crown radius - an earlier pass held minimum
+        // thickness across more than half the path and read as
+        // uniformly worm-thin rather than as a taper at all.
+        const distFromEnd = Math.min(t, 1 - t) * 2;
+        const thickness = 1 - smoothstep(0.05, 0.34, distFromEnd);
+        const nearA = 1 - t;
+        radii.push(lerp(crownRadius, lerp(baseRadiusB, baseRadiusA, nearA), thickness));
+      }
+
+      /* Surface irregularity without regularity. Zero phase drift
+         over a long, constant-side-count sweep prints dead-straight,
+         evenly-spaced ribs the whole way round - corrugated pipe, not
+         eroded stone, and the tell was obvious even from the hero
+         shot. A LOW-FREQUENCY drift (not the sharp per-ring random
+         walk `crag()` uses over three rings, which tore the surface
+         over sixty of them) rotates which ridge is most prominent as
+         the path runs, which is what keeps a real weathered surface
+         from repeating. */
+      const archGeo = kit.rockTube(rng, points, radii, { sides: 10, jitter: 0.11, phaseDrift: 0.045 });
+      kit.roughen(archGeo, 0.16, 0.09);
+      kit.roughen(archGeo, 0.36, 0.024);
+      paintH(archGeo, ROCK_RAMP, { normalWeight: 0.58, jitter: 0.16, noise: 0.28 });
+      kit.transform(archGeo, { pos: [site.x, siteY, site.z], rot: [0, yaw, 0] });
+
+      const dressGeos = [archGeo];
+
+      // A scatter of broken debris at both footings - talus a real
+      // arch has shed at its own base, and the same visual cue that
+      // stops a boulder floating: something smaller and irregular
+      // sitting where the big mass meets the sand.
+      for (const [lx, lz, ly] of [[legAx, legAz, legAy], [legBx, legBz, legBy]]) {
+        for (let i = 0; i < rng.int(4, 7); i += 1) {
+          const a = rng() * TAU;
+          const d = rng.range(2.5, 9);
+          const dx = lx + Math.cos(a) * d;
+          const dz = lz + Math.sin(a) * d;
+          if (inAnyDistrict(dx, dz)) continue;
+          const character = rng();
+          const s = rng.range(0.7, 2.6);
+          const g = kit.crag(rng, {
+            height: s * rng.range(0.5, 1.2), radius: s,
+            layers: rng.int(3, 5), sides: rng.int(5, 7), lean: rng.range(0, 0.5), sink: 0.4,
+            spike: character < 0.35 ? rng.range(0.2, 0.5) : 0,
+            cliff: character >= 0.35 && character < 0.6 ? rng.range(0.3, 0.7) : 0,
+          });
+          restOnTerrain(g, dx, dz, { rot: [rng.jit(0.3), rng() * TAU, rng.jit(0.3)], maxGap: 0.08 });
+          paintH(g, ROCK_RAMP, { normalWeight: 0.5, jitter: 0.22, noise: 0.35 });
+          dressGeos.push(g);
+          void ly;
+        }
+      }
+
+      batch.add("windgate", "rock", mergeGeometries(THREE, dressGeos), { castShadow: true, collisionSolid: true });
+      pois.push({ id: "windgate", name: "The Windgate", x: site.x, z: site.z });
     }
   }
 
@@ -3149,22 +5222,100 @@ export async function buildWorld(ctx, onProgress) {
       else if (surf.basalt > 0.4) { mat = "basalt"; ramp = BASALT_RAMP; }
       else if (surf.sand > 0.86 && rng.chance(0.72)) continue;   // keep the dunes clean
 
+      /* VARIETY. Every one of these used to be `layers: 3` with the
+         plain wind-cut profile and nothing else - which collapses,
+         at these small sizes, toward the same near-symmetric dome or
+         pyramid every time. Three thousand four hundred repeats of
+         one silhouette is the whole "boulders repeat too much"
+         complaint by itself, and it has a second, uglier consequence
+         at golden hour: with so few rings there are too few facets
+         for the sun to catch some and miss others, so the ENTIRE
+         shadow side lands on nearly one flat, uniform dark value -
+         no internal edge, no break, nothing to read as a faceted
+         solid rather than a flat dark shape standing in for a hole.
+         More rings buys back exactly the internal value variation a
+         low-poly rock needs to read as one in its own cast shadow.
+
+         The cliff/spike/bench mixing already proven on the rim
+         massifs (see the belt loop above) is reused here rather than
+         invented twice - about a third of boulders now take a
+         near-vertical broken-strata profile or a spiked one instead
+         of the default wind-cut dome. */
+      const character = rng();
+      const isCliff = character < 0.28;
+      const isSpiked = !isCliff && character < 0.40;
       const s = Math.pow(rng(), 2.1) * 2.6 + 0.22;
       const g = kit.crag(rng, {
         height: s * rng.range(0.5, 1.3), radius: s,
-        layers: 3, sides: rng.int(5, 7), lean: rng.range(0, 0.4), sink: 0.4,
+        layers: rng.int(3, 6), sides: rng.int(5, 8), lean: rng.range(0, 0.5), sink: 0.4,
+        spike: isSpiked ? rng.range(0.15, 0.55) : 0,
+        cliff: isCliff ? rng.range(0.35, 0.85) : 0,
+        benches: (isCliff && rng.chance(0.4)) ? rng.int(1, 2) : 0,
       });
+      /* Real debris does not all sit bolt upright - a boulder that
+         rolled to a stop leans. `restOnTerrain` (not `place`) rests
+         each one against its OWN lower envelope wherever it actually
+         landed, sampling several points across its footprint rather
+         than the single centre height `place` used - which is what
+         let a wide boulder's downhill edge hang in open air over a
+         real dune slope. It also means the tilt below cannot produce
+         a floating corner: the resting logic runs AFTER the tilt is
+         applied, against the tilted shape. */
       const tiltX = rng.jit(0.35);
       const yaw = rng() * TAU;
       const tiltZ = rng.jit(0.35);
-      void tiltX; void tiltZ;
-      place(g, x, z, { rot: [0, yaw, 0], dy: -0.14 });
+      /* Boss-arena keep-clear, applied AFTER every rng draw for this
+         crag so culling one never re-times the stream - cull earlier
+         and all 3,400 downstream boulders silently re-scatter. */
+      const censerDx = x - DISTRICTS.censer.x;
+      const censerDz = z - DISTRICTS.censer.z;
+      const censerRadius = Math.hypot(censerDx, censerDz);
+      const censerBearing = Math.atan2(censerDz, censerDx);
+      if (censerRadius > CENSER_WORKS.catwalkRadius - 24
+        && censerRadius < CENSER_WORKS.wallRadius + 62
+        && CENSER_WORKS.gateBearings.some((bearing) =>
+          Math.abs(Math.atan2(
+            Math.sin(censerBearing - bearing),
+            Math.cos(censerBearing - bearing)
+          )) < Math.asin(CENSER_WORKS.gateHalfWidth / CENSER_WORKS.wallRadius) * 2.4)) {
+        continue;
+      }
+      if (Math.hypot(x - MATRIARCH_ARENA.x, z - MATRIARCH_ARENA.z)
+        < MATRIARCH_ARENA.flatRadius + 22) continue;
+      if (Math.hypot(x - STYLITE_ARENA.x, z - STYLITE_ARENA.z)
+        < STYLITE_ARENA.flatRadius + 9) continue;
+      /* AND THE GARNER'S PIT, for a different reason than the arenas:
+         not that a boulder would be in the way, but that the ground it
+         is resting on IS NOT THERE LATER. Every prop is seated by
+         `restOnTerrain` against the pan as it stands at load, with the
+         funnel's amplitude still zero; when the encounter opens and
+         terrain.js drives `garnerReveal` to 1, the floor under these
+         drops up to sixteen metres and leaves them hanging in the
+         middle of the hole. Measured at r=6-10m: solid tops at y≈1.5
+         over a pit floor at y≈-14.7.
+
+         Bounded by the rim rather than by `reach` (62m): inside the
+         rim the bowl cuts down, outside it the spoil lip only RISES,
+         and a boulder that ends up slightly buried reads as a boulder
+         while one hanging in the air reads as a bug. The Ossuary's own
+         debris loop has always re-rolled out of this circle - see the
+         GARNER_PIT test there; the map-wide scatter simply never
+         learned about it. */
+      if (Math.hypot(x - GARNER_PIT.x, z - GARNER_PIT.z)
+        < GARNER_PIT.rimRadius + 6) continue;
+      restOnTerrain(g, x, z, { rot: [tiltX, yaw, tiltZ], maxGap: 0.08 });
       paintH(g, ramp, { normalWeight: 0.5, jitter: 0.22, noise: 0.35 });
       if (!perBucket.has(mat)) perBucket.set(mat, []);
       perBucket.get(mat).push(g);
     }
     for (const [mat, geos] of perBucket) {
-      batch.add("scatter", mat, mergeGeometries(THREE, geos), { castShadow: true });
+      /* Per piece for the same reason as the yardang talus above:
+         each boulder is painted on its own, and the merged mesh was
+         the single biggest always-in-frustum triangle bill on the
+         map (96k in view AND in the shadow box, from everywhere). */
+      for (const g of geos) {
+        batch.add("scatter", mat, g, { castShadow: true, chunk: true });
+      }
     }
   }
 
@@ -3173,7 +5324,7 @@ export async function buildWorld(ctx, onProgress) {
      ============================================================ */
 
   await step("Settling", 0.99);
-  const meshes = batch.flush();
+  const meshes = batch.flush().concat(authoredMeshes);
 
   /* Point lights. Kept few and short-range: this renderer has no
      clustered lighting, so every point light is a per-fragment cost
@@ -3392,9 +5543,17 @@ export async function buildWorld(ctx, onProgress) {
     lights: lightObjects,
     emitters,
     banners,
+    choirNeedles,
+    authoredLandmarks,
+    censerLayout: {
+      ...CENSER_WORKS,
+      upperY: field.censerUpperY,
+      lowerY: field.censerLowerY,
+    },
     pois,
     beautyShots,
     walkSurfaceAt,
+    walkSurfaceMaxInCircle,
     getBeautyShots: () => beautyShots,
     stats() {
       let tris = 0;

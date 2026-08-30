@@ -77,7 +77,7 @@ try {
   await waitForServer();
   await mkdir(proofDir, { recursive: true });
   browser = await chromium.launch({ headless: true });
-  const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+  const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
   const consoleErrors = [];
   const pageErrors = [];
   page.on("console", (message) => {
@@ -91,10 +91,24 @@ try {
   });
   await waitForGame(page);
   await page.waitForFunction(() => window.__SF?.introState?.()?.revealed, null, { timeout: 300000 });
-  await page.evaluate(() => window.__SF.maximize?.());
   await page.locator("[data-intro-start]").click();
   await page.waitForFunction(() => window.__SF?.introState?.()?.entryPanel === "characters", null,
     { timeout: 10000 });
+  const shellLayout = await page.evaluate(() => {
+    const stage = document.querySelector("#sf-intro").getBoundingClientRect();
+    const panel = document.querySelector('[data-intro-panel="characters"]').getBoundingClientRect();
+    return {
+      stage: { left: stage.left, right: stage.right, top: stage.top, bottom: stage.bottom },
+      panel: { left: panel.left, right: panel.right, top: panel.top, bottom: panel.bottom },
+    };
+  });
+  check("normal game-shell roster stays inside the playable stage",
+    shellLayout.panel.left >= shellLayout.stage.left - 1
+      && shellLayout.panel.right <= shellLayout.stage.right + 1
+      && shellLayout.panel.top >= shellLayout.stage.top - 1
+      && shellLayout.panel.bottom <= shellLayout.stage.bottom + 1,
+    shellLayout, "roster panel remains within the non-maximized game stage");
+  await page.evaluate(() => window.__SF.maximize?.());
 
   const roster = await page.evaluate(() => ({
     ids: [...document.querySelectorAll("[data-intro-character]")].map((card) => card.dataset.introCharacter),

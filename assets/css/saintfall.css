@@ -4386,7 +4386,10 @@ body[data-sf-contrast="high"] #sf-hud :is(.sf-hud__vitals, .sf-hud__minimap) {
 .sf-intro__gate .sf-entry__slots strong { overflow: hidden; color: #f0dfbd; font-family: "Cinzel",Georgia,serif; font-size: .68rem; font-weight: 500; letter-spacing: .08em; text-overflow: ellipsis; white-space: nowrap; }
 .sf-intro__gate .sf-entry__slots b { max-width: 11rem; text-align: right; line-height: 1.35; }
 .sf-entry__panel--characters {
-  width: min(63rem, calc(100vw - 4rem));
+  align-self: flex-start;
+  margin-left: 0;
+  margin-right: 0;
+  width: min(63rem, calc(100vw - 4rem), calc(100% - 3rem));
   border-radius: 0;
   background:
     linear-gradient(110deg, rgba(28, 20, 17, .94), rgba(7, 8, 10, .97) 48%, rgba(15, 12, 14, .96)),
@@ -4655,7 +4658,7 @@ body.sf-high-contrast .sf-entry__character-copy > span:not(.sf-entry__character-
   .sf-entry__secondary { gap: .8rem; margin-top: .2rem; }
   .sf-intro__gate .sf-entry__secondary button { font-size: .95rem; }
   .sf-entry__slots, .sf-entry__options { max-height: 13.75rem; }
-  .sf-entry__panel--characters { width: min(62rem, calc(100vw - 3rem)); padding: .6rem .75rem; }
+  .sf-entry__panel--characters { width: min(62rem, calc(100vw - 3rem), calc(100% - 3rem)); padding: .6rem .75rem; }
   .sf-entry__panel--characters > header { margin-bottom: .25rem; }
   .sf-entry__character-brief { display: none; }
   .sf-entry__characters { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .38rem; max-height: calc(100vh - 7.4rem); }

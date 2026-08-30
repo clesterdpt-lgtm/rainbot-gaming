@@ -1140,7 +1140,12 @@ export function buildSummitCommand(ctx, player, options = {}) {
       for (const inst of ctx.enemies?.live || []) {
         if (!inst || !inst.spec?.flies || inst.grounded) continue;
         if (Math.hypot(inst.x - x, inst.z - z) > gr) continue;
-        ctx.combat?.groundFlyer?.(inst, { stun: finite(spec.groundStun, 2.6) });
+        /* The Anvil bites deeper than a cast: an 88-second call action
+           should be worth more per use than a weapon cooldown, so two
+           of them bring a boss down where the hammer needs three. */
+        ctx.combat?.groundFlyer?.(inst, {
+          stun: finite(spec.groundStun, 2.6), lift: 2.0, source: "falling-anvil",
+        });
       }
     }
 

@@ -104,7 +104,14 @@ try {
   const highBefore = await page.evaluate(() => window.RB?.getHighScore?.("saintfall") || 0);
   const completed = await page.evaluate(() => window.__SF.completeCampaignForQA(2700));
   await page.waitForFunction(() => window.__SF.campaignDebriefForQA()?.menu?.open === true
-    && window.__SF.campaignDebriefForQA()?.visible === true, null, { timeout: 10000 });
+    && window.__SF.campaignDebriefForQA()?.menu?.missionWrap?.visible === true,
+  null, { timeout: 10000 });
+  const wrapped = await page.evaluate(() => window.__SF.campaignDebriefForQA());
+  check("victory opens the cinematic mission wrap before campaign stats",
+    wrapped.menu?.missionWrap?.visible === true && wrapped.visible === false);
+  await page.click('[data-menu-action="mission-record"]');
+  await page.waitForFunction(() => window.__SF.campaignDebriefForQA()?.visible === true,
+    null, { timeout: 5000 });
   const debrief = await page.evaluate(() => window.__SF.campaignDebriefForQA());
   const repeated = await page.evaluate(() => {
     const first = window.__SF.campaignScoreStateForQA();
@@ -112,7 +119,7 @@ try {
     return { first: first.result.score, second: second.result.score };
   });
   const highAfter = await page.evaluate(() => window.RB?.getHighScore?.("saintfall") || 0);
-  check("victory opens the paused Operation debrief",
+  check("mission wrap hands off to the paused Operation debrief",
     debrief.visible && debrief.menu?.open && debrief.menu?.panel === "operation");
   check("debrief shows all three score factors",
     debrief.difficulty === "PILGRIM" && debrief.time === "45:00" && Number(debrief.rank) >= 1,

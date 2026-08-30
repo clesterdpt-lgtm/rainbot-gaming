@@ -14,16 +14,16 @@ import {
 export const SUMMIT_CHARACTERS = [
   {
     id: "white-vigil",
-    name: "White Vigil",
-    designation: "Reliquary Scout",
+    name: "Saint Veyra",
+    designation: "Saint Scout",
     description: "A lean expedition plate carrying paired crescent melee/ranged hybrid arms.",
     accent: "verdigris",
     factory: buildWhiteVigilTrooper,
   },
   {
     id: "bastion-penitent",
-    name: "Bastion Penitent",
-    designation: "Reliquary Bulwark",
+    name: "Saint Torren",
+    designation: "Saint Bulwark",
     description: "A heavier crimson plate carrying a reliquary hammer and tower shield.",
     accent: "crimson",
     factory: buildBastionPenitentTrooper,
@@ -34,9 +34,13 @@ const byId = new Map(SUMMIT_CHARACTERS.map((character) => [character.id, charact
 const aliases = new Map([
   ["white", "white-vigil"],
   ["vigil", "white-vigil"],
+  ["veyra", "white-vigil"],
+  ["saint-veyra", "white-vigil"],
   ["red", "bastion-penitent"],
   ["bastion", "bastion-penitent"],
   ["red-bastion", "bastion-penitent"],
+  ["torren", "bastion-penitent"],
+  ["saint-torren", "bastion-penitent"],
 ]);
 
 function resolveCharacter(id) {

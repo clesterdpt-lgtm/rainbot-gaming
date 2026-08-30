@@ -19,7 +19,7 @@ import {
 } from "saintfall/summit-lights.js";
 
 const WHITE_VIGIL = {
-  name: "White Vigil",
+  name: "Saint Veyra",
   assetPath: "../../../assets/models/saintfall/white-vigil/white-vigil-player.glb",
   assetSource: "white-vigil-player.glb",
   /* Which reliquary pack rides the Spine. See jetpacks.js: the scout
@@ -120,7 +120,7 @@ const WHITE_VIGIL = {
 };
 
 const BASTION_PENITENT = {
-  name: "Bastion Penitent",
+  name: "Saint Torren",
   assetPath: "../../../assets/models/saintfall/red-bastion/red-bastion-player.glb",
   assetSource: "red-bastion-player.glb",
   jetpack: "censer",

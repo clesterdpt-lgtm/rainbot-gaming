@@ -2951,6 +2951,52 @@ body.sf-high-contrast .sf-stage:not(.sf-touch-enabled) #sf-native-ui :is(
 #sf-native-ui .sf-campaign-debrief>footer button:hover,
 #sf-native-ui .sf-campaign-debrief>footer button:focus-visible{border-color:#f0d58c;background:rgba(216,164,65,.2);outline:1px solid rgba(115,216,237,.75);outline-offset:2px}
 
+/* The final image is presentation, not state. The menu beneath it owns the
+   pause, focus trap, score record, and shared leaderboard; this one deliberate
+   veil only decides when the player is ready to see those numbers. */
+#sf-native-ui .sf-mission-wrap{
+  position:absolute;inset:0;z-index:30;display:grid;align-items:end;overflow:hidden;
+  border:0;border-radius:0;background:#050608;isolation:isolate
+}
+#sf-native-ui .sf-mission-wrap[hidden]{display:none}
+#sf-native-ui .sf-mission-wrap__art{
+  position:absolute;inset:0;z-index:-2;
+  background-image:url("../img/saintfall/saintfall-mission-complete-v1.jpg");
+  background-position:center;background-size:cover;
+  filter:saturate(.78) contrast(1.05) brightness(.84);transform:scale(1.01)
+}
+#sf-native-ui .sf-mission-wrap::before{
+  content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;
+  background:
+    linear-gradient(90deg,rgba(2,3,5,.96) 0%,rgba(3,5,7,.83) 28%,rgba(3,4,6,.2) 66%,rgba(2,3,5,.18)),
+    linear-gradient(0deg,rgba(2,3,5,.95) 0%,rgba(2,3,5,.22) 52%,rgba(2,3,5,.12))
+}
+#sf-native-ui .sf-mission-wrap__card{
+  display:grid;align-content:end;gap:.65rem;box-sizing:border-box;
+  width:min(36rem,calc(100% - 3rem));max-height:calc(100% - 3rem);margin:0 0 1.5rem 1.5rem;padding:1.15rem 1.25rem;
+  overflow-y:auto;border:1px solid rgba(216,164,65,.48);border-left:4px solid #d8a441;border-radius:0;
+  background:linear-gradient(110deg,rgba(98,63,26,.2),transparent 48%),rgba(4,7,9,.88);
+  box-shadow:0 1.2rem 3.4rem rgba(0,0,0,.58),inset 0 0 0 1px rgba(115,216,237,.07)
+}
+#sf-native-ui .sf-mission-wrap__kicker{color:#79d8ed;font-size:9px;font-weight:700;letter-spacing:.2em}
+#sf-native-ui .sf-mission-wrap__card h2{margin:0;color:#f6f0dd;font:600 clamp(1.75rem,4vw,3.1rem)/1 "Cinzel",Georgia,serif;letter-spacing:.1em}
+#sf-native-ui .sf-mission-wrap__card>p{margin:0;color:#f0d58c;font:600 15px/1.3 "Cormorant Garamond",Georgia,serif;font-style:italic;letter-spacing:.02em}
+#sf-native-ui .sf-mission-wrap__verdict{display:grid;gap:.25rem;margin-top:.15rem;padding:.65rem 0;border-block:1px solid rgba(216,164,65,.18)}
+#sf-native-ui .sf-mission-wrap__verdict strong{color:#f6f0dd;font:600 12px/1.2 "Cinzel",Georgia,serif;letter-spacing:.13em}
+#sf-native-ui .sf-mission-wrap__verdict span{max-width:32rem;color:rgba(225,236,236,.72);font-size:11px;line-height:1.52}
+#sf-native-ui .sf-mission-wrap__card footer{display:flex;align-items:center;justify-content:space-between;gap:.9rem}
+#sf-native-ui .sf-mission-wrap__card footer small{max-width:14rem;color:rgba(115,216,237,.72);font-size:8px;letter-spacing:.12em;line-height:1.4}
+#sf-native-ui .sf-mission-wrap__card button{
+  flex:0 0 auto;min-height:44px;padding:.65rem .85rem;border:1px solid rgba(216,164,65,.68);border-radius:0;
+  background:linear-gradient(90deg,rgba(128,78,25,.46),rgba(35,25,20,.9),rgba(128,78,25,.46));
+  color:#fff0cf;font:700 10px/1 "Cinzel",Georgia,serif;letter-spacing:.1em;cursor:pointer
+}
+#sf-native-ui .sf-mission-wrap__card button:hover,
+#sf-native-ui .sf-mission-wrap__card button:focus-visible{border-color:#f0d58c;background:rgba(216,164,65,.24);outline:2px solid rgba(115,216,237,.72);outline-offset:2px}
+body.sf-high-contrast #sf-native-ui .sf-mission-wrap__card{border-color:#ffe199;background:rgba(0,0,0,.96)}
+body.sf-high-contrast #sf-native-ui .sf-mission-wrap__verdict span{color:#fff}
+body.sf-reduced-motion #sf-native-ui .sf-mission-wrap__art{transform:none}
+
 @media (max-width:760px), (max-height:700px){
   #sf-native-ui .sf-menu[data-phase="won"] .sf-operation-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
   #sf-native-ui .sf-campaign-debrief{gap:.45rem;margin-top:.5rem;padding:.6rem}
@@ -2967,6 +3013,27 @@ body.sf-high-contrast .sf-stage:not(.sf-touch-enabled) #sf-native-ui :is(
   #sf-native-ui .sf-campaign-debrief__factors{grid-template-columns:1fr}
   #sf-native-ui .sf-campaign-debrief>footer{justify-content:stretch}
   #sf-native-ui .sf-campaign-debrief>footer button{width:100%}
+  #sf-native-ui .sf-mission-wrap{align-items:end}
+  #sf-native-ui .sf-mission-wrap::before{background:linear-gradient(0deg,rgba(2,3,5,.98) 0%,rgba(2,3,5,.84) 52%,rgba(2,3,5,.18))}
+  #sf-native-ui .sf-mission-wrap__art{background-position:64% center}
+  #sf-native-ui .sf-mission-wrap__card{width:calc(100% - 1rem);max-height:calc(100% - 1rem);margin:.5rem;padding:.8rem;gap:.48rem}
+  #sf-native-ui .sf-mission-wrap__card h2{font-size:clamp(1.45rem,8vw,2.15rem)}
+  #sf-native-ui .sf-mission-wrap__card>p{font-size:13px}
+  #sf-native-ui .sf-mission-wrap__card footer{align-items:stretch;flex-direction:column}
+  #sf-native-ui .sf-mission-wrap__card footer small{max-width:none}
+  #sf-native-ui .sf-mission-wrap__card button{width:100%}
+}
+@media (orientation:landscape) and (max-height:500px){
+  #sf-native-ui .sf-mission-wrap__art{background-position:center 45%}
+  #sf-native-ui .sf-mission-wrap__card{width:min(34rem,calc(100% - 1rem));max-height:calc(100% - 1rem);margin:.5rem;padding:.6rem .75rem;gap:.32rem}
+  #sf-native-ui .sf-mission-wrap__kicker{font-size:7px}
+  #sf-native-ui .sf-mission-wrap__card h2{font-size:1.45rem}
+  #sf-native-ui .sf-mission-wrap__card>p{font-size:11px}
+  #sf-native-ui .sf-mission-wrap__verdict{padding:.38rem 0}
+  #sf-native-ui .sf-mission-wrap__verdict strong{font-size:9px}
+  #sf-native-ui .sf-mission-wrap__verdict span{font-size:8px;line-height:1.3}
+  #sf-native-ui .sf-mission-wrap__card footer small{font-size:7px}
+  #sf-native-ui .sf-mission-wrap__card button{min-height:40px;padding:.45rem .65rem;font-size:8px}
 }
 
 /* The shared score panel remains the authority for local/cloud standings;

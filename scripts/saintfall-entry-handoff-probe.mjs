@@ -158,6 +158,16 @@ try {
       && roster.cards.every((card) => card.role && card.summary && card.portraitReady),
     roster, "characters panel with three described, loaded operative cards");
   await page.locator("[data-intro-character-confirm]").click();
+  await page.waitForFunction(() => window.__SF?.introState?.()?.entryPanel === "briefing", null,
+    { timeout: 10000 });
+  const briefed = await page.evaluate(() => ({
+    panel: window.__SF.introState().entryPanel,
+    started: window.__SF.introState().started,
+  }));
+  check("operative confirmation opens the mission briefing before descent",
+    briefed.panel === "briefing" && briefed.started === false,
+    briefed, { panel: "briefing", started: false });
+  await page.locator("[data-intro-briefing-deploy]").click();
   await page.waitForFunction(() => window.__SF?.introState?.()?.mode === "running", null,
     { timeout: 10000 });
   const launched = await page.evaluate(() => ({
@@ -165,7 +175,7 @@ try {
     shot: window.__SF.introState().shot,
     runtimePhase: window.__SF.ctx.runtime.phase,
   }));
-  check("orbital intro begins only after the operative is confirmed",
+  check("orbital intro begins only after the mission briefing is accepted",
     launched.mode === "running" && launched.shot === "orbit" && launched.runtimePhase === "intro",
     launched, { mode: "running", shot: "orbit", runtimePhase: "intro" });
   check("browser console remains clean", consoleErrors.length === 0 && pageErrors.length === 0,

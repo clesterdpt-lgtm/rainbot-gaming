@@ -10,7 +10,8 @@
   display: grid;
   place-items: center;
   overflow: auto;
-  padding: clamp(10px, 2vw, 22px);
+  box-sizing: border-box;
+  padding: clamp(8px, 1.8vw, 20px);
   color: #f5efe4;
   background:
     linear-gradient(90deg, rgba(3, 8, 14, .98), rgba(9, 14, 21, .91) 48%, rgba(9, 5, 7, .97)),
@@ -25,6 +26,7 @@
 
 .sf-character-select__frame {
   width: min(920px, 100%);
+  max-height: 100%;
   margin: auto;
   text-align: center;
 }
@@ -43,9 +45,9 @@
 }
 
 .sf-character-select__frame h2 {
-  margin: 5px 0 2px;
+  margin: 4px 0 2px;
   font-family: "Cinzel", Georgia, serif;
-  font-size: clamp(23px, 3.2vw, 34px);
+  font-size: clamp(20px, 2.8vw, 32px);
   line-height: 1;
   letter-spacing: .18em;
   padding-left: .18em;
@@ -54,22 +56,22 @@
 
 .sf-character-select__brief {
   max-width: 62ch;
-  margin: 6px auto 12px;
+  margin: 4px auto 10px;
   color: rgba(225, 230, 232, .68);
-  font: 14px/1.3 "Cormorant Garamond", Georgia, serif;
+  font: 13px/1.3 "Cormorant Garamond", Georgia, serif;
 }
 
 .sf-character-select__cards {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: clamp(10px, 2vw, 20px);
+  gap: clamp(8px, 1.8vw, 18px);
 }
 
 .sf-character-card {
   position: relative;
   display: grid;
-  grid-template-columns: minmax(120px, 42%) 1fr;
-  min-height: 210px;
+  grid-template-columns: minmax(110px, 40%) 1fr;
+  min-height: clamp(150px, 26vh, 200px);
   padding: 0;
   overflow: hidden;
   border: 1px solid rgba(140, 199, 213, .30);

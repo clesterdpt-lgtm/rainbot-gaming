@@ -122,12 +122,12 @@ export function buildHud(ctx, host) {
     </section>
     <div class="sf-hud__operative-dock" id="sf-operative-dock" hidden>
       <div class="sf-hud__operative-item sf-hud__operative-item--teleport" id="sf-teleport" hidden>
-        <span class="sf-hud__operative-label"><kbd data-bind-face="block">${keybindLabel("block")}</kbd> <b>VIGIL STEP</b></span>
-        <strong class="sf-hud__operative-value" id="sf-teleport-value">READY</strong>
+        <span class="sf-hud__operative-label"><b>VIGIL STEP</b></span>
+        <strong class="sf-hud__operative-value" id="sf-teleport-value"></strong>
       </div>
       <div class="sf-hud__operative-item sf-hud__operative-item--cast" id="sf-cast" hidden>
-        <span class="sf-hud__operative-label"><kbd>RMB</kbd> <b>HAMMER CAST</b></span>
-        <strong class="sf-hud__operative-value" id="sf-cast-value">READY</strong>
+        <span class="sf-hud__operative-label"><b>HAMMER CAST</b></span>
+        <strong class="sf-hud__operative-value" id="sf-cast-value"></strong>
       </div>
     </div>
     <div class="sf-hud__doctrine-cue" id="sf-doctrine-cue" hidden role="status" aria-live="polite" tabindex="0" title="Open Doctrine (Esc)">
@@ -222,13 +222,9 @@ export function buildHud(ctx, host) {
   const castEl = el.querySelector("#sf-cast");
   const castValueEl = el.querySelector("#sf-cast-value");
 
-  if (ctx.playerCharacter?.id === "white-vigil") {
-    if (operativeDockEl) operativeDockEl.hidden = false;
-    if (teleportEl) teleportEl.hidden = false;
-  } else if (ctx.playerCharacter?.id === "bastion-penitent") {
-    if (operativeDockEl) operativeDockEl.hidden = false;
-    if (castEl) castEl.hidden = false;
-  }
+  if (operativeDockEl) operativeDockEl.hidden = true;
+  if (teleportEl) teleportEl.hidden = true;
+  if (castEl) castEl.hidden = true;
   const ammoEl = el.querySelector("#sf-ammo");
   const heatFillEls = [...ammoEl.querySelectorAll(".sf-heat__fill")];
   const heatStateEl = ammoEl.querySelector("u");
@@ -1626,30 +1622,32 @@ export function buildHud(ctx, host) {
         const kitStatus = kit.status();
         let hasOperativeAbility = false;
         if (kitStatus?.blink && teleportEl) {
-          teleportEl.hidden = false;
-          hasOperativeAbility = true;
           const b = kitStatus.blink;
-          const held = Math.max(0, Math.min(b.maxCharges, b.charges));
-          const pips = "◆".repeat(held) + "◇".repeat(Math.max(0, b.maxCharges - held));
           const cooling = b.charges < b.maxCharges;
-          teleportValueEl.textContent = cooling
-            ? `${pips} ${b.rechargeIn.toFixed(1)}S CD`
-            : `${pips} READY`;
-          teleportEl.dataset.state = b.charges > 0 ? "ready" : "cooldown";
+          teleportEl.hidden = !cooling;
+          if (cooling) {
+            hasOperativeAbility = true;
+            const held = Math.max(0, Math.min(b.maxCharges, b.charges));
+            const pips = "◆".repeat(held) + "◇".repeat(Math.max(0, b.maxCharges - held));
+            teleportValueEl.textContent = `${pips} ${b.rechargeIn.toFixed(1)}S CD`;
+            teleportEl.dataset.state = b.charges > 0 ? "ready" : "cooldown";
+          }
         } else if (teleportEl) {
           teleportEl.hidden = true;
         }
 
         if (kitStatus?.hammer && castEl) {
-          castEl.hidden = false;
-          hasOperativeAbility = true;
           const h = kitStatus.hammer;
-          castValueEl.textContent = h.phase === "out" ? "CAST"
-            : h.phase === "return" ? "RETURNING"
-              : h.phase === "windup" ? "WINDING"
-                : h.cooldown > 0 ? `${h.cooldown.toFixed(1)}S CD` : "READY";
-          castEl.dataset.state = h.phase !== "held" ? "active"
-            : h.cooldown > 0 ? "cooldown" : "ready";
+          const cooling = h.phase !== "held" || h.cooldown > 0;
+          castEl.hidden = !cooling;
+          if (cooling) {
+            hasOperativeAbility = true;
+            castValueEl.textContent = h.phase === "out" ? "CAST"
+              : h.phase === "return" ? "RETURNING"
+                : h.phase === "windup" ? "WINDING"
+                  : `${h.cooldown.toFixed(1)}S CD`;
+            castEl.dataset.state = h.phase !== "held" ? "active" : "cooldown";
+          }
         } else if (castEl) {
           castEl.hidden = true;
         }

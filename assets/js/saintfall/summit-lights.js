@@ -98,10 +98,17 @@ export function makeGoldLampMesh(THREE, {
 
     const halfW = target.widthM * unitsPerMetre * 0.5;
     const halfH = target.heightM * unitsPerMetre * 0.5;
-    for (let i = 0; i <= segments; i += 1) {
-      const angle = Math.PI / 2 + (i / segments) * Math.PI * 2;
-      const x = Math.cos(angle);
-      const y = Math.sin(angle);
+    /* Most lamps use the compact octagon below. Props with a raised
+       frame can provide their measured aperture silhouette instead;
+       this keeps a lamp inside the metal mask at oblique camera angles
+       rather than relying on a broad card hidden by depth precision. */
+    const outline = Array.isArray(target.outline) && target.outline.length >= 3
+      ? target.outline
+      : Array.from({ length: segments }, (_, i) => {
+        const angle = Math.PI / 2 + (i / segments) * Math.PI * 2;
+        return [Math.cos(angle), Math.sin(angle)];
+      });
+    for (const [x, y] of outline) {
       point.copy(centre).addScaledVector(right, x * halfW)
         .addScaledVector(up, y * halfH);
       positions.push(point.x, point.y, point.z);
@@ -109,8 +116,9 @@ export function makeGoldLampMesh(THREE, {
       uvs.push(0.5 + x * 0.5, 0.5 + y * 0.5);
       colours.push(perimeterBrightness, perimeterBrightness, perimeterBrightness);
     }
-    for (let i = 0; i < segments; i += 1) {
-      indices.push(base, base + i + 1, base + i + 2);
+    for (let i = 0; i < outline.length; i += 1) {
+      const next = (i + 1) % outline.length;
+      indices.push(base, base + i + 1, base + next + 1);
     }
   }
 

@@ -614,11 +614,10 @@ export async function buildSummitLoadout(ctx, player) {
         name: "bastion-shield-gold-glow",
         intensity: 4.35,
       });
-      /* +Y is the raw shield height and +Z its face. The lamp must
-         tuck beneath the complete inner rim: even the 110 x 665mm
-         pass left a dark, uneven band in the recess at the player's
-         close camera angle. Keep it centred, overscan the aperture,
-         and seat it beneath the raised rim so the metal masks it. */
+      /* +Y is the raw shield height and +Z its face. Fit the pointed
+         aperture instead of hiding a broad octagon under the rim: the
+         latter looked correct head-on but escaped the metal mask as
+         depth precision changed at oblique camera angles. */
       const mesh = makeGoldLampMesh(THREE, {
         name: "bastion-shield-core-gold",
         material,
@@ -629,11 +628,17 @@ export async function buildSummitLoadout(ctx, player) {
           up: [0, 1, 0],
           widthM: 0.149,
           heightM: 0.718,
+          outline: [
+            [0.00, 1.00], [-0.52, 0.84], [-0.76, 0.62],
+            [-0.76, -0.62], [-0.52, -0.84], [0.00, -1.00],
+            [0.52, -0.84], [0.76, -0.62], [0.76, 0.62],
+            [0.52, 0.84],
+          ],
           perimeterBrightness: 0.88,
         }],
         /* raw model units per final world metre */
         unitsPerMetre: sourceSpan / spec.targetSize,
-        standoffM: 0.001,
+        standoffM: 0.0025,
       });
       asset.add(mesh);
       goldGlow = { mesh, material };
@@ -659,13 +664,51 @@ export async function buildSummitLoadout(ctx, player) {
      where the player is looking when they look up a mountain, and
      what makes the pair converge instead of firing on parallel
      lines. */
+  /* WHERE THE BARRELS CROSS.
+   *
+   * This was a flat 18 metres, and that is the number a player feels
+   * as "my shots do not go where I am pointing" at any real distance:
+   * two emitters held a metre apart, toed in to meet at 18m, MISS by
+   * the same margin again at 36 and keep diverging. Against a Stylite
+   * perched a hundred and eleven metres up they were never going to
+   * land, whatever the weapon's range said - which is how both Kenosis
+   * operatives ended up unable to touch that boss at all.
+   *
+   * So the convergence is the distance to whatever is actually being
+   * aimed at: the nearest enemy along the look, or the wall behind it,
+   * or far away if the sky. Held to a floor so a muzzle pressed
+   * against something does not cross behind itself.
+   *
+   * CACHED PER FRAME. `aimPoint` is read by the wrist solve every
+   * frame and by every shot; the ray behind it steps at 0.35m over as
+   * much as 200, so recomputing it per call would be hundreds of
+   * samples per weapon per frame. */
   const CONVERGE_RANGE = 18;
+  const CONVERGE_MIN = 7;
+  const CONVERGE_FAR = 200;
+  const aimCache = { at: -1, range: CONVERGE_RANGE };
+
+  function convergeRange() {
+    const clock = player?.state?.clock ?? 0;
+    if (aimCache.at === clock) return aimCache.range;
+    aimCache.at = clock;
+    let range = CONVERGE_FAR;
+    const hit = ctx.combat?.raycastEnemies?.(camPos.x, camPos.y, camPos.z,
+      camDir.x, camDir.y, camDir.z, CONVERGE_FAR);
+    if (hit && Number.isFinite(hit.t) && hit.t > 0) range = hit.t;
+    const wall = ctx.collide?.rayBlock?.(camPos.x, camPos.y, camPos.z,
+      camDir.x, camDir.y, camDir.z, range);
+    if (Number.isFinite(wall) && wall > 0 && wall < range) range = wall;
+    aimCache.range = Math.max(CONVERGE_MIN, range);
+    return aimCache.range;
+  }
+
   function aimPoint(out) {
     const camera = ctx.render?.camera;
     if (!camera) return null;
     camera.getWorldPosition(camPos);
     camera.getWorldDirection(camDir);
-    return out.copy(camPos).addScaledVector(camDir, CONVERGE_RANGE);
+    return out.copy(camPos).addScaledVector(camDir, convergeRange());
   }
 
   /* AIMING IS THE WRIST'S JOB.

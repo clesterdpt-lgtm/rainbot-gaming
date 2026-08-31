@@ -190,15 +190,13 @@ export function buildSummitHud(ctx, host) {
         <small>VITALITY</small><b id="sf-kit-hp-value">150</b></div>
       <div class="sf-kit__bar sf-kit__charge" id="sf-kit-charge"><i id="sf-kit-charge-fill"></i>
         <small>RELIQUARY</small><b id="sf-kit-charge-value">READY</b></div>
-      <div class="sf-kit__row" id="sf-kit-ability" data-state="ready" hidden>
-        <kbd id="sf-kit-ability-key">E</kbd>
+      <div class="sf-kit__row" id="sf-kit-ability" data-state="cooldown" hidden>
         <span id="sf-kit-ability-name"></span>
         <b id="sf-kit-ability-value"></b>
       </div>
-      <div class="sf-kit__row" id="sf-kit-cast" data-state="ready" hidden>
-        <kbd>RMB</kbd>
+      <div class="sf-kit__row" id="sf-kit-cast" data-state="cooldown" hidden>
         <span id="sf-kit-cast-name">HAMMER CAST</span>
-        <b id="sf-kit-cast-value">READY</b>
+        <b id="sf-kit-cast-value"></b>
       </div>
       <div class="sf-kit__row" id="sf-kit-command" data-state="ready" hidden>
         <kbd>Q</kbd>
@@ -231,7 +229,6 @@ export function buildSummitHud(ctx, host) {
     chargeFill: el.querySelector("#sf-kit-charge-fill"),
     chargeValue: el.querySelector("#sf-kit-charge-value"),
     ability: el.querySelector("#sf-kit-ability"),
-    abilityKey: el.querySelector("#sf-kit-ability-key"),
     abilityName: el.querySelector("#sf-kit-ability-name"),
     abilityValue: el.querySelector("#sf-kit-ability-value"),
     cast: el.querySelector("#sf-kit-cast"),
@@ -253,14 +250,9 @@ export function buildSummitHud(ctx, host) {
     if (!kit || kitDockNamed) return;
     kitDockNamed = true;
     if (kit.id === "white-vigil") {
-      kitEls.ability.hidden = false;
-      kitEls.abilityKey.textContent = keybindLabel("block").split(" / ")[0] || "E";
-      kitEls.abilityName.textContent = "VIGIL STEP";
+      if (kitEls.abilityName) kitEls.abilityName.textContent = "VIGIL STEP";
     } else if (kit.id === "bastion-penitent") {
-      kitEls.ability.hidden = false;
-      kitEls.abilityKey.textContent = keybindLabel("block").split(" / ")[0] || "E";
-      kitEls.abilityName.textContent = "TOWER SHIELD";
-      kitEls.cast.hidden = false;
+      if (kitEls.ability) kitEls.ability.hidden = true;
     }
   }
   function updateKitDock(player) {
@@ -313,16 +305,18 @@ export function buildSummitHud(ctx, host) {
     if (!kit) return;
     const status = kit.status();
     if (status.blink) {
-      kitEls.ability.hidden = false;
       const b = status.blink;
-      /* Clamped both ways: `repeat` throws on a negative count, and
-         a doctrine that widens or narrows the step's magazine can
-         put these two out of order for a frame. */
-      const held = Math.max(0, Math.min(b.maxCharges, b.charges));
-      const pips = "◆".repeat(held) + "◇".repeat(Math.max(0, b.maxCharges - held));
-      kitEls.abilityValue.textContent = b.charges < b.maxCharges
-        ? `${pips} ${b.rechargeIn.toFixed(1)}S CD` : `${pips} READY`;
-      kitEls.ability.dataset.state = b.charges > 0 ? "ready" : "cooldown";
+      const cooling = b.charges < b.maxCharges;
+      kitEls.ability.hidden = !cooling;
+      if (cooling) {
+        /* Clamped both ways: `repeat` throws on a negative count, and
+           a doctrine that widens or narrows the step's magazine can
+           put these two out of order for a frame. */
+        const held = Math.max(0, Math.min(b.maxCharges, b.charges));
+        const pips = "◆".repeat(held) + "◇".repeat(Math.max(0, b.maxCharges - held));
+        kitEls.abilityValue.textContent = `${pips} ${b.rechargeIn.toFixed(1)}S CD`;
+        kitEls.ability.dataset.state = "cooldown";
+      }
     } else {
       kitEls.ability.hidden = true;
     }
@@ -342,12 +336,17 @@ export function buildSummitHud(ctx, host) {
     }
     if (status.hammer) {
       const h = status.hammer;
-      kitEls.castValue.textContent = h.phase === "out" ? "CAST"
-        : h.phase === "return" ? "RETURNING"
-          : h.phase === "windup" ? "WINDING"
-            : h.cooldown > 0 ? `${h.cooldown.toFixed(1)}S CD` : "READY";
-      kitEls.cast.dataset.state = h.phase !== "held" ? "active"
-        : h.cooldown > 0 ? "cooldown" : "ready";
+      const cooling = h.phase !== "held" || h.cooldown > 0;
+      kitEls.cast.hidden = !cooling;
+      if (cooling) {
+        kitEls.castValue.textContent = h.phase === "out" ? "CAST"
+          : h.phase === "return" ? "RETURNING"
+            : h.phase === "windup" ? "WINDING"
+              : `${h.cooldown.toFixed(1)}S CD`;
+        kitEls.cast.dataset.state = h.phase !== "held" ? "active" : "cooldown";
+      }
+    } else {
+      kitEls.cast.hidden = true;
     }
   }
 

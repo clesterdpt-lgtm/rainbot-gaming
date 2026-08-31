@@ -90,7 +90,19 @@ const KITS = {
       /* Consumed by summit-discharge: the crescents become a real
          mid-range weapon. Sustained 137 dps at the muzzle, falling
          past focusStart toward rangeM. */
-      damage: 26, range: 42, speed: 46, falloffStart: 26, falloffFloor: 0.55,
+      /* `range` is where the crescent stops BEING a weapon; `travel`
+         is how far it physically flies. They used to be the same
+         number, and against a Stylite perched a hundred and ten
+         metres up that meant Veyra could not touch the boss at all -
+         its grip only wears to damage taken while perched, so the
+         fight's whole opening loop was closed to her. Vesper's lance
+         reaches 360m and never noticed.
+         Past `range` the crescent keeps flying and its damage falls
+         off a cliff to `farFloor`, so she CAN wear a distant perch
+         down and is deliberately bad at it. Mid-range is still what
+         she is; being locked out of an encounter is not. */
+      damage: 26, range: 42, travel: 150, speed: 46,
+      falloffStart: 26, falloffFloor: 0.55, farFloor: 0.16,
       spreadHip: 0.030, spreadAds: 0.007,
     },
   },
@@ -106,7 +118,11 @@ const KITS = {
     },
     hammer: {
       damage: 260, returnDamage: 130, speed: 34, returnSpeed: 40,
-      range: 46, cooldown: 8.0, knockdownStun: 3.0, knockback: 14,
+      /* The cast is Torren's ONLY ranged tool, so it carries the same
+         obligation: a melee operative who cannot reach a perched boss
+         cannot fight it. One heavy hit on an eight-second cooldown is
+         a fair way to wear a grip pool down from below. */
+      range: 120, cooldown: 8.0, knockdownStun: 3.0, knockback: 14,
       /* THE FLYER ASSIST. The cast is the Bastion's whole answer to
          anything airborne - he cannot fly, his hammer is the only
          thing he owns that leaves the ground, and a small fast target

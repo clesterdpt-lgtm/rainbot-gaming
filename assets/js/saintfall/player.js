@@ -2596,6 +2596,11 @@ export async function createPlayer(ctx, canvas) {
   const aimYawQuaternion = new THREE.Quaternion();
   const aimPitchQuaternion = new THREE.Quaternion();
   const headCarryYawQuaternion = new THREE.Quaternion();
+  const jetpackWorldQuaternion = new THREE.Quaternion();
+  const jetpackParentQuaternion = new THREE.Quaternion();
+  const jetpackYawCorrection = new THREE.Quaternion();
+  const jetpackWorldPosition = new THREE.Vector3();
+  const jetpackFigurePosition = new THREE.Vector3();
   const travelRight = new THREE.Vector3();
   const aimRight = new THREE.Vector3();
   const worldUp = new THREE.Vector3(0, 1, 0);
@@ -4119,7 +4124,14 @@ export async function createPlayer(ctx, canvas) {
        ADS adds a little more commitment; melee actions already carry
        their own large authored chest turns, so only a quarter of the
        carry bias remains during a swing. */
-    const polearmCarry = !!ctx.weapons?.current?.spec?.polearm;
+    const campaignWeapon = ctx.weapons?.current;
+    /* Operative kits keep a hidden campaign lance alive solely for
+       legacy save compatibility. It must not also keep applying the
+       lance's low-ready torso pose: that invisible -18deg turn made
+       Veyra's and Torren's otherwise centred packs orbit permanently
+       to the left of their backs. */
+    const polearmCarry = !!campaignWeapon?.spec?.polearm
+      && campaignWeapon.root?.visible !== false;
     /* A slung weapon no longer owns the shoulders.  Leaving the
        low-ready twist active after both hands released did more than
        turn the breastplate: Meshy's raked Spine local Y leaked that
@@ -4285,6 +4297,44 @@ export async function createPlayer(ctx, canvas) {
         figure.chest.updateWorldMatrix(false, true);
       } else {
         figure.chest.rotation.set(actionPose.chestPitch, actionPose.chestYaw, 0);
+      }
+    }
+
+    /* A BACKPACK IS NOT A THIRD HAND.
+     *
+     * The carried lance turns Aurel's shoulders toward the rear grip.
+     * Because the pack is parented to that Spine bone, its 10cm rear
+     * standoff turns the same modest torso yaw into a conspicuous
+     * sideways orbit: the Seraph's visual centre moved 12.3cm off the
+     * hero centreline while the lance was drawn, then snapped back to
+     * 0.6cm when sheathed. Keep all chest pitch, gait and action motion,
+     * but cancel the weapon-only yaw at the pack and slide its mount
+     * back onto the figure centreline. The torso and hands retain the
+     * authored low-ready stance; only the back equipment stops being
+     * dragged sideways by it. */
+    const jetpackRoot = ctx.jetpack?.visual?.root;
+    const jetpackBindPosition = jetpackRoot?.userData?.mountBindPosition;
+    const jetpackBindQuaternion = jetpackRoot?.userData?.mountBindQuaternion;
+    if (jetpackRoot && jetpackRoot.parent
+      && Array.isArray(jetpackBindPosition) && Array.isArray(jetpackBindQuaternion)) {
+      jetpackRoot.position.fromArray(jetpackBindPosition);
+      jetpackRoot.quaternion.fromArray(jetpackBindQuaternion);
+      jetpackRoot.updateWorldMatrix(true, true);
+      if (Math.abs(carryChestYaw) > 1e-5) {
+        jetpackRoot.getWorldQuaternion(jetpackWorldQuaternion);
+        jetpackYawCorrection.setFromAxisAngle(worldUp, -carryChestYaw);
+        jetpackWorldQuaternion.premultiply(jetpackYawCorrection);
+        jetpackRoot.parent.getWorldQuaternion(jetpackParentQuaternion).invert();
+        jetpackRoot.quaternion.copy(jetpackParentQuaternion).multiply(jetpackWorldQuaternion);
+
+        jetpackRoot.getWorldPosition(jetpackWorldPosition);
+        jetpackFigurePosition.copy(jetpackWorldPosition);
+        figure.root.worldToLocal(jetpackFigurePosition);
+        jetpackFigurePosition.x = 0;
+        figure.root.localToWorld(jetpackFigurePosition);
+        jetpackRoot.parent.worldToLocal(jetpackFigurePosition);
+        jetpackRoot.position.copy(jetpackFigurePosition);
+        jetpackRoot.updateWorldMatrix(false, true);
       }
     }
     /* Recover half the locomotion pitch through the neck so the
@@ -6508,15 +6558,15 @@ export async function createPlayer(ctx, canvas) {
      be set by looking. Mutable so `qa.setPalmRoll` can sweep it in a
      live session rather than by rebuild-and-squint.
 
-     0.24 rad is about 14 degrees, chosen off a sweep of -0.40 to
-     +0.30 shot from behind (the player's own bearing) and from
+     0.30 rad is about 17 degrees, chosen off an updated sweep of
+     0.24 to 0.36 shot from behind (the player's own bearing) and from
      outboard. At 0 both gauntlets present their broad flat face
      square to the camera with the haft passing behind them - beside
-     the shaft rather than around it. By 0.24 the palm side has
+     the shaft rather than around it. By 0.30 the palm side has
      turned onto the haft and the gauntlet's long axis lines up with
      it. Past 0.40 the seat breaks and palm contact error jumps from
      0.055m to 0.63m, so the usable window is not wide. */
-  const PALM_ROLL = [0.24, 0.24];
+  const PALM_ROLL = [0.30, 0.30];
   const wristForearm = new THREE.Vector3();
   const wristTiltAxis = new THREE.Vector3();
   const wristTiltedY = new THREE.Vector3();

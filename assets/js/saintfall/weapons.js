@@ -1,19 +1,20 @@
 /* ============================================================
    SAINTFALL - weapons
 
-   Weapon mechanics and anchors are built from the same `structures.js`
-   kit that built the Vault-Cathedral. Saint Aurel can now dress that
-   established rig with an authored Meshy Censer-Lance; the original
-   procedural body remains the load-failure fallback. The split is
-   specific rather than doctrinal:
+   Built procedurally from the same `structures.js` kit that built
+   the Vault-Cathedral, rather than authored in Blender. The reasons
+   are specific rather than doctrinal:
 
+     - They are rigid hard-surface objects, which is exactly what a
+       ring-solid kit is good at.
      - Weapon MOTION is code no matter where the mesh comes from -
        recoil impulse, sway, bob and the ADS transition are springs,
-       not clips - so the authored model stays presentation-only.
+       not clips - so a modelling pipeline buys nothing on the half
+       of the problem that actually moves.
      - Variants come free from `ctx.seed`: barrel lengths, sights,
-       magazines and ornament still serve every procedural fallback.
-     - Grip, tip, emitter and reliquary-light nodes remain code-owned,
-       so visuals cannot quietly change combat reach or aim.
+       magazines, ornament.
+     - Nothing to load, nothing to cache-bust, no draw call that is
+       not already there.
 
    The Concord does not build a machine it does not also sanctify,
    so every pattern carries a skull boss, a brass plate and a purity
@@ -59,151 +60,6 @@ const LANCE_HEAD = 0.59;
 const LANCE_NEEDLE_BASE = 0.18;
 const LANCE_NEEDLE_LEN = 0.285;
 const lanceTipX = (haft) => haft * LANCE_HEAD + LANCE_NEEDLE_BASE + LANCE_NEEDLE_LEN;
-
-/* Saint Aurel's approved Meshy replacement is a VISUAL, not a second
-   weapon implementation. The grip anchors, aim muzzle, bolt emitter,
-   melee tip, reliquary lamp and every motion spring below remain on the
-   established weapon root. If the GLB cannot be fetched, buildGlaive()
-   still supplies the complete procedural Censer-Lance that shipped
-   before it. */
-const AUREL_LANCE_MODEL = Object.freeze({
-  file: "saint-aurel-censer-lance.glb",
-  sourceImage: "saint-aurel-censer-lance-option-1-reliquary-needle.png",
-  /* The generated shaft's visual centre sat above both solved palms.
-     This presentation-only drop seats the haft into the hands without
-     moving either grip anchor or any combat node. */
-  offsetY: -0.040,
-  /* Meshy's side-profile reconstruction keeps the approved weapon on
-     local X, but the generated point is at -X. Rotate it once so the
-     point follows Saintfall's authored +X weapon convention. */
-  rotationY: Math.PI,
-});
-
-function aurelLanceUrl(build) {
-  const url = new URL(
-    `../../../assets/models/saintfall/player-weapons/${AUREL_LANCE_MODEL.file}`,
-    import.meta.url,
-  );
-  if (build) url.searchParams.set("v", build);
-  return url;
-}
-
-async function loadAurelLanceModel(ctx) {
-  if (ctx.playerCharacter?.id !== "vesper-reliquary") return null;
-  try {
-    const { GLTFLoader } = await import("three/addons/loaders/GLTFLoader.js");
-    const gltf = await new GLTFLoader().loadAsync(aurelLanceUrl(ctx.build).href);
-    const source = gltf.scene;
-    source.updateMatrixWorld(true);
-    const box = new ctx.THREE.Box3().setFromObject(source);
-    const size = box.getSize(new ctx.THREE.Vector3());
-    if (!(size.x > 1e-6 && size.y > 1e-6 && size.z > 1e-6)) {
-      throw new Error("model has no measurable volume");
-    }
-    if (size.x < Math.max(size.y, size.z) * 4) {
-      throw new Error(`unexpected long axis ${size.x.toFixed(3)} x ${size.y.toFixed(3)} x ${size.z.toFixed(3)}`);
-    }
-
-    let meshes = 0;
-    let triangles = 0;
-    source.traverse((node) => {
-      if (!node.isMesh) return;
-      meshes += 1;
-      const count = node.geometry.index?.count
-        || node.geometry.attributes.position?.count || 0;
-      triangles += count / 3;
-    });
-    return {
-      ...AUREL_LANCE_MODEL,
-      source,
-      box,
-      size,
-      meshes,
-      triangles: Math.round(triangles),
-    };
-  } catch (error) {
-    console.warn("[saintfall] Saint Aurel Censer-Lance failed to load; using procedural fallback", error);
-    return null;
-  }
-}
-
-function instantiateAurelLance(ctx, asset, spec) {
-  if (!asset?.source) return null;
-  const { THREE } = ctx;
-  const root = asset.source.clone(true);
-  root.name = "saint-aurel-censer-lance-authored";
-  root.rotation.set(0, asset.rotationY, 0);
-  root.position.set(0, 0, 0);
-  root.scale.setScalar(1);
-
-  const materialClones = new Map();
-  const materials = [];
-  const meshes = [];
-  const cloneMaterial = (original) => {
-    if (!original) return original;
-    if (materialClones.has(original)) return materialClones.get(original);
-    const material = original.clone();
-    material.name = `saint-aurel-lance-${original.name || "material"}`;
-    if ("metalness" in material) material.metalness = 0.30;
-    if ("roughness" in material) material.roughness = 0.58;
-    if ("envMapIntensity" in material) material.envMapIntensity = 0.92;
-    /* Meshy's authored emissive atlas isolates the amber crystal. Give
-       that map a non-black multiplier without turning the ivory panels
-       into lamps. The existing scene PointLight still owns the real
-       bounce and discharge flash. */
-    if (material.emissiveMap && material.emissive) {
-      material.emissive.set(0xffffff);
-      material.emissiveIntensity = 1.15;
-    }
-    patchMaterial(material, ctx.atmos, { rim: 0.82, glitter: 0 });
-    materialClones.set(original, material);
-    materials.push(material);
-    return material;
-  };
-
-  root.traverse((node) => {
-    if (!node.isMesh) return;
-    node.name = "saint-aurel-censer-lance-mesh";
-    node.material = Array.isArray(node.material)
-      ? node.material.map(cloneMaterial) : cloneMaterial(node.material);
-    node.castShadow = true;
-    node.receiveShadow = true;
-    node.userData.authoredPlayerWeapon = "saint-aurel-censer-lance";
-    meshes.push(node);
-  });
-
-  /* Fit the generated pommel and point to the SAME physical envelope
-     the old visual occupied. That preserves camera framing, back-cradle
-     clearance and the visible relationship to the unchanged emitter.
-     The source may be off-centre, so align measured bounds rather than
-     assuming its origin is meaningful. */
-  const targetMinX = -spec.haft * 0.40;
-  const targetMaxX = lanceTipX(spec.haft);
-  root.updateMatrixWorld(true);
-  let box = new THREE.Box3().setFromObject(root);
-  const sourceLength = Math.max(1e-6, box.max.x - box.min.x);
-  const scalar = (targetMaxX - targetMinX) / sourceLength;
-  root.scale.setScalar(scalar);
-  root.updateMatrixWorld(true);
-  box = new THREE.Box3().setFromObject(root);
-  const center = box.getCenter(new THREE.Vector3());
-  root.position.set(
-    targetMinX - box.min.x,
-    -center.y + asset.offsetY,
-    -center.z,
-  );
-  root.updateMatrixWorld(true);
-  box = new THREE.Box3().setFromObject(root);
-  const size = box.getSize(new THREE.Vector3());
-  root.userData.authoredPlayerWeapon = {
-    file: asset.file,
-    sourceImage: asset.sourceImage,
-    scale: scalar,
-    bounds: { min: box.min.toArray(), max: box.max.toArray() },
-    triangles: asset.triangles,
-  };
-  return { root, materials, meshes, box, size, scalar, asset };
-}
 
 const IRON = makeRamp([
   [0.00, "#191412"], [0.28, "#31261f"], [0.58, "#4f4033"],
@@ -361,9 +217,8 @@ export const PATTERNS = {
    BUILD
    ============================================================ */
 
-export async function buildWeapons(ctx) {
+export function buildWeapons(ctx) {
   const { THREE, scene, materials } = ctx;
-  const aurelLanceAsset = await loadAurelLanceModel(ctx);
   const kit = makeKit(THREE);
   const bus = makeBus();
   const group = new THREE.Group();
@@ -623,8 +478,6 @@ export async function buildWeapons(ctx) {
 
     const root = new THREE.Group();
     root.name = `weapon-${key}`;
-    const authoredVisual = isPolearm
-      ? instantiateAurelLance(ctx, aurelLanceAsset, spec) : null;
 
     const add = (list, ramp, matName, opts = {}) => {
       if (!list.length) return null;
@@ -642,20 +495,16 @@ export async function buildWeapons(ctx) {
       return mesh;
     };
 
-    if (authoredVisual) {
-      root.add(authoredVisual.root);
-    } else {
-      add(parts.iron, IRON, "iron");
-      if (parts.blade) add(parts.blade, BLADE, "iron", { bias: 0.12, normalWeight: 0.44 });
-      if (parts.amber) add(parts.amber, AMBER, "emissive", { bias: 0.18, normalWeight: 0.34 });
-      // Brass biased UP its ramp: it is the read, and a dull brass is
-      // no more legible than the iron it is meant to break up.
-      add(parts.brass, BRASS, "gold", { bias: 0.22, normalWeight: 0.42 });
-      add(parts.wood, WOOD, "verdigris", { normalWeight: 0.46, bias: 0.14 });
-    }
+    add(parts.iron, IRON, "iron");
+    if (parts.blade) add(parts.blade, BLADE, "iron", { bias: 0.12, normalWeight: 0.44 });
+    if (parts.amber) add(parts.amber, AMBER, "emissive", { bias: 0.18, normalWeight: 0.34 });
+    // Brass biased UP its ramp: it is the read, and a dull brass is
+    // no more legible than the iron it is meant to break up.
+    add(parts.brass, BRASS, "gold", { bias: 0.22, normalWeight: 0.42 });
+    add(parts.wood, WOOD, "verdigris", { normalWeight: 0.46, bias: 0.14 });
 
     let seal = null;
-    if (!authoredVisual && parts.cloth.length) {
+    if (parts.cloth.length) {
       const geo = kit.merge(parts.cloth);
       paintFlat(THREE, geo, PALETTE.ivory, 0.18);
       seal = new THREE.Mesh(geo, materials.cloth);
@@ -879,7 +728,7 @@ export async function buildWeapons(ctx) {
 
     // The censer hangs under the blade and swings on its own pivot.
     let censer = null;
-    if (isPolearm && !authoredVisual) {
+    if (isPolearm) {
       censer = new THREE.Object3D();
       censer.position.set(spec.haft * 0.59, -0.02, 0);
       root.add(censer);
@@ -893,7 +742,7 @@ export async function buildWeapons(ctx) {
     }
 
     const record = {
-      key, spec, mode: spec.mode || key, root, seal, rng, authoredVisual,
+      key, spec, mode: spec.mode || key, root, seal, rng,
       gripRear, gripFront, muzzle, emitter, tip, butt, censer,
       reliquaryLight, reliquarySocket,
       flashRig, flashMat,
@@ -1850,7 +1699,6 @@ export async function buildWeapons(ctx) {
         equipped: carry.key,
         mode: carry.record ? carry.record.mode : null,
         triangles: Math.round(tris),
-        authored: carry.record?.authoredVisual?.asset?.file || null,
         ads: Number(carry.ads.toFixed(2)),
       };
     },

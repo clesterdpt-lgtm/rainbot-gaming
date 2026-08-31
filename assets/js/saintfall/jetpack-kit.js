@@ -590,5 +590,11 @@ export function mountPack(figure, root, position) {
   figure.root.updateMatrixWorld(true);
   if (figure.chest) figure.chest.attach(root);
   figure.root.updateMatrixWorld(true);
+  /* The chest is animated after the pack is built. Keep the exact
+     post-attach local transform so player.js can begin every frame
+     from the authored seat before applying its carry-yaw stabiliser;
+     otherwise that small correction would accumulate indefinitely. */
+  root.userData.mountBindPosition = root.position.toArray();
+  root.userData.mountBindQuaternion = root.quaternion.toArray();
   return root;
 }

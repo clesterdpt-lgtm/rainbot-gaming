@@ -270,7 +270,8 @@ export async function start({ boot, build } = {}) {
     ctx.loadout = operativeLoadout;
   }
 
-  const weapons = buildWeapons(ctx);
+  progress(0.965, usesOperativeKit ? "Recalling the field pattern" : "Blessing the Censer-Lance");
+  const weapons = await buildWeapons(ctx);
   ctx.weapons = weapons;
   const campaignWeapon = weapons.equip("autogun", player.figure.weaponMount);
   if (usesOperativeKit && campaignWeapon) {

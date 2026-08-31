@@ -1,0 +1,22 @@
+{
+  "taskId": "01a05602-2f6e-7658-84ac-f222b1dc5be1",
+  "taskType": "image-to-3d",
+  "input": "assets/concepts/saintfall/meshy/saint-aurel-censer-lance-option-1-reliquary-needle.png",
+  "request": {
+    "image_url": "[local image data URI omitted]",
+    "model_type": "standard",
+    "ai_model": "meshy-6",
+    "enable_pbr": true,
+    "should_texture": true,
+    "should_remesh": true,
+    "topology": "triangle",
+    "target_polycount": 18000,
+    "pose_mode": "",
+    "image_enhancement": false,
+    "remove_lighting": true,
+    "target_formats": [
+      "glb"
+    ],
+    "texture_prompt": "Saintfall weapon PBR: ivory enamel grip panels, restrained verdigris metal haft, muted aged brass cage and bands, dark iron recesses, warm amber crystal only, cool steel needle point; preserve clean side-profile details and material separation"
+  }
+}

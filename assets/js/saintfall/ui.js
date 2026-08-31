@@ -290,7 +290,7 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render, setQualit
         <div class="sf-mission-wrap__card">
           <span class="sf-mission-wrap__kicker">THE GILDED SILENCE · CLOSED</span>
           <h2 id="sf-mission-wrap-title">MISSION COMPLETE</h2>
-          <p data-mission-wrap-saint>One Saint fell from orbit. Vesper-IX rises from silence.</p>
+          <p data-mission-wrap-saint>One Saint made saintfall from orbit. Vesper-IX rises from silence.</p>
           <div class="sf-mission-wrap__verdict">
             <strong>THE BLOOM IS BROKEN</strong>
             <span>The Apostate is gone. The ancient Saint remains in ruins, but its basin belongs to the Concord again. Vesper-IX is reclaimed.</span>
@@ -1816,7 +1816,7 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render, setQualit
       missionWrap.hidden = !showMissionWrap;
       missionWrap.setAttribute("aria-hidden", showMissionWrap ? "false" : "true");
       const saint = missionWrap.querySelector("[data-mission-wrap-saint]");
-      if (saint) saint.textContent = `${ctx.playerCharacter?.name || "The Saint"} fell from orbit. Vesper-IX rises from silence.`;
+      if (saint) saint.textContent = `${ctx.playerCharacter?.name || "The Saint"} made saintfall from orbit. Vesper-IX rises from silence.`;
     }
     if (debrief) {
       debrief.hidden = !showDebrief || showMissionWrap;

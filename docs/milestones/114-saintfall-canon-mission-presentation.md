@@ -2,7 +2,7 @@
 
 ## Status
 
-in-progress
+implemented; awaits user playtest
 
 ## Objective
 
@@ -33,12 +33,12 @@ cinematic mission wrap before opening the existing score and high-score record.
 
 ## Acceptance criteria
 
-- [ ] The roster displays Saint Aurel, Saint Veyra, and Saint Torren while keeping `vesper-reliquary`, `white-vigil`, and `bastion-penitent`. — test: `scripts/saintfall-mission-presentation-probe.mjs::canon and durable IDs`
-- [ ] Confirming a Saint opens a readable mission briefing and does not begin descent until the player activates Begin Saintfall. — test: `scripts/saintfall-mission-presentation-probe.mjs::briefing gates descent`
-- [ ] The briefing says the Saints descend from orbit, the Bloom destroyed an ancient statue, and the mission is to reclaim Vesper-IX. — test: `scripts/saintfall-mission-presentation-probe.mjs::briefing canon`
-- [ ] Victory opens a cinematic mission-complete screen using a project-local generated image before the score record is presented. — test: `scripts/saintfall-mission-presentation-probe.mjs::victory wrap gates record`
-- [ ] View Mission Record reveals final score, high score, and the existing shared high-score action without changing score calculation. — test: `scripts/saintfall-mission-presentation-probe.mjs::record handoff`
-- [ ] Briefing and victory wrap contain cleanly at desktop, phone portrait, and short phone landscape sizes with hard-edged controls. — test: `scripts/saintfall-mission-presentation-probe.mjs::responsive presentation`
+- [x] The roster displays Saint Aurel, Saint Veyra, and Saint Torren while keeping `vesper-reliquary`, `white-vigil`, and `bastion-penitent`. — test: `scripts/saintfall-mission-presentation-probe.mjs::canon and durable IDs`
+- [x] Confirming a Saint opens a readable mission briefing and does not begin descent until the player activates Begin Saintfall. — test: `scripts/saintfall-mission-presentation-probe.mjs::briefing gates descent`
+- [x] The briefing says the Saints descend from orbit, the Bloom destroyed an ancient statue, and the mission is to reclaim Vesper-IX. — test: `scripts/saintfall-mission-presentation-probe.mjs::briefing canon`
+- [x] Victory opens a cinematic mission-complete screen using a project-local generated image before the score record is presented. — test: `scripts/saintfall-mission-presentation-probe.mjs::victory wrap gates record`
+- [x] View Mission Record reveals final score, high score, and the existing shared high-score action without changing score calculation. — test: `scripts/saintfall-mission-presentation-probe.mjs::record handoff`
+- [x] Briefing and victory wrap contain cleanly at desktop, phone portrait, and short phone landscape sizes with hard-edged controls. — test: `scripts/saintfall-mission-presentation-probe.mjs::responsive presentation`
 - [ ] The new screens match Saintfall's solemn hard-edged visual language. — verified by user playtest
 
 ## Exit condition
@@ -58,4 +58,8 @@ portrait, and landscape screenshots for the briefing and mission wrap.
 
 - Display-name changes are intentionally decoupled from durable IDs.
 - The generated image contains no text; accessible HTML owns all mission copy.
-
+- Focused gates: mission presentation 26/26, campaign debrief 18/18,
+  character selector 12/12, entry handoff 10/10, operative carryover 20/20,
+  and save integrity 62/62. Every Saintfall entry point boots clean.
+- The broad UI regression remains 97/99 on its two pre-existing assertions:
+  complete controls/settings enumeration and the 844x390 Doctrine scan row.

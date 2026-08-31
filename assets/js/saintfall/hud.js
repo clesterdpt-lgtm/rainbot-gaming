@@ -100,9 +100,6 @@ export function buildHud(ctx, host) {
         <div class="sf-hud__jetlabel"><span>CHARGE</span><b id="sf-jet-value">100%</b></div>
         <div class="sf-hud__jettrack"><i id="sf-jet-fill"></i></div>
         <div class="sf-hud__boost" id="sf-boost"><span><b data-bind-face="boost">${keybindLabel("boost")}</b> GLIDE</span><strong id="sf-boost-value">READY</strong></div>
-        <div class="sf-hud__ability sf-hud__ability--teleport" id="sf-teleport" hidden><span><b data-bind-face="block">${keybindLabel("block")}</b> VIGIL STEP</span><strong id="sf-teleport-value">READY</strong></div>
-        <div class="sf-hud__ability sf-hud__ability--cast" id="sf-cast" hidden><span><b>RMB</b> HAMMER CAST</span><strong id="sf-cast-value">READY</strong></div>
-        <div class="sf-hud__ability sf-hud__ability--shield" id="sf-shield" hidden><span><b data-bind-face="block">${keybindLabel("block")}</b> TOWER SHIELD</span><strong id="sf-shield-value">READY</strong></div>
       </div>
     </div>
     <div class="sf-hud__heat sf-heat" id="sf-ammo" role="progressbar"
@@ -123,6 +120,16 @@ export function buildHud(ctx, host) {
       </header>
       <div class="sf-hud__strat" id="sf-strat"></div>
     </section>
+    <div class="sf-hud__operative-dock" id="sf-operative-dock" hidden>
+      <div class="sf-hud__operative-item sf-hud__operative-item--teleport" id="sf-teleport" hidden>
+        <span class="sf-hud__operative-label"><kbd data-bind-face="block">${keybindLabel("block")}</kbd> <b>VIGIL STEP</b></span>
+        <strong class="sf-hud__operative-value" id="sf-teleport-value">READY</strong>
+      </div>
+      <div class="sf-hud__operative-item sf-hud__operative-item--cast" id="sf-cast" hidden>
+        <span class="sf-hud__operative-label"><kbd>RMB</kbd> <b>HAMMER CAST</b></span>
+        <strong class="sf-hud__operative-value" id="sf-cast-value">READY</strong>
+      </div>
+    </div>
     <div class="sf-hud__doctrine-cue" id="sf-doctrine-cue" hidden role="status" aria-live="polite" tabindex="0" title="Open Doctrine (Esc)">
       <span class="sf-doctrine-cue__icon" aria-hidden="true">✦</span>
       <span class="sf-doctrine-cue__copy">
@@ -209,19 +216,18 @@ export function buildHud(ctx, host) {
   const jetValueEl = el.querySelector("#sf-jet-value");
   const boostEl = el.querySelector("#sf-boost");
   const boostValueEl = el.querySelector("#sf-boost-value");
+  const operativeDockEl = el.querySelector("#sf-operative-dock");
   const teleportEl = el.querySelector("#sf-teleport");
   const teleportValueEl = el.querySelector("#sf-teleport-value");
   const castEl = el.querySelector("#sf-cast");
   const castValueEl = el.querySelector("#sf-cast-value");
-  const towerShieldEl = el.querySelector("#sf-shield");
-  const towerShieldValueEl = el.querySelector("#sf-shield-value");
 
   if (ctx.playerCharacter?.id === "white-vigil") {
+    if (operativeDockEl) operativeDockEl.hidden = false;
     if (teleportEl) teleportEl.hidden = false;
   } else if (ctx.playerCharacter?.id === "bastion-penitent") {
+    if (operativeDockEl) operativeDockEl.hidden = false;
     if (castEl) castEl.hidden = false;
-    if (towerShieldEl) towerShieldEl.hidden = false;
-    if (boostEl) boostEl.hidden = true;
   }
   const ammoEl = el.querySelector("#sf-ammo");
   const heatFillEls = [...ammoEl.querySelectorAll(".sf-heat__fill")];
@@ -1618,8 +1624,10 @@ export function buildHud(ctx, host) {
       const kit = ctx.kenosis;
       if (kit?.status) {
         const kitStatus = kit.status();
+        let hasOperativeAbility = false;
         if (kitStatus?.blink && teleportEl) {
           teleportEl.hidden = false;
+          hasOperativeAbility = true;
           const b = kitStatus.blink;
           const held = Math.max(0, Math.min(b.maxCharges, b.charges));
           const pips = "◆".repeat(held) + "◇".repeat(Math.max(0, b.maxCharges - held));
@@ -1634,6 +1642,7 @@ export function buildHud(ctx, host) {
 
         if (kitStatus?.hammer && castEl) {
           castEl.hidden = false;
+          hasOperativeAbility = true;
           const h = kitStatus.hammer;
           castValueEl.textContent = h.phase === "out" ? "CAST"
             : h.phase === "return" ? "RETURNING"
@@ -1645,22 +1654,13 @@ export function buildHud(ctx, host) {
           castEl.hidden = true;
         }
 
-        if (kitStatus?.block && towerShieldEl) {
-          towerShieldEl.hidden = false;
-          towerShieldValueEl.textContent = kitStatus.block.active ? "HELD"
-            : kitStatus.block.blockedReason ? kitStatus.block.blockedReason.toUpperCase() : "READY";
-          towerShieldEl.dataset.state = kitStatus.block.active ? "active" : "ready";
-        } else if (towerShieldEl) {
-          towerShieldEl.hidden = true;
-        }
-
-        if (kitStatus?.id === "bastion-penitent" && boostEl) {
-          boostEl.hidden = true;
+        if (operativeDockEl) {
+          operativeDockEl.hidden = !hasOperativeAbility;
         }
       } else {
+        if (operativeDockEl) operativeDockEl.hidden = true;
         if (teleportEl) teleportEl.hidden = true;
         if (castEl) castEl.hidden = true;
-        if (towerShieldEl) towerShieldEl.hidden = true;
       }
 
       /* One quiet, attacker-anchored omen for Aegis-readable melee. No words,

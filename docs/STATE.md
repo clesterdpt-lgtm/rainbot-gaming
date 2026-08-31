@@ -1,5 +1,20 @@
 # Project state
 
+## Saintfall canon and mission presentation
+
+**Milestone 114 is implemented and awaits user playtest.** The playable roster
+now reads Saint Aurel, Saint Veyra, and Saint Torren while retaining its durable
+save IDs. New Game proceeds from Saint selection to a concise Gilded Silence
+briefing, and only `BEGIN SAINTFALL` starts the existing orbital drop. Victory
+now opens a generated-art mission-complete tableau before `VIEW MISSION RECORD`
+reveals the existing final score, local high score, and shared score action.
+The concise canon is recorded in `docs/saintfall-lore-bible.md`: the Saints are
+orbital supersoldiers, Saintfall is their descent, and the ruined central figure
+is an ancient monument destroyed by the Bloom invasion. Build pin
+`20260830-mission-presentation-1`; focused presentation gate 26/26, debrief
+18/18, save integrity 62/62, operative carryover 20/20, and every entry point
+boots clean.
+
 ## Latest focused fix
 
 **SAINTFALL: Doctrine inspector width lock**: The preview column was

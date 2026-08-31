@@ -313,6 +313,7 @@ export function buildSummitHud(ctx, host) {
     if (!kit) return;
     const status = kit.status();
     if (status.blink) {
+      kitEls.ability.hidden = false;
       const b = status.blink;
       /* Clamped both ways: `repeat` throws on a negative count, and
          a doctrine that widens or narrows the step's magazine can
@@ -322,11 +323,8 @@ export function buildSummitHud(ctx, host) {
       kitEls.abilityValue.textContent = b.charges < b.maxCharges
         ? `${pips} ${b.rechargeIn.toFixed(1)}S CD` : `${pips} READY`;
       kitEls.ability.dataset.state = b.charges > 0 ? "ready" : "cooldown";
-    }
-    if (status.block) {
-      kitEls.abilityValue.textContent = status.block.active ? "HELD"
-        : status.block.blockedReason ? status.block.blockedReason.toUpperCase() : "READY";
-      kitEls.ability.dataset.state = status.block.active ? "active" : "ready";
+    } else {
+      kitEls.ability.hidden = true;
     }
     /* The doctrine's own cue. The campaign HUD has a dedicated
        banner for this; here it is one more row of the kit dock, and

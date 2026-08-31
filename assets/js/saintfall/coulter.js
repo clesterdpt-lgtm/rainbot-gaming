@@ -1275,10 +1275,22 @@ export function buildCoulter(ctx) {
 
   /** A direct hit, which is worth a fifth of a pool's worth of toxin
    *  on its own so that dodging the globules matters. */
-  function splash(x, y, z, direct) {
+  /* `globule` is optional and carries the shot's travel: a DIRECT hit
+     reports its impact, which is on the player, and a zero-distance
+     origin is read by the guard rules as an area effect. The pool it
+     leaves behind is one, and stays unguardable. */
+  function splash(x, y, z, direct, globule = null) {
     if (direct && ctx.combat) {
+      const vs = globule
+        ? (Math.hypot(globule.vx || 0, globule.vy || 0, globule.vz || 0) || 1) : 0;
       ctx.combat.hurtPlayer(C.spewDirect * SURVIVAL_CONFIG.enemyDamageMultiplier, {
         source: "venom-globule", x, y, z,
+        ...(globule ? {
+          originX: x - ((globule.vx || 0) / vs) * 6,
+          originY: y - ((globule.vy || 0) / vs) * 6,
+          originZ: z - ((globule.vz || 0) / vs) * 6,
+          guardType: "frontal",
+        } : {}),
       });
       toxin.level = clamp01(toxin.level + 0.34);
     }
@@ -2374,7 +2386,7 @@ export function buildCoulter(ctx) {
       if (hit) {
         g.live = false;
         g.mesh.visible = false;
-        splash(hit.x, hit.y, hit.z, hit.direct);
+        splash(hit.x, hit.y, hit.z, hit.direct, g);
         continue;
       }
       if (g.life <= 0) {

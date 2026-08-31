@@ -2417,8 +2417,13 @@ export function buildDistaff(ctx) {
         if (hit.direct && b.reel) {
           hookPlayer(hit);
         } else if (hit.direct) {
+          const ws = Math.hypot(b.vx, b.vy, b.vz) || 1;
           ctx.combat?.hurtPlayer?.(C.webDamage, {
             source: "distaff-web", x: hit.x, y: hit.y, z: hit.z,
+            originX: hit.x - (b.vx / ws) * 6,
+            originY: hit.y - (b.vy / ws) * 6,
+            originZ: hit.z - (b.vz / ws) * 6,
+            guardType: "frontal",
           });
           /* PINNED - if the animal is allowed one. See `webPinGap`:
              a fan is three strands and they arrive together, so

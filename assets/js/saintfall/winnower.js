@@ -2987,8 +2987,13 @@ export function buildWinnower(ctx) {
       if (dx * dx + dz * dz < C.strafeRadius * C.strafeRadius
         && Math.abs(dy) < 6 && !state.strafeHit) {
         state.strafeHit = true;
+        /* A strafing run has a direction - it is the animal coming
+           past - so it is blockable from the front. Without an origin
+           the rules read it as an area effect and refuse the plate. */
         ctx.combat.hurtPlayer(C.strafeDamage, {
           source: "winnower-strafe", x: ps.x, y: ps.y + 1.0, z: ps.z,
+          originX: inst.x, originY: inst.y, originZ: inst.z,
+          guardType: "frontal",
         });
         ctx.player.punch?.(1.6);
         ctx.player.doctrineKick?.(0.8, 0.6);

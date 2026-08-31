@@ -2078,8 +2078,23 @@ export function buildStylite(ctx) {
         b.live = false;
         b.mesh.visible = false;
         if (hit.direct) {
+          /* THE SHIELD NEEDS TO KNOW WHERE THIS CAME FROM.
+             `normalizeGuardDetail` reads the payload's x/y/z as the
+             ORIGIN, and a direct projectile hit reports its impact -
+             which is on the player. Distance ~0 means "no direction",
+             which the rules correctly read as an area effect and mark
+             UNBLOCKABLE. So a melee operative holding a tower shield
+             could not block a bolt he was staring straight at.
+             The impact stays as x/y/z for the effects; the origin is
+             taken back up the bolt's own travel, which is where it
+             came from however far the shooter has since moved. */
+          const bs = Math.hypot(b.vx, b.vy, b.vz) || 1;
           ctx.combat?.hurtPlayer?.(C.volleyDamage * SURVIVAL_CONFIG.enemyDamageMultiplier, {
             source: "stylite-bolt", x: hit.x, y: hit.y, z: hit.z,
+            originX: hit.x - (b.vx / bs) * 6,
+            originY: hit.y - (b.vy / bs) * 6,
+            originZ: hit.z - (b.vz / bs) * 6,
+            guardType: "frontal",
           });
           ctx.player?.punch?.(0.6);
         }

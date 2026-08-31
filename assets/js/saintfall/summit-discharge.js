@@ -220,11 +220,28 @@ export function buildSummitDischarge(ctx, player, loadout, spec = null) {
 
   /* Damage falls from full to `falloffFloor` between falloffStart and
      the end of the range: a mid-range weapon, honest about it. */
+  /* TWO FALLOFFS, because there are two ranges. Inside `range` this is
+     the mid-range weapon it always was, decaying to `falloffFloor`.
+     Past it the crescent still flies - out to `travel` - but its
+     damage collapses toward `farFloor`, which is what lets Veyra wear
+     down something perched far out of her fight without turning her
+     into a sniper. A kit that simply cannot reach an encounter is
+     worse than one that is bad at it. */
+  const FAR_TRAVEL = Math.max(DISCHARGE.range,
+    Number(DISCHARGE.travel) || DISCHARGE.range);
+  const FAR_FLOOR = Number.isFinite(DISCHARGE.farFloor) ? DISCHARGE.farFloor : 0;
+
   function damageAt(distance) {
     if (distance <= DISCHARGE.falloffStart) return DISCHARGE.damage;
-    const t = Math.min(1, (distance - DISCHARGE.falloffStart)
-      / Math.max(1e-4, DISCHARGE.range - DISCHARGE.falloffStart));
-    return DISCHARGE.damage * (1 - t * (1 - DISCHARGE.falloffFloor));
+    if (distance <= DISCHARGE.range) {
+      const t = Math.min(1, (distance - DISCHARGE.falloffStart)
+        / Math.max(1e-4, DISCHARGE.range - DISCHARGE.falloffStart));
+      return DISCHARGE.damage * (1 - t * (1 - DISCHARGE.falloffFloor));
+    }
+    const far = Math.min(1, (distance - DISCHARGE.range)
+      / Math.max(1e-4, FAR_TRAVEL - DISCHARGE.range));
+    return DISCHARGE.damage
+      * (DISCHARGE.falloffFloor + far * (FAR_FLOOR - DISCHARGE.falloffFloor));
   }
 
   function update(dt) {
@@ -296,7 +313,11 @@ export function buildSummitDischarge(ctx, player, loadout, spec = null) {
          its disc; a slice holds its plane, or the horns would swing
          off the vertical in flight. */
       shot.distance += step;
-      const fade = Math.max(0, Math.min(1, (DISCHARGE.range - shot.distance) / 2.2));
+      /* Faded and culled against TRAVEL, not against the damage
+         range - culling at `range` was what kept the crescent from
+         ever arriving at a distant target however far it was allowed
+         to hurt. */
+      const fade = Math.max(0, Math.min(1, (FAR_TRAVEL - shot.distance) / 2.2));
       shot.coreMaterial.opacity = 0.96 * fade;
       shot.glowMaterial.opacity = 0.34 * fade;
       const ground = ctx.collide?.groundHeight?.(shot.root.position.x, shot.root.position.z);
@@ -305,7 +326,7 @@ export function buildSummitDischarge(ctx, player, loadout, spec = null) {
         ctx.vfx?.spark?.(shot.root.position.x, ground + 0.06, shot.root.position.z,
           0.7, true, true);
       }
-      if (shot.distance >= DISCHARGE.range || struckGround) removeShot(shot);
+      if (shot.distance >= FAR_TRAVEL || struckGround) removeShot(shot);
     }
   }
 

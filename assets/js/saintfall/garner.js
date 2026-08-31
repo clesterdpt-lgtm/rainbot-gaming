@@ -2782,7 +2782,7 @@ export function buildGarner(ctx) {
       if (hit) {
         s.live = false;
         s.mesh.visible = false;
-        shatter(hit.x, hit.y, hit.z, hit.direct);
+        shatter(hit.x, hit.y, hit.z, hit.direct, s);
       } else if (s.life <= 0) {
         s.live = false;
         s.mesh.visible = false;
@@ -2794,13 +2794,27 @@ export function buildGarner(ctx) {
    *  what makes a near miss cost something - the shards are big and
    *  slow enough to dodge individually, so a volley that only punished
    *  direct hits would be free at any range. */
-  function shatter(x, y, z, direct) {
+  /* `bolt` is optional and carries the shard's travel, so a DIRECT
+     hit can tell the shield where it came from. Without it the payload
+     reports its impact - which is on the player - and the guard rules
+     correctly read a zero-distance origin as an area effect and refuse
+     the block. The burst below genuinely is an area effect and stays
+     unguardable. */
+  function shatter(x, y, z, direct, bolt = null) {
     ctx.vfx?.spark?.(x, y, z, direct ? 1.9 : 1.1, !direct, false);
     ctx.vfx?.sandSpray?.(x, y + 0.2, z, 0.9, 0, 1);
     const ps = ctx.player?.state;
     if (direct) {
+      const gs = bolt
+        ? (Math.hypot(bolt.vx || 0, bolt.vy || 0, bolt.vz || 0) || 1) : 0;
       ctx.combat?.hurtPlayer?.(C.spitDamage * SURVIVAL_CONFIG.enemyDamageMultiplier, {
         source: "garner-shard", x, y, z,
+        ...(bolt ? {
+          originX: x - ((bolt.vx || 0) / gs) * 6,
+          originY: y - ((bolt.vy || 0) / gs) * 6,
+          originZ: z - ((bolt.vz || 0) / gs) * 6,
+          guardType: "frontal",
+        } : {}),
       });
       ctx.player?.punch?.(0.8);
     } else if (ps && !ctx.combat?.player?.dead) {

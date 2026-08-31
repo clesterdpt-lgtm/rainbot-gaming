@@ -449,13 +449,12 @@ body.rb-escape-menu-open .sf-hud__doctrine-cue {
 
 .sf-hud__operative-dock {
   position: absolute;
-  right: max(1.4rem, calc(env(safe-area-inset-right) + 1rem));
-  bottom: 5.4rem;
-  max-width: calc(100% - 6rem);
-  display: inline-flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 0.35rem;
+  left: calc(50% + .75rem);
+  width: min(15rem, 24cqw);
+  bottom: max(2.35rem, calc(env(safe-area-inset-bottom) + 2.15rem));
+  display: flex;
+  justify-content: flex-start;
+  align-items: center;
   pointer-events: none;
   z-index: 20;
 }
@@ -466,17 +465,17 @@ body.rb-escape-menu-open .sf-hud__operative-dock {
 .sf-hud__operative-item {
   display: inline-flex;
   align-items: center;
-  gap: 0.55rem;
-  padding: 0.32rem 0.65rem 0.32rem 0.5rem;
+  gap: 0.45rem;
+  padding: 0.18rem 0.45rem;
   border: 1px solid rgba(216, 164, 65, 0.4);
-  border-right: 3px solid var(--sf-gold, #d8a441);
+  border-left: 2px solid var(--sf-gold, #d8a441);
   border-radius: 2px;
-  background: linear-gradient(225deg, rgba(216, 164, 65, 0.14), rgba(12, 8, 9, 0.88));
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.65), 0 0 10px rgba(216, 164, 65, 0.18);
+  background: linear-gradient(135deg, rgba(216, 164, 65, 0.16), rgba(12, 8, 9, 0.9));
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.65);
   backdrop-filter: blur(4px);
   color: var(--sf-bone, #f6edd9);
   font-family: "Share Tech Mono", ui-monospace, monospace;
-  font-size: 11px;
+  font-size: 10px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
@@ -485,50 +484,25 @@ body.rb-escape-menu-open .sf-hud__operative-dock {
 }
 .sf-hud__operative-item--teleport {
   border-color: rgba(140, 199, 213, 0.4);
-  border-right-color: #8cc7d5;
-  background: linear-gradient(225deg, rgba(140, 199, 213, 0.16), rgba(7, 12, 16, 0.88));
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.65), 0 0 10px rgba(140, 199, 213, 0.18);
+  border-left-color: #8cc7d5;
+  background: linear-gradient(135deg, rgba(140, 199, 213, 0.18), rgba(7, 12, 16, 0.9));
 }
 .sf-hud__operative-item--cast {
   border-color: rgba(225, 174, 80, 0.4);
-  border-right-color: #f0c360;
-  background: linear-gradient(225deg, rgba(225, 174, 80, 0.16), rgba(16, 10, 8, 0.88));
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.65), 0 0 10px rgba(225, 174, 80, 0.18);
-}
-.sf-hud__operative-label {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-}
-.sf-hud__operative-label kbd {
-  display: inline-block;
-  padding: 1px 5px;
-  border: 1px solid rgba(216, 164, 65, 0.45);
-  background: rgba(0, 0, 0, 0.55);
-  color: #ffd27a;
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  box-shadow: inset 0 -1px 0 rgba(216, 164, 65, 0.3);
-}
-.sf-hud__operative-item--teleport .sf-hud__operative-label kbd {
-  border-color: rgba(140, 199, 213, 0.45);
-  color: #aae4f2;
-  box-shadow: inset 0 -1px 0 rgba(140, 199, 213, 0.3);
+  border-left-color: #f0c360;
+  background: linear-gradient(135deg, rgba(225, 174, 80, 0.18), rgba(16, 10, 8, 0.9));
 }
 .sf-hud__operative-label b {
-  font-weight: 500;
-  color: rgba(246, 237, 217, 0.88);
+  font-weight: 600;
+  color: rgba(246, 237, 217, 0.92);
   font-size: 10px;
+  letter-spacing: 0.06em;
 }
 .sf-hud__operative-value {
   font-weight: 700;
-  font-size: 11px;
-  color: #9ff1d8;
-  letter-spacing: 0.06em;
-}
-.sf-hud__operative-item[data-state="cooldown"] .sf-hud__operative-value {
+  font-size: 10px;
   color: #e8a06a;
+  letter-spacing: 0.06em;
 }
 .sf-hud__operative-item[data-state="active"] .sf-hud__operative-value {
   color: #ffae48;

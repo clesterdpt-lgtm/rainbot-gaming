@@ -77,8 +77,13 @@ const WHITE_VIGIL = {
     chest: [
       {
         name: "white-vigil-chest-gem",
-        position: [-0.176, -4.150, 10.284],
+        /* The source rig's Spine origin is left of the visible socket;
+           keep the lamp on the authored jewel, not the bone centre. */
+        position: [3.550, -4.150, 10.284],
         normal: [0.009, 0.232, 0.973],
+        /* Counter the Spine bone's slight screen-space roll so the
+           jewel's pointed axis stays upright in the frontal socket. */
+        up: [-0.055, 1.000, 0.000],
         widthM: 0.046,
         heightM: 0.114,
         /* A jewel is a lit volume, not a face lamp. Keep nearly all

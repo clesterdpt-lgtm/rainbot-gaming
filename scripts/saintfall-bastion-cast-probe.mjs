@@ -151,9 +151,17 @@ async function run(browser, label, rel) {
        a populated world and `clearEnemies()` does not stop its
        garrisons coming back, so `live[0]` picked a body 684 metres
        away and the probe measured that instead. */
+    /* 4m of lateral offset at 24m out, not 7. The cast's aim now
+       converges on whatever is actually being looked at rather than at
+       a fixed eighteen metres, so the throw leaves the hand on a
+       noticeably different line - and the old placement measured 30.7
+       degrees off it, outside the 21.8-degree assist cone by design.
+       The assist is meant to forgive a near miss on a small fast
+       target, not to be a magnet, so the subject is placed inside the
+       cone it advertises. */
     const placeAt = (ps, lift) => {
-      const x = ps.x + Math.sin(ps.camYaw) * 24 + Math.cos(ps.camYaw) * 7;
-      const z = ps.z + Math.cos(ps.camYaw) * 24 - Math.sin(ps.camYaw) * 7;
+      const x = ps.x + Math.sin(ps.camYaw) * 24 + Math.cos(ps.camYaw) * 4;
+      const z = ps.z + Math.cos(ps.camYaw) * 24 - Math.sin(ps.camYaw) * 4;
       T.spawnEnemy("thresher", x, z, {});
       let inst = null;
       let best = 6;

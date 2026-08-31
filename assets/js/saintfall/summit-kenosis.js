@@ -118,11 +118,15 @@ const KITS = {
     },
     hammer: {
       damage: 260, returnDamage: 130, speed: 34, returnSpeed: 40,
-      /* The cast is Torren's ONLY ranged tool, so it carries the same
-         obligation: a melee operative who cannot reach a perched boss
-         cannot fight it. One heavy hit on an eight-second cooldown is
-         a fair way to wear a grip pool down from below. */
-      range: 120, cooldown: 8.0, knockdownStun: 3.0, knockback: 14,
+      /* 46, and a longer throw was TRIED AND REVERTED. Reaching a
+         Stylite perched 110m up wants ~120, and at that range the
+         hammer is still outbound when the cast's whole loop expects it
+         home: the kit probe caught `catches: 0` and a recast refused
+         with "hammer-away". A thrown weapon that returns is a cadence,
+         not just a projectile, and tripling its flight breaks the
+         cadence. Torren's reach against a distant perch needs a
+         different answer than a bigger number here. */
+      range: 46, cooldown: 8.0, knockdownStun: 3.0, knockback: 14,
       /* THE FLYER ASSIST. The cast is the Bastion's whole answer to
          anything airborne - he cannot fly, his hammer is the only
          thing he owns that leaves the ground, and a small fast target

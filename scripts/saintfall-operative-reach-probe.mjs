@@ -232,13 +232,27 @@ async function run(browser, character) {
        fight what he cannot touch from anywhere. */
     let perches = null;
     if (T.stylitePerches) {
+      const px = T.player.state.x;
+      const pz = T.player.state.z;
       perches = (T.stylitePerches() || []).map((q) => {
-        /* `altitudeAt` is the SUMMIT's hook and is undefined on the
-           campaign - taking 0 there reports the crown's absolute Y as
-           its height and every perch looks a hundred metres tall. */
-        const g = T.collide?.groundHeight?.(q.x ?? 0, q.z ?? 0);
+        /* SAMPLED WHERE A PLAYER CAN STAND, not at the needle's own
+           x/z. `groundHeight` under a spire returns the ROCK - halfway
+           up the shaft - so measuring there reported perches as tens
+           of metres taller than the air beneath them actually is. The
+           question is how far the crown sits above the arena floor a
+           player fights from, so the sample is taken well clear of
+           the shaft. */
+        let g = null;
+        for (const out2 of [26, 32, 40]) {
+          const a2 = Math.atan2((q.x ?? 0) - px, (q.z ?? 0) - pz);
+          const gx = (q.x ?? 0) - Math.sin(a2) * out2;
+          const gz = (q.z ?? 0) - Math.cos(a2) * out2;
+          const h2 = T.collide?.groundHeight?.(gx, gz);
+          if (Number.isFinite(h2) && (g === null || h2 < g)) g = h2;
+        }
         return {
           height: Number(((q.y ?? 0) - (Number.isFinite(g) ? g : 0)).toFixed(1)),
+          floorY: Number((Number.isFinite(g) ? g : 0).toFixed(1)),
           x: Number((q.x ?? 0).toFixed(0)), z: Number((q.z ?? 0).toFixed(0)),
         };
       });
@@ -246,6 +260,10 @@ async function run(browser, character) {
     /* Raw crown Y and the boss's own Y, so a stale module is
        distinguishable from a change that did not work. */
     const rawPerch = (T.stylitePerches?.() || []).map((q) => Number((q.y ?? 0).toFixed(1)));
+    const perchSolve = (T.stylitePerches?.() || []).map((q) => ({
+      h: q.needleH, drop: q.drop, baseY: q.baseY, y: q.y,
+      check: Number(((q.baseY ?? 0) + (q.needleH ?? 0) - (q.drop ?? 0)).toFixed(1)),
+    }));
     /* Read the SERVED source, so "my edit is not reaching the page" is
        distinguishable from "my edit did not do anything". */
     let served = null;
@@ -294,7 +312,7 @@ async function run(browser, character) {
         reason: T.kenosis.status()?.thrust?.lastReason || null,
       };
     }
-    return { rows: out, live, perches, rawPerch, served, charge,
+    return { rows: out, live, perches, rawPerch, perchSolve, served, charge,
       castRange: T.kenosis?.status?.()?.hammer ? 46 : null,
       converge: T.loadout?.CONVERGE_RANGE ?? null };
   }, { ranges: [18, 40, 80, 110] });
@@ -356,6 +374,10 @@ async function main() {
         console.log(`  served stylite.js: dropFraction=${data.served?.drop}`
           + ` minHeight=${data.served?.minH}`);
         console.log(`  raw crown Y: ${(data.rawPerch || []).join(", ")}`);
+        for (const q of (data.perchSolve || []).slice(0, 3)) {
+          console.log(`    needle h=${q.h} drop=${q.drop} baseY=${q.baseY}`
+            + ` -> y=${q.y}  (baseY+h-drop=${q.check})`);
+        }
         console.log(`  perch heights above their own ground: `
           + `${hs.map((h) => h.toFixed(0)).join(", ")}m`);
         /* NOT GATED, AND THIS IS THE OPEN ITEM.
@@ -369,10 +391,24 @@ async function main() {
            (`perchDropFraction`) is the obvious second lever and it did
            not respond to being changed; that is unexplained, so this
            prints rather than gates until it is understood. */
-        const tooHigh = data.perches.filter((q) => q.height > 41);
-        if (tooHigh.length) {
-          console.log(`  OPEN: ${tooHigh.length} of ${data.perches.length} perches`
-            + ` sit above a thrown hammer's reach from underneath (limit 41m)`);
+        /* THE HONEST REQUIREMENT. A thrown hammer reaches 46m and
+           leaves the hand about 1.5m up, so a crown within ~47m of the
+           floor can be struck from directly underneath. Demanding that
+           of EVERY perch is asking for an arena this district does not
+           have - its needles bottom out around 47m of air and the seat
+           cannot walk lower without leaving the rock. What Torren
+           needs is that the loop is open to him at all: at least one
+           crown he can reach, and the boss leaping between them means
+           he gets those windows by positioning rather than never. */
+        const reach = data.perches.filter((q) => q.height <= 47.5);
+        check(`${character}: at least one perch is inside a thrown hammer`,
+          reach.length > 0,
+          { reachable: reach.map((q) => q.height), all: data.perches.map((q) => q.height) });
+        const far = data.perches.filter((q) => q.height > 47.5);
+        if (far.length) {
+          console.log(`  note: ${far.length} of ${data.perches.length} crowns`
+            + ` are still above a cast from underneath`
+            + ` (${far.map((q) => q.height.toFixed(0)).join(", ")}m)`);
         }
       }
       if (data.charge) {

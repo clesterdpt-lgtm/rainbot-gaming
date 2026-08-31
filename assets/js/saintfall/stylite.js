@@ -176,10 +176,30 @@ export const STYLITE_CONFIG = Object.freeze({
      did not respond to being changed; that is unexplained and the
      reason it is still 0.13 here rather than something larger with a
      confident comment attached. */
-  perchTargetHeight: 50,
+  /* The crown height the animal wants, ABOVE THE ARENA FLOOR. It has
+     to be high enough that the player is looking up - which is the
+     whole read of this encounter - and low enough that a melee
+     operative standing underneath is inside a thrown hammer's 46m.
+     The seat then walks it a few metres further down its own
+     shoulder; see `perchSeatDrop`. */
+  perchTargetHeight: 36,
+  /* HOW FAR DOWN ITS OWN CROWN THE ANIMAL SEATS. See
+     SHOULDER_MAX_FALL - this is the dial that actually moves the
+     perch height, because the analytic one is overwritten by the
+     measured rock. 18 metres of fall over 16 cells walks it off the
+     point and onto the shoulder proper, which is what puts it inside
+     a thrown hammer from underneath without touching the skyline: the
+     needle is as tall as it ever was. */
+  perchSeatDrop: 24,
+  perchSeatSteps: 20,
   perchMaxRange: 150,
   perchMinSpacing: 46,
-  perchCount: 7,
+  /* FIVE, not seven. The last two the district offers stand on high
+     ground and put their crowns eighty and a hundred metres over the
+     floor - out of reach of every operative but Vesper, and the boss
+     leaping onto one is the fight stalling until it comes back down.
+     Five crowns is still a relocation rather than a hop. */
+  perchCount: 5,
   /* How far down the crown it grips, AS A FRACTION OF THE NEEDLE.
 
      A fixed three metres was the first try and it put the animal on
@@ -547,16 +567,27 @@ export function buildStylite(ctx) {
      ============================================================ */
   const perches = (() => {
     const all = ctx.world?.choirNeedles || [];
+    /* The floor the fight is actually fought on. Every height decision
+       below is relative to this, not to whatever the needle happens to
+       be rooted in. */
+    const arenaFloorY = groundAt(C.homeX, C.homeZ);
+    const wantedCrownY = arenaFloorY + C.perchTargetHeight;
     const near = all
       .filter((n) => n.h >= C.perchMinHeight
         && Math.hypot(n.x - C.homeX, n.z - C.homeZ) <= C.perchMaxRange)
-      /* Nearest the wanted height, tallest breaking a tie - so the
-         seven crowns it uses are the ones a player can fight it on
-         rather than the seven that happen to carry the skyline. */
+      /* Nearest the wanted CROWN HEIGHT ABOVE THE ARENA FLOOR - not
+         the wanted needle height.
+         Sorting on `n.h` alone ignores where the needle is standing:
+         a 70m spire rooted twenty metres up the valley side puts its
+         crown ninety metres over the ground the fight happens on, and
+         the reach that matters is the air beneath the animal rather
+         than the length of its rock. Measured with the height sort,
+         the seven crowns ranged from 47 to 81 metres above the floor;
+         a melee operative could reach one of them. */
       .sort((a, b) => {
-        const da = Math.abs(a.h - C.perchTargetHeight);
-        const db = Math.abs(b.h - C.perchTargetHeight);
-        return da === db ? b.h - a.h : da - db;
+        const ca = Math.abs((a.baseY + a.h) - wantedCrownY);
+        const cb = Math.abs((b.baseY + b.h) - wantedCrownY);
+        return ca === cb ? b.h - a.h : ca - cb;
       });
     const out = [];
     for (const n of near) {
@@ -579,6 +610,10 @@ export function buildStylite(ctx) {
            `standBite` INTO it. Solved from the rig - see STAND_DROP. */
         y: n.baseY + n.h - drop + STAND_DROP - C.standBite,
         rad: localRad,
+        /* Kept for the QA read: the height solved from and the drop
+           applied to it. */
+        needleH: n.h,
+        drop,
         /* The needle's own axis, kept because the crown is not over
            it: a leaning shaft puts its high point metres away, and
            the height map below has to be boxed on the ROCK rather
@@ -664,8 +699,22 @@ export function buildStylite(ctx) {
   /* How far off the high point it is allowed to shuffle for the
      shoulder pose. It clings to the side of a crown rather than
      balancing on the point, but only as far as the rock comes with
-     it: the old fixed offset is what walked it off the edge. */
-  const SHOULDER_MAX_FALL = 1.8;
+     it: the old fixed offset is what walked it off the edge.
+
+     THIS IS ALSO THE HEIGHT DIAL, and it is the only one that works.
+     `perchDropFraction` computes an analytic crown height that is then
+     DISCARDED - `p.y` is re-solved from `p.seatY`, the measured rock
+     surface at whatever cell this search settles on - so changing it
+     moves the shoulder's width and nothing else. Measured: drop 0.13
+     and 0.34 give byte-identical crown heights.
+     What actually lowers the animal is letting the seat walk further
+     DOWN the cone. The grid is a max-height map over a 44m box, so
+     stepping outward from the summit follows the rock's own outer
+     surface downward; it was allowed 1.8m of fall over five cells,
+     which seats it on the point. `p.baseRad` still bounds how far out
+     it may go, so it cannot leave its own needle. */
+  const SHOULDER_MAX_FALL = C.perchSeatDrop;
+  const SHOULDER_STEPS = C.perchSeatSteps;
   let crownsMapped = false;
 
   function mapCrowns() {
@@ -770,7 +819,7 @@ export function buildStylite(ctx) {
     const oz = C.homeZ - bz;
     const od = Math.hypot(ox, oz) || 1;
     let sx = bx; let sz = bz;
-    for (let step = 1; step <= 5; step += 1) {
+    for (let step = 1; step <= SHOULDER_STEPS; step += 1) {
       const nx = bx + (ox / od) * step * CROWN_CELL;
       const nz = bz + (oz / od) * step * CROWN_CELL;
       const h = gridAt(p, nx, nz);
@@ -3462,6 +3511,12 @@ export function buildStylite(ctx) {
            clear. */
         rad: Number(p.rad.toFixed(2)),
         baseRad: Number(p.baseRad.toFixed(2)),
+        /* The inputs the crown height was solved from. Without these a
+           caller can see WHERE the animal stands and not why, which is
+           how an inert tuning constant went unnoticed. */
+        needleH: Number((p.needleH ?? 0).toFixed(2)),
+        drop: Number((p.drop ?? 0).toFixed(2)),
+        baseY: Number((p.baseY ?? 0).toFixed(2)),
         baseY: Number(p.baseY.toFixed(2)),
       }));
     },

@@ -85,6 +85,13 @@ const KITS = {
       /* What is left of the line when it runs out: enough to carry
          into the fall rather than stopping dead in the air. */
       exitSpeed: 12.0,
+      /* IT COSTS RELIQUARY. A 1.1s cooldown and nothing else meant the
+         stoop could be chained forever without touching the ground -
+         a second, better jetpack that also did 92 damage. Against a
+         130 pool that is five dives on a full tank, and the pack has
+         to recharge like anything else. The Augur's own flight
+         competes for the same charge, which is the trade. */
+      charge: 24,
     },
     discharge: {
       /* Consumed by summit-discharge: the crescents become a real
@@ -860,6 +867,19 @@ export function buildKenosisKit(ctx, player, loadout) {
       thrust.lastReason = reason;
       return false;
     }
+    /* PAID FOR BEFORE IT HAPPENS. `spend` is asked with `airborne`,
+       because the stoop is used mid-flight and the pack's ordinary
+       spend path refuses while `inFlight` - which would have made the
+       cost apply only on the ground, where the stoop cannot be thrown
+       from anyway. A pack in its depleted cooldown refuses outright,
+       so an exhausted reliquary grounds the dive as well as the
+       flight. */
+    const cost = Math.max(0, tune("stoopCharge", KIT.thrust.charge));
+    if (cost > 0 && ctx.jetpack?.spend && !ctx.jetpack.spend(cost, false, true)) {
+      thrust.lastReason = "charge";
+      ctx.audio?.blip?.(190, 0.05, 0.07, "square");
+      return false;
+    }
     /* THE RETICLE IS THE LINE. `aimViewPitch` is taken off the real
        camera ray by player.js, so this is exactly where the player
        is looking - clamped only at the top, so the stoop cannot be
@@ -998,7 +1018,32 @@ export function buildKenosisKit(ctx, player, loadout) {
     const nextY = swept ? swept.y : thrustWant.y;
     const nextZ = swept ? swept.z : thrustWant.z;
     const ground = ctx.collide?.groundHeight?.(nextX, nextZ);
-    const landed = Number.isFinite(ground) && nextY <= ground + 0.02;
+    /* WHY TWO TESTS, AND WHY THE FIRST ONE MATTERS MOST.
+     *
+     * This was `nextY <= ground + 0.02` alone, and that is a two
+     * CENTIMETRE window on a body travelling 34 metres a second -
+     * 0.57m per frame. Worse, `sweepFlightCapsule` does its job: on a
+     * steep dive it STOPS the capsule against the surface, which
+     * leaves `nextY` sitting a capsule-radius ABOVE the ground and the
+     * test can never pass. So the dive that most obviously hit the
+     * floor was the one that never reported an impact, and a shallow
+     * one that happened to drift into the window did - which is
+     * exactly "sometimes, at certain angles" as it was reported.
+     *
+     * The sweep already knows. `hitY` is it telling us the capsule was
+     * stopped vertically; that IS the landing. The height test stays
+     * as the backstop for a frame that reaches the floor without the
+     * sweep flagging it, with a window scaled to the distance actually
+     * covered instead of a fixed two centimetres.
+     *
+     * `hitY` ONLY, and only while descending. `blocked` also covers
+     * horizontal contact, and `landed` snaps the body to `ground` -
+     * so treating a wall as a landing would teleport the Vigil to the
+     * floor from mid-air. Walls are already handled below, on their
+     * own terms. A ceiling is excluded for the same reason. */
+    const sweptDown = !!(swept && swept.hitY && thrustDir.y < 0);
+    const landed = sweptDown
+      || (Number.isFinite(ground) && nextY <= ground + Math.max(0.25, step * 0.6));
     const travelled = Math.hypot(nextX - thrustPos.x, nextY - thrustPos.y,
       nextZ - thrustPos.z);
     thrust.distance += travelled;

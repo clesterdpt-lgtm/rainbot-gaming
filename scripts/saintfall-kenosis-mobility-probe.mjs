@@ -385,6 +385,87 @@ async function main() {
         overhead.peakTracers >= 5 && overhead.tracersBefore <= 1,
         { before: overhead.tracersBefore, peak: overhead.peakTracers });
 
+      /* ============================================================
+         DOES THE DIVE LAND?
+
+         Reported from play: the stoop sometimes fails to impact when
+         it reaches the ground, depending on the angle. It did. The
+         landing test was `nextY <= ground + 0.02` - a two CENTIMETRE
+         window on a body moving 0.57m per frame - and worse,
+         `sweepFlightCapsule` stops the capsule AGAINST the surface, so
+         the steeper the dive the further above `ground` it is parked
+         and the less chance that window has of ever being satisfied.
+         The dive that most obviously hit the floor was the one that
+         reported nothing.
+
+         Swept across the aim range, because "at certain angles" is
+         the whole claim. */
+      const dives = await page.evaluate(async ({ pitches }) => {
+        const T = window.__SF;
+        const P = T.player;
+        const out = [];
+        for (const pitch of pitches) {
+          T.summit.kitReset();
+          T.teleport(120, 930, Math.PI);
+          T.advanceTime(0.6, 1 / 60);
+          /* WITHIN THE DIVE'S OWN REACH. The stoop runs 0.62s at 34m/s
+             - about 21 metres of line - and a steep one drops roughly
+             19 of them. Starting 30m up meant no aim could reach the
+             floor before the line ran out, so every case landed at the
+             same 156 frames: that was the FALL afterwards, not the
+             dive, and it would have passed a naive "does it land"
+             check while proving nothing. */
+          P.state.grounded = false;
+          P.state.y += 11;
+          P.state.vy = 0;
+          T.advanceTime(1 / 60, 1 / 60);
+          /* Set IMMEDIATELY before the call. `player.js` recomputes
+             `aimViewPitch` from the camera every frame, so a write
+             followed by any `advanceTime` is overwritten before the
+             stoop reads it - and every aim then dives identically,
+             which is what the first cut of this measured. */
+          P.state.aimViewYaw = P.state.yaw;
+          P.state.aimViewPitch = pitch;
+          const started = T.summit.aerialThrust();
+          let landedAt = null;
+          for (let f = 0; f < 260 && landedAt === null; f += 1) {
+            T.advanceTime(1 / 60, 1 / 60);
+            if (P.state.grounded) landedAt = f;
+          }
+          out.push({
+            pitch, started,
+            landed: landedAt !== null,
+            frames: landedAt,
+            active: !!T.summit.kitState()?.thrust?.active,
+          });
+          T.advanceTime(1.4, 1 / 60);
+        }
+        return out;
+      }, { pitches: [-1.3, -0.9, -0.5, -0.2, 0.0, 0.4] });
+      console.log("stoop landings by aim:",
+        dives.map((d) => `${d.pitch}:${d.landed ? d.frames + "f" : "NEVER"}`).join("  "));
+      const stuck = dives.filter((d) => d.started && !d.landed);
+      check("stoop: every dive that starts eventually reaches the ground",
+        stuck.length === 0, stuck.map((d) => ({ pitch: d.pitch })));
+      /* The stoop's own line is 0.62s - 37 frames. A properly steep
+         dive has to arrive DURING it rather than coasting to the floor
+         afterwards, which is the difference between the impact firing
+         and the thrust quietly expiring in the air. */
+      const steep = dives.filter((d) => d.pitch <= -0.9 && d.started);
+      check("stoop: a steep dive lands during its own line, not after it",
+        steep.length > 0 && steep.every((d) => d.landed && d.frames <= 37),
+        steep.map((d) => ({ pitch: d.pitch, frames: d.frames })));
+      /* And the aim is what decides when: a set of landings that do
+         not order by pitch means the dive is not driving into the
+         ground, it is falling into it. That was the shape of the bug -
+         every aim landing at an identical frame count. */
+      const ordered = dives.filter((d) => d.started && d.landed);
+      const monotonic = ordered.every((d, i) =>
+        i === 0 || ordered[i - 1].frames <= d.frames);
+      check("stoop: a steeper aim reaches the ground sooner",
+        ordered.length >= 4 && monotonic,
+        ordered.map((d) => ({ pitch: d.pitch, frames: d.frames })));
+
       if (errors.length) console.log("vigil pageErrors:", errors.slice(0, 3));
       await context.close();
     }

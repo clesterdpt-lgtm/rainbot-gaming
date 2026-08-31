@@ -151,6 +151,32 @@ export const STYLITE_CONFIG = Object.freeze({
      not wander out of the arena, and at least this far apart so a leap
      is a real relocation rather than a hop. */
   perchMinHeight: 46,
+  /* THE HEIGHT IT ACTUALLY WANTS, and it is not "the tallest thing
+     available".
+
+     The crowns were picked tallest-first, which put the animal
+     between 100 and 135 metres up. Vesper never noticed - her lance
+     reaches 360 - but the two Kenosis operatives carry 42 and 46
+     metres between them, so neither could put a single point of
+     damage on a perched Stylite, and its GRIP only wears to damage
+     taken while perched. The fight's opening move was unavailable to
+     both of them: not hard, impossible.
+
+     So it grips the crown of a needle near this height instead of the
+     tallest one in the district. At ~52m the player still has to look
+     up - which is the whole read of the encounter - but a melee
+     operative who walks in under it is inside a thrown hammer's 46m.
+     Needles below `perchMinHeight` are still refused, so it never
+     ends up on a stump.
+
+     This alone took the nearest crown from 135m of altitude to 89 and
+     the boss from 111 metres away to 57 - a large improvement and NOT
+     yet enough for Torren's 46m cast. Gripping further down the same
+     needle (`perchDropFraction`) is the obvious second lever and it
+     did not respond to being changed; that is unexplained and the
+     reason it is still 0.13 here rather than something larger with a
+     confident comment attached. */
+  perchTargetHeight: 50,
   perchMaxRange: 150,
   perchMinSpacing: 46,
   perchCount: 7,
@@ -524,8 +550,14 @@ export function buildStylite(ctx) {
     const near = all
       .filter((n) => n.h >= C.perchMinHeight
         && Math.hypot(n.x - C.homeX, n.z - C.homeZ) <= C.perchMaxRange)
-      // Tallest first: the crowns that already carry the skyline.
-      .sort((a, b) => b.h - a.h);
+      /* Nearest the wanted height, tallest breaking a tie - so the
+         seven crowns it uses are the ones a player can fight it on
+         rather than the seven that happen to carry the skyline. */
+      .sort((a, b) => {
+        const da = Math.abs(a.h - C.perchTargetHeight);
+        const db = Math.abs(b.h - C.perchTargetHeight);
+        return da === db ? b.h - a.h : da - db;
+      });
     const out = [];
     for (const n of near) {
       if (out.length >= C.perchCount) break;

@@ -225,7 +225,78 @@ async function run(browser, character) {
         damage: Number((hp0 - (bossNow ? bossNow.health : hp0)).toFixed(1)),
       };
     }
-    return { rows: out, live, converge: T.loadout?.CONVERGE_RANGE ?? null };
+    /* THE PERCHES THEMSELVES, as geometry. This is the gate that does
+       not depend on aiming through a cinematic: how high above its own
+       ground does each crown sit, and is that inside a thrown hammer's
+       reach from directly underneath it? A melee operative cannot
+       fight what he cannot touch from anywhere. */
+    let perches = null;
+    if (T.stylitePerches) {
+      perches = (T.stylitePerches() || []).map((q) => {
+        /* `altitudeAt` is the SUMMIT's hook and is undefined on the
+           campaign - taking 0 there reports the crown's absolute Y as
+           its height and every perch looks a hundred metres tall. */
+        const g = T.collide?.groundHeight?.(q.x ?? 0, q.z ?? 0);
+        return {
+          height: Number(((q.y ?? 0) - (Number.isFinite(g) ? g : 0)).toFixed(1)),
+          x: Number((q.x ?? 0).toFixed(0)), z: Number((q.z ?? 0).toFixed(0)),
+        };
+      });
+    }
+    /* Raw crown Y and the boss's own Y, so a stale module is
+       distinguishable from a change that did not work. */
+    const rawPerch = (T.stylitePerches?.() || []).map((q) => Number((q.y ?? 0).toFixed(1)));
+    /* Read the SERVED source, so "my edit is not reaching the page" is
+       distinguishable from "my edit did not do anything". */
+    let served = null;
+    try {
+      const txt = await (await fetch("/assets/js/saintfall/stylite.js")).text();
+      served = {
+        drop: (txt.match(/perchDropFraction:\s*([0-9.]+)/) || [])[1] || null,
+        minH: (txt.match(/perchMinHeight:\s*([0-9.]+)/) || [])[1] || null,
+      };
+    } catch (_) { served = { error: "fetch failed" }; }
+    /* THE STOOP COSTS RELIQUARY NOW. It had a 1.1s cooldown and
+       nothing else, so it could be chained forever without touching
+       the ground - a second jetpack that also did 92 damage. Measured
+       on the CAMPAIGN, where the pack is limited; the summit runs
+       unlimited fuel by default and the cost is free there by design. */
+    let charge = null;
+    if (T.kenosis?.tryAerialThrust) {
+      T.teleport(120, 930, Math.PI);
+      T.advanceTime(0.8, 1 / 60);
+      const jp = () => T.jetpack.status(T.player.state);
+      const full = jp().maxFuel;
+      const airborne = () => {
+        T.player.state.grounded = false;
+        T.player.state.y += 14;
+        T.player.state.vy = 0;
+      };
+      T.summit?.kitReset?.() ?? T.kenosis.reset?.();
+      airborne();
+      const before = jp().fuel;
+      const cast1 = T.kenosis.tryAerialThrust();
+      const after = jp().fuel;
+      T.advanceTime(2.2, 1 / 60);
+      /* And with the reliquary empty it must refuse rather than
+         happening for free. */
+      T.jetpack.drain(full);
+      T.player.state.y += 14;
+      T.player.state.grounded = false;
+      T.advanceTime(0.1, 1 / 60);
+      const emptyFuel = jp().fuel;
+      const cast2 = T.kenosis.tryAerialThrust();
+      charge = {
+        maxFuel: full,
+        spent: Number((before - after).toFixed(1)),
+        cast1, cast2,
+        emptyFuel: Number(emptyFuel.toFixed(1)),
+        reason: T.kenosis.status()?.thrust?.lastReason || null,
+      };
+    }
+    return { rows: out, live, perches, rawPerch, served, charge,
+      castRange: T.kenosis?.status?.()?.hammer ? 46 : null,
+      converge: T.loadout?.CONVERGE_RANGE ?? null };
   }, { ranges: [18, 40, 80, 110] });
 
   await context.close();
@@ -279,6 +350,38 @@ async function main() {
         console.log(`  live Stylite at ${data.live.distance}m:`
           + ` ${data.live.fired} shots -> ${data.live.damage} damage,`
           + ` grip -${data.live.gripWorn}  (not gated - see the note)`);
+      }
+      if (data.perches && data.perches.length) {
+        const hs = data.perches.map((q) => q.height);
+        console.log(`  served stylite.js: dropFraction=${data.served?.drop}`
+          + ` minHeight=${data.served?.minH}`);
+        console.log(`  raw crown Y: ${(data.rawPerch || []).join(", ")}`);
+        console.log(`  perch heights above their own ground: `
+          + `${hs.map((h) => h.toFixed(0)).join(", ")}m`);
+        /* NOT GATED, AND THIS IS THE OPEN ITEM.
+           46 is the cast's range, so a perch has to sit inside about
+           41 metres of its own ground for Torren to reach it by
+           walking underneath. Choosing crowns near `perchTargetHeight`
+           instead of the tallest in the district took the nearest one
+           from 135m of altitude to 89, and the boss from 111 metres
+           away to 57 - a large improvement and still not enough.
+           Gripping further down the same needle
+           (`perchDropFraction`) is the obvious second lever and it did
+           not respond to being changed; that is unexplained, so this
+           prints rather than gates until it is understood. */
+        const tooHigh = data.perches.filter((q) => q.height > 41);
+        if (tooHigh.length) {
+          console.log(`  OPEN: ${tooHigh.length} of ${data.perches.length} perches`
+            + ` sit above a thrown hammer's reach from underneath (limit 41m)`);
+        }
+      }
+      if (data.charge) {
+        console.log(`  stoop charge: spent ${data.charge.spent}`
+          + ` of ${data.charge.maxFuel}; on empty -> ${data.charge.reason}`);
+        check(`${character}: the stoop spends reliquary charge`,
+          data.charge.cast1 === true && data.charge.spent > 0, data.charge);
+        check(`${character}: and is refused on an empty reliquary`,
+          data.charge.cast2 === false && data.charge.reason === "charge", data.charge);
       }
       check(`${character}: zero page errors`, errors.length === 0, errors.slice(0, 2));
     }

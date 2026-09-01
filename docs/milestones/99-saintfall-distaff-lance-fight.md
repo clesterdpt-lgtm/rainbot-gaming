@@ -195,6 +195,21 @@ Gates: `saintfall-distaff-fight.mjs` **59/59** — the new check renders the
 body Front / Double / Back and requires the near wall to be what is
 drawn (0.87 % front-vs-double, 19.45 % double-vs-back).
 
+## Restore follow-up — the correction belongs to the live mesh
+
+A field-state load reconstructs `enemies.live` and then rebinds the Distaff
+controller to the replacement instance. The original dressing guard remembered
+only that the module had dressed *an* instance, so the rebound SkinnedMesh kept
+the source inward winding at -289.07 m³ while `status().windingCorrected`
+continued reporting the old instance's result. The dressing now keys ownership
+to the actual live skin, disposes the detached private geometry/materials, and
+rebuilds the replacement at +289.07 m³. The three permanent decorative
+`sf-distaff-lair-*` web discs were also removed: no silk appears before the
+encounter; fight-thrown patches still use the existing temporary hazard pool.
+The expanded harness is **64/64**, including a real roster-rebuilding save/load,
+zero dormant lair webs, the GPU side-signature, every web combat contract, and
+no browser or asset errors. Save integrity remains **62/62**.
+
 ## Traps this pass hit
 
 - **`_teleportRaw` steps a whole frame.** An orbit test that teleported the

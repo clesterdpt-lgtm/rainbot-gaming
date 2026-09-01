@@ -17,6 +17,49 @@ boots clean.
 
 ## Latest focused fix
 
+**SAINTFALL: the Saints stop crossing their legs while boosting backwards**:
+The three braced leg solves - the ground boost, the steep downhill skid, and
+the Executioner's Thrust - built their whole stance in the TRAVEL frame, so
+firing while gliding backwards (which pins the pelvis to the reticle and the
+travel to the stick) put `leg.side * width` on the wrong side of the body. The
+stance width, the knee poles and the boot headings are now body-frame while
+only the lunge stays on the travel line, with a hard midline clamp behind
+them. Measured at 20m/s on the flat, backward glide: the ankles were crossed
+`0.34m` the wrong way, both sabatons pointed dead astern under a
+forward-facing trooper, and the knees broke `0.31m` BACKWARDS; they now stand
+`0.30m` apart on their own sides with boots and knees forward. A forward boost
+is unchanged to three decimals, which is the control. Every Saintfall page now
+loads the same `boot.js` build pin, so all three levels pick the fix up. Gates:
+new `saintfall-brace-stance-probe` 14/14 measured cases across Saint Aurel,
+Saint Veyra and Saint Torren (7 skipped where the verb refuses to ignite mid
+swing), leg rig 12/12 on both bodies, walk shape unchanged.
+
+**SAINTFALL: restored Distaff shell and clean dormant Glass Scar**: The
+Distaff's winding correction now follows the live SkinnedMesh rather than a
+module-wide dressed flag. Field-state loads reconstruct the enemy roster, so
+the rebound boss now receives a fresh private outward-wound geometry copy
+instead of reverting to the source GLB at signed volume -289.07 while stale
+diagnostics claimed it was corrected. The three permanent decorative lair-web
+decals were removed; the dormant crater is clear, while web bolts and temporary
+combat patches remain unchanged after the encounter begins. Build pin
+`20260831-winnower-distaff-fix-1`. Gates: Distaff fight and lifecycle 64/64,
+including a real save/load at +289.07 signed volume and zero dormant lair webs;
+save integrity 62/62; Distaff intro green from all four approaches; no Distaff
+page, console, or same-origin asset errors.
+
+**SAINTFALL: Winnower shell and new-Saint anti-air audit**: The live Winnower
+now corrects its inward-wound GLB on a private geometry copy before the shell
+field bake, so FrontSide rendering shows the outward carapace rather than the
+far interior wall (`status().windingCorrected`). Saint Veyra's real crescent
+projectiles now preserve analytic heat-sac hits, spend the shared lift pool,
+and identify those hits as sacs through Martyr armour. Four authored sac hits
+take lift 4 -> 0 and begin the landing. Saint Torren's real Hammer Cast was
+audited from an unobstructed firing lane: one cast takes lift 4 -> 2.5 and does
+not skip the earned multi-hit downing, so its authored values remain unchanged.
+Build pin `20260831-winnower-operative-fix-1`. Gates: focused new-Saint probe
+6/6, Winnower fight 50/50, grounding 7/7, operative carryover 20/20, save
+integrity 62/62, authored pass corridors all green, and no page/console errors.
+
 **SAINTFALL: Doctrine inspector width lock**: The preview column was
 shrink-wrapping to each rite's copy (long titles, refund buttons). It is
 now a fixed 3/5 of the workspace, so selecting any talent or the Vow
@@ -618,6 +661,7 @@ The current face-retopology experiment is paused and must not be published or tr
 
 ## Verification
 
+- 2026-08-31 SAINTFALL braced stance (boost / skid / thrust): the reported "legs cross while boosting backwards, usually when firing forward" was reproduced red-first by the new `scripts/saintfall-brace-stance-probe.mjs`, which drives each Saint on flat ground and on a 1.39-grade dune face and measures the stance in the BODY frame rather than judging it by eye: ankle separation across the midline, each boot's own side, the boot heading read back off the sabaton's own basis, the knee's break direction, and the one-frame ankle move. Before: Saint Aurel's backward glide crossed by `-0.338m` with `-1.00` toe dot and `-0.310m` knee break, the diagonal retreat by `-0.667m`, the downhill skid by `-0.298m`; Saint Veyra `-0.361m` and Saint Torren `-0.575m` in the same drive - 10 failing cases. After: 14/14 measured cases pass on all three Saints (`+0.30m` to `+0.56m` apart, boots and knees forward, worst one-frame move `0.20m` and that one is the body's own turn), with the forward boost identical to three decimals before and after as the control. `saintfall-leg-rig-probe` 12/12 on both bodies and `saintfall-walk-shape-probe` unchanged. Captures: `output/saintfall/brace-stance-shots/{before,after}-vesper-reliquary-boost-back-f22.png`.
 - 2026-08-13 SAINTFALL boss entry gates: red-first Distaff and Winnower regressions reproduced both dormant bosses as visible in the world and minimap, targetable, and accepting 100 damage before arena entry; their reveal cameras released after only `0.37s` / `0.42s`. The shared encounter gate now keeps dormant district bosses spawned but out of rendering, the tactical picture, and every authoritative damage path, reveals them protected, holds both authored cameras for `4.8s`, and unlocks damage only on combat handoff. Final sequential Chromium passes Distaff 38/38 at `6.42ms/frame` and Winnower 38/38 at `6.57ms/frame`, with zero page, console, or same-origin asset errors. Shared `saintfall-gameplay` passes 50/50, `saintfall-ui-regression` passes 79/79, and the complete Coulter and Matriarch encounter harnesses pass unchanged. Inspected captures are `output/saintfall/boss-entry-final2-distaff/distaff-reveal.png` and `output/saintfall/boss-entry-final2-winnower/winnower-reveal.png`.
 - 2026-07-29 furniture sight occlusion: the red-first focused browser test stopped on the missing real-furniture LOS contract after confirming the visible furniture builders registered physics only. Exact opaque table, seat, sofa, bed, bookcase, cabinet, refrigerator, piano, easel, wine-rack, boiler, and range surfaces now join the existing wall/door/hedge blocker set and follow their live scene transforms; both the camera `lineOfSight()` path and Mr. Feast's witnessed-sight path stop at them. A separate ray above the largest dining tabletop stays clear, proving the broad movement collider did not become phantom cover. Focused furniture occlusion, camera security, full desktop/mobile Contestant 13, runtime/test syntax, and `git diff --check` pass with a clean focused console; inspected proof is `output/playwright/mr-feast-furniture-occlusion/reading-room-furniture-cover.png`. The adjacent caught-pursuit suite reaches its correct `SERVED` recovery state, then its old one-click load assertion stops on the concurrently added load chooser; renovation retains only its known unrelated `28 stairwell continuity` baseline.
 - 2026-07-29 Captured at Dinner outdoor-wall fix: the red-first banquet regression reproduced a far-front-drive catch with `interiorDetailsHidden: true` and only the front façade visible behind the indoor Dining Room camera. The banquet reveal now restores the complete indoor shell before taking its tabletop visibility snapshots, so later game-over refreshes cannot reapply the frozen outdoor player's culling mask or re-show hidden candelabra. Focused desktop/phone banquet loss, caught pursuit, and full desktop/mobile Contestant 13 pass with clean browser consoles; inspected proof is `output/playwright/mr-feast-banquet-loss/banquet-table-desktop.png`. Renovation retains only its unrelated `28 stairwell continuity` baseline.

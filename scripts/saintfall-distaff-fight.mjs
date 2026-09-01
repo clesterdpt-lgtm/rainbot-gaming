@@ -152,10 +152,14 @@ try {
     const healthBefore = inst.health;
     const dealt = T.combat.damageEnemy(inst, 100, { source: "qa-pre-fight" });
     const minimapContacts = T.minimapState()?.contacts || [];
+    const lairSilkVisible = (T.distaff.group?.children || [])
+      .filter((child) => child.name?.startsWith("sf-distaff-lair-") && child.visible)
+      .length;
     return {
       phase: T.distaffState().phase,
       hidden: !inst.root.visible,
       minimapHidden: !minimapContacts.some((contact) => contact.species === "distaff"),
+      lairSilkVisible,
       targetable: T.combat.targetable(inst),
       dealt,
       healthBefore,
@@ -166,9 +170,69 @@ try {
     `phase=${farCheck.phase}`);
   check("the dormant boss cannot be seen before the Glass Scar arena",
     farCheck.hidden && farCheck.minimapHidden, JSON.stringify(farCheck));
+  check("the dormant Glass Scar has no Distaff web on the ground",
+    farCheck.lairSilkVisible === 0, JSON.stringify(farCheck));
   check("the dormant boss cannot be damaged before the Glass Scar arena",
     !farCheck.targetable && farCheck.dealt === 0 && farCheck.healthAfter === farCheck.healthBefore,
     JSON.stringify(farCheck));
+
+  /* A field load reconstructs the enemy roster, so the encounter controller
+     must dress the replacement instance rather than treating its old private
+     geometry as proof the new SkinnedMesh was already corrected. */
+  const restorePage = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+  restorePage.on("pageerror", (error) => pageErrors.push(error.message));
+  restorePage.on("console", (message) => {
+    if (message.type() === "error") consoleErrors.push(message.text());
+  });
+  await restorePage.goto(`${base}/games/saintfall.html?qa=1&quality=high`,
+    { waitUntil: "domcontentloaded", timeout: 60000 });
+  await restorePage.waitForFunction(() => window.__SF?.isReady?.(), null,
+    { timeout: 300000 });
+  const restoredMesh = await restorePage.evaluate(() => {
+    const T = window.__SF;
+    T.maximize();
+    T.invulnerable(true);
+    const dormant = T.distaffState();
+    T._teleportRaw(dormant.x - 70, dormant.z, 0);
+    for (let i = 0; i < 30; i += 1) T.renderOnce(1 / 60);
+    const before = T.enemies.live.find((enemy) => enemy.key === "distaff");
+    const snapshot = T.saves.capture();
+    const applied = T.saves.apply(structuredClone(snapshot));
+    const after = T.enemies.live.find((enemy) => enemy.key === "distaff");
+    const geometry = after?.skin?.geometry;
+    const pos = geometry?.attributes?.position;
+    const index = geometry?.index;
+    let volume6 = 0;
+    if (pos) {
+      const count = index ? index.count : pos.count;
+      for (let i = 0; i < count; i += 3) {
+        const ia = index ? index.getX(i) : i;
+        const ib = index ? index.getX(i + 1) : i + 1;
+        const ic = index ? index.getX(i + 2) : i + 2;
+        const ax = pos.getX(ia), ay = pos.getY(ia), az = pos.getZ(ia);
+        const bx = pos.getX(ib), by = pos.getY(ib), bz = pos.getZ(ib);
+        const cx = pos.getX(ic), cy = pos.getY(ic), cz = pos.getZ(ic);
+        volume6 += ax * (by * cz - bz * cy)
+          + ay * (bz * cx - bx * cz)
+          + az * (bx * cy - by * cx);
+      }
+    }
+    T.teleportToDistaff(30);
+    T.advanceToDistaffPhase("alert", 5);
+    T.renderOnce(1 / 60);
+    return {
+      applied,
+      rebound: !!before && !!after && before !== after,
+      signedVolume: Number((volume6 / 6).toFixed(2)),
+      windingCorrected: !!T.distaffState()?.windingCorrected,
+    };
+  });
+  await restorePage.screenshot({ path: path.join(outDir, "distaff-restored-reveal.png") });
+  await restorePage.close();
+  check("save restore keeps the replacement Distaff shell outward-wound",
+    restoredMesh.applied && restoredMesh.rebound
+      && restoredMesh.signedVolume > 0 && restoredMesh.windingCorrected,
+    JSON.stringify(restoredMesh));
 
   const aggroStart = await page.evaluate(() => {
     const T = window.__SF;

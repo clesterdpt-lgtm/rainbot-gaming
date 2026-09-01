@@ -5979,6 +5979,110 @@ export async function createPlayer(ctx, canvas) {
     }
   }
 
+  /* ---------------- THE BRACED STANCE FRAME ----------------
+   *
+   * A boost, a downhill skid and a pierce all abandon the walk cycle
+   * and rebuild both foot targets from scratch every frame. All
+   * three used to build them entirely in the TRAVEL frame: the
+   * lunge, the stance width, the knee pole, the boot's heading and
+   * the slope sample were all measured from the direction the body
+   * was moving.
+   *
+   * That is correct only while the body faces the way it is going,
+   * and the verb this game is built around breaks exactly that.
+   * Firing hands the pelvis to the reticle while the stick keeps the
+   * travel, so a backward glide puts the travel frame 180 degrees
+   * out - and `leg.side * width` then placed the LEFT boot on the
+   * trooper's RIGHT. Measured on the flat at 20m/s: the ankles
+   * crossed by 0.34m, both sabatons pointed dead astern under a
+   * forward-facing body, and the knees broke 0.31m BACKWARDS,
+   * because the pole was aimed behind them too.
+   *
+   * So the stance is body-frame and only the LUNGE is travel-frame.
+   * The travel survives as its two components in the body's own
+   * axes, which is what a person sliding sideways does with their
+   * feet, and every case where the two frames agree - which is every
+   * boost that is not fired out of - is arithmetically unchanged.
+   */
+
+  /** How much of a sideways lunge is taken as a sideways FOOT
+   *  offset. All of it does the splits at 90 degrees off; none of it
+   *  leaves a lateral skate standing square to its own travel. */
+  const BRACE_LATERAL_SHARE = 0.55;
+  /** How far the boots turn INTO a sideways slide, radians at 90
+   *  degrees off. Carried on the sine, so it is zero both dead ahead
+   *  and dead astern: a straight backward glide keeps the sabatons
+   *  square under the hips, and nothing flips as the travel line
+   *  crosses the tail. */
+  const BRACE_TOE_TURN = 0.38;
+  const braceFrame = {
+    sin: 0, cos: 1, fore: 1, right: 0, footYaw: 0, footSin: 0, footCos: 1,
+  };
+
+  /** Resolve a travel heading into the body's own frame. `fore` and
+   *  `right` are that heading's components along the trooper's own
+   *  forward and right; `footYaw` is where the boots point. */
+  function braceFrameFrom(travelYaw) {
+    const bodyYaw = state.yaw + actionPose.pelvisYaw;
+    const delta = angleDelta(bodyYaw, travelYaw);
+    braceFrame.sin = Math.sin(bodyYaw);
+    braceFrame.cos = Math.cos(bodyYaw);
+    braceFrame.fore = Math.cos(delta);
+    braceFrame.right = Math.sin(delta);
+    braceFrame.footYaw = bodyYaw + braceFrame.right * BRACE_TOE_TURN;
+    braceFrame.footSin = Math.sin(braceFrame.footYaw);
+    braceFrame.footCos = Math.cos(braceFrame.footYaw);
+    return braceFrame;
+  }
+
+  /**
+   * One braced foot target: `fore` metres along the travel line,
+   * `width` metres out to the leg's own side of the BODY.
+   */
+  function braceFootTarget(leg, fore, width, out) {
+    const f = braceFrame;
+    /* The sideways share of the lunge SHIFTS the whole stance rather
+       than widening it, so both boots keep their order however far
+       off the travel line is. */
+    let right = leg.side * width + f.right * fore * BRACE_LATERAL_SHARE;
+    /* AND THE MIDLINE IS A WALL. Continuous, because `max` is: it
+       engages only as a target reaches the centreline and never
+       moves one that was already outboard, so nothing pops as the
+       travel sweeps across the body. */
+    right = leg.side > 0
+      ? Math.max(right, STANCE_GUARD)
+      : Math.min(right, -STANCE_GUARD);
+    const fwd = f.fore * fore;
+    const x = state.x + f.sin * fwd + f.cos * right;
+    const z = state.z + f.cos * fwd - f.sin * right;
+    const gy = groundY(x, z);
+    return out.set(x, (Number.isFinite(gy) ? gy : state.y) + figure.limb.ankle, z);
+  }
+
+  /** The knee breaks FORWARD - whatever the travel is doing. Poled
+   *  off the travel frame, a leg glided backwards was solved with
+   *  the pole behind the joint and the knee inverted. */
+  function braceKneePole(leg, splay, drop) {
+    const f = braceFrame;
+    const right = leg.side * splay + f.right * 0.22;
+    return kneePole.set(
+      f.sin + f.cos * right,
+      drop,
+      f.cos - f.sin * right
+    ).normalize();
+  }
+
+  /** The ground's pitch under the body along the BOOT'S own heading,
+   *  which is the only line an ankle's flexion can be measured in. */
+  function braceGroundDev(reach, lo, hi) {
+    const f = braceFrame;
+    const slope = (
+      groundY(state.x + f.footSin * reach, state.z + f.footCos * reach)
+      - groundY(state.x - f.footSin * reach, state.z - f.footCos * reach)
+    ) / (reach * 2);
+    return Number.isFinite(slope) ? clamp(Math.atan(slope) * 0.68, lo, hi) : 0;
+  }
+
   /** Ground boost lunge: one boot attacks the travel line while the
    *  other braces behind it, and both ride with the translating body.
    *
@@ -5990,28 +6094,19 @@ export async function createPlayer(ctx, canvas) {
    * every frame and keep the stride itself frozen until the boost ends. */
   function solveBoostLegs(dt, pose) {
     const boost = ctx.boost?.state;
-    let dx = Number(boost?.directionX);
-    let dz = Number(boost?.directionZ);
-    const directionLength = Math.hypot(dx, dz);
-    if (!(directionLength > 1e-5)) {
-      const facing = Number.isFinite(state.travelYaw) ? state.travelYaw : state.yaw;
-      dx = Math.sin(facing);
-      dz = Math.cos(facing);
-    } else {
-      dx /= directionLength;
-      dz /= directionLength;
-    }
-    const facing = Math.atan2(dx, dz);
-    const rightX = dz;
-    const rightZ = -dx;
-    const slope = (
-      groundY(state.x + dx * 0.18, state.z + dz * 0.18)
-      - groundY(state.x - dx * 0.18, state.z - dz * 0.18)
-    ) / 0.36;
+    const dx = Number(boost?.directionX);
+    const dz = Number(boost?.directionZ);
+    /* The boost's OWN heading, which is the one the body is actually
+       travelling on - the resolved travel yaw lags it by a frame and
+       reads as noise at a standstill. */
+    const travelYaw = Math.hypot(dx, dz) > 1e-5
+      ? Math.atan2(dx, dz)
+      : (Number.isFinite(state.travelYaw) ? state.travelYaw : state.yaw);
+    const f = braceFrameFrom(travelYaw);
     /* Toes up into an uphill line, down into a downhill one, but
        only as far as an ankle goes - the global clamp in
        `orientFoot` is the backstop, this is the pose. */
-    const groundDev = clamp(Math.atan(slope) * 0.68, -0.35, 0.42);
+    const groundDev = braceGroundDev(0.18, -0.35, 0.42);
     figure.root.updateMatrixWorld(true);
 
     for (let i = 0; i < 2; i += 1) {
@@ -6020,19 +6115,17 @@ export async function createPlayer(ctx, canvas) {
       /* The blend makes ignition and release continuous while the
          targets remain body-relative throughout. The lead sabaton is
          visibly committed downrange; the trail leg is the long brace
-         that sells the thrust without ever being left behind. */
+         that sells the thrust without ever being left behind.
+         Downrange is the TRAVEL line and the sides are the BODY's -
+         see the braced stance frame above. */
       const fore = lead
         ? lerp(0.10, 0.42, pose)
         : lerp(-0.08, -0.34, pose);
-      const lateral = leg.side * lerp(HIP_HALF, HIP_HALF + 0.065, pose);
-      const x = state.x + dx * fore + rightX * lateral;
-      const z = state.z + dz * fore + rightZ * lateral;
-      const gy = groundY(x, z);
-      leg.foot.set(x, gy + figure.limb.ankle, z);
+      braceFootTarget(leg, fore, lerp(HIP_HALF, HIP_HALF + 0.065, pose), leg.foot);
       leg.plant.copy(leg.foot);
       leg.swinging = false;
       leg.planted = false;
-      const tilt = legGroundTilt(i, x, z, facing);
+      const tilt = legGroundTilt(i, leg.foot.x, leg.foot.z, f.footYaw);
       leg.footDev = damp(leg.footDev, groundDev, 18, dt);
       leg.footFollow = damp(leg.footFollow, 0, 18, dt);
       leg.footRoll = damp(leg.footRoll, tilt.roll, 14, dt);
@@ -6042,11 +6135,7 @@ export async function createPlayer(ctx, canvas) {
         figure.kneePivots[i].quaternion.copy(figure.kneeBindQuaternions[i]);
         figure.legPivots[i].updateWorldMatrix(true, true);
       }
-      kneePole.set(
-        dx + rightX * leg.side * 0.18,
-        -0.30,
-        dz + rightZ * leg.side * 0.18
-      ).normalize();
+      braceKneePole(leg, 0.18, -0.30);
       clampReach(i, leg.foot);
       leg.plant.copy(leg.foot);
       const lengths = figure.legLengths ? figure.legLengths[i] : figure.limb;
@@ -6054,7 +6143,7 @@ export async function createPlayer(ctx, canvas) {
         figure.legPivots[i], figure.kneePivots[i],
         leg.foot, kneePole, lengths.thigh, lengths.shin, LEG_AXIS
       );
-      orientFoot(i, facing, leg.footDev, leg.footFollow, leg.footRoll);
+      orientFoot(i, f.footYaw, leg.footDev, leg.footFollow, leg.footRoll);
     }
   }
 
@@ -6066,13 +6155,19 @@ export async function createPlayer(ctx, canvas) {
    * so the sabatons stay braced against the slope while visibly moving
    * downhill with the hips. */
   function solveDownhillLegs(dt, pose) {
-    const facing = Number.isFinite(state.travelYaw) ? state.travelYaw : state.yaw;
-    const sin = Math.sin(facing);
-    const cos = Math.cos(facing);
+    const travelYaw = Number.isFinite(state.travelYaw) ? state.travelYaw : state.yaw;
+    const f = braceFrameFrom(travelYaw);
     figure.root.updateMatrixWorld(true);
     /* Toes DOWN into the fall line: the brace is the ball of the
-       boot, not the heel. */
-    const slopeDev = clamp(-Math.atan(Math.max(0, state.downhillGrade)) * 0.68, -0.65, 0);
+       boot, not the heel - and the HEEL when the trooper is facing
+       back up the hill they are sliding down, which is what firing
+       through a retreat looks like. `f.fore` carries that sign and
+       passes smoothly through square-on, where a skid braces on
+       neither end of the boot. */
+    const slopeDev = clamp(
+      -Math.atan(Math.max(0, state.downhillGrade)) * 0.68 * f.fore,
+      -0.65, 0.42
+    );
 
     for (let i = 0; i < 2; i += 1) {
       const leg = legs[i];
@@ -6081,17 +6176,13 @@ export async function createPlayer(ctx, canvas) {
          brake. Widen both beyond the walking stance so the silhouette
          reads as balance rather than a paused mid-stride. */
       const fore = lead ? 0.25 : -0.19;
-      const lateral = leg.side * (HIP_HALF + 0.055);
-      const x = state.x + sin * fore + cos * lateral;
-      const z = state.z + cos * fore - sin * lateral;
-      const gy = groundY(x, z);
-      footTmp.set(x, gy + figure.limb.ankle, z);
+      braceFootTarget(leg, fore, HIP_HALF + 0.055, footTmp);
       const follow = 1 - Math.exp(-lerp(12, 22, pose) * dt);
       leg.foot.lerp(footTmp, follow);
       leg.plant.copy(leg.foot);
       leg.swinging = false;
       leg.planted = false;
-      const tilt = legGroundTilt(i, x, z, facing);
+      const tilt = legGroundTilt(i, footTmp.x, footTmp.z, f.footYaw);
       leg.footDev = damp(leg.footDev, slopeDev, 14, dt);
       leg.footFollow = damp(leg.footFollow, 0, 16, dt);
       leg.footRoll = damp(leg.footRoll, tilt.roll, 12, dt);
@@ -6101,11 +6192,7 @@ export async function createPlayer(ctx, canvas) {
         figure.kneePivots[i].quaternion.copy(figure.kneeBindQuaternions[i]);
         figure.legPivots[i].updateWorldMatrix(true, true);
       }
-      kneePole.set(
-        sin + cos * leg.side * 0.13,
-        -0.24,
-        cos - sin * leg.side * 0.13
-      ).normalize();
+      braceKneePole(leg, 0.13, -0.24);
       clampReach(i, leg.foot);
       leg.plant.copy(leg.foot);
       const lengths = figure.legLengths ? figure.legLengths[i] : figure.limb;
@@ -6113,7 +6200,7 @@ export async function createPlayer(ctx, canvas) {
         figure.legPivots[i], figure.kneePivots[i],
         leg.foot, kneePole, lengths.thigh, lengths.shin, LEG_AXIS
       );
-      orientFoot(i, facing, leg.footDev, leg.footFollow, leg.footRoll);
+      orientFoot(i, f.footYaw, leg.footDev, leg.footFollow, leg.footRoll);
     }
   }
 
@@ -6122,20 +6209,17 @@ export async function createPlayer(ctx, canvas) {
    *  stance with the lead foot lunging forward and the trail leg braced
    *  behind, riding smoothly with the translating body. */
   function solvePierceLegs(dt) {
-    const facing = Number.isFinite(state.aimViewYaw)
+    /* The thrust's own line. The camera owns it, so a player who
+       yanks the mouse mid-charge can put it most of a turn away from
+       the pelvis the body has actually committed - the same split
+       the braced frame exists for. */
+    const travelYaw = Number.isFinite(state.aimViewYaw)
       ? state.aimViewYaw
       : (Number.isFinite(action.aimYaw)
         ? action.aimYaw
         : (Number.isFinite(state.travelYaw) ? state.travelYaw : state.yaw));
-    const dx = Math.sin(facing);
-    const dz = Math.cos(facing);
-    const rightX = dz;
-    const rightZ = -dx;
-    const slope = (
-      groundY(state.x + dx * 0.20, state.z + dz * 0.20)
-      - groundY(state.x - dx * 0.20, state.z - dz * 0.20)
-    ) / 0.40;
-    const groundDev = clamp(Math.atan(slope) * 0.68, -0.40, 0.45);
+    const f = braceFrameFrom(travelYaw);
+    const groundDev = braceGroundDev(0.20, -0.40, 0.45);
     figure.root.updateMatrixWorld(true);
 
     for (let i = 0; i < 2; i += 1) {
@@ -6143,15 +6227,11 @@ export async function createPlayer(ctx, canvas) {
       const lead = leg.side === LEAD_SIDE;
       // Tandem planted stance: lead leg forward, trail leg braced back
       const fore = lead ? 0.38 : -0.32;
-      const lateral = leg.side * (HIP_HALF + 0.065);
-      const x = state.x + dx * fore + rightX * lateral;
-      const z = state.z + dz * fore + rightZ * lateral;
-      const gy = groundY(x, z);
-      leg.foot.set(x, gy + figure.limb.ankle, z);
+      braceFootTarget(leg, fore, HIP_HALF + 0.065, leg.foot);
       leg.plant.copy(leg.foot);
       leg.swinging = false;
       leg.planted = false;
-      const tilt = legGroundTilt(i, x, z, facing);
+      const tilt = legGroundTilt(i, leg.foot.x, leg.foot.z, f.footYaw);
       leg.footDev = damp(leg.footDev, groundDev, 20, dt);
       leg.footFollow = damp(leg.footFollow, 0, 20, dt);
       leg.footRoll = damp(leg.footRoll, tilt.roll, 16, dt);
@@ -6161,11 +6241,7 @@ export async function createPlayer(ctx, canvas) {
         figure.kneePivots[i].quaternion.copy(figure.kneeBindQuaternions[i]);
         figure.legPivots[i].updateWorldMatrix(true, true);
       }
-      kneePole.set(
-        dx + rightX * leg.side * 0.16,
-        -0.28,
-        dz + rightZ * leg.side * 0.16
-      ).normalize();
+      braceKneePole(leg, 0.16, -0.28);
       clampReach(i, leg.foot);
       leg.plant.copy(leg.foot);
       const lengths = figure.legLengths ? figure.legLengths[i] : figure.limb;
@@ -6173,7 +6249,7 @@ export async function createPlayer(ctx, canvas) {
         figure.legPivots[i], figure.kneePivots[i],
         leg.foot, kneePole, lengths.thigh, lengths.shin, LEG_AXIS
       );
-      orientFoot(i, facing, leg.footDev, leg.footFollow, leg.footRoll);
+      orientFoot(i, f.footYaw, leg.footDev, leg.footFollow, leg.footRoll);
     }
   }
 

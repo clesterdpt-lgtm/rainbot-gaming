@@ -273,9 +273,20 @@ export function buildSummitDischarge(ctx, player, loadout, spec = null) {
         const hit = ctx.combat.raycastEnemies(px, py, pz,
           shot.direction.x, shot.direction.y, shot.direction.z, step + 0.3);
         if (hit && hit.inst) {
+          /* Alternate projectiles still resolve through the shared
+             analytic hit volumes.  Preserve the heat-sac verdict:
+             dropping `sacIndex` here made Veyra visibly hit every
+             glowing sac while spending none of the lift pool, and on
+             Martyr also misclassified the hit as armoured body fire. */
+          const box = ctx.combat.hitbox?.[hit.inst.key];
+          if (hit.sacIndex >= 0 && box?.sacs) {
+            ctx.combat.drainLift?.(hit.inst, box.sacs.lift || 1, hit.sacIndex, {
+              source: "crescent", x: hit.x, y: hit.y, z: hit.z,
+            });
+          }
           ctx.combat.damageEnemy(hit.inst, damageAt(shot.distance + hit.t), {
             source: "crescent", x: hit.x, y: hit.y, z: hit.z,
-            head: !!hit.head, weak: !!hit.weak,
+            head: !!hit.head, weak: !!hit.weak, sac: hit.sacIndex >= 0,
           });
           hitsLanded += 1;
           ctx.vfx?.spark?.(hit.x, hit.y, hit.z, 1.0, false, true);

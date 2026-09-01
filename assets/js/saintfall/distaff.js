@@ -996,6 +996,13 @@ export function buildDistaff(ctx) {
    *  been spawned and dressed. One instance, one dressing. */
   let dress = null;
 
+  function discardDress() {
+    if (!dress) return;
+    dress.geo.dispose();
+    for (const mat of dress.mats) mat.dispose();
+    dress = null;
+  }
+
   function makeSurfaceMaterial(name, family, roughness, metalness, extra = {}) {
     const spec = inst.spec.material;
     const mat = new THREE.MeshStandardMaterial({
@@ -1033,9 +1040,16 @@ export function buildDistaff(ctx) {
    * bestiary's shared surface rather than a half-shared mutant.
    */
   function dressInstance() {
-    if (!inst || dress) return;
+    if (!inst) return;
     const skin = inst.skin;
     if (!skin || !skin.geometry || !skin.skeleton) return;
+    /* Loading a field save reconstructs enemies before rebinding this
+       controller.  The replacement keeps the durable id but owns a new
+       SkinnedMesh; a module-wide `dress` flag therefore cannot prove that
+       THIS shell was corrected.  Release the detached instance's private
+       geometry/materials and dress the live skin. */
+    if (dress?.skin === skin) return;
+    discardDress();
 
     const src = skin.geometry;
     /* toNonIndexed returns a NEW geometry and leaves the source
@@ -1716,6 +1730,7 @@ export function buildDistaff(ctx) {
     skin.material = mats;
 
     dress = {
+      skin,
       geo,
       mats,
       colour,
@@ -2289,84 +2304,6 @@ export function buildDistaff(ctx) {
     stains.push({ mesh, mat, position });
   }
   let stainCursor = 0;
-
-  /* ============================================================
-     THE LAIR'S OWN SILK
-
-     A guardian that has stood in one crater long enough to have
-     become part of it has webbed the floor of it. Three standing mats
-     around the lair, laid once and never expiring - the web bolts and
-     the thrown patches are the FIGHT's silk and they come and go;
-     this is the animal's address.
-
-     It is also the only cold, pale, high-frequency thing this module
-     can put on the crater floor, and the frame needs one. Measured
-     across the gallery, 75% of every Distaff frame sits below sRGB 32
-     and almost all of that is unlit crater rim this module does not
-     own; the one surface it does own down there is silk.
-
-     NOT A HAZARD, and named so nothing mistakes it for one: `patchAt`
-     - which is what slows a player standing in a fresh web - only
-     walks the `patches` pool, and qa.js's `webPools` enumerates by
-     the `sf-web-patch` prefix. A permanent slow field under a boss
-     would be a mechanic nobody was told about.
-
-     A DORMANT BOSS MUST COST NOTHING, so these are hidden until
-     something is near enough to see them. Three transparent discs is
-     three draw calls on a frame that is already fill-bound, and there
-     is no reason for the far side of the map to pay them.
-     ============================================================ */
-  const LAIR_SILK = [
-    { r: 13.5, a: 0.35, size: 11.5, fade: 0.82 },
-    { r: 17.0, a: 2.45, size: 8.5, fade: 0.70 },
-    { r: 12.0, a: 4.30, size: 9.5, fade: 0.76 },
-  ];
-  const lairSilk = [];
-  for (let i = 0; i < LAIR_SILK.length; i += 1) {
-    const { geo, position } = makeDiscGeometry();
-    const mat = new THREE.ShaderMaterial({
-      uniforms: {
-        // Old silk, not fresh: dustier and duller than a thrown patch,
-        // which is also what keeps it from reading as a hazard.
-        uCore: { value: new THREE.Color("#e8f6f2") },
-        uEdge: { value: new THREE.Color("#5b8f90") },
-        uBed: { value: new THREE.Color("#101d1f") },
-        uFade: { value: 0 },
-        uTime: { value: 0 },
-      },
-      vertexShader: patchVertex,
-      fragmentShader: patchFragment,
-      transparent: true,
-      depthWrite: false,
-      side: THREE.DoubleSide,
-    });
-    const mesh = new THREE.Mesh(geo, mat);
-    mesh.name = `sf-distaff-lair-${i}`;
-    mesh.frustumCulled = false;
-    mesh.visible = false;
-    mesh.renderOrder = 3;
-    group.add(mesh);
-    lairSilk.push({ mesh, mat, position, spec: LAIR_SILK[i] });
-  }
-  let lairLaid = false;
-
-  function updateLairSilk() {
-    if (!lairLaid) {
-      lairLaid = true;
-      for (const silk of lairSilk) {
-        const { r, a, size } = silk.spec;
-        layDisc(silk, C.lairX + Math.cos(a) * r, C.lairZ + Math.sin(a) * r, size);
-      }
-    }
-    const ps = ctx.player?.state;
-    const near = !!ps && Math.hypot(ps.x - C.lairX, ps.z - C.lairZ) < 260;
-    for (const silk of lairSilk) {
-      if (silk.mesh.visible !== near) silk.mesh.visible = near;
-      if (!near) continue;
-      silk.mat.uniforms.uFade.value = silk.spec.fade;
-      silk.mat.uniforms.uTime.value = atmos.elapsed;
-    }
-  }
 
   function spillIchor(x, z, radius = 2.6) {
     const stain = stains[stainCursor];
@@ -3608,7 +3545,6 @@ export function buildDistaff(ctx) {
     updateBolts(d);
     updateLine();
     updatePatches(d);
-    updateLairSilk();
   }
 
   function status() {
@@ -3700,6 +3636,7 @@ export function buildDistaff(ctx) {
     if (state.defeated) {
       if (rebound) enemies.remove?.(rebound);
       inst = null;
+      discardDress();
       state.phase = "dead";
       clearHazards();
       return true;
@@ -3860,11 +3797,7 @@ export function buildDistaff(ctx) {
          own - `enemies.js` never saw them - so nothing else can be
          holding them. The species geometry and the caste material it
          DID hand us are deliberately not touched. */
-      if (dress) {
-        dress.geo.dispose();
-        for (const mat of dress.mats) mat.dispose();
-        dress = null;
-      }
+      discardDress();
     },
   };
 }

@@ -642,6 +642,64 @@ function bakeShellFields(THREE, geo) {
   return (typeof performance !== "undefined" ? performance.now() : Date.now()) - t0;
 }
 
+/* The exported Winnower shell is wound inward.  With FrontSide
+   materials that culls the near wall and draws the far interior wall,
+   which is why the live animal can read as a hollow or folded mesh.
+   Correct a private geometry copy before the occlusion bake: the bake
+   marches along authored normals, so fixing only the GPU index would
+   still paint cavities and ash from the inside.  Detection keeps a
+   future corrected export from being flipped back inward. */
+function outwardShellGeometry(THREE, geo) {
+  if (!geo?.attributes?.position) return { geometry: geo, corrected: false };
+  const owned = geo.clone();
+  const pos = owned.attributes.position;
+  const index = owned.index;
+  const count = index ? index.count : pos.count;
+  let volume6 = 0;
+  for (let i = 0; i < count; i += 3) {
+    const ia = index ? index.getX(i) : i;
+    const ib = index ? index.getX(i + 1) : i + 1;
+    const ic = index ? index.getX(i + 2) : i + 2;
+    const ax = pos.getX(ia), ay = pos.getY(ia), az = pos.getZ(ia);
+    const bx = pos.getX(ib), by = pos.getY(ib), bz = pos.getZ(ib);
+    const cx = pos.getX(ic), cy = pos.getY(ic), cz = pos.getZ(ic);
+    volume6 += ax * (by * cz - bz * cy)
+      + ay * (bz * cx - bx * cz)
+      + az * (bx * cy - by * cx);
+  }
+  if (volume6 >= 0) return { geometry: owned, corrected: false };
+
+  const source = index?.array;
+  if (source) {
+    const reversed = new source.constructor(source.length);
+    for (let i = 0; i < source.length; i += 3) {
+      reversed[i] = source[i];
+      reversed[i + 1] = source[i + 2];
+      reversed[i + 2] = source[i + 1];
+    }
+    owned.setIndex(new THREE.BufferAttribute(reversed, 1));
+  } else {
+    const reversed = new (pos.count > 65535 ? Uint32Array : Uint16Array)(pos.count);
+    for (let i = 0; i < pos.count; i += 3) {
+      reversed[i] = i;
+      reversed[i + 1] = i + 2;
+      reversed[i + 2] = i + 1;
+    }
+    owned.setIndex(new THREE.BufferAttribute(reversed, 1));
+  }
+  const normal = owned.attributes.normal;
+  if (normal) {
+    for (let i = 0; i < normal.count; i += 1) {
+      normal.setXYZ(i, -normal.getX(i), -normal.getY(i), -normal.getZ(i));
+    }
+    normal.needsUpdate = true;
+  }
+  owned.computeBoundingBox();
+  owned.computeBoundingSphere();
+  if (owned.boundingSphere) owned.boundingSphere.radius *= 2.4;
+  return { geometry: owned, corrected: true };
+}
+
 /* ============================================================
    THE FURNACE SHADER
 
@@ -1225,6 +1283,7 @@ export function buildWinnower(ctx) {
   }
 
   let shellBound = false;
+  let windingCorrected = false;
   let bakeMs = 0;
   /** Hand the instance its own shell, and measure the bind pose once.
    *  Idempotent: `ensureSpawned` is reached from a restore and from
@@ -1240,6 +1299,9 @@ export function buildWinnower(ctx) {
     if (shellBound || !inst?.root) return;
     inst.root.traverse((o) => {
       if (!o.isMesh && !o.isSkinnedMesh) return;
+      const outward = outwardShellGeometry(THREE, o.geometry);
+      o.geometry = outward.geometry;
+      windingCorrected ||= outward.corrected;
       o.material = shellMat;
       bakeMs += bakeShellFields(THREE, o.geometry);
     });
@@ -3731,6 +3793,7 @@ export function buildWinnower(ctx) {
       sacFill: [Number(sacFill(0).toFixed(3)), Number(sacFill(1).toFixed(3))],
       surfaceDamage: Number(state.shownDamage.toFixed(3)),
       poolGain: Number(pool.gain.toFixed(3)),
+      windingCorrected,
     };
   }
 

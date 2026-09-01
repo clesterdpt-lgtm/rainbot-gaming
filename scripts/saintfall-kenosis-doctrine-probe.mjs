@@ -236,7 +236,8 @@ async function auditOperative(browser, character) {
         name: o.name,
         talentIds: o.talents.map((x) => x.id),
         capstone: o.capstone?.id || null,
-        icons: o.talents.every((x) => typeof x.icon === "string" && x.icon.startsWith("data:")),
+        icons: o.talents.every((x) => typeof x.icon === "string"
+          && (x.icon.startsWith("data:") || x.icon.includes("/talents/"))),
       })),
     };
   });
@@ -370,7 +371,10 @@ async function auditOperative(browser, character) {
       hidden: !!root?.hidden,
       tabs: tabs.length,
       cards: cards.length,
-      dataSigils: Array.from(thumbs).filter((n) => (n.getAttribute("src") || "").startsWith("data:")).length,
+      dataSigils: Array.from(thumbs).filter((n) => {
+        const src = n.getAttribute("src") || "";
+        return src.startsWith("data:") || src.includes("/talents/");
+      }).length,
       points: root?.querySelector("[data-doctrine-points]")?.textContent || "",
       rank: root?.querySelector("[data-doctrine-rank]")?.textContent || "",
     };

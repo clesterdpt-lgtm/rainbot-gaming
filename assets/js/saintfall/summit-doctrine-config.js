@@ -179,13 +179,44 @@ function riteIcon(colour, accent, folds, glyph) {
   return `data:image/svg+xml,${encodeURIComponent(svg)}`;
 }
 
+/* Talents that carry dedicated authored plate artwork in `img/saintfall/talents/`.
+   Any talent not in this set falls back to the procedural SVG sigil. */
+const AUTHORED_PLATES = new Set([
+  "quicksilver_afterimage",
+  "quicksilver_second_wind",
+  "quicksilver_cut_the_thread",
+  "quicksilver_three_places",
+  "quicksilver_unbroken_vigil",
+  "crescent_paired_verdict",
+  "crescent_long_measure",
+  "crescent_sundered_arc",
+  "crescent_reaping_volley",
+  "crescent_choir_of_edges",
+  "stoop_falling_star",
+  "stoop_kingfisher",
+  "stoop_shearwater",
+  "stoop_high_pass",
+]);
+
+const talentPlateUrl = (id) => `../assets/img/saintfall/talents/${encodeURIComponent(id)}.jpg?v=20260829-doctrine-v2`;
+
 /* Attach an icon to every node of an Order as the tree is built. */
 function withIcons(order) {
   const { colour, accent, folds } = order.art;
   order.talents.forEach((talent, index) => {
-    talent.icon = riteIcon(colour, accent, folds, index);
+    if (AUTHORED_PLATES.has(talent.id)) {
+      talent.icon = talentPlateUrl(talent.id);
+    } else {
+      talent.icon = riteIcon(colour, accent, folds, index);
+    }
   });
-  if (order.capstone) order.capstone.icon = riteIcon(accent, colour, folds, 5);
+  if (order.capstone) {
+    if (AUTHORED_PLATES.has(order.capstone.id)) {
+      order.capstone.icon = talentPlateUrl(order.capstone.id);
+    } else {
+      order.capstone.icon = riteIcon(accent, colour, folds, 5);
+    }
+  }
   return order;
 }
 

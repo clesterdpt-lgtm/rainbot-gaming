@@ -17,6 +17,21 @@ boots clean.
 
 ## Latest focused fix
 
+**SAINTFALL: Veyra projectile edge and Torren weight SFX**: Saint Veyra's
+crescent launch no longer plays a clean high sine chirp or melodic left/right
+detune. It now uses a short pitch-poor air shear, dry pressure body and blade
+edge, with a separate quiet breakup cue when the projectile reaches an enemy,
+trial target, wall or ground. Saint Torren's ordinary hammer procession now
+owns a low air displacement on a whiff and adds a sub-heavy strike, fracture
+and restrained iron partial only on a connected sweep; Hammer Cast's bright
+square partials were lowered into darker triangular iron tones. His Censer leap
+now preserves its real descent speed through the controller's touchdown zero
+and sends that weight into a dedicated positional ground, rubble and settling
+armour voice instead of the normal jet landing blip. Build pin
+`20260901-operative-sfx-1`. Focused operative SFX gate 12/12 with real Veyra
+volleys, real Torren leap/landing and hammer contact, seven offline-rendered
+operative voices, and console-clean pages for both Saints.
+
 **SAINTFALL: the Saints stop crossing their legs while boosting backwards**:
 The three braced leg solves - the ground boost, the steep downhill skid, and
 the Executioner's Thrust - built their whole stance in the TRAVEL frame, so

@@ -2668,7 +2668,14 @@ export function buildAudio(ctx) {
     }
     if (combat) {
       combat.bus.on("hit", (e) => impact(e.x, e.z, "flesh"));
-      combat.bus.on("melee", (e) => meleeImpact(e.x, e.z, e));
+      /* Torren's reliquary hammer is not the same contact as a lance or
+         wrist blade. Keep the shared combat event authoritative, then
+         choose the voice from the selected Saint here so queued combo
+         swings and direct input both reach the same audio path. */
+      combat.bus.on("melee", (e) => {
+        if (ctx.playerCharacter?.id === "bastion-penitent") hammerMelee(e);
+        else meleeImpact(e.x, e.z, e);
+      });
       /* The `big` death is now the Harrow's. It is a two-tonne animal
          and the only one whose death should be audible across the
          basin; the other two castes have to stay cheap, because a
@@ -3214,38 +3221,91 @@ export function buildAudio(ctx) {
      (a furnace and a bell on legs).
      ========================================================== */
 
-  /** One crescent pulse. `opts.hand` detunes left/right so an
-   *  alternating volley reads as two instruments, not a stutter. */
+  /** One crescent pulse. This used to be a clean 1180 -> 610Hz sine
+   *  chirp, detuned per hand; at Veyra's fire rate it read like two toy
+   *  whistles trading notes. The report is now a pitch-poor shear with
+   *  a low pressure body. Hands vary the filter edge only, so the volley
+   *  stays organic without becoming a melody. */
   function crescentShot(x, z, opts = {}) {
     const t = now();
-    const dur = 0.17;
+    const dur = 0.14;
     const g = voice("weapon", dur + 0.05);
     if (!g) return;
     const p = place(g, x, z, 20, 300);
     if (!p) return;
-    const amp = (opts.gain ?? 0.30) * p.atten;
-    const detune = opts.hand === 1 ? 1.06 : 1.0;
-    // Layer A: the pulse leaving - a falling sine, fast.
-    const tone = ac.createOscillator();
-    tone.type = "sine";
-    tone.frequency.setValueAtTime(1180 * detune, t);
-    tone.frequency.exponentialRampToValueAtTime(610 * detune, t + dur);
+    const amp = (opts.gain ?? 0.32) * p.atten;
+    const handEdge = opts.hand === 1 ? 0.94 : 1.04;
+
+    // Layer A: displaced air, swept sharply down instead of sung.
+    const shear = noiseSource(1.8);
+    const sf = ac.createBiquadFilter();
+    sf.type = "bandpass";
+    sf.Q.value = 0.72;
+    sf.frequency.setValueAtTime(3100 * handEdge, t);
+    sf.frequency.exponentialRampToValueAtTime(760 * handEdge, t + 0.105);
+    const sg = ac.createGain();
+    sg.gain.setValueAtTime(amp, t);
+    sg.gain.exponentialRampToValueAtTime(0.0001, t + 0.115);
+    shear.connect(sf); sf.connect(sg); sg.connect(p.node);
+    shear.start(t); shear.stop(t + 0.125);
+
+    // Layer B: the emitter kicking in the gauntlet - low, dry pressure.
+    const body = ac.createOscillator();
+    body.type = "triangle";
+    body.frequency.setValueAtTime(340, t);
+    body.frequency.exponentialRampToValueAtTime(112, t + dur);
+    const bg = ac.createGain();
+    bg.gain.setValueAtTime(amp * 0.48, t);
+    bg.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    body.connect(bg); bg.connect(p.node);
+    body.start(t); body.stop(t + dur + 0.02);
+
+    // Layer C: a two-centisecond blade edge makes the shot cut, not pop.
+    const edge = noiseSource(2.2);
+    const ef = ac.createBiquadFilter();
+    ef.type = "highpass";
+    ef.frequency.value = 3900 * handEdge;
+    const eg = ac.createGain();
+    eg.gain.setValueAtTime(amp * 0.34, t);
+    eg.gain.exponentialRampToValueAtTime(0.0001, t + 0.026);
+    edge.connect(ef); ef.connect(eg); eg.connect(p.node);
+    edge.start(t); edge.stop(t + 0.035);
+  }
+
+  /** A crescent coming apart against armour, stone or a body. Kept
+   *  deliberately shorter and quieter than the launch so automatic
+   *  fire does not become a solid wall of impacts. */
+  function crescentImpact(x, z, opts = {}) {
+    const t = now();
+    const solid = opts.solid === true;
+    const dur = solid ? 0.17 : 0.13;
+    const g = voice("world", dur + 0.03);
+    if (!g) return;
+    const p = place(g, x, z, 18, 260);
+    if (!p) return;
+    const amp = (solid ? 0.25 : 0.21) * p.atten;
+
+    const tear = noiseSource(solid ? 1.35 : 1.7);
+    const tf = ac.createBiquadFilter();
+    tf.type = "bandpass";
+    tf.Q.value = solid ? 0.9 : 0.62;
+    tf.frequency.setValueAtTime(solid ? 1450 : 2100, t);
+    tf.frequency.exponentialRampToValueAtTime(solid ? 520 : 860, t + dur);
     const tg = ac.createGain();
     tg.gain.setValueAtTime(amp, t);
     tg.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-    tone.connect(tg); tg.connect(p.node);
-    tone.start(t); tone.stop(t + dur + 0.02);
-    // Layer B: the emitter's crack - a very short band of noise.
-    const crack = noiseSource(1.7);
-    const cf = ac.createBiquadFilter();
-    cf.type = "bandpass";
-    cf.frequency.value = 2300 * detune;
-    cf.Q.value = 1.3;
-    const cg = ac.createGain();
-    cg.gain.setValueAtTime(amp * 0.85, t);
-    cg.gain.exponentialRampToValueAtTime(0.0001, t + 0.05);
-    crack.connect(cf); cf.connect(cg); cg.connect(p.node);
-    crack.start(t); crack.stop(t + 0.07);
+    tear.connect(tf); tf.connect(tg); tg.connect(p.node);
+    tear.start(t); tear.stop(t + dur + 0.01);
+
+    const stop = ac.createOscillator();
+    stop.type = "triangle";
+    stop.frequency.setValueAtTime(solid ? 270 : 220, t);
+    stop.frequency.exponentialRampToValueAtTime(92, t + dur * 0.82);
+    const stg = ac.createGain();
+    stg.gain.setValueAtTime(amp * (solid ? 0.52 : 0.34), t);
+    stg.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    stop.connect(stg); stg.connect(p.node);
+    stop.start(t); stop.stop(t + dur + 0.02);
   }
 
   /** The Vigil Step, leaving. A rising tear with a choir edge. */
@@ -3359,10 +3419,10 @@ export function buildAudio(ctx) {
     bg.gain.exponentialRampToValueAtTime(0.0001, t + dur);
     body.connect(bg); bg.connect(p.node);
     body.start(t); body.stop(t + dur + 0.02);
-    // Layer B: the bell of the reliquary - two detuned partials.
-    for (const [freq, gain] of [[522, 0.34], [787, 0.20]]) {
+    // Layer B: the reliquary's lower iron partials, not a bright toy bell.
+    for (const [freq, gain] of [[318, 0.32], [471, 0.17]]) {
       const bell = ac.createOscillator();
-      bell.type = "square";
+      bell.type = "triangle";
       bell.frequency.setValueAtTime(freq, t + 0.008);
       bell.frequency.exponentialRampToValueAtTime(freq * 0.94, t + dur);
       const gg = ac.createGain();
@@ -3382,6 +3442,70 @@ export function buildAudio(ctx) {
     cg.gain.exponentialRampToValueAtTime(0.0001, t + 0.1);
     crack.connect(cf); cf.connect(cg); cg.connect(p.node);
     crack.start(t); crack.stop(t + 0.12);
+  }
+
+  /** Torren's ordinary hammer procession. The air moves on a whiff;
+   *  a connected sweep adds a sub-heavy head strike, chitin/masonry
+   *  fracture and one restrained iron partial. One combat event owns
+   *  the whole voice, so clearing a pack cannot multiply it per body. */
+  function hammerMelee(event = {}) {
+    const t = now();
+    const connected = event.hits > 0;
+    const dur = connected ? (event.slam ? 0.62 : 0.50) : 0.30;
+    const g = voice("world", dur + 0.05);
+    if (!g) return;
+    const target = connected && event.targets?.[0];
+    const x = Number.isFinite(target?.x) ? target.x : (event.x || 0);
+    const z = Number.isFinite(target?.z) ? target.z : (event.z || 0);
+    const p = place(g, x, z, 22, 300);
+    if (!p) return;
+    const crowd = Math.min(1.28, 1 + Math.max(0, (event.hits || 0) - 1) * 0.07);
+    const amp = 0.43 * p.atten * crowd;
+
+    // The head displaces a broad, low band of air even when it misses.
+    const swing = noiseSource(0.72);
+    const wf = ac.createBiquadFilter();
+    wf.type = "lowpass";
+    wf.frequency.setValueAtTime(760, t);
+    wf.frequency.exponentialRampToValueAtTime(150, t + 0.28);
+    const wg = ac.createGain();
+    wg.gain.setValueAtTime(0.0001, t);
+    wg.gain.linearRampToValueAtTime(amp * (connected ? 0.62 : 0.82), t + 0.025);
+    wg.gain.exponentialRampToValueAtTime(0.0001, t + 0.29);
+    swing.connect(wf); wf.connect(wg); wg.connect(p.node);
+    swing.start(t); swing.stop(t + 0.31);
+
+    if (!connected) return;
+    const body = ac.createOscillator();
+    body.type = "triangle";
+    body.frequency.setValueAtTime(event.slam ? 86 : 102, t + 0.018);
+    body.frequency.exponentialRampToValueAtTime(event.slam ? 31 : 38, t + dur);
+    const bg = ac.createGain();
+    bg.gain.setValueAtTime(amp * (event.slam ? 1.18 : 1), t + 0.018);
+    bg.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    body.connect(bg); bg.connect(p.node);
+    body.start(t + 0.018); body.stop(t + dur + 0.02);
+
+    const breakage = noiseSource(1.1);
+    const bf = ac.createBiquadFilter();
+    bf.type = "bandpass";
+    bf.frequency.value = event.slam ? 580 : 720;
+    bf.Q.value = 0.85;
+    const brg = ac.createGain();
+    brg.gain.setValueAtTime(amp * 0.88, t + 0.015);
+    brg.gain.exponentialRampToValueAtTime(0.0001, t + 0.13);
+    breakage.connect(bf); bf.connect(brg); brg.connect(p.node);
+    breakage.start(t + 0.015); breakage.stop(t + 0.15);
+
+    const iron = ac.createOscillator();
+    iron.type = "triangle";
+    iron.frequency.setValueAtTime(event.slam ? 252 : 294, t + 0.024);
+    iron.frequency.exponentialRampToValueAtTime(226, t + dur * 0.82);
+    const ig = ac.createGain();
+    ig.gain.setValueAtTime(amp * 0.20, t + 0.024);
+    ig.gain.exponentialRampToValueAtTime(0.0001, t + dur * 0.92);
+    iron.connect(ig); ig.connect(p.node);
+    iron.start(t + 0.024); iron.stop(t + dur);
   }
 
   /** The hammer slapping back into the gauntlet. */
@@ -3726,6 +3850,63 @@ export function buildAudio(ctx) {
     boom.start(t); boom.stop(t + dur + 0.02);
   }
 
+  /** The Censer coming back to earth. This is separate from jetLand:
+   *  the other Saints touch down under sustained thrust, while Torren
+   *  drops a plated body and a boiler onto the ground in one beat. */
+  function leapLand(x, z, impactSpeed = 0) {
+    const t = now();
+    const dur = 0.72;
+    const g = voice("world", dur + 0.08);
+    if (!g) return;
+    const p = place(g, x, z, 28, 360);
+    if (!p) return;
+    const weight = Math.min(1.22, 0.88 + Math.max(0, impactSpeed - 6) * 0.018);
+    const amp = 0.56 * p.atten * weight;
+
+    const ground = ac.createOscillator();
+    ground.type = "triangle";
+    ground.frequency.setValueAtTime(92, t);
+    ground.frequency.exponentialRampToValueAtTime(32, t + 0.48);
+    const gg = ac.createGain();
+    gg.gain.setValueAtTime(amp, t);
+    gg.gain.exponentialRampToValueAtTime(0.0001, t + 0.52);
+    ground.connect(gg); gg.connect(p.node);
+    ground.start(t); ground.stop(t + 0.55);
+
+    const rubble = noiseSource(0.62);
+    const rf = ac.createBiquadFilter();
+    rf.type = "lowpass";
+    rf.frequency.setValueAtTime(820, t);
+    rf.frequency.exponentialRampToValueAtTime(125, t + dur);
+    const rg = ac.createGain();
+    rg.gain.setValueAtTime(amp * 0.72, t);
+    rg.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    rubble.connect(rf); rf.connect(rg); rg.connect(p.node);
+    rubble.start(t); rubble.stop(t + dur + 0.01);
+
+    // Plates settle just after the ground, keeping the transient heavy.
+    const armour = noiseSource(1.3);
+    const af = ac.createBiquadFilter();
+    af.type = "bandpass";
+    af.frequency.value = 920;
+    af.Q.value = 1.15;
+    const ag = ac.createGain();
+    ag.gain.setValueAtTime(amp * 0.30, t + 0.045);
+    ag.gain.exponentialRampToValueAtTime(0.0001, t + 0.19);
+    armour.connect(af); af.connect(ag); ag.connect(p.node);
+    armour.start(t + 0.045); armour.stop(t + 0.21);
+
+    const plate = ac.createOscillator();
+    plate.type = "triangle";
+    plate.frequency.setValueAtTime(238, t + 0.052);
+    plate.frequency.exponentialRampToValueAtTime(166, t + 0.34);
+    const pg = ac.createGain();
+    pg.gain.setValueAtTime(amp * 0.13, t + 0.052);
+    pg.gain.exponentialRampToValueAtTime(0.0001, t + 0.36);
+    plate.connect(pg); pg.connect(p.node);
+    plate.start(t + 0.052); plate.stop(t + 0.38);
+  }
+
   return {
     context: ac,
     shot,
@@ -3763,13 +3944,16 @@ export function buildAudio(ctx) {
     jetEmpty,
     jetLand,
     crescentShot,
+    crescentImpact,
     blinkCast,
     blinkArrive,
     hammerThrow,
     hammerImpact,
+    hammerMelee,
     hammerCatch,
     blockImpact,
     leapBlast,
+    leapLand,
     commandCast,
     gildingRite,
     mirrorChoir: mirrorChoirCue,
@@ -3869,9 +4053,9 @@ function makeSilentApi() {
     rumble: noop, surface: noop, hiss: noop,
     step: noop, hurt: noop, blip: noop, chord: noop, attach: noop,
     jetIgnite: noop, jetCutoff: noop, jetEmpty: noop, jetLand: noop,
-    crescentShot: noop, blinkCast: noop, blinkArrive: noop,
-    hammerThrow: noop, hammerImpact: noop, hammerCatch: noop,
-    blockImpact: noop, leapBlast: noop,
+    crescentShot: noop, crescentImpact: noop, blinkCast: noop, blinkArrive: noop,
+    hammerThrow: noop, hammerImpact: noop, hammerMelee: noop, hammerCatch: noop,
+    blockImpact: noop, leapBlast: noop, leapLand: noop,
     commandCast: noop, gildingRite: noop, mirrorChoir: noop,
     crescentRain: noop, gateRaise: noop, anvilFall: noop,
     boostIgnite: noop, boostCut: noop, boostHit: noop,

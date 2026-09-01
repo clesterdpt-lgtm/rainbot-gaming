@@ -2874,15 +2874,30 @@ export function installQa(ctx, api) {
         slamCharge: (a) => a.slamCharge(0, 0),
         slamPlunge: (a) => a.slamPlunge(0, 0),
         slamImpact: (a) => a.slamImpact(0, 0, 0.6),
+        crescentShot: (a) => a.crescentShot(0, 0, { hand: 0 }),
+        crescentImpact: (a) => a.crescentImpact(2, 2, { solid: true }),
+        hammerMeleeWhiff: (a) => a.hammerMelee({ x: 0, z: 0, hits: 0 }),
+        hammerMeleeImpact: (a) => a.hammerMelee({
+          x: 0, z: 0, hits: 1, targets: [{ x: 2, z: 2 }],
+        }),
+        hammerImpact: (a) => a.hammerImpact(2, 2, true),
+        leapBlast: (a) => a.leapBlast(0, 0),
+        leapLand: (a) => a.leapLand(0, 0, 12),
         doctrineCenser: (a) => a.doctrineCue({ order: "censer", cue: "brand-break", x: 0, z: 0, intensity: 0.8 }),
         doctrineProcession: (a) => a.doctrineCue({ order: "procession", cue: "toll", x: 0, z: 0, intensity: 0.8 }),
         doctrineWing: (a) => a.doctrineCue({ order: "wing", cue: "circuit", x: 0, z: 0, intensity: 1, capstone: true }),
         doctrineHalo: (a) => a.doctrineCue({ order: "halo", cue: "parry", x: 0, z: 0, intensity: 0.8 }),
         doctrineEdict: (a) => a.doctrineCue({ order: "edict", cue: "fusion", x: 0, z: 0, intensity: 1, capstone: true }),
       };
+      /* The campaign injects its audio factory into the QA surface;
+         Summit pages only publish the live audio object. Both pages
+         import the same module, so load that factory directly when a
+         compact operative page asks for an offline render. */
+      const audioFactory = api.audioFactory
+        || (await import("saintfall/audio.js")).buildAudio;
       for (const [name, play] of Object.entries(cases)) {
         const oc = new OC(2, 44100 * 2.5, 44100);
-        const probe = api.audioFactory({ ...ctx, __audioContext: oc });
+        const probe = audioFactory({ ...ctx, __audioContext: oc });
         probe.testWith(oc);
         play(probe);
         const buf = await oc.startRendering();

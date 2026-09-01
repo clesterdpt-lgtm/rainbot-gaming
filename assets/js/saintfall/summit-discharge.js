@@ -300,6 +300,9 @@ export function buildSummitDischarge(ctx, player, loadout, spec = null) {
           }
           hitsLanded += 1;
           ctx.vfx?.spark?.(hit.x, hit.y, hit.z, 1.0, false, true);
+          ctx.audio?.crescentImpact?.(hit.x, hit.z, {
+            solid: hit.legIndex >= 0 || !!hit.strong || !!hit.surface,
+          });
           removeShot(shot);
           consumed = true;
         }
@@ -312,6 +315,7 @@ export function buildSummitDischarge(ctx, player, loadout, spec = null) {
         if (swept && swept.length) {
           hitsLanded += 1;
           ctx.vfx?.spark?.(swept[0].x, swept[0].y, swept[0].z, 1.0, false, true);
+          ctx.audio?.crescentImpact?.(swept[0].x, swept[0].z);
           removeShot(shot);
           consumed = true;
         }
@@ -324,6 +328,7 @@ export function buildSummitDischarge(ctx, player, loadout, spec = null) {
           const wy = py + shot.direction.y * wallAt;
           const wz = pz + shot.direction.z * wallAt;
           ctx.vfx?.spark?.(wx, wy, wz, 0.8, true, true);
+          ctx.audio?.crescentImpact?.(wx, wz, { solid: true });
           removeShot(shot);
           consumed = true;
         }
@@ -346,6 +351,8 @@ export function buildSummitDischarge(ctx, player, loadout, spec = null) {
       if (struckGround) {
         ctx.vfx?.spark?.(shot.root.position.x, ground + 0.06, shot.root.position.z,
           0.7, true, true);
+        ctx.audio?.crescentImpact?.(shot.root.position.x, shot.root.position.z,
+          { solid: true });
       }
       if (shot.distance >= FAR_TRAVEL || struckGround) removeShot(shot);
     }

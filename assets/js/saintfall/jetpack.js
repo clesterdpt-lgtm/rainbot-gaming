@@ -219,6 +219,7 @@ export function buildJetpack(ctx, player, options = {}) {
     leapCooldownRemaining: 0,
     leapPulse: 0,
     leapAirborne: false,
+    leapImpactSpeed: 0,
     leaps: 0,
     leapBlockedReason: null,
     /* The sustained horizontal of a leap in flight, and the bearing
@@ -266,6 +267,7 @@ export function buildJetpack(ctx, player, options = {}) {
     state.leapCooldownRemaining = 0;
     state.leapPulse = 0;
     state.leapAirborne = false;
+    state.leapImpactSpeed = 0;
     state.leapBlockedReason = null;
     boostVisualThrottle = 0;
     wingSpread = 0;
@@ -392,6 +394,13 @@ export function buildJetpack(ctx, player, options = {}) {
       state.leapCooldownRemaining = Math.max(0, state.leapCooldownRemaining - dt);
       state.leapPulse = Math.max(0, state.leapPulse - dt);
       state.leapDriveRemaining = Math.max(0, state.leapDriveRemaining - dt);
+      /* The ordinary fall solver zeroes `vy` on the touchdown frame.
+         Hold onto the fastest downward sample here so the landing cue
+         receives the impact that actually happened instead of a zero. */
+      if (state.leapAirborne && !playerState.grounded) {
+        state.leapImpactSpeed = Math.max(state.leapImpactSpeed,
+          Math.max(0, -(playerState.vy || 0)));
+      }
       /* Landing ends the drive: a leap is the flight, not a skate
          along the ground after it. */
       if (playerState.grounded && state.leapDriveRemaining > 0 && !pressed) {
@@ -411,6 +420,7 @@ export function buildJetpack(ctx, player, options = {}) {
           state.leapCooldownRemaining = LEAP.cooldown;
           state.leapPulse = LEAP.pulse;
           state.leapAirborne = true;
+          state.leapImpactSpeed = 0;
           state.leaps += 1;
           /* The bearing is the STICK's, read camera-relative exactly
              as the boost reads it, so a leap goes where the player
@@ -440,7 +450,13 @@ export function buildJetpack(ctx, player, options = {}) {
         state.leapAirborne = false;
         state.landPulse = 1;
         state.landings += 1;
-        ctx.audio?.jetLand?.(Math.max(4, Math.abs(playerState.vy || 0)));
+        /* The vertical impulse is a conservative fallback for a single
+           long frame that crosses from ascent to grounded between audio
+           samples. It affects sound weight only, never the leap solve. */
+        const impactSpeed = Math.max(LEAP.vertical * 0.65, state.leapImpactSpeed);
+        state.lastLandingSpeed = impactSpeed;
+        ctx.audio?.leapLand?.(playerState.x, playerState.z, impactSpeed);
+        state.leapImpactSpeed = 0;
         ctx.doctrine?.verb?.("leapLand", { x: playerState.x, z: playerState.z });
       }
     } else if (pressed && !state.active && !state.needsRelease && !pinned

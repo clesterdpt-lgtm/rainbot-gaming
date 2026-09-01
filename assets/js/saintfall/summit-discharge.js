@@ -284,10 +284,20 @@ export function buildSummitDischarge(ctx, player, loadout, spec = null) {
               source: "crescent", x: hit.x, y: hit.y, z: hit.z,
             });
           }
-          ctx.combat.damageEnemy(hit.inst, damageAt(shot.distance + hit.t), {
-            source: "crescent", x: hit.x, y: hit.y, z: hit.z,
-            head: !!hit.head, weak: !!hit.weak, sac: hit.sacIndex >= 0,
-          });
+          const jointMult = hit.legIndex >= 0 && hit.joint
+            ? (box?.joints?.mult || 1) : 1;
+          const damage = damageAt(shot.distance + hit.t) * jointMult;
+          if (hit.legIndex >= 0) {
+            ctx.combat.damageLeg?.(hit.inst, hit.legIndex, damage, {
+              source: "crescent", x: hit.x, y: hit.y, z: hit.z,
+              joint: !!hit.joint,
+            });
+          } else {
+            ctx.combat.damageEnemy(hit.inst, damage, {
+              source: "crescent", x: hit.x, y: hit.y, z: hit.z,
+              head: !!hit.head, weak: !!hit.weak, sac: hit.sacIndex >= 0,
+            });
+          }
           hitsLanded += 1;
           ctx.vfx?.spark?.(hit.x, hit.y, hit.z, 1.0, false, true);
           removeShot(shot);

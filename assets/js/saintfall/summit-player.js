@@ -133,18 +133,17 @@ const BASTION_PENITENT = {
      the flight chord performs a single jet-boosted leap and nothing
      ever hovers (jetpack.js leap mode). Costs and impulse are the
      bulwark's - expensive, high, and committed. */
-  /* A boiler on legs buys ground, not lift: 24 m/s held for most of
-     the arc carries the bulwark ~18m and clears most of what the
-     mountain puts in its way, which is the whole point of the verb
-     for a figure that walks at 3.15. Higher and faster than the
-     first pass, which set a one-frame nudge and travelled ~4m. */
+  /* A boiler on legs buys ground, not lift: 50 m/s held across the
+     arc carries the bulwark ~58m (triple the baseline distance) and
+     clears vast crater gaps and ridges, which is the whole point of
+     the verb for a figure that walks at 3.15. */
   jetpackProfile: {
     mode: "leap",
     leap: {
       cost: 22,
-      vertical: 13.8,
-      driveSpeed: 24.0,
-      driveSeconds: 0.85,
+      vertical: 15.0,
+      driveSpeed: 50.0,
+      driveSeconds: 1.25,
       fade: 0.30,
       cooldown: 1.7,
     },

@@ -34,6 +34,23 @@ new `saintfall-brace-stance-probe` 14/14 measured cases across Saint Aurel,
 Saint Veyra and Saint Torren (7 skipped where the verb refuses to ignite mid
 swing), leg rig 12/12 on both bodies, walk shape unchanged.
 
+**SAINTFALL: Saint Torren powered leap triple-distance tuning**:
+Saint Torren's Censer pack leap parameters (`jetpackProfile.leap`) were upgraded to triple the ground covered by the leap chord (Shift + Space). Drive speed was scaled from 24 m/s to 50 m/s held across a 1.25s drive window with a 15.0 vertical impulse, taking the horizontal leap distance from 18.6m to 58.7m (3.15× baseline) at 5.6m peak height and 1.37s aloft. Build pin `20260831-torren-leap-fix-1`. Gates: `saintfall-kenosis-mobility-probe` 21/21 passed (58.7m horizontal, 5.6m rise), `saintfall-kenosis-kit-probe` verified full kit integrity and landing registration.
+
+**SAINTFALL: Saint Veyra and Saint Torren can break the Distaff's footing**:
+Both operative weapons already received the shared raycaster's authored
+`legIndex` / joint verdict, but their kit modules discarded it and sent every
+impact through ordinary body damage. Crescent projectiles and Hammer Cast now
+route only classified leg impacts through `damageLeg`, preserve their
+`crescent` / `hammer-cast` source identity, and apply the Distaff joint
+multiplier. The production encounter—not a direct footing write—now collapses
+for Veyra after 56 real crescents and for Torren after eight real casts while
+the boss's normal footing recovery runs. Build pin
+`20260831-torren-leap-operative-limb-fix-1`. Gates: new focused Distaff operative
+probe 5/5 with real projectiles, real cooldowns, real `legHit` events, and a
+console-clean browser run; Distaff lifecycle 64/64, Winnower operative audit
+6/6, campaign operative carryover 20/20, and save integrity 62/62.
+
 **SAINTFALL: restored Distaff shell and clean dormant Glass Scar**: The
 Distaff's winding correction now follows the live SkinnedMesh rather than a
 module-wide dressed flag. Field-state loads reconstruct the enemy roster, so

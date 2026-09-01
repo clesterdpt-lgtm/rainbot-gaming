@@ -210,6 +210,22 @@ The expanded harness is **64/64**, including a real roster-rebuilding save/load,
 zero dormant lair webs, the GPU side-signature, every web combat contract, and
 no browser or asset errors. Save integrity remains **62/62**.
 
+## Operative follow-up — Veyra and Torren spend footing too
+
+The shared enemy raycaster already classified Veyra's crescents and Torren's
+Hammer Cast as Distaff leg or joint impacts, but both operative kit modules
+discarded `legIndex` and called ordinary body damage unconditionally. Their
+authored attacks now keep that verdict: leg impacts call `damageLeg`, joint
+impacts retain the Distaff's 1.75× multiplier, and body impacts keep their old
+path. No footing value, cooldown, damage value, or collapse threshold was
+retuned.
+
+`scripts/saintfall-distaff-operative-probe.mjs` drives both campaign kits from
+real unobstructed lanes and listens to the production `legHit` bus. Saint Veyra
+collapses the standing boss after 56 real crescents; Saint Torren does it after
+eight real Hammer Casts while the normal eight-second cooldown and footing
+regeneration continue. The focused probe is **5/5** and console-clean.
+
 ## Traps this pass hit
 
 - **`_teleportRaw` steps a whole frame.** An orbit test that teleported the

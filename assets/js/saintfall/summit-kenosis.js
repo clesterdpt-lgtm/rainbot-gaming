@@ -1489,10 +1489,21 @@ export function buildKenosisKit(ctx, player, loadout) {
           ? tune("castReturnDamage", KIT.hammer.returnDamage,
             { outbound: KIT.hammer.damage })
           : KIT.hammer.damage;
-        ctx.combat.damageEnemy(hit.inst, dmg, {
-          source: "hammer-cast", x: hit.x, y: hit.y, z: hit.z,
-          head: !!hit.head, weak: !!hit.weak,
-        });
+        const box = ctx.combat.hitbox?.[hit.inst.key];
+        const jointMult = hit.legIndex >= 0 && hit.joint
+          ? (box?.joints?.mult || 1) : 1;
+        const damage = dmg * jointMult;
+        if (hit.legIndex >= 0) {
+          ctx.combat.damageLeg?.(hit.inst, hit.legIndex, damage, {
+            source: "hammer-cast", x: hit.x, y: hit.y, z: hit.z,
+            joint: !!hit.joint,
+          });
+        } else {
+          ctx.combat.damageEnemy(hit.inst, damage, {
+            source: "hammer-cast", x: hit.x, y: hit.y, z: hit.z,
+            head: !!hit.head, weak: !!hit.weak,
+          });
+        }
         const downed = ctx.combat.groundFlyer?.(hit.inst,
           { stun: tune("castKnockdownStun", KIT.hammer.knockdownStun) });
         if (downed) hammer.grounded += 1;

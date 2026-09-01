@@ -1855,7 +1855,7 @@ export async function buildReliquaryFigure(ctx) {
    INPUT
    ============================================================ */
 
-function makeInput(canvas, captureMeleeAim = null) {
+function makeInput(canvas, captureMeleeIntent = null) {
   const keys = new Set();
   const state = {
     clock: 0,
@@ -1929,8 +1929,10 @@ function makeInput(canvas, captureMeleeAim = null) {
       return true;
     }
     if (type === "melee" && !Number.isFinite(detail.aimYaw)) {
-      const aimYaw = captureMeleeAim?.();
-      state.events.push({ type, ...detail, aimYaw });
+      const captured = captureMeleeIntent?.();
+      const intent = captured && typeof captured === "object"
+        ? captured : { aimYaw: captured };
+      state.events.push({ type, ...intent, ...detail });
     } else {
       state.events.push({ type, ...detail });
     }
@@ -2016,7 +2018,10 @@ function makeInput(canvas, captureMeleeAim = null) {
          event is drained after player.update(), so sampling there
          would let mouse-look during the same frame silently redirect
          an attack the player already committed. */
-      state.events.push({ type: "melee", aimYaw: captureMeleeAim?.() });
+      const captured = captureMeleeIntent?.();
+      const intent = captured && typeof captured === "object"
+        ? captured : { aimYaw: captured };
+      state.events.push({ type: "melee", ...intent });
     }
     else if (keybindMatches("stratagems", k)) state.events.push({ type: "stratOpen" });
     else if (keybindMatches("vent", k)) state.events.push({ type: "vent" });
@@ -2367,9 +2372,68 @@ export async function createPlayer(ctx, canvas) {
     aimHold: 0,
   };
 
-  const input = makeInput(canvas, () => Number.isFinite(state.aimViewYaw)
-    ? state.aimViewYaw
-    : state.camYaw);
+  /* RETICLE-OWNED MELEE ARRIVAL.
+   *
+   * A forward lunge is allowed to help only when the centre reticle's
+   * real camera ray intersects a target. A broad cone or nearest-enemy
+   * search would turn this into hidden lock-on and pull the player toward
+   * things they did not choose. The hit point is stored relative to the
+   * creature so the short wind-up can follow ordinary enemy travel
+   * without chasing a different target. Ordinary capsule hits report
+   * their centre plane, so their radius is folded into the stopping gap;
+   * rendered and segmented hits already report their true entry surface. */
+  const MELEE_ASSIST_CAPTURE_RANGE = 14;
+  const MELEE_ASSIST_MAX_TARGET_HEIGHT = 5.5;
+  const MELEE_ASSIST_PLAYER_GAP = 0.58;
+  const MELEE_ASSIST_BRAKE = 42;
+  const MELEE_ASSIST_MAX_STEER = Math.PI / 10;
+  const meleeCaptureOrigin = new THREE.Vector3();
+  const meleeCaptureDirection = new THREE.Vector3();
+
+  function captureMeleeIntent() {
+    const aimYaw = Number.isFinite(state.aimViewYaw)
+      ? state.aimViewYaw : state.camYaw;
+    const intent = { aimYaw };
+    const camera = ctx.render?.camera || ctx.camera;
+    if (!camera || !ctx.combat?.raycastEnemies || !ctx.collide?.rayBlock) return intent;
+
+    camera.updateWorldMatrix?.(true, false);
+    camera.getWorldPosition(meleeCaptureOrigin);
+    camera.getWorldDirection(meleeCaptureDirection);
+    const wall = ctx.collide.rayBlock(
+      meleeCaptureOrigin.x, meleeCaptureOrigin.y, meleeCaptureOrigin.z,
+      meleeCaptureDirection.x, meleeCaptureDirection.y, meleeCaptureDirection.z,
+      MELEE_ASSIST_CAPTURE_RANGE
+    );
+    const hit = ctx.combat.raycastEnemies(
+      meleeCaptureOrigin.x, meleeCaptureOrigin.y, meleeCaptureOrigin.z,
+      meleeCaptureDirection.x, meleeCaptureDirection.y, meleeCaptureDirection.z,
+      Math.min(MELEE_ASSIST_CAPTURE_RANGE, wall)
+    );
+    if (!hit?.inst || !Number.isFinite(hit.x) || !Number.isFinite(hit.y)
+      || !Number.isFinite(hit.z)) return intent;
+    /* Do not drag a grounded opener toward a target its swing cannot
+       honestly reach. Flyers/perchers get their own earned grounding
+       windows, and high boss anatomy must be approached through a leg or
+       another low target rather than magnetising the player underneath it. */
+    if (((hit.inst.spec?.flies || hit.inst.spec?.perches) && !hit.inst.grounded)
+      || hit.y < state.y - 0.8
+      || hit.y > state.y + MELEE_ASSIST_MAX_TARGET_HEIGHT) return intent;
+    const box = ctx.combat.hitbox?.[hit.inst.key];
+    const centrePlaneHit = !!box
+      && !hit.surface && !hit.weak
+      && !box.segments && !box.sac && !box.sacs && !box.legs;
+    const targetRadius = centrePlaneHit ? Math.max(0, Number(box.r) || 0) : 0;
+    intent.meleeTarget = {
+      inst: hit.inst,
+      offsetX: hit.x - hit.inst.x,
+      offsetZ: hit.z - hit.inst.z,
+      stopGap: MELEE_ASSIST_PLAYER_GAP + targetRadius,
+    };
+    return intent;
+  }
+
+  const input = makeInput(canvas, captureMeleeIntent);
 
   const EYE = 1.62;
   const CAMERA_AIM_BIAS = Math.atan2(0.35, state.camDist);
@@ -3502,6 +3566,11 @@ export async function createPlayer(ctx, canvas) {
     turnSweep: null,
     turnDir: 0,
     strikeArc: null,
+    /* The exact enemy hit selected by the centre reticle at the
+       lunge press. This is intentionally absent on ordinary swings and
+       the piercing thrust: only the forward opener promises to arrive
+       at a target without travelling through it. */
+    lungeTarget: null,
   };
   const actionPose = {
     x: 0, y: 0, z: 0, pitch: 0, yaw: 0, roll: 0,
@@ -3553,7 +3622,7 @@ export async function createPlayer(ctx, canvas) {
     writeActionPose(k, i, k[i], k[Math.min(k.length - 1, i + 1)], time);
   }
 
-  function beginAction(name, aimYaw = null) {
+  function beginAction(name, aimYaw = null, meleeTarget = null) {
     const spec = ACTIONS[name];
     if (!spec) return false;
     action.name = name;
@@ -3564,6 +3633,11 @@ export async function createPlayer(ctx, canvas) {
     action.turnSweep = null;
     action.turnDir = 0;
     action.strikeArc = null;
+    action.lungeTarget = name === "meleeLunge"
+      && meleeTarget?.inst
+      && Number.isFinite(meleeTarget.offsetX)
+      && Number.isFinite(meleeTarget.offsetZ)
+      ? meleeTarget : null;
     action.aimYaw = name.startsWith("melee") && Number.isFinite(aimYaw)
       ? Math.atan2(Math.sin(aimYaw), Math.cos(aimYaw))
       : null;
@@ -3600,7 +3674,7 @@ export async function createPlayer(ctx, canvas) {
    *  publishes a `meleeSpec` (melee/reach/damage) for the operative's
    *  held props. Gating the fallback on the explicit operative flag means a
    *  campaign lance in ranged mode still refuses exactly as before. */
-  function meleeSwing(capturedAimYaw = null) {
+  function meleeSwing(capturedAimYaw = null, meleeTarget = undefined) {
     const w = ctx.weapons && ctx.weapons.current;
     const kitSpec = (ctx.operativeKitActive || !ctx.weapons)
       && ctx.loadout?.meleeSpec?.melee
@@ -3664,7 +3738,14 @@ export async function createPlayer(ctx, canvas) {
        forward-tilted touch stick), read at the moment the swing
        actually begins so a buffered chain re-evaluates it. */
     if (action.combo === 1 && input.state.move.y < -0.25) {
-      return beginAction("meleeLunge", aimYaw);
+      /* Main routes the press-time target here. Direct consumers such as
+         Kenosis can omit it and still get the same reticle-exact solve at
+         the moment they invoke the swing. An explicit null means the
+         press saw empty space and must stay unassisted. */
+      const target = meleeTarget === undefined
+        ? captureMeleeIntent().meleeTarget || null
+        : meleeTarget;
+      return beginAction("meleeLunge", aimYaw, target);
     }
     return beginAction(`melee${action.combo}`, aimYaw);
   }
@@ -3730,6 +3811,7 @@ export async function createPlayer(ctx, canvas) {
     action.turnSweep = null;
     action.turnDir = 0;
     action.strikeArc = null;
+    action.lungeTarget = null;
     sampleAction(0);
     return true;
   }
@@ -3793,6 +3875,7 @@ export async function createPlayer(ctx, canvas) {
       action.name = null;
       action.spec = null;
       action.aimYaw = null;
+      action.lungeTarget = null;
       /* The grace period begins after recovery, not at the first wind-up.
          Starting it when the strike began consumed most of the nominal
          window inside the authored animation and left only a few tenths for
@@ -3804,6 +3887,50 @@ export async function createPlayer(ctx, canvas) {
 
   function groundY(x, z) {
     return ctx.collide ? ctx.collide.groundHeight(x, z) : terrain.heightAt(x, z);
+  }
+
+  const lungeArrival = {
+    x: 0, z: 0, distance: 0, remaining: 0, yaw: 0,
+  };
+
+  /** Live arrival solve for the reticle-selected lunge target.
+   *
+   * The hit offset follows enemy translation for the few tenths of a
+   * second between press and impact. Steering is capped to a small correction
+   * around the committed bearing, so this can prevent a near miss without
+   * becoming a lock-on that chases a creature across the player's screen. */
+  function readLungeArrival() {
+    const target = action.name === "meleeLunge" ? action.lungeTarget : null;
+    const inst = target?.inst;
+    if (!inst || inst.state === "death"
+      || (ctx.combat?.targetable && !ctx.combat.targetable(inst))) {
+      action.lungeTarget = null;
+      return null;
+    }
+    const x = inst.x + target.offsetX;
+    const z = inst.z + target.offsetZ;
+    if (!Number.isFinite(x) || !Number.isFinite(z)) {
+      action.lungeTarget = null;
+      return null;
+    }
+    const dx = x - state.x;
+    const dz = z - state.z;
+    const distance = Math.hypot(dx, dz);
+    const targetYaw = distance > 1e-5 ? Math.atan2(dx, dz) : action.aimYaw;
+    const correction = clamp(
+      angleDelta(action.aimYaw, targetYaw),
+      -MELEE_ASSIST_MAX_STEER,
+      MELEE_ASSIST_MAX_STEER
+    );
+    lungeArrival.x = x;
+    lungeArrival.z = z;
+    lungeArrival.distance = distance;
+    const stopGap = Number.isFinite(target.stopGap)
+      ? Math.max(MELEE_ASSIST_PLAYER_GAP, target.stopGap)
+      : MELEE_ASSIST_PLAYER_GAP;
+    lungeArrival.remaining = Math.max(0, distance - stopGap);
+    lungeArrival.yaw = action.aimYaw + correction;
+    return lungeArrival;
   }
 
   /** Update only the steep-DOWNHILL presentation latch.
@@ -4660,6 +4787,7 @@ export async function createPlayer(ctx, canvas) {
       } else if (dt0 <= driveSpec.end) lungeDrive = 1;
       else lungeDrive = clamp01(1 - (dt0 - driveSpec.end) / Math.max(1e-4, driveSpec.fade));
     }
+    const meleeArrival = readLungeArrival();
     /* The leap's sustained horizontal (leap-mode packs only). Read
        once here because it gates the travel below as well as the
        speed: with the stick centred the solver drives `wanted` to
@@ -4694,6 +4822,15 @@ export async function createPlayer(ctx, canvas) {
           : MELEE_LUNGE_SPEED;
         state.speed = Math.max(state.speed,
           driveMax * lungeDrive * state.slowFactor);
+      }
+      if (meleeArrival) {
+        /* Begin braking early enough that the authored burst still reads as
+           momentum, then clamp the final substep below as the no-pass
+           guarantee. sqrt(2ad) is the maximum speed that can shed its
+           velocity inside the remaining arrival distance. */
+        const arrivalSpeed = Math.sqrt(2 * MELEE_ASSIST_BRAKE * meleeArrival.remaining);
+        state.speed = Math.min(state.speed, arrivalSpeed);
+        if (meleeArrival.remaining <= 1e-4) state.speed = 0;
       }
       /* A LEAPING PACK CARRIES ITS OWN HORIZONTAL, on exactly the
          terms the lunge does: a floor under the damped speed rather
@@ -4856,7 +4993,12 @@ export async function createPlayer(ctx, canvas) {
     const motionStartZ = state.z;
     let downhillUpdated = false;
     if ((mag > 0.01 || boostMode || lungeDrive > 0 || !!jetDrive) && !slamMode) {
-      const step = state.speed * dt;
+      const rawStep = state.speed * dt;
+      const step = meleeArrival
+        ? Math.min(rawStep, meleeArrival.remaining)
+        : rawStep;
+      const completingMeleeArrival = !!meleeArrival
+        && meleeArrival.remaining <= rawStep + 1e-5;
       /* Melee and ranged aim commitment can own the BODY bearing, but
          neither may steal the movement stick. Preserve the same
          camera-relative travel the pressed WASD direction requested;
@@ -4875,6 +5017,7 @@ export async function createPlayer(ctx, canvas) {
          because air control over a jump is what makes it a verb
          rather than a cutscene. */
       const moveYaw = boostMode ? boostState.yaw
+        : lungeDrive > 0 && meleeArrival ? meleeArrival.yaw
         : lungeDrive > 0 && Number.isFinite(action.aimYaw) ? action.aimYaw
         : (jetDrive && mag <= 0.01) ? jetDrive.yaw
         : (shieldMode || meleeFacing || state.aimCommit > 0.002)
@@ -5057,6 +5200,7 @@ export async function createPlayer(ctx, canvas) {
         state.gait += gaitTravel / Math.max(0.55, readGaitSpec().strideLen);
         state.x = px;
         state.z = pz;
+        if (completingMeleeArrival) state.speed = 0;
       }
       }
     }

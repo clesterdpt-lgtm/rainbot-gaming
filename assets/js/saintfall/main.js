@@ -1042,10 +1042,11 @@ export async function start({ boot, build } = {}) {
   let meleeBorrowed = false;
   let meleeHoldTime = 0;
   let meleeAimYaw = null;
+  let meleeAimTarget = null;
   let meleeCharging = false;
   let meleePending = null;
 
-  function meleeStrike(aimYaw = null) {
+  function meleeStrike(aimYaw = null, meleeTarget = null) {
     if (combat.player.dead) return false;
     if (jetpack.state.inFlight) return false;
     if (shield.state.active) return false;
@@ -1064,7 +1065,7 @@ export async function start({ boot, build } = {}) {
        returns false for that case as well as for a refusal - so the
        rite is handed back on the ACTION ending, not on this result.
        Returning it here dropped the player out of melee mid-combo. */
-    if (!player.meleeSwing(aimYaw) && wasRanged && !player.action) {
+    if (!player.meleeSwing(aimYaw, meleeTarget) && wasRanged && !player.action) {
       weapons.setMode("ranged");
       meleeBorrowed = false;
       return false;
@@ -1072,7 +1073,7 @@ export async function start({ boot, build } = {}) {
     return true;
   }
 
-  function meleePierce(aimYaw = null, chargeRatio = 1.0) {
+  function meleePierce(aimYaw = null, chargeRatio = 1.0, meleeTarget = null) {
     if (combat.player.dead) return false;
     if (jetpack.state.inFlight) return false;
     if (shield.state.active) return false;
@@ -1087,7 +1088,7 @@ export async function start({ boot, build } = {}) {
     const targetCost = Math.round(15 + ratio * 35);
     const available = jetpack.state.fuel || 0;
     if (available < 15 - 1e-4) {
-      return meleeStrike(aimYaw);
+      return meleeStrike(aimYaw, meleeTarget);
     }
     const cost = Math.min(available, targetCost);
     jetpack.spend(cost, true, true);
@@ -1103,10 +1104,10 @@ export async function start({ boot, build } = {}) {
   /* A press must survive the ordinary low-ready/sheathed carry. Previously
      the input was consumed while the lance was still on the trooper's back;
      by the time the draw finished there was no action left to perform. */
-  function queueMelee(kind, aimYaw = null, chargeRatio = 1.0) {
+  function queueMelee(kind, aimYaw = null, chargeRatio = 1.0, meleeTarget = null) {
     calmFor = 0;
     weapons.setStow(false);
-    meleePending = { kind, aimYaw, chargeRatio };
+    meleePending = { kind, aimYaw, chargeRatio, meleeTarget };
   }
 
   function resolveQueuedMelee(canChargePierce, blocked) {
@@ -1119,9 +1120,10 @@ export async function start({ boot, build } = {}) {
     const pending = meleePending;
     meleePending = null;
     if (pending.kind === "pierce" && canChargePierce) {
-      return meleePierce(pending.aimYaw, pending.chargeRatio ?? 1.0);
+      return meleePierce(pending.aimYaw, pending.chargeRatio ?? 1.0,
+        pending.meleeTarget);
     }
-    return meleeStrike(pending.aimYaw);
+    return meleeStrike(pending.aimYaw, pending.meleeTarget);
   }
 
   /* ------------------------------------------------------------
@@ -1265,13 +1267,15 @@ export async function start({ boot, build } = {}) {
       else if (ev.type === "melee" && !boost.state.active && !shield.state.active) {
         const measureRank = progression.rank?.("procession_executioners_measure") || 0;
         meleeAimYaw = ev.aimYaw;
+        meleeAimTarget = Object.hasOwn(ev, "meleeTarget") ? ev.meleeTarget : null;
         calmFor = 0;
         weapons.setStow(false);
         if (measureRank > 0 && player.input.state.meleeHeld && (jetpack.state.fuel || 0) >= 15 - 1e-4) {
           meleeHoldTime = 0;
           meleeCharging = true;
         } else {
-          queueMelee("strike", ev.aimYaw);
+          queueMelee("strike", ev.aimYaw, 1.0, meleeAimTarget);
+          meleeAimTarget = null;
         }
       }
     }
@@ -1293,10 +1297,12 @@ export async function start({ boot, build } = {}) {
         audio.meleePierceCharge?.(progress);
         vfx.meleePierceCharge?.(player.state.x, player.state.y, player.state.z, progress, measureRankVal);
         if (meleeHoldTime >= MELEE_CHARGE_MAX && weapons.stowPhase <= 0.08) {
-          meleePierce(meleeAimYaw ?? player.state.aimViewYaw, 1.0);
+          meleePierce(meleeAimYaw ?? player.state.aimViewYaw,
+            1.0, meleeAimTarget);
           audio.meleePierceCharge?.(0);
           meleeHoldTime = 0;
           meleeCharging = false;
+          meleeAimTarget = null;
         }
       }
     } else if (meleeCharging) {
@@ -1305,13 +1311,16 @@ export async function start({ boot, build } = {}) {
         if (meleeHoldTime >= MELEE_HOLD_GATE && canChargePierce) {
           const progress = Math.min(1.0, (meleeHoldTime - MELEE_HOLD_GATE) / (MELEE_CHARGE_MAX - MELEE_HOLD_GATE));
           const chargeRatio = Math.max(0.15, progress);
-          queueMelee("pierce", meleeAimYaw ?? player.state.aimViewYaw, chargeRatio);
+          queueMelee("pierce", meleeAimYaw ?? player.state.aimViewYaw,
+            chargeRatio, meleeAimTarget);
         } else {
-          queueMelee("strike", meleeAimYaw ?? player.state.aimViewYaw);
+          queueMelee("strike", meleeAimYaw ?? player.state.aimViewYaw,
+            1.0, meleeAimTarget);
         }
       }
       meleeCharging = false;
       meleeHoldTime = 0;
+      meleeAimTarget = null;
     }
     resolveQueuedMelee(canChargePierce, meleeBlocked);
     const melee = weapons.current && weapons.current.spec.melee;

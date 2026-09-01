@@ -1646,7 +1646,7 @@ export function buildKenosisKit(ctx, player, loadout) {
     return !player.state.grounded;
   }
 
-  function routeMeleePress(aimYaw) {
+  function routeMeleePress(aimYaw, meleeTarget = undefined) {
     if (ctx.slam?.state?.active) return;
     if (isBastion && blockState.active) return;
     if (isBastion && hammer.phase !== "held") {
@@ -1654,14 +1654,14 @@ export function buildKenosisKit(ctx, player, loadout) {
       ctx.audio?.blip?.(200, 0.05, 0.06, "square");
       return;
     }
-    player.meleeSwing?.(aimYaw);
+    player.meleeSwing?.(aimYaw, meleeTarget);
   }
 
   /* One press, two rites, decided by altitude - exactly the
      campaign's routing: a press in the air is the Fall, and a Fall
      that refuses falls back to the swing rather than eating the
      press. Shared by the melee keybind and the Vigil's right button. */
-  function pressMelee(aimYaw) {
+  function pressMelee(aimYaw, meleeTarget = undefined) {
     if (airborne()) {
       /* Two operatives, two answers to being in the air. The scout
          throws an AIMED line (the stoop); the bulwark drops the
@@ -1677,7 +1677,7 @@ export function buildKenosisKit(ctx, player, loadout) {
         if (ctx.jetpack?.state?.inFlight || ctx.slam?.state?.active) return;
       }
     }
-    routeMeleePress(aimYaw);
+    routeMeleePress(aimYaw, meleeTarget);
   }
 
   function update(dt) {
@@ -1690,7 +1690,10 @@ export function buildKenosisKit(ctx, player, loadout) {
         if (!ctx.jetpack?.state?.inFlight) ctx.boost?.trigger?.();
         continue;
       }
-      if (ev.type === "melee") pressMelee(ev.aimYaw);
+      if (ev.type === "melee") {
+        pressMelee(ev.aimYaw,
+          Object.hasOwn(ev, "meleeTarget") ? ev.meleeTarget : null);
+      }
     }
     const input = player.input?.state || {};
     if (!dead && !stunned && !player.state.free) {

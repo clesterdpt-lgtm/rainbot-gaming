@@ -22,7 +22,11 @@
         captured bearing. A negative offset takes the mirrored clip.
      6. LUNGE: forward held at the press turns the opener into
         meleeLunge - a committed dash along the captured bearing that
-        reaches a target the standing swing cannot.
+        reaches a target the standing swing cannot. When the real
+        centre ray is on that target, the dash brakes before its surface
+        instead of carrying the player through it.
+     7. An enemy outside the reticle receives no arrival assist and the
+        original open-space lunge distance remains available.
 
    Usage:
      node scripts/saintfall-melee-reticle-probe.mjs [outfile.json]
@@ -45,6 +49,11 @@ const BASE = `http://127.0.0.1:${PORT}`;
 const AIM_TOLERANCE_DEG = 3;
 const RETICLE_MOVE_MIN_DEG = 60;
 const DAMAGE_EPSILON = 1e-6;
+/* Gleaner body radius (0.80m) plus the player's 0.58m body/readability
+   gap. The tolerance catches both overlap and an over-cautious stop. */
+const ARRIVAL_GAP_MIN = 1.28;
+const ARRIVAL_GAP_MAX = 1.48;
+const OPEN_LUNGE_MIN = 4.5;
 
 function startServer() {
   const child = spawn("/opt/homebrew/bin/python3",
@@ -548,48 +557,111 @@ async function main() {
       const Q = window.__SF_MELEE_RETICLE_QA;
       const reset = Q.reset(0, 0);
       const state = T.player.state;
-      const capturedAimYaw = state.aimViewYaw ?? state.camYaw;
       const distance = 6.5;
-      const target = T.enemies.spawn("gleaner",
-        state.x + Math.sin(capturedAimYaw) * distance,
-        state.z + Math.cos(capturedAimYaw) * distance,
+      const initialAimYaw = state.aimViewYaw ?? state.camYaw;
+      const targetX = state.x + Math.sin(initialAimYaw) * distance;
+      const targetZ = state.z + Math.cos(initialAimYaw) * distance;
+      const targetY = T.ctx.collide.groundHeight(targetX, targetZ);
+      /* Aim before spawning so the ranged subject cannot retreat during
+         aimAt's convergence frames and quietly change the test distance. */
+      const aim = T.aimAt(targetX, targetY + 1.8, targetZ, 4);
+      const capturedAimYaw = state.aimViewYaw ?? state.camYaw;
+      const target = T.enemies.spawn("gleaner", targetX, targetZ,
         { health: 1000, yaw: capturedAimYaw + Math.PI });
       Q.lunge = {
         capturedAimYaw,
         target,
+        targetX,
+        targetZ,
         targetHealthBefore: target?.health ?? null,
         startX: state.x,
         startZ: state.z,
       };
-      return { reset, spawned: !!target, targetDistance: distance };
+      return { reset, spawned: !!target, targetDistance: distance, aim };
     });
     await page.keyboard.down("KeyW");
     await page.keyboard.press("KeyF");
+    const lungePressCapture = await page.evaluate(() => {
+      const T = window.__SF;
+      const Q = window.__SF_MELEE_RETICLE_QA;
+      const P = Q.lunge;
+      const event = [...T.player.input.state.events]
+        .reverse().find((entry) => entry.type === "melee");
+      const lock = event?.meleeTarget;
+      const surfaceX = lock?.inst ? lock.inst.x + lock.offsetX : null;
+      const surfaceZ = lock?.inst ? lock.inst.z + lock.offsetZ : null;
+      return {
+        eventTargetMatches: !!lock && lock.inst === P.target,
+        initialSurfaceGap: Number.isFinite(surfaceX) && Number.isFinite(surfaceZ)
+          ? Number(Math.hypot(surfaceX - P.startX, surfaceZ - P.startZ).toFixed(3))
+          : null,
+      };
+    });
     const lungeStrike = await page.evaluate(() => {
       const T = window.__SF;
       const Q = window.__SF_MELEE_RETICLE_QA;
       const P = Q.lunge;
+      const pinTarget = () => {
+        if (!P.target) return;
+        P.target.x = P.targetX;
+        P.target.z = P.targetZ;
+      };
+      pinTarget();
       Q.step(1);
+      pinTarget();
       const started = Q.snapshot(P.capturedAimYaw);
       const spec = T.player.actionSpec("meleeLunge");
       let peakSpeed = 0;
+      let minimumSurfaceGap = Infinity;
+      const sampleSurfaceGap = () => {
+        const lock = T.player.actionState?.lungeTarget;
+        if (!lock?.inst) return null;
+        const gap = Math.hypot(
+          lock.inst.x + lock.offsetX - T.player.state.x,
+          lock.inst.z + lock.offsetZ - T.player.state.z
+        );
+        minimumSurfaceGap = Math.min(minimumSurfaceGap, gap);
+        return gap;
+      };
+      const targetLocked = T.player.actionState?.lungeTarget?.inst === P.target;
+      sampleSurfaceGap();
       const frames = Math.ceil(spec.hit[1] * 60) + 2;
       for (let i = 0; i < frames; i += 1) {
+        pinTarget();
         Q.step(1);
+        pinTarget();
         peakSpeed = Math.max(peakSpeed, T.player.state.speed);
+        sampleSurfaceGap();
       }
       const afterHit = Q.snapshot(P.capturedAimYaw);
       const dx = T.player.state.x - P.startX;
       const dz = T.player.state.z - P.startZ;
       const displacement = Math.hypot(dx, dz);
       const displacementYaw = displacement > 1e-5 ? Math.atan2(dx, dz) : P.capturedAimYaw;
-      Q.step(120);
+      let actionFrames = 0;
+      while (T.player.action === "meleeLunge" && actionFrames < 90) {
+        pinTarget();
+        Q.step(1);
+        pinTarget();
+        peakSpeed = Math.max(peakSpeed, T.player.state.speed);
+        sampleSurfaceGap();
+        actionFrames += 1;
+      }
+      const atActionEnd = Q.snapshot(P.capturedAimYaw);
+      const endDx = T.player.state.x - P.startX;
+      const endDz = T.player.state.z - P.startZ;
+      Q.step(2);
       return {
         started,
         afterHit,
+        atActionEnd,
         restored: Q.snapshot(),
+        targetLocked,
         peakSpeed: Number(peakSpeed.toFixed(2)),
         displacement: Number(displacement.toFixed(3)),
+        actionEndDisplacement: Number(Math.hypot(endDx, endDz).toFixed(3)),
+        minimumSurfaceGap: Number.isFinite(minimumSurfaceGap)
+          ? Number(minimumSurfaceGap.toFixed(3)) : null,
         displacementErrorDeg: Number(Q.angleErrorDeg(
           displacementYaw, P.capturedAimYaw
         ).toFixed(2)),
@@ -597,6 +669,59 @@ async function main() {
         targetHealthAfter: P.target?.health ?? null,
         targetDamage: P.targetHealthBefore === null
           ? null : Number((P.targetHealthBefore - (P.target?.health ?? 0)).toFixed(3)),
+      };
+    });
+    await page.keyboard.up("KeyW");
+
+    /* ----------------------------------------------------------
+       OPEN-SPACE CONTROL
+
+       A nearby enemy outside the centre ray must not bend or brake the
+       lunge. This is the guard against turning exact reticle intent into
+       a broad, sticky lock-on cone.
+       ---------------------------------------------------------- */
+    const openLungeSetup = await page.evaluate(() => {
+      const T = window.__SF;
+      const Q = window.__SF_MELEE_RETICLE_QA;
+      const reset = Q.reset(0, 0);
+      const state = T.player.state;
+      const aimYaw = state.aimViewYaw ?? state.camYaw;
+      const decoyYaw = aimYaw + Math.PI / 4;
+      const distance = 5.0;
+      const decoy = T.enemies.spawn("gleaner",
+        state.x + Math.sin(decoyYaw) * distance,
+        state.z + Math.cos(decoyYaw) * distance,
+        { health: 1000, yaw: decoyYaw + Math.PI });
+      Q.openLunge = {
+        aimYaw,
+        decoy,
+        startX: state.x,
+        startZ: state.z,
+      };
+      return { reset, spawned: !!decoy, decoyOffsetDeg: 45 };
+    });
+    await page.keyboard.down("KeyW");
+    await page.keyboard.press("KeyF");
+    const openLunge = await page.evaluate(() => {
+      const T = window.__SF;
+      const Q = window.__SF_MELEE_RETICLE_QA;
+      const P = Q.openLunge;
+      const event = [...T.player.input.state.events]
+        .reverse().find((entry) => entry.type === "melee");
+      const eventHasTarget = !!event?.meleeTarget;
+      Q.step(1);
+      const started = Q.snapshot(P.aimYaw);
+      const actionHasTarget = !!T.player.actionState?.lungeTarget;
+      const spec = T.player.actionSpec("meleeLunge");
+      const frames = Math.ceil(spec.hit[1] * 60) + 2;
+      for (let i = 0; i < frames; i += 1) Q.step(1);
+      const dx = T.player.state.x - P.startX;
+      const dz = T.player.state.z - P.startZ;
+      return {
+        started,
+        eventHasTarget,
+        actionHasTarget,
+        displacement: Number(Math.hypot(dx, dz).toFixed(3)),
       };
     });
     await page.keyboard.up("KeyW");
@@ -721,6 +846,10 @@ async function main() {
     check("holding forward makes the opener a lunge",
       lungeStrike.started.action === "meleeLunge" && lungeStrike.started.meleeMode,
       JSON.stringify(lungeStrike.started));
+    check("the centre reticle captures the lunge target at keypress",
+      lungePressCapture.eventTargetMatches && lungeStrike.targetLocked,
+      JSON.stringify({ press: lungePressCapture, live: lungeStrike.targetLocked,
+        aim: lungeSetup.aim }));
     check("the lunge dashes along the committed bearing",
       lungeStrike.displacement >= 2.2
         && lungeStrike.displacementErrorDeg <= 6
@@ -730,9 +859,24 @@ async function main() {
     check("the lunge reaches a target beyond the standing swing",
       Number.isFinite(lungeStrike.targetDamage) && lungeStrike.targetDamage > DAMAGE_EPSILON,
       `${lungeStrike.targetHealthBefore} -> ${lungeStrike.targetHealthAfter} at 6.5m`);
+    check("the targeted lunge brakes before crossing the enemy surface",
+      Number.isFinite(lungeStrike.minimumSurfaceGap)
+        && lungeStrike.minimumSurfaceGap >= ARRIVAL_GAP_MIN
+        && lungeStrike.minimumSurfaceGap <= ARRIVAL_GAP_MAX,
+      `minimum gap ${lungeStrike.minimumSurfaceGap}m; action travelled `
+        + `${lungeStrike.actionEndDisplacement}m`);
     check("ranged mode restores after the lunge",
       lungeStrike.restored.action === null && !lungeStrike.restored.meleeMode,
       JSON.stringify(lungeStrike.restored));
+    check("an off-reticle enemy receives no lunge assist",
+      openLungeSetup.spawned
+        && openLunge.started.action === "meleeLunge"
+        && !openLunge.eventHasTarget
+        && !openLunge.actionHasTarget,
+      JSON.stringify({ setup: openLungeSetup, strike: openLunge }));
+    check("the unassisted lunge keeps its open-space distance",
+      openLunge.displacement >= OPEN_LUNGE_MIN,
+      `${openLunge.displacement}m (minimum ${OPEN_LUNGE_MIN}m)`);
 
     check("page and console remain error-free",
       pageErrors.length === 0 && consoleErrors.length === 0,
@@ -746,6 +890,8 @@ async function main() {
         aimToleranceDeg: AIM_TOLERANCE_DEG,
         reticleMoveMinimumDeg: RETICLE_MOVE_MIN_DEG,
         damageEpsilon: DAMAGE_EPSILON,
+        arrivalGap: [ARRIVAL_GAP_MIN, ARRIVAL_GAP_MAX],
+        openLungeMinimum: OPEN_LUNGE_MIN,
       },
       primary: {
         setup: primarySetup,
@@ -767,7 +913,9 @@ async function main() {
       },
       lunge: {
         setup: lungeSetup,
+        pressCapture: lungePressCapture,
         strike: lungeStrike,
+        openSpace: { setup: openLungeSetup, strike: openLunge },
       },
       errors: { page: pageErrors, console: consoleErrors },
       checks,

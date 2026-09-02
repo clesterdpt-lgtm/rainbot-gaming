@@ -283,6 +283,10 @@ function readSettings() {
         ? !!saved.reducedMotion
         : prefersReducedMotion(),
       highContrast: !!saved.highContrast,
+      /* New operations default to the guided field orientation. The entry
+         screen owns the visible switch, but the preference lives beside the
+         other field settings so changing Saint bodies cannot lose it. */
+      tutorialEnabled: saved.tutorialEnabled !== false,
       // Default ON: it only ever acts when the frame is over budget.
       dynamicRes: saved.dynamicRes !== false,
       /* The renderer's tier (render.js QUALITY). Defaults to the tier
@@ -299,7 +303,8 @@ function readSettings() {
   } catch (_) {
     return {
       hudScale: "standard", reducedMotion: prefersReducedMotion(), highContrast: false,
-      dynamicRes: true, quality: DEFAULT_QUALITY, difficulty: DEFAULT_DIFFICULTY,
+      tutorialEnabled: true, dynamicRes: true,
+      quality: DEFAULT_QUALITY, difficulty: DEFAULT_DIFFICULTY,
       masterVolume: 1.0, musicVolume: 0.8, sfxVolume: 1.0,
     };
   }
@@ -436,7 +441,7 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render, setQualit
       update() {}, toggleAudio: () => false, setSetting: () => false, openMenu: () => false,
       openMap: () => false, closeMenu: () => false, cancelWheel: () => false, refresh() {},
       wheelState: closed, menuState: closed,
-      settingsState: () => ({ audioEnabled: false, hudScale: "standard", reducedMotion: false, highContrast: false, dynamicRes: true, quality: DEFAULT_QUALITY, difficulty: DEFAULT_DIFFICULTY }),
+      settingsState: () => ({ audioEnabled: false, hudScale: "standard", reducedMotion: false, highContrast: false, tutorialEnabled: true, dynamicRes: true, quality: DEFAULT_QUALITY, difficulty: DEFAULT_DIFFICULTY }),
     };
   }
 
@@ -1013,6 +1018,7 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render, setQualit
     if (name === "hudScale") settings.hudScale = value === "large" ? "large" : "standard";
     else if (name === "reducedMotion") settings.reducedMotion = !!value;
     else if (name === "highContrast") settings.highContrast = !!value;
+    else if (name === "tutorialEnabled") settings.tutorialEnabled = value !== false;
     else if (name === "dynamicRes") {
       settings.dynamicRes = !!value;
       render?.setAutoScale?.(settings.dynamicRes);
@@ -3339,6 +3345,7 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render, setQualit
       hudScale: settings.hudScale,
       reducedMotion: settings.reducedMotion,
       highContrast: settings.highContrast,
+      tutorialEnabled: settings.tutorialEnabled !== false,
       dynamicRes: settings.dynamicRes,
       // Live tier (see applySettings): what the frame is drawn at.
       quality: activeQuality(),

@@ -100,8 +100,12 @@ export async function start({ boot, build } = {}) {
   /* Production new operations receive orientation by default. Existing QA
      URLs retain their direct-gameplay contract and opt in explicitly. */
   const tutorialForced = tutorialParam === "1" || tutorialParam === "force";
+  /* Focused entry QA needs the real player-facing switch without forcing its
+     value. It remains a QA-only URL mode; ordinary players never see or need
+     this parameter. */
+  const tutorialMenuQa = qa && tutorialParam === "menu";
   const tutorialEnabled = tutorialParam !== "0" && tutorialParam !== "skip"
-    && (!qa || tutorialForced);
+    && (!qa || tutorialForced || tutorialMenuQa);
   /* A `?quality=` URL value is a SESSION override - harnesses pin a tier
      with it, and it must not write itself into the player's stored
      preference. Absent the param, the tier comes from the settings
@@ -581,6 +585,8 @@ export async function start({ boot, build } = {}) {
     stage,
     canvas,
     touch,
+    characterId: character.id,
+    saintName: character.name,
   });
   ctx.tutorial = tutorial;
 
@@ -686,6 +692,11 @@ export async function start({ boot, build } = {}) {
     },
     characters: SAINTFALL_CHARACTERS,
     characterId: character.id,
+    tutorialAvailable: tutorialEnabled,
+    tutorialEnabled: tutorialForced
+      ? true
+      : tutorialEnabled && gameUi.settingsState?.().tutorialEnabled !== false,
+    tutorialLocked: tutorialParam !== null && !tutorialMenuQa,
     autoStartNewGame,
     onCharacterChange: (id) => {
       const next = resolveSaintfallCharacter(id);
@@ -700,7 +711,7 @@ export async function start({ boot, build } = {}) {
     },
     settingsState: () => gameUi.settingsState?.() || {},
     onSetting: (name, value) => gameUi.setSetting?.(name, value),
-    onComplete({ launchMode } = {}) {
+    onComplete({ launchMode, tutorialEnabled: guided = true } = {}) {
       ctx.runtime.phase = "playing";
       ctx.runtime.paused = false;
       ctx.runtime.handoffFrames = 1;
@@ -711,7 +722,7 @@ export async function start({ boot, build } = {}) {
       audio.startAmbience?.();
       audio.startMusic?.();
       syncRuntimePaused();
-      if (launchMode === "new") tutorial.start?.({ source: "new-operation" });
+      if (launchMode === "new" && guided) tutorial.start?.({ source: "new-operation" });
     },
   });
   ctx.intro = intro;

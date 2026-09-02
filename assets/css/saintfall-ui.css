@@ -2001,7 +2001,7 @@ body.rb-escape-menu-open .saintfall-page .rb-standalone-surface{container-name:n
 .sf-tutorial__head{display:flex;align-items:start;justify-content:space-between;gap:.8rem;padding-bottom:.5rem;border-bottom:1px solid rgba(115,216,237,.2)}
 .sf-tutorial__head>span{display:grid;gap:.14rem;min-width:0}
 .sf-tutorial__head small{color:rgba(115,216,237,.78);font-size:8px;font-weight:700;letter-spacing:.19em}
-.sf-tutorial__head strong{overflow:hidden;color:#f4ead2;font:600 16px/1.15 "Cinzel",Georgia,serif;letter-spacing:.08em;text-overflow:ellipsis;white-space:nowrap}
+.sf-tutorial__head strong{overflow:visible;color:#f4ead2;font:600 16px/1.15 "Cinzel",Georgia,serif;letter-spacing:.08em;text-overflow:clip;white-space:normal}
 .sf-tutorial__head>b{flex:0 0 auto;padding:.2rem .32rem;border:1px solid rgba(216,164,65,.3);color:#e9bf69;font-size:9px;font-weight:700;letter-spacing:.1em;white-space:nowrap}
 .sf-tutorial>p{margin:0;color:rgba(224,236,232,.7);font:11px/1.48 system-ui,sans-serif;letter-spacing:.02em}
 .sf-tutorial__controls{display:flex;flex-wrap:wrap;gap:.32rem}

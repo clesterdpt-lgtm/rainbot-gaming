@@ -1364,6 +1364,10 @@ function buildMarkup(host, characters = [], selectedCharacterId = "") {
         <button class="sf-entry__btn sf-entry__new" type="button" data-intro-start>
           <span>NEW GAME</span>
         </button>
+        <button class="sf-entry__btn sf-entry__tutorial" type="button" role="switch"
+          data-intro-tutorial-toggle aria-checked="true">
+          <span>TUTORIAL</span><b data-intro-tutorial-state>ON</b>
+        </button>
         <button class="sf-entry__btn sf-entry__load" type="button" data-intro-load-toggle aria-expanded="false">
           <span>LOAD GAME</span>
         </button>
@@ -1536,6 +1540,8 @@ export function buildDropIntro(ctx, options = {}) {
   const el = (selector) => host.querySelector(selector);
   const startButton = el("[data-intro-start]");
   const continueButton = el("[data-intro-continue]");
+  const tutorialToggle = el("[data-intro-tutorial-toggle]");
+  const tutorialStateEl = el("[data-intro-tutorial-state]");
   const gate = el(".sf-intro__gate");
   const loadToggle = el("[data-intro-load-toggle]");
   const optionsToggle = el("[data-intro-options-toggle]");
@@ -1589,6 +1595,7 @@ export function buildDropIntro(ctx, options = {}) {
     latestSave: null,
     launchMode: "menu",
     characterId: initialCharacter?.id || null,
+    tutorialEnabled: options.tutorialEnabled !== false,
   };
 
   function fieldRecords() {
@@ -1694,6 +1701,19 @@ export function buildDropIntro(ctx, options = {}) {
     });
 
     const current = settingsState() || {};
+    /* Ordinary menu choices persist with the field settings so a Saint-body
+       reload cannot silently turn guidance back on. Deterministic URL modes
+       can lock the choice for focused QA. */
+    if (options.tutorialLocked !== true) {
+      state.tutorialEnabled = current.tutorialEnabled !== false;
+    }
+    if (tutorialToggle) {
+      tutorialToggle.disabled = state.mode !== "awaiting-gesture"
+        || options.tutorialAvailable === false;
+      tutorialToggle.setAttribute("aria-checked", state.tutorialEnabled ? "true" : "false");
+      tutorialToggle.dataset.state = state.tutorialEnabled ? "on" : "skip";
+    }
+    if (tutorialStateEl) tutorialStateEl.textContent = state.tutorialEnabled ? "ON" : "SKIP";
     host.querySelectorAll("[data-intro-setting]").forEach((button) => {
       const name = button.dataset.introSetting;
       const enabled = name === "sound" ? current.audioEnabled !== false : !!current[name];
@@ -1733,6 +1753,7 @@ export function buildDropIntro(ctx, options = {}) {
   function setEntryActionsDisabled(disabled) {
     startButton.disabled = disabled;
     continueButton.disabled = disabled || !state.latestSave;
+    if (tutorialToggle) tutorialToggle.disabled = disabled || options.tutorialAvailable === false;
     loadToggle.disabled = disabled;
     optionsToggle.disabled = disabled;
     characterConfirm.disabled = disabled;
@@ -2625,7 +2646,13 @@ export function buildDropIntro(ctx, options = {}) {
     host.dataset.shot = "handoff";
     skipButton.disabled = true;
     stage?.classList.remove("sf-intro-active");
-    onComplete({ skipped: state.skipped, handoffCount: state.handoffCount, source, launchMode });
+    onComplete({
+      skipped: state.skipped,
+      handoffCount: state.handoffCount,
+      source,
+      launchMode,
+      tutorialEnabled: state.tutorialEnabled,
+    });
     window.setTimeout(() => {
       if (!options.preserveForQa) dispose();
     }, state.reducedMotion ? 80 : 900);
@@ -2824,6 +2851,7 @@ export function buildDropIntro(ctx, options = {}) {
       launchMode: state.launchMode,
       entryPanel: state.entryPanel,
       characterId: state.characterId,
+      tutorialEnabled: state.tutorialEnabled,
       hasSave: !!state.latestSave,
       paused: state.paused,
       phase: state.phase,
@@ -2919,6 +2947,13 @@ export function buildDropIntro(ctx, options = {}) {
     if (!target || state.mode !== "awaiting-gesture") return;
     if (target.matches("[data-intro-start]")) {
       setEntryPanel("characters");
+      return;
+    }
+    if (target.matches("[data-intro-tutorial-toggle]")) {
+      if (options.tutorialAvailable === false || options.tutorialLocked === true) return;
+      state.tutorialEnabled = !state.tutorialEnabled;
+      onSetting("tutorialEnabled", state.tutorialEnabled);
+      refreshEntryMenu();
       return;
     }
     if (target.matches("[data-intro-load-toggle]")) {

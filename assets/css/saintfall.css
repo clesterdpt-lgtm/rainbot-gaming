@@ -4349,6 +4349,20 @@ body[data-sf-contrast="high"] #sf-hud :is(.sf-hud__vitals, .sf-hud__minimap) {
 .sf-intro__gate .sf-entry__continue:disabled b {
   color: rgba(220, 200, 170, .45);
 }
+.sf-intro__gate .sf-entry__tutorial b {
+  min-width: 3.4rem;
+  color: #8ed9b9;
+  font-family: "Share Tech Mono", ui-monospace, monospace;
+  font-size: .72rem;
+  font-weight: 700;
+  letter-spacing: .14em;
+  text-align: left;
+  text-shadow: 0 0 12px rgba(121, 216, 178, .34), 0 2px 8px rgba(0, 0, 0, .9);
+}
+.sf-intro__gate .sf-entry__tutorial[aria-checked="false"] b {
+  color: rgba(236, 190, 106, .78);
+  text-shadow: 0 0 10px rgba(216, 164, 65, .24), 0 2px 8px rgba(0, 0, 0, .9);
+}
 .sf-entry__panel[hidden] { display: none !important; }
 .sf-intro__gate:not([data-entry-panel="main"]) .sf-entry__actions { display: none; }
 .sf-intro__gate:not([data-entry-panel="main"]) .sf-entry__header { margin-bottom: .45rem; }

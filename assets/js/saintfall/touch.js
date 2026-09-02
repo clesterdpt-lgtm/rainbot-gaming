@@ -49,7 +49,12 @@ function actionButton(action, glyph, label, mode, extra = "") {
     </button>`;
 }
 
-function buildMarkup() {
+function buildMarkup(characterId = "vesper-reliquary") {
+  const defense = characterId === "white-vigil"
+    ? { label: "BLINK", mode: "tap" }
+    : characterId === "bastion-penitent"
+      ? { label: "GUARD", mode: "hold" }
+      : { label: "AEGIS", mode: "hold" };
   return `
     <div class="sf-touch__look" data-touch-look aria-label="Swipe to look" role="application">
       <span>SWIPE TO LOOK</span>
@@ -81,7 +86,7 @@ function buildMarkup() {
       </div>
       <div class="sf-touch__actions">
         ${actionButton("aim", "◎", "AIM", "hold")}
-        ${actionButton("shield", "◇", "AEGIS", "hold")}
+        ${actionButton("shield", "◇", defense.label, defense.mode)}
         ${actionButton("melee", "╱", "MELEE", "tap")}
         ${actionButton("fire", "●", "FIRE", "hold", "sf-touch__button--fire")}
       </div>
@@ -103,7 +108,7 @@ export function buildTouchControls(ctx, player, host, stage) {
     };
   }
 
-  host.innerHTML = buildMarkup();
+  host.innerHTML = buildMarkup(ctx.playerCharacter?.id);
   const input = player.input;
   const surface = stage.closest(".rb-standalone-surface");
   const params = new URLSearchParams(window.location.search);

@@ -22,83 +22,111 @@ const resolveBinds = (text) => String(text ?? "")
   .replace(bindToken, (_, id, primaryOnly) => (primaryOnly
     ? keybindPrimaryLabel(id) : keybindLabel(id)));
 
-const DESKTOP_STEPS = Object.freeze([
-  {
-    id: "orientation",
-    kicker: "FIELD ORIENTATION",
-    title: "Take the road",
-    copy: "Click the battlefield to link your sight. Move off the landing mark and scan the basin.",
-    controls: ["{{moveForward!}} {{moveLeft!}} {{moveBack!}} {{moveRight!}}", "MOUSE"],
-    hint: "Move and look to continue",
-    checks: [["move", "MOVE"], ["look", "LOOK"]],
-  },
-  {
-    id: "mobility",
-    kicker: "RELIQUARY MOBILITY",
-    title: "Break the distance",
-    copy: "Tap {{boost!}} for a burst, hold it to glide, vault with {{jump!}}, then combine both inputs for the jetpack.",
-    controls: ["{{boost!}}", "{{jump!}}", "{{boost!}} + {{jump!}}"],
-    hint: "Try each mobility input",
-    checks: [["glide", "GLIDE"], ["vault", "VAULT"], ["jet", "JET"]],
-  },
-  {
-    id: "combat",
-    kicker: "WEAPON LITURGY",
-    title: "Ready the Vesper lance",
-    copy: "Fire and aim with the mouse. A small white omen over an attacker marks a committed melee strike; raise {{block}} before contact. Projectiles carry their own warning. {{melee}} strikes and {{vent}} vents heat.",
-    controls: ["LMB", "RMB", "{{melee}}", "{{block}}", "{{vent}}"],
-    hint: "Follow the training beat, then cycle every combat control",
-    checks: [["fire", "FIRE"], ["aim", "AIM"], ["melee", "MELEE"], ["aegis", "AEGIS"], ["vent", "VENT"]],
-  },
-  {
-    id: "command",
-    kicker: "FIELD COMMAND",
-    title: "Call down the sky",
-    copy: "Hold {{wheel}} to open the command wheel. Hover a support sigil and left click to deploy; release to cancel.",
-    controls: ["HOLD {{wheel}}", "LMB"],
-    hint: "Open the command wheel",
-    checks: [["command", "COMMAND WHEEL"]],
-  },
-]);
+const TUTORIAL_PROFILES = Object.freeze({
+  "vesper-reliquary": Object.freeze({
+    id: "vesper-reliquary",
+    name: "Saint Aurel",
+    role: "VANGUARD",
+    orientationTitle: "Advance as the Vanguard",
+    mobilityTitle: "Sustain the ascent",
+    mobilityCopy: "Tap {{boost!}} for a reliquary burst, hold it to glide, vault with {{jump!}}, then combine both inputs for Saint Aurel's sustained flight.",
+    touchMobilityCopy: "Glide crosses ground, Vault clears hazards, and Jet sustains Saint Aurel's flight.",
+    combatTitle: "Censer-lance and Aegis",
+    combatCopy: "LMB fires the Censer-lance, RMB aims, and {{melee}} begins a procession strike. When the red melee omen closes, hold {{block}}: Saint Aurel raises the visible Aegis block pose. {{vent}} vents lance heat.",
+    touchCombatCopy: "Fire the Censer-lance, Aim, and use Melee. When the red omen closes, hold Aegis until Saint Aurel raises the shield; Vent clears lance heat.",
+    controls: ["LMB", "RMB", "{{melee}}", "HOLD {{block}}", "{{vent}}"],
+    touchControls: ["FIRE", "AIM", "MELEE", "HOLD AEGIS", "VENT"],
+    checks: [["primary", "LANCE"], ["secondary", "AIM"], ["melee", "MELEE"], ["guard", "AEGIS BLOCK"], ["vent", "VENT"]],
+    defense: Object.freeze({ kind: "guard", check: "guard", label: "AEGIS BLOCK" }),
+  }),
+  "white-vigil": Object.freeze({
+    id: "white-vigil",
+    name: "Saint Veyra",
+    role: "SCOUT",
+    orientationTitle: "Find the Scout's line",
+    mobilityTitle: "Keep the Vigil moving",
+    mobilityCopy: "Tap {{boost!}} to break pursuit, hold it to glide, vault with {{jump!}}, then combine both inputs to take Saint Veyra's firing line into the air.",
+    touchMobilityCopy: "Glide breaks pursuit, Vault clears hazards, and Jet carries Saint Veyra's firing line into the air.",
+    combatTitle: "Crescents and Vigil Step",
+    combatCopy: "LMB fires the twin crescents; RMB and {{melee}} work the quick blades. Saint Veyra cannot block: when the red melee omen closes, tap {{block}} to Blink through the attack line.",
+    touchCombatCopy: "Fire the twin crescents and use the quick blades. Saint Veyra cannot block: when the red omen closes, tap Blink to vanish through the attack line.",
+    controls: ["LMB", "RMB", "{{melee}}", "TAP {{block}}"],
+    touchControls: ["FIRE", "QUICK BLADE", "MELEE", "TAP BLINK"],
+    checks: [["primary", "CRESCENTS"], ["secondary", "QUICK BLADE"], ["melee", "MELEE"], ["blink", "BLINK EVADE"]],
+    defense: Object.freeze({ kind: "blink", check: "blink", label: "BLINK EVADE" }),
+  }),
+  "bastion-penitent": Object.freeze({
+    id: "bastion-penitent",
+    name: "Saint Torren",
+    role: "BULWARK",
+    orientationTitle: "Take the Bulwark's ground",
+    mobilityTitle: "Commit the advance",
+    mobilityCopy: "Tap {{boost!}} to drive forward, vault with {{jump!}}, then combine both inputs for Saint Torren's powered leap. The Bulwark wins ground instead of hovering over it.",
+    touchMobilityCopy: "Glide drives forward, Vault clears hazards, and Jet commits Saint Torren's powered leap.",
+    combatTitle: "Hammer and tower guard",
+    combatCopy: "LMB swings the reliquary hammer, RMB casts it, and {{melee}} commits another hammer strike. When the red melee omen closes, hold {{block}}: Saint Torren plants the visible tower-shield block pose.",
+    touchCombatCopy: "Swing or cast the reliquary hammer. When the red omen closes, hold Guard until Saint Torren plants the tower shield in its block pose.",
+    controls: ["LMB", "RMB", "{{melee}}", "HOLD {{block}}"],
+    touchControls: ["HAMMER", "HAMMER CAST", "MELEE", "HOLD GUARD"],
+    checks: [["primary", "HAMMER"], ["secondary", "HAMMER CAST"], ["melee", "MELEE"], ["guard", "TOWER GUARD"]],
+    defense: Object.freeze({ kind: "guard", check: "guard", label: "TOWER GUARD" }),
+  }),
+});
 
-const TOUCH_STEPS = Object.freeze([
-  {
-    id: "orientation",
-    kicker: "FIELD ORIENTATION",
-    title: "Take the road",
-    copy: "Drag the left relic to move off the landing mark. Swipe the right side of the battlefield to scan the basin.",
-    controls: ["LEFT RELIC", "SWIPE TO LOOK"],
-    hint: "Move and look to continue",
-    checks: [["move", "MOVE"], ["look", "LOOK"]],
-  },
-  {
-    id: "mobility",
-    kicker: "RELIQUARY MOBILITY",
-    title: "Break the distance",
-    copy: "Tap or hold the labeled mobility controls. Glide crosses ground, Vault clears hazards, and Jet sustains flight.",
-    controls: ["GLIDE", "VAULT", "JET"],
-    hint: "Try each mobility control",
-    checks: [["glide", "GLIDE"], ["vault", "VAULT"], ["jet", "JET"]],
-  },
-  {
-    id: "combat",
-    kicker: "WEAPON LITURGY",
-    title: "Ready the Vesper lance",
-    copy: "A small white omen over an attacker marks a committed melee strike; raise Aegis before contact. Projectiles carry their own warning. Then try each labeled combat control.",
-    controls: ["FIRE", "AIM", "MELEE", "AEGIS", "VENT"],
-    hint: "Follow the training beat, then cycle every combat control",
-    checks: [["fire", "FIRE"], ["aim", "AIM"], ["melee", "MELEE"], ["aegis", "AEGIS"], ["vent", "VENT"]],
-  },
-  {
-    id: "command",
-    kicker: "FIELD COMMAND",
-    title: "Call down the sky",
-    copy: "Hold Call, drag toward a support sigil, then release to confirm. Return to the centre to cancel.",
-    controls: ["HOLD CALL", "DRAG + RELEASE"],
-    hint: "Open the command wheel",
-    checks: [["command", "COMMAND WHEEL"]],
-  },
-]);
+function tutorialProfile(id, saintName = "") {
+  const selected = TUTORIAL_PROFILES[id] || TUTORIAL_PROFILES["vesper-reliquary"];
+  return saintName && saintName !== selected.name ? { ...selected, name: saintName } : selected;
+}
+
+function stepsFor(profile, inputMode) {
+  const touchMode = inputMode === "touch";
+  return [
+    {
+      id: "orientation",
+      kicker: `${profile.role} // FIELD ORIENTATION`,
+      title: profile.orientationTitle,
+      copy: touchMode
+        ? `Drag the left relic to move ${profile.name} off the landing mark. Swipe the battlefield to scan the basin.`
+        : `Click the battlefield to link ${profile.name}'s sight. Move off the landing mark and scan the basin.`,
+      controls: touchMode
+        ? ["LEFT RELIC", "SWIPE TO LOOK"]
+        : ["{{moveForward!}} {{moveLeft!}} {{moveBack!}} {{moveRight!}}", "MOUSE"],
+      hint: "Move and look to continue",
+      checks: [["move", "MOVE"], ["look", "LOOK"]],
+    },
+    {
+      id: "mobility",
+      kicker: `${profile.role} // MOBILITY`,
+      title: profile.mobilityTitle,
+      copy: touchMode ? profile.touchMobilityCopy : profile.mobilityCopy,
+      controls: touchMode
+        ? ["GLIDE", "VAULT", "JET"]
+        : ["{{boost!}}", "{{jump!}}", "{{boost!}} + {{jump!}}"],
+      hint: "Try each mobility input",
+      checks: [["glide", "GLIDE"], ["vault", "VAULT"], ["jet", "JET"]],
+    },
+    {
+      id: "combat",
+      kicker: `${profile.role} // DEFENSE DRILL`,
+      title: profile.combatTitle,
+      copy: touchMode ? profile.touchCombatCopy : profile.combatCopy,
+      controls: touchMode ? profile.touchControls : profile.controls,
+      hint: `Read the red training omen, then perform ${profile.defense.label}`,
+      checks: profile.checks,
+    },
+    {
+      id: "command",
+      kicker: `${profile.role} // FIELD COMMAND`,
+      title: "Call down the sky",
+      copy: touchMode
+        ? `Hold Call, drag toward one of ${profile.name}'s support sigils, then release to confirm. Return to centre to cancel.`
+        : `Hold {{wheel}} to open ${profile.name}'s command wheel. Hover a support sigil and left click to deploy; release to cancel.`,
+      controls: touchMode ? ["HOLD CALL", "DRAG + RELEASE"] : ["HOLD {{wheel}}", "LMB"],
+      hint: "Open the command wheel",
+      checks: [["command", "COMMAND WHEEL"]],
+    },
+  ];
+}
 
 function angleDistance(a, b) {
   return Math.abs(Math.atan2(Math.sin(a - b), Math.cos(a - b)));
@@ -126,6 +154,8 @@ export function buildTutorial(ctx, options = {}) {
   const stage = options.stage;
   const canvas = options.canvas;
   const touch = options.touch;
+  const profile = tutorialProfile(options.characterId || ctx.playerCharacter?.id,
+    options.saintName || ctx.playerCharacter?.name);
   if (!enabled || !host || !stage || !canvas || !ctx.player?.input) {
     const status = unavailableStatus(enabled ? "missing-host" : "disabled");
     return {
@@ -176,6 +206,8 @@ export function buildTutorial(ctx, options = {}) {
     stepStartedAt: 0,
     completedAt: 0,
     guardPreviewAt: 0,
+    defenseBaseline: 0,
+    defenseAnimationSeen: false,
     origin: { x: 0, z: 0, yaw: 0, pitch: 0 },
     lookTravel: 0,
     lastYaw: 0,
@@ -185,7 +217,11 @@ export function buildTutorial(ctx, options = {}) {
   let advanceTimer = 0;
   let hideTimer = 0;
 
-  const steps = () => state.inputMode === "touch" ? TOUCH_STEPS : DESKTOP_STEPS;
+  const stepSets = {
+    desktop: stepsFor(profile, "desktop"),
+    touch: stepsFor(profile, "touch"),
+  };
+  const steps = () => stepSets[state.inputMode];
   const step = () => steps()[state.stepIndex] || null;
 
   function clearTimers() {
@@ -234,6 +270,12 @@ export function buildTutorial(ctx, options = {}) {
     return true;
   }
 
+  function defenseCount() {
+    return profile.defense.kind === "blink"
+      ? Number(ctx.kenosis?.status?.()?.blink?.casts) || 0
+      : Number(ctx.shield?.status?.()?.blocks) || 0;
+  }
+
   function setStep(index) {
     if (!state.active || state.completed || index < 0 || index >= STEP_COUNT) return false;
     state.stepIndex = index;
@@ -241,6 +283,7 @@ export function buildTutorial(ctx, options = {}) {
     state.observed = {};
     state.stepStartedAt = performance.now();
     state.guardPreviewAt = state.stepIndex === 2 ? performance.now() : 0;
+    if (state.stepIndex === 2) state.defenseBaseline = defenseCount();
     resetOrigin();
     renderStep();
     return true;
@@ -266,8 +309,8 @@ export function buildTutorial(ctx, options = {}) {
         host.classList.remove("is-active", "is-leaving");
       }, 180);
     } else {
-      kickerEl.textContent = "ORIENTATION COMPLETE";
-      titleEl.textContent = "The road is yours";
+      kickerEl.textContent = `${profile.role} ORIENTATION COMPLETE`;
+      titleEl.textContent = `${profile.name} is field ready`;
       progressEl.textContent = "FIELD READY";
       copyEl.textContent = resolveBinds("{{menu}} or Esc opens the operation menu. {{map}} opens the full "
         + "tactical map. Every control can be rebound under Controls.");
@@ -309,6 +352,8 @@ export function buildTutorial(ctx, options = {}) {
     state.inputMode = touch?.enabled ? "touch" : "desktop";
     state.stepIndex = 0;
     state.observed = {};
+    state.defenseBaseline = defenseCount();
+    state.defenseAnimationSeen = false;
     heldKeys.clear();
     resetOrigin();
     host.hidden = false;
@@ -340,7 +385,6 @@ export function buildTutorial(ctx, options = {}) {
       if (keybindDown(heldKeys, "boost") && keybindDown(heldKeys, "jump")) mark("jet");
     } else if (step()?.id === "combat") {
       if (keybindMatches("melee", event.code)) mark("melee");
-      if (keybindMatches("block", event.code)) mark("aegis");
       if (keybindMatches("vent", event.code)) mark("vent");
     }
   }
@@ -354,8 +398,8 @@ export function buildTutorial(ctx, options = {}) {
       || event.target?.closest?.("#sf-tutorial")) return;
     const ownsAim = document.pointerLockElement === canvas || !!ctx.player.input.state.locked;
     if (!ownsAim) return;
-    if (event.button === 0) mark("fire");
-    if (event.button === 2) mark("aim");
+    if (event.button === 0) mark("primary");
+    if (event.button === 2) mark("secondary");
   }
 
   function onPointerDown(event) {
@@ -367,8 +411,11 @@ export function buildTutorial(ctx, options = {}) {
       if (action === "vault") mark("vault");
       if (action === "jet") mark("jet");
     } else if (step()?.id === "combat") {
-      const controls = { fire: "fire", aim: "aim", melee: "melee", shield: "aegis", vent: "vent" };
-      if (controls[action]) mark(controls[action]);
+      const controls = { fire: "primary", aim: "secondary", melee: "melee", vent: "vent" };
+      /* Defense is credited from the real shield/blink state in update(),
+         never from touching the button. That keeps the visible animation
+         and the completed check on the same authoritative action. */
+      if (action !== "shield" && controls[action]) mark(controls[action]);
     } else if (step()?.id === "command" && target?.closest?.("[data-touch-command]")) {
       mark("command");
     }
@@ -405,13 +452,29 @@ export function buildTutorial(ctx, options = {}) {
     } else if (current?.id === "combat") {
       const now = performance.now();
       const activeGuard = ctx.guardReadability?.status?.()?.primary;
-      if (!state.observed.aegis && !activeGuard && now >= state.guardPreviewAt) {
-        ctx.guardReadability?.preview?.({ impactIn: 1.1, guardType: "frontal" });
+      if (!state.observed[profile.defense.check] && !activeGuard && now >= state.guardPreviewAt) {
+        ctx.guardReadability?.preview?.({
+          impactIn: 1.1,
+          guardType: "frontal",
+          label: profile.defense.label,
+        });
         state.guardPreviewAt = now + 1900;
       }
-      if (ctx.player.input.state.firing) mark("fire");
-      if (ctx.player.input.state.ads) mark("aim");
-      if (ctx.player.input.state.block) mark("aegis");
+      if (ctx.player.input.state.firing) mark("primary");
+      if (ctx.player.input.state.ads) mark("secondary");
+      if (profile.defense.kind === "guard") {
+        const guard = ctx.shield?.status?.();
+        if (guard?.active) {
+          state.defenseAnimationSeen = true;
+          mark(profile.defense.check);
+        }
+      } else {
+        const casts = Number(ctx.kenosis?.status?.()?.blink?.casts) || 0;
+        if (casts > state.defenseBaseline) {
+          state.defenseAnimationSeen = true;
+          mark(profile.defense.check);
+        }
+      }
     } else if (current?.id === "command"
       && document.body.classList.contains("sf-command-open")) {
       mark("command");
@@ -450,6 +513,11 @@ export function buildTutorial(ctx, options = {}) {
       stepNumber: state.stepIndex >= 0 ? state.stepIndex + 1 : 0,
       stepCount: STEP_COUNT,
       inputMode: state.inputMode,
+      characterId: profile.id,
+      saintName: profile.name,
+      defense: profile.defense.kind,
+      defenseLabel: profile.defense.label,
+      defenseAnimationSeen: state.defenseAnimationSeen,
       observed: { ...state.observed },
       visible: !host.hidden && host.getAttribute("aria-hidden") !== "true",
     };

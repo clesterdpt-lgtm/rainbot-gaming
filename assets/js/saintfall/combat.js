@@ -587,8 +587,13 @@ export function buildCombat(ctx) {
   const { THREE, enemies, collide, vfx } = ctx;
   const bus = makeBus();
 
+  const resolvePlayerMaxHp = () => {
+    return ctx.playerCharacter?.id === "bastion-penitent" ? 225 : SURVIVAL_CONFIG.playerMaxHp;
+  };
+  const initialMaxHp = resolvePlayerMaxHp();
+
   const player = {
-    hp: SURVIVAL_CONFIG.playerMaxHp, maxHp: SURVIVAL_CONFIG.playerMaxHp,
+    hp: initialMaxHp, maxHp: initialMaxHp,
     dead: false,
     respawnIn: 0,
     lastHitAt: -99,
@@ -2821,6 +2826,14 @@ export function buildCombat(ctx) {
         guardType: detail.guardType,
         reason: attempt.reason || "rejected",
       });
+    }
+    /* Torren (Saint Bulwark) has innate heavy plate armor: 25% passive incoming damage reduction */
+    if (ctx.playerCharacter?.id === "bastion-penitent") {
+      amount *= 0.75;
+    }
+    /* Apply doctrine incoming damage modifiers (Anvil Stance, Thin Ice, Braced Call) */
+    if (ctx.doctrine?.kit) {
+      amount = ctx.doctrine.kit("incomingDamage", amount, detail);
     }
     player.hp = Math.max(0, player.hp - amount);
     player.lastHitAt = clock;

@@ -13,17 +13,18 @@
    ============================================================ */
 
 const DEFAULTS = Object.freeze({
-  cooldown: 0.19,
+  cooldown: 0.165,
   warmup: 0.11,
-  speed: 46,
-  range: 42,
-  radius: 0.30,
+  speed: 48,
+  range: 45,
+  radius: 0.32,
   maxActive: 24,
-  damage: 26,
-  falloffStart: 26,
-  falloffFloor: 0.55,
-  spreadHip: 0.030,
-  spreadAds: 0.007,
+  damage: 36,
+  falloffStart: 30,
+  falloffFloor: 0.65,
+  farFloor: 0.25,
+  spreadHip: 0.028,
+  spreadAds: 0.006,
 });
 
 export function buildSummitDischarge(ctx, player, loadout, spec = null) {

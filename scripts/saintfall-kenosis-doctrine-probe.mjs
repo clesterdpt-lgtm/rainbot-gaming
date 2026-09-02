@@ -56,8 +56,8 @@ const PASSIVES = {
     crescent_long_measure: { key: "crescentRange", base: 42 },
     /* The volley ramp only exists while the trigger is actually
        held, so the measurement has to hold it. */
-    crescent_reaping_volley: { key: "crescentDamage", base: 26, hold: 1.8 },
-    stoop_falling_star: { key: "stoopDamage", base: 92, detail: { metres: 20 } },
+    crescent_reaping_volley: { key: "crescentDamage", base: 36, hold: 1.8 },
+    stoop_falling_star: { key: "stoopDamage", base: 138, detail: { metres: 20 } },
     /* The call Order's two number rites. Both are asked for through
        exactly the keys `summit-command.js` asks with, so a rename on
        either side breaks this rather than going quiet. */
@@ -65,7 +65,7 @@ const PASSIVES = {
     antiphon_wider_verse: { key: "callRadius", base: 12, detail: { key: "mirrorchoir" } },
   },
   "bastion-penitent": {
-    bulwark_immovable: { key: "guardMoveSpeed", base: 2.0 },
+    bulwark_immovable: { key: "guardMoveSpeed", base: 2.7 },
     cast_true_return: { key: "castReturnDamage", base: 130, detail: { outbound: 260 } },
     cast_second_reliquary: { key: "castCooldown", base: 8 },
     cast_hooked_chain: { key: "castKnockdownStun", base: 3.0 },

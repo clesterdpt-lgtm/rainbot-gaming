@@ -61,7 +61,7 @@ const KITS = {
          polearm; the tempo advantage is the identity. `sweepScale`
          sizes the crescent VFX to the weapon - a wrist blade draws
          slightly tighter than the lance the shapes were measured on. */
-      melee: true, reach: 1.85, damage: 46, sweepScale: 0.92,
+      melee: true, reach: 1.95, damage: 68, sweepScale: 0.95,
     },
     blink: {
       range: 12.0, charges: 2, recharge: 5.5,
@@ -77,7 +77,7 @@ const KITS = {
        one is a dive - the same verb, and the player picks. */
     thrust: {
       speed: 34.0, seconds: 0.62, cooldown: 1.1,
-      radius: 1.9, damage: 92, knockback: 12,
+      radius: 2.3, damage: 138, knockback: 15,
       /* Aim clamps. Down is nearly unlimited (a dive is the point);
          up is held well short of vertical so the stoop cannot be
          flown as a second jetpack. */
@@ -95,7 +95,7 @@ const KITS = {
     },
     discharge: {
       /* Consumed by summit-discharge: the crescents become a real
-         mid-range weapon. Sustained 137 dps at the muzzle, falling
+         mid-range weapon. Sustained 218 dps at the muzzle, falling
          past focusStart toward rangeM. */
       /* `range` is where the crescent stops BEING a weapon; `travel`
          is how far it physically flies. They used to be the same
@@ -108,9 +108,9 @@ const KITS = {
          off a cliff to `farFloor`, so she CAN wear a distant perch
          down and is deliberately bad at it. Mid-range is still what
          she is; being locked out of an encounter is not. */
-      damage: 26, range: 42, travel: 150, speed: 46,
-      falloffStart: 26, falloffFloor: 0.55, farFloor: 0.16,
-      spreadHip: 0.030, spreadAds: 0.007,
+      damage: 36, cooldown: 0.165, range: 45, travel: 150, speed: 48,
+      falloffStart: 30, falloffFloor: 0.65, farFloor: 0.25,
+      spreadHip: 0.028, spreadAds: 0.006,
     },
   },
   "bastion-penitent": {
@@ -120,7 +120,7 @@ const KITS = {
        lance's sweep. */
     melee: { melee: true, reach: 2.60, damage: 132, sweepScale: 1.55 },
     block: {
-      moveSpeed: 2.0, frontDot: 0.30, perfectWindow: 0.25,
+      moveSpeed: 2.7, frontDot: 0.05, perfectWindow: 0.35,
       distance: 0.98, centreY: 1.15,
     },
     hammer: {

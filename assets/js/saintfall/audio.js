@@ -1374,6 +1374,12 @@ export function buildAudio(ctx) {
    *  reliquary ring. One voice per swing keeps pack-clearing readable. */
   function meleeImpact(x, z, event = {}) {
     if (!(event.hits > 0)) return;
+    /* Put the confirmation on the body the blade found, not back at the
+       player's boots. The difference is especially clear on the long
+       lunge and charged thrust. */
+    const target = event.targets?.[0];
+    if (Number.isFinite(target?.x)) x = target.x;
+    if (Number.isFinite(target?.z)) z = target.z;
     const t = now();
     const dur = event.slam ? 0.52 : 0.34;
     const g = voice("world", dur);
@@ -3460,7 +3466,10 @@ export function buildAudio(ctx) {
     const p = place(g, x, z, 22, 300);
     if (!p) return;
     const crowd = Math.min(1.28, 1 + Math.max(0, (event.hits || 0) - 1) * 0.07);
-    const amp = 0.43 * p.atten * crowd;
+    /* The head finding a body must outweigh the same hammer moving only
+       air. This gain touches the connected body/crack/iron layers while
+       leaving the whiff voice at its authored level. */
+    const amp = 0.43 * p.atten * crowd * (connected ? 1.16 : 1);
 
     // The head displaces a broad, low band of air even when it misses.
     const swing = noiseSource(0.72);

@@ -6,6 +6,8 @@
      - the visible polearm travels through a materially larger arc;
      - a real queued melee press one-shots an over-health Thresher;
      - the dying light enemy is physically displaced by the impact;
+     - confirmed contact briefly holds gameplay and adds a camera shove;
+     - whiffs do neither, and a wide sweep still requests one impact beat;
      - larger castes retain their normal health balance.
 
    Usage:
@@ -90,6 +92,7 @@ try {
     T._teleportRaw(-12, 830, 0);
     T.setBodyHeading(0);
     T.setCam(0, -0.10, 5.8);
+    T.meleeFeedback.reset();
 
     const inst = T.enemies.spawn("thresher", -12, 833.25,
       { health: 240, yaw: Math.PI });
@@ -100,15 +103,24 @@ try {
 
     let event = null;
     let impactOrigin = null;
+    let feedbackAtImpact = null;
+    let heaveAtImpact = 0;
     const off = T.combat.bus.on("melee", (next) => {
       event = { ...next };
       impactOrigin = { x: inst.x, z: inst.z };
+      feedbackAtImpact = T.meleeFeedback.status();
+      heaveAtImpact = T.player.state.heave;
     });
 
     T.pressMelee();
     T.renderOnce(1 / 60); // drain the production input event
     const started = T.player.action;
-    for (let frame = 0; frame < 25; frame += 1) T.renderOnce(1 / 60);
+    const clockDeltas = [];
+    for (let frame = 0; frame < 25; frame += 1) {
+      const beforeClock = T.player.state.clock;
+      T.renderOnce(1 / 60);
+      clockDeltas.push(T.player.state.clock - beforeClock);
+    }
     const impactImage = T.captureDataURL();
     for (let frame = 0; frame < 35; frame += 1) T.renderOnce(1 / 60);
 
@@ -116,6 +128,10 @@ try {
     return {
       started,
       event,
+      feedbackAtImpact,
+      feedbackEnd: T.meleeFeedback.status(),
+      heaveAtImpact,
+      minClockDelta: Math.min(...clockDeltas),
       startHp: 240,
       endHp: inst.health,
       endState: inst.state,
@@ -143,10 +159,99 @@ try {
     JSON.stringify(thresher.event));
   check("dying Thresher is visibly knocked backward", thresher.displacement >= 2,
     `${thresher.displacement.toFixed(3)}m after impact`);
+  check("confirmed kill requests one short contact pause",
+    thresher.feedbackAtImpact?.requests === 1
+      && thresher.feedbackAtImpact?.last?.duration >= 0.034
+      && thresher.feedbackAtImpact?.last?.duration <= 0.040,
+    JSON.stringify(thresher.feedbackAtImpact));
+  check("contact pause withholds gameplay time, then fully expires",
+    thresher.minClockDelta <= 1e-6
+      && thresher.feedbackEnd?.active === false
+      && Math.abs(thresher.feedbackEnd?.frozenSeconds - 0.036) <= 1e-6,
+    `min clock delta=${thresher.minClockDelta}, ${JSON.stringify(thresher.feedbackEnd)}`);
+  check("confirmed contact adds a distinct heavy camera shove",
+    thresher.heaveAtImpact >= 0.16,
+    `heave=${thresher.heaveAtImpact}`);
+
+  const whiff = await page.evaluate(() => {
+    const T = window.__SF;
+    T.clearEnemies();
+    T._teleportRaw(-12, 830, 0);
+    T.setBodyHeading(0);
+    T.meleeFeedback.reset();
+    T.player.state.heave = 0;
+    const beforeClock = T.player.state.clock;
+    const hits = T.combat.meleeStrike(1, 1.42, false, 1.34, 1, 1);
+    const afterStrike = T.meleeFeedback.status();
+    const heave = T.player.state.heave;
+    T.renderOnce(1 / 60);
+    return {
+      hits,
+      afterStrike,
+      heave,
+      clockDelta: T.player.state.clock - beforeClock,
+    };
+  });
+  check("a whiff never requests hit-stop or contact heave",
+    whiff.hits === 0 && whiff.afterStrike.requests === 0
+      && whiff.afterStrike.active === false && whiff.heave === 0,
+    JSON.stringify(whiff));
+  check("a whiff leaves the next gameplay frame at full length",
+    Math.abs(whiff.clockDelta - 1 / 60) <= 1e-6,
+    `clock delta=${whiff.clockDelta}`);
+
+  const crowd = await page.evaluate(() => {
+    const T = window.__SF;
+    T.clearEnemies();
+    T._teleportRaw(-12, 830, 0);
+    T.setBodyHeading(0);
+    T.meleeFeedback.reset();
+    T.enemies.spawn("harrow", -12.55, 832.45, { yaw: Math.PI });
+    T.enemies.spawn("harrow", -11.45, 832.45, { yaw: Math.PI });
+    const hits = T.combat.meleeStrike(1, 1.8, false, 1.34, 1, 1);
+    return { hits, feedback: T.meleeFeedback.status() };
+  });
+  check("one crowd-clearing sweep requests one impact beat",
+    crowd.hits === 2 && crowd.feedback.requests === 1
+      && crowd.feedback.last?.hits === 2,
+    JSON.stringify(crowd));
+
+  const profiles = await page.evaluate(() => {
+    const T = window.__SF;
+    const sample = ({ slam = false, sweepId = 1, reduced = false }) => {
+      T.clearEnemies();
+      T._teleportRaw(-12, 830, 0);
+      T.setBodyHeading(0);
+      T.meleeFeedback.reset();
+      document.body.classList.toggle("sf-reduced-motion", reduced);
+      T.enemies.spawn("harrow", -12, 832.5, { yaw: Math.PI });
+      T.combat.meleeStrike(1, slam ? 1.7 : 1.2, slam, 1.34,
+        slam ? 3 : sweepId === 6 ? 3 : 1, sweepId);
+      const status = T.meleeFeedback.status();
+      document.body.classList.remove("sf-reduced-motion");
+      return status.last;
+    };
+    return {
+      strike: sample({}),
+      pierce: sample({ sweepId: 6 }),
+      finisher: sample({ slam: true, sweepId: 3 }),
+      reduced: sample({ reduced: true }),
+    };
+  });
+  check("strike, piercing thrust, and finisher keep distinct contact timing",
+    Math.abs(profiles.strike?.duration - 0.030) <= 1e-6
+      && Math.abs(profiles.pierce?.duration - 0.020) <= 1e-6
+      && Math.abs(profiles.finisher?.duration - 0.050) <= 1e-6,
+    JSON.stringify(profiles));
+  check("reduced motion shortens the contact pause",
+    profiles.reduced?.reducedMotion === true
+      && Math.abs(profiles.reduced?.duration - 0.0135) <= 1e-6,
+    JSON.stringify(profiles.reduced));
 
   const harrow = await page.evaluate(() => {
     const T = window.__SF;
     T.clearEnemies();
+    T.meleeFeedback.reset();
     T._teleportRaw(-12, 830, 0);
     T.setBodyHeading(0);
     T.weapons.setMode("melee");

@@ -34,6 +34,7 @@ import { buildShield } from "saintfall/shield.js";
 import { buildEnemies } from "saintfall/enemies.js";
 import { buildCollision } from "saintfall/collide.js";
 import { buildCombat } from "saintfall/combat.js";
+import { buildMeleeFeedback } from "saintfall/melee-feedback.js";
 import { buildMission } from "saintfall/mission.js";
 import { buildBreaches } from "saintfall/breaches.js";
 import { buildAbbess } from "saintfall/abbess.js";
@@ -541,6 +542,11 @@ export async function start({ boot, build } = {}) {
   ctx.audio = audio;
   audio.attach();
 
+  /* Presentation observes the same one-per-sweep combat event as audio.
+     It owns no hit detection and cannot turn a miss into a contact. */
+  const meleeFeedback = buildMeleeFeedback(ctx);
+  ctx.meleeFeedback = meleeFeedback;
+
   /* The trooper falls over when killed. Subscribed here rather than
      called from combat, for the same reason audio is: the player is
      built before combat exists and cannot subscribe to a bus that is
@@ -761,6 +767,7 @@ export async function start({ boot, build } = {}) {
     touch,
     collide,
     combat,
+    meleeFeedback,
     mission,
     breaches,
     abbess,
@@ -1212,7 +1219,7 @@ export async function start({ boot, build } = {}) {
     return jetpack.state.inFlight || slam.state.active || !player.state.grounded;
   }
 
-  function stepGame(d) {
+  function stepGame(d, presentationD = d) {
     const encounterHold = !!player.state.free;
     if (encounterHold) {
       /* The reveal camera is a hold, not a second control scheme.
@@ -1440,7 +1447,9 @@ export async function start({ boot, build } = {}) {
        another controller's separation later in the same frame. */
     enemies.resolveCrowding?.(player.state);
     progression.update?.(d);
-    audio.update(d, player, render.camera);
+    /* Audio and its positional listener remain real-time during the tiny
+       contact pause; only gameplay clocks are withheld. */
+    audio.update(presentationD, player, render.camera);
     if (colliderView) {
       colliderTick -= d;
       if (colliderTick <= 0) {
@@ -1505,9 +1514,10 @@ export async function start({ boot, build } = {}) {
    *  without drawing, which is what lets the harness settle three
    *  simulated seconds in a few milliseconds. */
   function step(dt, draw = true) {
-    const d = Math.min(dt, 0.1);
+    const frameD = Math.min(dt, 0.1);
+    const d = meleeFeedback.simulationDelta(frameD);
     player.update(d, render.camera);
-    advanceSky(d, render.camera, draw);
+    advanceSky(frameD, render.camera, draw);
     terrain.updateLod(render.camera);
     enemies.update(d, render.camera);
     if (usesOperativeKit) {
@@ -1515,22 +1525,22 @@ export async function start({ boot, build } = {}) {
          and their attacks read those sockets in the same frame. */
       player.postUpdate(d);
       operativeLoadout?.update?.(d);
-      stepGame(d);
+      stepGame(d, frameD);
     } else {
-      stepGame(d);
+      stepGame(d, frameD);
       weapons.update(d, player, render.camera);
       player.postUpdate(d);
       flushShot();
       flushFurnaceLance();
     }
-    jetpack.updateVisual(d);
-    shield.updateVisual(d);
-    vfx.update(d, render.camera);
-    touch.update(d);
-    hud.update(d, player, render.camera);
+    jetpack.updateVisual(frameD);
+    shield.updateVisual(frameD);
+    vfx.update(frameD, render.camera);
+    touch.update(frameD);
+    hud.update(frameD, player, render.camera);
     saves.update(d);
-    gameUi.update?.(d);
-    tutorial.update?.(d);
+    gameUi.update?.(frameD);
+    tutorial.update?.(frameD);
     if (draw) render.render(render.camera);
   }
 

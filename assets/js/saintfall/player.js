@@ -7632,6 +7632,24 @@ export async function createPlayer(ctx, canvas) {
     return true;
   }
 
+  /** The blade finding a body gets a slower shove beneath the existing
+   *  high-frequency weapon punch. Whiffs never call this; the difference
+   *  is part of the control language, not decoration. */
+  function meleeContactKick(event = {}) {
+    if (!(event.hits > 0)) return false;
+    const reduced = systemReducedMotion
+      || (typeof document !== "undefined"
+        && !!document.body?.classList?.contains("sf-reduced-motion"));
+    const crowd = Math.min(1.22, 1 + Math.max(0, event.hits - 1) * 0.055);
+    const kill = event.kills > 0 ? 0.035 : 0;
+    const amount = (event.slam ? 0.30 : event.isPierce ? 0.20 : 0.14) * crowd + kill;
+    const scaled = amount * (reduced ? 0.15 : 1);
+    state.heave = Math.min(1, state.heave + scaled);
+    state.heaveFreq = event.slam ? 15 : event.isPierce ? 22 : 29;
+    state.heaveDecay = event.slam ? 7.2 : event.isPierce ? 10.5 : 13.5;
+    return true;
+  }
+
   /**
    * A ground-speed penalty from a hazard - webbing, in practice, but
    * written against nothing more specific than "how slow" and "how
@@ -7737,6 +7755,7 @@ export async function createPlayer(ctx, canvas) {
   return {
     state,
     punch,
+    meleeContactKick,
     pulseDoctrine,
     doctrineKick,
     applySlow,

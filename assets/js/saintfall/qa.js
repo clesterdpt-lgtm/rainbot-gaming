@@ -4726,6 +4726,7 @@ export function installQa(ctx, api) {
     get touch() { return api.touch; },
     get atmos() { return ctx.atmos; },
     get combat() { return api.combat; },
+    get meleeFeedback() { return api.meleeFeedback || ctx.meleeFeedback || null; },
     get figure() { return api.player.figure; },
     get mission() { return api.mission; },
     get breaches() { return api.breaches; },

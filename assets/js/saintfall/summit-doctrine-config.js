@@ -225,6 +225,13 @@ const AUTHORED_PLATES = new Set([
   "anvil_dead_weight",
   "anvil_measured_swing",
   "anvil_ring_true",
+  "anvil_shatterpoint",
+  "anvil_the_last_nail",
+  "tocsin_short_fuse",
+  "tocsin_braced_call",
+  "tocsin_heavy_ordnance",
+  "tocsin_two_bells",
+  "tocsin_the_great_bell",
 ]);
 
 const talentPlateUrl = (id) => `../assets/img/saintfall/talents/${encodeURIComponent(id)}.jpg?v=20260829-doctrine-v2`;

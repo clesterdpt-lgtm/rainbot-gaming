@@ -369,7 +369,7 @@ const VIGIL_ORDERS = [
         ]),
       t("stoop_high_pass", "stoop", "High Pass",
         "Start the dive from the ground.", 3, 4, [
-          "The Stoop may be thrown from standing: the Vigil launches 9.5 metres up into the line.",
+          "The Stoop may be thrown from standing: Saint Veyra launches 9.5 metres up into the line.",
           "The launch rises to 11.5 metres.",
         ]),
     ],
@@ -402,13 +402,13 @@ const VIGIL_ORDERS = [
         ]),
       t("vigil_last_lantern", "vigil", "The Last Lantern",
         "One death deferred.", 3, 4, [
-          "A lethal blow instead leaves the Vigil at 45 vitality. Once every 95 seconds.",
+          "A lethal blow instead leaves Saint Veyra at 45 vitality. Once every 95 seconds.",
           "It leaves 70 vitality, once every 70 seconds.",
         ]),
     ],
     capstone: cap("vigil_white_vigil", "vigil", "The White Vigil",
       "Hold still, and be unseen for it.",
-      "Standing still for 1.6 seconds veils the Vigil: enemies lose track, and the next crescent volley fired from the veil deals 160% more damage. The veil holds for 6 seconds or until the volley is spent."),
+      "Standing still for 1.6 seconds veils Saint Veyra: enemies lose track, and the next crescent volley fired from the veil deals 160% more damage. The veil holds for 6 seconds or until the volley is spent."),
   }),
   /* ============================================================
      THE FIFTH ORDER. Everything above improves what the operative
@@ -482,13 +482,13 @@ const BASTION_ORDERS = [
         ]),
       t("bulwark_immovable", "bulwark", "Immovable",
         "Walk behind the wall.", 3, 4, [
-          "Guarding no longer slows to a crawl - the Bastion advances at 2.6 m/s and resists 50% of knockback.",
-          "It advances at 3.1 m/s and resists 80% of knockback.",
+          "Guarding no longer slows to a crawl - Saint Torren advances at 2.6 m/s and resists 50% of knockback.",
+          "He advances at 3.1 m/s and resists 80% of knockback.",
         ]),
     ],
     capstone: cap("bulwark_the_shut_gate", "bulwark", "The Shut Gate",
       "Refuse a blow loudly enough to end the argument.",
-      "A perfect guard slams the gate: a 9-metre shockwave for 210 damage, staggering everything caught for 2.6 seconds, and the Bastion cannot be moved for the next 2 seconds."),
+      "A perfect guard slams the gate: a 9-metre shockwave for 210 damage, staggering everything caught for 2.6 seconds, and Saint Torren cannot be moved for the next 2 seconds."),
   }),
   withIcons({
     id: "cast",
@@ -519,7 +519,7 @@ const BASTION_ORDERS = [
         ]),
       t("cast_hooked_chain", "cast", "Hooked Chain",
         "What is felled stays felled.", 3, 4, [
-          "A flyer struck by the cast is grounded for 4 seconds and dragged 6 metres toward the Bastion.",
+          "A flyer struck by the cast is grounded for 4 seconds and dragged 6 metres toward Saint Torren.",
           "It is grounded for 5.5 seconds and dragged 9 metres.",
         ]),
     ],
@@ -552,7 +552,7 @@ const BASTION_ORDERS = [
         ]),
       t("forge_furnace_gait", "forge", "Furnace Gait",
         "Land running.", 3, 4, [
-          "For 3.5 seconds after landing a leap, the Bastion moves 35% faster.",
+          "For 3.5 seconds after landing a leap, Saint Torren moves 35% faster.",
           "50% faster, for 4.5 seconds.",
         ]),
     ],
@@ -616,7 +616,7 @@ const BASTION_ORDERS = [
         ]),
       t("tocsin_braced_call", "tocsin", "Braced Call",
         "Plant, and let it come.", 1, 0, [
-          "Calling a command braces the Bastion: 28% less damage taken for 4 seconds.",
+          "Calling a command braces Saint Torren: 28% less damage taken for 4 seconds.",
           "48% less damage taken for 5.5 seconds.",
         ]),
       t("tocsin_heavy_ordnance", "tocsin", "Heavy Ordnance",
@@ -632,7 +632,7 @@ const BASTION_ORDERS = [
     ],
     capstone: cap("tocsin_the_great_bell", "tocsin", "The Great Bell",
       "The one call that does not wait.",
-      "A field command called from behind a raised shield skips its fuse entirely: the beacon lands at the Bastion's own feet the instant he asks, and everything flying within 12 metres is dragged out of the air and left staggered for 2.6 seconds."),
+      "A field command called from behind a raised shield skips its fuse entirely: the beacon lands at Saint Torren's own feet the instant he asks, and everything flying within 12 metres is dragged out of the air and left staggered for 2.6 seconds."),
   }),
 ];
 

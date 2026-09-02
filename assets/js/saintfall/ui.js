@@ -19,12 +19,196 @@ import {
 const clamp = (value, lo, hi) => Math.max(lo, Math.min(hi, value));
 const SETTINGS_KEY = "saintfall:field-ui:v1";
 const PANEL_NAMES = new Set(["operation", "map", "doctrine", "saves", "controls", "settings"]);
+function createKenosisOrderSigil(id) {
+  const defs = {
+    quicksilver: {
+      accent: "#9df3e0", bright: "#eafff7", dark: "#0a2e26", spokes: 8,
+      emblem: `
+        <path d="M190 320 C160 260 210 180 280 160 C350 140 370 200 320 250 C270 300 210 310 190 320 Z" fill="none" stroke="#9df3e0" stroke-width="8" opacity="0.85"/>
+        <path d="M322 192 C352 252 302 332 232 352 C162 372 142 312 192 262 C242 212 302 202 322 192 Z" fill="none" stroke="#eafff7" stroke-width="8" opacity="0.95"/>
+        <path d="M130 382 L382 130" stroke="#9df3e0" stroke-width="10" stroke-linecap="round"/>
+        <polygon points="382,130 340,145 367,172" fill="#eafff7"/>
+        <polygon points="130,382 172,367 145,340" fill="#9df3e0"/>
+        <circle cx="256" cy="256" r="18" fill="#eafff7"/>
+        <circle cx="256" cy="256" r="32" fill="none" stroke="#9df3e0" stroke-width="4" stroke-dasharray="8 6"/>
+        <polygon points="256,190 264,204 278,204 266,214 270,228 256,218 242,228 246,214 234,204 248,204" fill="#eafff7"/>
+        <polygon points="256,322 264,308 278,308 266,298 270,284 256,294 242,284 246,298 234,308 248,308" fill="#9df3e0"/>
+      `,
+    },
+    crescent: {
+      accent: "#ffe6a2", bright: "#fff6dc", dark: "#3d2c05", spokes: 12,
+      emblem: `
+        <path d="M230 140 A120 120 0 0 0 230 372 A145 145 0 0 1 230 140 Z" fill="none" stroke="#ffe6a2" stroke-width="9" opacity="0.9"/>
+        <path d="M282 372 A120 120 0 0 0 282 140 A145 145 0 0 1 282 372 Z" fill="none" stroke="#fff6dc" stroke-width="9" opacity="0.9"/>
+        <circle cx="256" cy="256" r="24" fill="#ffe6a2"/>
+        <circle cx="256" cy="256" r="42" fill="none" stroke="#fff6dc" stroke-width="4" stroke-dasharray="10 8"/>
+        <line x1="256" y1="120" x2="256" y2="392" stroke="#fff6dc" stroke-width="4" stroke-linecap="round" opacity="0.7"/>
+        <line x1="120" y1="256" x2="392" y2="256" stroke="#fff6dc" stroke-width="4" stroke-linecap="round" opacity="0.7"/>
+        <circle cx="256" cy="120" r="6" fill="#ffe6a2"/>
+        <circle cx="256" cy="392" r="6" fill="#ffe6a2"/>
+        <circle cx="120" cy="256" r="6" fill="#ffe6a2"/>
+        <circle cx="392" cy="256" r="6" fill="#ffe6a2"/>
+      `,
+    },
+    stoop: {
+      accent: "#8fd6e6", bright: "#eafcff", dark: "#0b2c34", spokes: 6,
+      emblem: `
+        <path d="M256 120 L300 230 L390 260 L290 280 L256 400 L222 280 L122 260 L212 230 Z" fill="none" stroke="#8fd6e6" stroke-width="8" stroke-linejoin="round" opacity="0.85"/>
+        <path d="M256 150 L280 235 L330 255 L275 270 L256 360 L237 270 L182 255 L232 235 Z" fill="none" stroke="#eafcff" stroke-width="5" stroke-linejoin="round"/>
+        <line x1="256" y1="100" x2="256" y2="420" stroke="#eafcff" stroke-width="7" stroke-linecap="round"/>
+        <path d="M200 340 L256 395 L312 340" fill="none" stroke="#8fd6e6" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M220 370 L256 405 L292 370" fill="none" stroke="#eafcff" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+        <circle cx="256" cy="256" r="14" fill="#eafcff"/>
+      `,
+    },
+    vigil: {
+      accent: "#cfe0f4", bright: "#ffffff", dark: "#13253b", spokes: 6,
+      emblem: `
+        <polygon points="256,120 360,180 360,332 256,392 152,332 152,180" fill="none" stroke="#cfe0f4" stroke-width="8" stroke-linejoin="round" opacity="0.9"/>
+        <polygon points="256,148 334,194 334,318 256,364 178,318 178,194" fill="none" stroke="#ffffff" stroke-width="4" stroke-linejoin="round" opacity="0.6"/>
+        <path d="M168 256 Q256 160 344 256 Q256 352 168 256 Z" fill="none" stroke="#cfe0f4" stroke-width="7" stroke-linejoin="round"/>
+        <circle cx="256" cy="256" r="32" fill="none" stroke="#ffffff" stroke-width="6"/>
+        <circle cx="256" cy="256" r="16" fill="#ffffff"/>
+        <line x1="256" y1="100" x2="256" y2="148" stroke="#ffffff" stroke-width="6"/>
+        <line x1="256" y1="364" x2="256" y2="412" stroke="#ffffff" stroke-width="6"/>
+      `,
+    },
+    antiphon: {
+      accent: "#c9a8ff", bright: "#f2e9ff", dark: "#281045", spokes: 10,
+      emblem: `
+        <circle cx="256" cy="256" r="140" fill="none" stroke="#c9a8ff" stroke-width="4" stroke-dasharray="14 10" opacity="0.6"/>
+        <circle cx="256" cy="256" r="105" fill="none" stroke="#f2e9ff" stroke-width="6" opacity="0.8"/>
+        <circle cx="256" cy="256" r="70" fill="none" stroke="#c9a8ff" stroke-width="7"/>
+        <circle cx="256" cy="256" r="35" fill="none" stroke="#f2e9ff" stroke-width="8"/>
+        <circle cx="256" cy="256" r="14" fill="#f2e9ff"/>
+        <polygon points="256,120 268,156 306,156 276,178 288,214 256,192 224,214 236,178 206,156 244,156" fill="#c9a8ff" opacity="0.9"/>
+        <polygon points="256,392 268,356 306,356 276,334 288,298 256,320 224,298 236,334 206,356 244,356" fill="#c9a8ff" opacity="0.9"/>
+        <polygon points="120,256 156,244 156,206 178,236 214,224 192,256 214,288 178,276 156,306 156,268" fill="#c9a8ff" opacity="0.9"/>
+        <polygon points="392,256 356,244 356,206 334,236 298,224 320,256 298,288 334,276 356,306 356,268" fill="#c9a8ff" opacity="0.9"/>
+      `,
+    },
+    bulwark: {
+      accent: "#ff9540", bright: "#ffe0b0", dark: "#3d1a01", spokes: 8,
+      emblem: `
+        <path d="M160 140 L352 140 L352 280 C352 350 256 392 256 392 C256 392 160 350 160 280 Z" fill="none" stroke="#ff9540" stroke-width="10" stroke-linejoin="round" opacity="0.95"/>
+        <path d="M184 164 L328 164 L328 274 C328 328 256 364 256 364 C256 364 184 328 184 274 Z" fill="none" stroke="#ffe0b0" stroke-width="5" stroke-linejoin="round" opacity="0.7"/>
+        <line x1="256" y1="140" x2="256" y2="380" stroke="#ffe0b0" stroke-width="8"/>
+        <line x1="160" y1="230" x2="352" y2="230" stroke="#ffe0b0" stroke-width="8"/>
+        <line x1="160" y1="300" x2="352" y2="300" stroke="#ff9540" stroke-width="6"/>
+        <polygon points="256,170 272,200 240,200" fill="#ffe0b0"/>
+        <polygon points="256,270 276,270 256,300 236,270" fill="#ffe0b0"/>
+        <circle cx="256" cy="230" r="16" fill="#ffe0b0"/>
+      `,
+    },
+    cast: {
+      accent: "#ffc453", bright: "#fff4d8", dark: "#3a2702", spokes: 10,
+      emblem: `
+        <rect x="180" y="160" width="152" height="74" rx="8" fill="none" stroke="#ffc453" stroke-width="9" opacity="0.9"/>
+        <rect x="200" y="174" width="112" height="46" rx="4" fill="none" stroke="#fff4d8" stroke-width="4" opacity="0.7"/>
+        <line x1="256" y1="234" x2="256" y2="390" stroke="#fff4d8" stroke-width="10" stroke-linecap="round"/>
+        <line x1="256" y1="130" x2="256" y2="160" stroke="#ffc453" stroke-width="8" stroke-linecap="round"/>
+        <path d="M150 220 C110 270 140 350 200 370 C270 390 380 340 370 260 C360 190 280 130 210 130" fill="none" stroke="#ffc453" stroke-width="5" stroke-dasharray="14 10" stroke-linecap="round" opacity="0.8"/>
+        <polygon points="210,130 230,116 230,144" fill="#fff4d8"/>
+        <circle cx="256" cy="390" r="14" fill="#fff4d8"/>
+        <circle cx="256" cy="197" r="12" fill="#fff4d8"/>
+      `,
+    },
+    forge: {
+      accent: "#ff6a2a", bright: "#ffc07a", dark: "#3b1101", spokes: 6,
+      emblem: `
+        <polygon points="256,120 370,360 142,360" fill="none" stroke="#ff6a2a" stroke-width="9" stroke-linejoin="round" opacity="0.9"/>
+        <polygon points="256,160 342,340 170,340" fill="none" stroke="#ffc07a" stroke-width="4" stroke-linejoin="round" opacity="0.6"/>
+        <path d="M256 210 C275 250 310 270 300 310 C290 340 265 345 256 345 C247 345 222 340 212 310 C202 270 237 250 256 210 Z" fill="#ff6a2a" opacity="0.85"/>
+        <path d="M256 250 C268 275 288 290 280 320 C274 336 262 340 256 340 C250 340 238 336 232 320 C224 290 244 275 256 250 Z" fill="#ffc07a"/>
+        <line x1="256" y1="100" x2="256" y2="120" stroke="#ffc07a" stroke-width="6" stroke-linecap="round"/>
+        <line x1="142" y1="360" x2="126" y2="380" stroke="#ff6a2a" stroke-width="6" stroke-linecap="round"/>
+        <line x1="370" y1="360" x2="386" y2="380" stroke="#ff6a2a" stroke-width="6" stroke-linecap="round"/>
+      `,
+    },
+    anvil: {
+      accent: "#e8503a", bright: "#ffd0b0", dark: "#380a04", spokes: 8,
+      emblem: `
+        <path d="M150 250 L180 200 L340 200 L370 230 L320 250 L300 280 L340 350 L172 350 L212 280 L192 250 Z" fill="none" stroke="#e8503a" stroke-width="9" stroke-linejoin="round" opacity="0.9"/>
+        <path d="M200 220 L320 220 L300 250 L230 250 Z" fill="#ffd0b0" opacity="0.75"/>
+        <line x1="256" y1="110" x2="256" y2="190" stroke="#ffd0b0" stroke-width="12" stroke-linecap="round"/>
+        <polygon points="220,110 292,110 280,145 232,145" fill="#e8503a"/>
+        <line x1="180" y1="170" x2="220" y2="190" stroke="#ffd0b0" stroke-width="4" stroke-linecap="round"/>
+        <line x1="332" y1="170" x2="292" y2="190" stroke="#ffd0b0" stroke-width="4" stroke-linecap="round"/>
+        <circle cx="256" cy="305" r="14" fill="#ffd0b0"/>
+      `,
+    },
+    tocsin: {
+      accent: "#6fd3b0", bright: "#dffaf0", dark: "#0a2d21", spokes: 12,
+      emblem: `
+        <path d="M256 130 C200 130 180 220 160 300 L352 300 C332 220 312 130 256 130 Z" fill="none" stroke="#6fd3b0" stroke-width="9" stroke-linejoin="round" opacity="0.9"/>
+        <path d="M144 300 C144 320 368 320 368 300 Z" fill="#6fd3b0" stroke="#dffaf0" stroke-width="5"/>
+        <circle cx="256" cy="340" r="22" fill="#dffaf0"/>
+        <line x1="256" y1="300" x2="256" y2="340" stroke="#dffaf0" stroke-width="6"/>
+        <path d="M236 100 L276 100 L276 130 L236 130 Z" fill="none" stroke="#dffaf0" stroke-width="5" stroke-linejoin="round"/>
+        <path d="M110 256 A150 150 0 0 1 130 180" fill="none" stroke="#6fd3b0" stroke-width="5" stroke-linecap="round" opacity="0.7"/>
+        <path d="M402 256 A150 150 0 0 0 382 180" fill="none" stroke="#6fd3b0" stroke-width="5" stroke-linecap="round" opacity="0.7"/>
+        <path d="M90 280 A180 180 0 0 1 120 160" fill="none" stroke="#dffaf0" stroke-width="4" stroke-linecap="round" opacity="0.5"/>
+        <path d="M422 280 A180 180 0 0 0 392 160" fill="none" stroke="#dffaf0" stroke-width="4" stroke-linecap="round" opacity="0.5"/>
+      `,
+    },
+  };
+
+  const c = defs[id] || defs.quicksilver;
+  const spokes = [];
+  for (let i = 0; i < c.spokes; i += 1) {
+    const a = (i / c.spokes) * Math.PI * 2 - Math.PI / 2;
+    const x1 = 256 + Math.cos(a) * 80;
+    const y1 = 256 + Math.sin(a) * 80;
+    const x2 = 256 + Math.cos(a) * 210;
+    const y2 = 256 + Math.sin(a) * 210;
+    spokes.push(`<line x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}"/>`);
+  }
+
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">`
+    + `<defs>`
+    + `<radialGradient id="sf-sigil-bg-${id}" cx="50%" cy="50%" r="50%">`
+    + `<stop offset="0%" stop-color="${c.dark}" stop-opacity="0.92"/>`
+    + `<stop offset="65%" stop-color="#070c12" stop-opacity="0.96"/>`
+    + `<stop offset="100%" stop-color="#020406"/>`
+    + `</radialGradient>`
+    + `<radialGradient id="sf-sigil-glow-${id}" cx="50%" cy="50%" r="40%">`
+    + `<stop offset="0%" stop-color="${c.bright}" stop-opacity="0.32"/>`
+    + `<stop offset="100%" stop-color="${c.accent}" stop-opacity="0"/>`
+    + `</radialGradient>`
+    + `</defs>`
+    + `<rect width="512" height="512" rx="28" fill="url(#sf-sigil-bg-${id})"/>`
+    + `<rect x="18" y="18" width="476" height="476" rx="20" fill="none" stroke="${c.accent}" stroke-width="2.5" opacity="0.35"/>`
+    + `<rect x="32" y="32" width="448" height="448" rx="14" fill="none" stroke="${c.bright}" stroke-width="1.5" stroke-dasharray="16 12" opacity="0.45"/>`
+    + `<circle cx="256" cy="256" r="218" fill="none" stroke="${c.accent}" stroke-width="3" opacity="0.4"/>`
+    + `<circle cx="256" cy="256" r="185" fill="none" stroke="${c.bright}" stroke-width="1.8" opacity="0.3"/>`
+    + `<g fill="none" stroke="${c.accent}" stroke-width="2" opacity="0.25">${spokes.join("")}</g>`
+    + `<circle cx="256" cy="256" r="150" fill="url(#sf-sigil-glow-${id})"/>`
+    + `<g>${c.emblem}</g>`
+    + `</svg>`;
+  return `data:image/svg+xml,${encodeURIComponent(svg)}`;
+}
+
 const DOCTRINE_SIGILS = Object.freeze({
+  /* Campaign - Saint Aurel */
   censer: new URL("../../img/saintfall/doctrine/order-censer-sigil-ai-v1.jpg", import.meta.url).href,
   procession: new URL("../../img/saintfall/doctrine/order-procession-sigil-ai-v1.jpg", import.meta.url).href,
   wing: new URL("../../img/saintfall/doctrine/order-wing-sigil-ai-v1.jpg", import.meta.url).href,
   halo: new URL("../../img/saintfall/doctrine/order-halo-sigil-ai-v1.jpg", import.meta.url).href,
   edict: new URL("../../img/saintfall/doctrine/order-edict-sigil-ai-v1.jpg", import.meta.url).href,
+
+  /* Kenosis - Saint Veyra */
+  quicksilver: createKenosisOrderSigil("quicksilver"),
+  crescent: createKenosisOrderSigil("crescent"),
+  stoop: createKenosisOrderSigil("stoop"),
+  vigil: createKenosisOrderSigil("vigil"),
+  antiphon: createKenosisOrderSigil("antiphon"),
+
+  /* Kenosis - Saint Torren */
+  bulwark: createKenosisOrderSigil("bulwark"),
+  cast: createKenosisOrderSigil("cast"),
+  forge: createKenosisOrderSigil("forge"),
+  anvil: createKenosisOrderSigil("anvil"),
+  tocsin: createKenosisOrderSigil("tocsin"),
 });
 const WHEEL_POINTS = Object.freeze([
   { x: 0, y: -1, angle: -90 },

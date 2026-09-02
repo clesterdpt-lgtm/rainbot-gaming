@@ -613,14 +613,31 @@ export function buildSummitCommand(ctx, player, options = {}) {
   const GATE_HALF_T = 0.55;
   const _gl = { x: 0, z: 0 };
 
-  function gateBlocks(x, z, feetY, radius) {
+  function gateBlocks(x, z, feetY = null, radius = 0.42) {
     for (const gate of gates) {
       if (gate.remaining <= 0) continue;
+      const gy = Number.isFinite(feetY) ? feetY : groundAt(x, z);
       /* Under the sill or over the lintel is not blocked - a jetborne
          Vigil can clear it, which is the counterplay the Bastion's
          own wall should have. */
-      if (feetY > gate.y + gate.height - 0.2) continue;
-      if (feetY < gate.y - 2.5) continue;
+      if (gy > gate.y + gate.height - 0.2) continue;
+      if (gy < gate.y - 2.5) continue;
+      gateLocal(gate, x, z, _gl);
+      const r = Math.max(0, radius);
+      if (Math.abs(_gl.x) > gate.width * 0.5 + r) continue;
+      if (Math.abs(_gl.z) > GATE_HALF_T + r) continue;
+      return true;
+    }
+    return false;
+  }
+
+  function gateFlightBlocks(x, z, feetY = null, radius = 0.42, height = 2.35) {
+    for (const gate of gates) {
+      if (gate.remaining <= 0) continue;
+      const bottom = Number.isFinite(feetY) ? feetY : groundAt(x, z);
+      const top = bottom + (Number.isFinite(height) ? height : 2.35);
+      if (bottom > gate.y + gate.height - 0.2) continue;
+      if (top < gate.y) continue;
       gateLocal(gate, x, z, _gl);
       const r = Math.max(0, radius);
       if (Math.abs(_gl.x) > gate.width * 0.5 + r) continue;
@@ -662,6 +679,15 @@ export function buildSummitCommand(ctx, player, options = {}) {
     }
     return best;
   }
+
+  const gateObstacleProvider = {
+    blocked: (x, z, feetY, radius) => (gates.length ? gateBlocks(x, z, feetY, radius) : false),
+    flightBlocked: (x, z, feetY, radius, height, ignoreTerrain) =>
+      (gates.length ? gateFlightBlocks(x, z, feetY, radius, height) : false),
+    rayBlock: (ox, oy, oz, dx, dy, dz, maxDist, allowOriginExit) =>
+      (gates.length ? gateRayHit(ox, oy, oz, dx, dy, dz, maxDist) : Infinity),
+  };
+  ctx.collide?.addObstacleProvider?.(gateObstacleProvider);
 
   /* Wrapped ONCE, at build. Both wrappers short-circuit on an empty
      gate list, so a level with no wall standing pays one array-length
@@ -1336,6 +1362,7 @@ export function buildSummitCommand(ctx, player, options = {}) {
   }
 
   function releaseCollision() {
+    ctx.collide?.removeObstacleProvider?.(gateObstacleProvider);
     if (ctx.collide && baseBlocked) ctx.collide.blocked = baseBlocked;
     if (ctx.collide && baseRayBlock) ctx.collide.rayBlock = baseRayBlock;
   }

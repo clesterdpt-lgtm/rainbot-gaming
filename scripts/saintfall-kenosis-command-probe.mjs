@@ -450,8 +450,62 @@ async function auditOperative(browser, character) {
         : null;
       const overhead = gate
         ? T.summit.commandHandle().gateBlocks(gate.x, gate.z, gy + 6, 0.42) : null;
+
+      /* Real collision system checks for player and AI */
+      const collideBlocked = gate ? T.collide.blocked(gate.x, gate.z, gy, 0.42) : null;
+      const collideBeside = gate
+        ? T.collide.blocked(
+          gate.x + Math.cos(gate.yaw) * (gate.width * 0.5 + 3),
+          gate.z - Math.sin(gate.yaw) * (gate.width * 0.5 + 3), gy, 0.42)
+        : null;
+      const collideOverhead = gate
+        ? T.collide.flightBlocked(gate.x, gate.z, gy + 6, 0.42, 2.35)
+        : null;
+
+      /* Swept path check across the standing gate */
+      const nx = Math.sin(gate?.yaw || 0);
+      const nz = Math.cos(gate?.yaw || 0);
+      const walkStart = gate ? [gate.x + nx * 3, gate.z + nz * 3] : null;
+      const walkGoal = gate ? [gate.x - nx * 3, gate.z - nz * 3] : null;
+      const walkClearThroughGate = gate
+        ? T.collide.walkClear(walkStart[0], walkStart[1], walkGoal[0], walkGoal[1], 0.42)
+        : null;
+
+      /* Multi-frame walk simulation towards the gate */
+      let curX = walkStart ? walkStart[0] : 0;
+      let curZ = walkStart ? walkStart[1] : 0;
+      const stepDist = 0.1;
+      const totalSteps = 60;
+      const dx = walkStart && walkGoal ? (walkGoal[0] - walkStart[0]) / 6 : 0;
+      const dz = walkStart && walkGoal ? (walkGoal[1] - walkStart[1]) / 6 : 0;
+      for (let i = 0; i < totalSteps; i += 1) {
+        const out = T.collide.slide(curX, curZ, curX + dx * (stepDist / 1.0), curZ + dz * (stepDist / 1.0), gy, 0.42);
+        curX = out[0];
+        curZ = out[1];
+      }
+      const distanceTravelled = walkStart ? Math.hypot(curX - walkStart[0], curZ - walkStart[1]) : 0;
+      const distanceToGoal = walkGoal ? Math.hypot(curX - walkGoal[0], curZ - walkGoal[1]) : 0;
+      const walkBlockedByGate = distanceTravelled < 2.5 && distanceToGoal > 3.0;
+
       T.summit.commandReset();
+      const walkClearAfterReset = gate
+        ? T.collide.walkClear(walkStart[0], walkStart[1], walkGoal[0], walkGoal[1], 0.42)
+        : null;
+
+      curX = walkStart ? walkStart[0] : 0;
+      curZ = walkStart ? walkStart[1] : 0;
+      for (let i = 0; i < totalSteps; i += 1) {
+        const out = T.collide.slide(curX, curZ, curX + dx * (stepDist / 1.0), curZ + dz * (stepDist / 1.0), gy, 0.42);
+        curX = out[0];
+        curZ = out[1];
+      }
+      const afterResetPassed = walkGoal ? Math.hypot(curX - walkGoal[0], curZ - walkGoal[1]) < 0.15 : false;
+
       return { open, walled, atWall, beside, overhead,
+        collideBlocked, collideBeside, collideOverhead,
+        walkClearThroughGate, walkClearAfterReset,
+        walkBlockedByGate, afterResetPassed,
+        distanceTravelled, distanceToGoal,
         width: gate ? gate.width : null };
     }, { seconds: RESOLVE_SECONDS });
     const gs = effects.gateSolid;
@@ -469,8 +523,15 @@ async function auditOperative(browser, character) {
         open: { contacts: gs.open?.contacts, hits: gs.open?.hits },
         walled: { contacts: gs.walled?.contacts, hits: gs.walled?.hits } });
     check("bastion-penitent: the Gate is solid underfoot and open above it",
-      gs.atWall === true && gs.beside === false && gs.overhead === false,
-      { atWall: gs.atWall, beside: gs.beside, overhead: gs.overhead });
+      gs.atWall === true && gs.beside === false && gs.overhead === false
+      && gs.collideBlocked === true && gs.collideBeside === false
+      && gs.collideOverhead === false,
+      { atWall: gs.atWall, beside: gs.beside, overhead: gs.overhead,
+        collideBlocked: gs.collideBlocked, collideBeside: gs.collideBeside,
+        collideOverhead: gs.collideOverhead });
+    check("bastion-penitent: player walking into the Gate slides and stops",
+      gs.walkBlockedByGate === true && gs.afterResetPassed === true,
+      { walkBlockedByGate: gs.walkBlockedByGate, afterResetPassed: gs.afterResetPassed });
 
     check("bastion-penitent: the Gate stops what crosses it and nothing else",
       effects.gate.gate && effects.gate.through === true

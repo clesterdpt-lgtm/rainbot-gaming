@@ -582,8 +582,50 @@ export function buildCollision(ctx, world) {
   let angledSlides = 0;
   let hardStops = 0;
 
+  const obstacleProviders = [];
+
+  function addObstacleProvider(provider) {
+    if (provider && typeof provider === "object" && !obstacleProviders.includes(provider)) {
+      obstacleProviders.push(provider);
+    }
+  }
+
+  function removeObstacleProvider(provider) {
+    const idx = obstacleProviders.indexOf(provider);
+    if (idx !== -1) obstacleProviders.splice(idx, 1);
+  }
+
+  function dynamicBlocked(x, z, feetY, radius = RADIUS) {
+    for (let i = 0; i < obstacleProviders.length; i += 1) {
+      const p = obstacleProviders[i];
+      if (p.blocked && p.blocked(x, z, feetY, radius)) return true;
+    }
+    return false;
+  }
+
+  function dynamicFlightBlocked(x, z, feetY, radius = RADIUS, height = HEAD_ROOM, ignoreTerrain = false) {
+    for (let i = 0; i < obstacleProviders.length; i += 1) {
+      const p = obstacleProviders[i];
+      if (p.flightBlocked && p.flightBlocked(x, z, feetY, radius, height, ignoreTerrain)) return true;
+    }
+    return false;
+  }
+
+  function dynamicRayBlock(ox, oy, oz, dx, dy, dz, maxDist, allowOriginExit = true) {
+    let best = Infinity;
+    for (let i = 0; i < obstacleProviders.length; i += 1) {
+      const p = obstacleProviders[i];
+      if (p.rayBlock) {
+        const hit = p.rayBlock(ox, oy, oz, dx, dy, dz, maxDist, allowOriginExit);
+        if (Number.isFinite(hit) && hit < best) best = hit;
+      }
+    }
+    return best;
+  }
+
   /** Is a capsule at (x, z) standing on ground `feetY` blocked? */
   function blocked(x, z, feetY, radius = RADIUS) {
+    if (dynamicBlocked(x, z, feetY, radius)) return true;
     const knee = feetY + STEP;        // steppable below this
     const head = feetY + HEAD_ROOM;   // duckable above this
     /* Test the complete capsule disk against the occupied grid cells.
@@ -833,6 +875,7 @@ export function buildCollision(ctx, world) {
    * from imprisoning a capsule that legally stood there. */
   function flightBlocked(x, z, feetY, radius = RADIUS, height = HEAD_ROOM,
     ignoreTerrain = false) {
+    if (dynamicFlightBlocked(x, z, feetY, radius, height, ignoreTerrain)) return true;
     /* Being below the support at a CANDIDATE point does not mean the
        capsule is taking off; it is also exactly what happens when an
        airborne player flies into a hill. The old inference therefore
@@ -1113,6 +1156,8 @@ export function buildCollision(ctx, world) {
    * is under the width of the things being shot at.
    */
   function rayBlock(ox, oy, oz, dx, dy, dz, maxDist, allowOriginExit = true) {
+    const dynHit = dynamicRayBlock(ox, oy, oz, dx, dy, dz, maxDist, allowOriginExit);
+    if (dynHit <= 0 && !allowOriginExit) return 0;
     const step = 0.35;
     const n = Math.ceil(maxDist / step);
     /* If the ORIGIN is already inside solid, the ray has to get out
@@ -1145,17 +1190,21 @@ export function buildCollision(ctx, world) {
     let inside = originInside;
     for (let i = 1; i <= n; i += 1) {
       const d = i * step;
+      if (d > dynHit) return dynHit;
       const x = ox + dx * d;
       const y = oy + dy * d;
       const z = oz + dz * d;
-      if (y < groundHeight(x, z)) return inside ? Infinity : d;
+      if (y < groundHeight(x, z)) {
+        const worldD = inside ? Infinity : d;
+        return Number.isFinite(dynHit) ? Math.min(worldD, dynHit) : worldD;
+      }
       // The ray is stopped only where geometry actually spans its
       // height - it passes beneath an overhang like anything else.
       const solid = solidAt(x, y, z);
       if (inside) { if (!solid) inside = false; continue; }
-      if (solid) return d;
+      if (solid) return Number.isFinite(dynHit) ? Math.min(d, dynHit) : d;
     }
-    return Infinity;
+    return Number.isFinite(dynHit) ? dynHit : Infinity;
   }
 
   /**
@@ -1277,6 +1326,8 @@ export function buildCollision(ctx, world) {
     walkClear,
     findPath,
     rayBlock,
+    addObstacleProvider,
+    removeObstacleProvider,
     radius: RADIUS,
     step: STEP,
     stats() {

@@ -32,7 +32,11 @@ export function makeGoldLampMaterial(THREE, atmos, {
     emissiveIntensity: intensity,
     roughness: 0.30,
     metalness: 0,
-    side: THREE.FrontSide,
+    /* The Bastion shield can yaw far enough during the held stance that
+       its inset aperture is viewed from the reverse side. Keep the lamp
+       readable through that arc; the pointed outline and depth offset
+       still keep it contained by the metal frame. */
+    side: THREE.DoubleSide,
     vertexColors: true,
     polygonOffset: true,
     polygonOffsetFactor: -2,

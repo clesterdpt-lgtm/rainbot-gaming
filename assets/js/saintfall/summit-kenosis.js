@@ -993,6 +993,24 @@ export function buildKenosisKit(ctx, player, loadout) {
         ctx.audio?.impact?.(hit.x, hit.z, "flesh");
       }
     }
+    if (ctx.abbess?.hitEggs) {
+      const eggHits = ctx.abbess.hitEggs(
+        thrustPos.x, thrustPos.y + 1.0, thrustPos.z,
+        step + KIT.thrust.radius + 0.8,
+        KIT.thrust.damage,
+        { melee: true }
+      );
+      if (eggHits > 0) thrust.hits += eggHits;
+    }
+    if (ctx.undercroft?.hitProps) {
+      const propHits = ctx.undercroft.hitProps(
+        thrustPos.x, thrustPos.y + 1.0, thrustPos.z,
+        step + KIT.thrust.radius + 0.8,
+        KIT.thrust.damage,
+        { melee: true }
+      );
+      if (propHits > 0) thrust.hits += propHits;
+    }
     if (ctx.trials?.sweep) {
       const swept = ctx.trials.sweep(thrustPos.x, thrustPos.y + 1.0, thrustPos.z,
         thrustDir.x, thrustDir.y, thrustDir.z, step + KIT.thrust.radius, {
@@ -1513,6 +1531,34 @@ export function buildKenosisKit(ctx, player, loadout) {
         rite("castHit", {
           inst: hit.inst, grounded: downed, x: hit.x, y: hit.y, z: hit.z,
         });
+      }
+    }
+    const dmg = returning
+      ? tune("castReturnDamage", KIT.hammer.returnDamage,
+        { outbound: KIT.hammer.damage })
+      : KIT.hammer.damage;
+    if (ctx.abbess?.hitEggs) {
+      const eggHits = ctx.abbess.hitEggs(
+        hammerPos.x, hammerPos.y, hammerPos.z,
+        stepLen + 1.8,
+        dmg,
+        { melee: false }
+      );
+      if (eggHits > 0) {
+        hammer.hits += eggHits;
+        hammerImpact(hammerPos.x, hammerPos.y, hammerPos.z, true);
+      }
+    }
+    if (ctx.undercroft?.hitProps) {
+      const propHits = ctx.undercroft.hitProps(
+        hammerPos.x, hammerPos.y, hammerPos.z,
+        stepLen + 1.8,
+        dmg,
+        { melee: false }
+      );
+      if (propHits > 0) {
+        hammer.hits += propHits;
+        hammerImpact(hammerPos.x, hammerPos.y, hammerPos.z, true);
       }
     }
     if (ctx.trials?.sweep) {

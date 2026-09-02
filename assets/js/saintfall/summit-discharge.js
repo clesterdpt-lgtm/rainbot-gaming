@@ -308,6 +308,45 @@ export function buildSummitDischarge(ctx, player, loadout, spec = null) {
           consumed = true;
         }
       }
+      if (!consumed && ctx.abbess?.hitEggs) {
+        const damage = damageAt(shot.distance);
+        const eggHits = ctx.abbess.hitEggs(
+          px + shot.direction.x * step * 0.5,
+          py + shot.direction.y * step * 0.5,
+          pz + shot.direction.z * step * 0.5,
+          step * 0.5 + 1.5,
+          damage,
+          { melee: false }
+        );
+        if (eggHits > 0) {
+          hitsLanded += eggHits;
+          ctx.vfx?.spark?.(px, py, pz, 1.0, false, true);
+          ctx.audio?.crescentImpact?.(px, pz, { solid: true });
+          removeShot(shot);
+          consumed = true;
+        }
+      }
+      if (!consumed && ctx.undercroft?.hitProps) {
+        const damage = damageAt(shot.distance);
+        const propHits = ctx.undercroft.hitProps(
+          px + shot.direction.x * step * 0.5,
+          py + shot.direction.y * step * 0.5,
+          pz + shot.direction.z * step * 0.5,
+          step * 0.5 + 1.5,
+          damage,
+          { melee: false }
+        );
+        if (propHits > 0) {
+          hitsLanded += propHits;
+          ctx.vfx?.spark?.(px, py, pz, 1.0, false, true);
+          ctx.audio?.crescentImpact?.(px, pz, { solid: true });
+          removeShot(shot);
+          consumed = true;
+        }
+      }
+      if (!consumed && ctx.mission?.tryHitCommandBeacon) {
+        ctx.mission.tryHitCommandBeacon(shot.root.position, shot.direction);
+      }
       if (!consumed && ctx.trials?.sweep) {
         const swept = ctx.trials.sweep(px, py, pz,
           shot.direction.x, shot.direction.y, shot.direction.z, step + 0.3, {

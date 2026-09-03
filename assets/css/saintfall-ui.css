@@ -837,9 +837,23 @@ body.sf-command-open .sf-stage.sf-touch-enabled #sf-touch :is(
 }
 .sf-doctrine__respec-warn[hidden]{display:none!important}
 
+.sf-ability-link{display:inline;color:var(--sfu-gold,#f5d88e);text-decoration:underline dashed rgba(216,164,65,.65) 1px;text-underline-offset:3px;cursor:help;transition:color .12s ease,text-decoration-color .12s ease}
+.sf-ability-link:hover,.sf-ability-link:focus-visible,.sf-ability-link.is-pinned{color:#fff6dc;text-decoration-color:var(--sfu-verd,#76cda7);text-decoration-style:solid;outline:none}
+.sf-ability-popover{position:fixed;z-index:1200;width:max-content;max-width:min(290px,86vw);padding:.65rem .8rem;box-sizing:border-box;border:1px solid rgba(216,164,65,.42);border-left:3px solid var(--sfu-gold,#f5d88e);border-radius:0;background:linear-gradient(135deg,rgba(16,12,14,.98),rgba(8,6,8,.99));box-shadow:0 10px 28px rgba(0,0,0,.85),0 0 10px rgba(216,164,65,.15);pointer-events:none;opacity:0;transform:translateY(4px);transition:opacity .15s ease,transform .15s ease}
+.sf-ability-popover.is-visible{opacity:1;transform:translateY(0);pointer-events:auto}
+.sf-ability-popover[hidden]{display:none!important}
+.sf-ability-popover__meta{display:flex;align-items:center;justify-content:space-between;gap:.6rem;margin-bottom:.25rem}
+.sf-ability-popover__saint{color:var(--sfu-verd,#76cda7);font-size:8px;font-weight:600;letter-spacing:.12em;text-transform:uppercase}
+.sf-ability-popover__kbd{display:inline-block;padding:.12rem .35rem;border:1px solid rgba(216,164,65,.45);border-radius:0;background:rgba(216,164,65,.12);color:var(--sfu-gold,#f5d88e);font:700 8.5px/1 "Share Tech Mono",monospace;letter-spacing:.05em}
+.sf-ability-popover__title{margin:.15rem 0 .3rem;color:var(--sfu-bone,#f8eed6);font:600 11.5px/1.25 "Cinzel",Georgia,serif;letter-spacing:.05em}
+.sf-ability-popover__desc{margin:0;color:rgba(242,229,199,.78);font-size:10px;line-height:1.4}
+
 body.sf-high-contrast .sf-doctrine__summary>div,body.sf-high-contrast .sf-doctrine__orders,body.sf-high-contrast .sf-doctrine-talent,body.sf-high-contrast .sf-doctrine__vow{border-color:rgba(245,216,142,.62);background-color:#090607}
 body.sf-high-contrast .sf-doctrine-talent>p,body.sf-high-contrast .sf-doctrine-talent__reason,body.sf-high-contrast .sf-doctrine-talent__detail li,body.sf-high-contrast .sf-doctrine__vow-detail,body.sf-high-contrast .sf-doctrine__vow-action>small,body.sf-high-contrast .sf-doctrine__respec-warn{color:#f8edda}
-body.sf-reduced-motion .sf-doctrine__xp>i em,body.sf-reduced-motion .sf-doctrine-talent,body.sf-reduced-motion .sf-doctrine__vow{transition:none!important;animation:none!important}
+body.sf-high-contrast .sf-ability-link{color:#fff6dc;text-decoration-color:#fff6dc}
+body.sf-high-contrast .sf-ability-popover{border-color:#f5d88e;border-left-color:#fff6dc;background:#090607}
+body.sf-high-contrast .sf-ability-popover__desc{color:#f8edda}
+body.sf-reduced-motion .sf-doctrine__xp>i em,body.sf-reduced-motion .sf-doctrine-talent,body.sf-reduced-motion .sf-doctrine__vow,body.sf-reduced-motion .sf-ability-popover{transition:none!important;animation:none!important;transform:none!important}
 
 @media (min-width:881px){
   .sf-doctrine__summary small,.sf-doctrine__orders button small,.sf-doctrine__order-head small,.sf-doctrine-talent>header small,.sf-doctrine__vow>header small{font-size:9px}

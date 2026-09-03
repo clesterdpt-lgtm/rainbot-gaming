@@ -281,6 +281,10 @@ export const STYLITE_CONFIG = Object.freeze({
   stoopDamage: 46,
   stoopSlowFactor: 0.36,
   stoopSlowSeconds: 1.2,
+  /* How long it remains grounded and vulnerable on the floor after a stoop.
+     Longer than the 1.2s shockwave stun/slow so the player has an active
+     window to close distance and counter-attack with melee or ranged strikes. */
+  stoopGroundSeconds: 3.2,
 
   /* ------------------------------------------------------------
      THE GRIP, AND THE FALL
@@ -2324,7 +2328,7 @@ export function buildStylite(ctx) {
        the honest warning that the melee window is closing. */
     const seamSlip = clamp01(1 - state.grip / Math.max(1, C.gripMax));
     const downed = state.phase === "plummet" || state.phase === "stunned"
-      || state.phase === "recover";
+      || state.phase === "recover" || state.phase === "stoopGrounded";
     seamClock += dt * lerp(2.1, 9.5, seamSlip * seamSlip);
     const beat = 0.5 + 0.5 * Math.sin(seamClock);
     const lit = wake * (dead ? 0 : downed ? 0.14 : 1)
@@ -2587,10 +2591,14 @@ export function buildStylite(ctx) {
         damage: 0, stun: 1.2, knockSpeed: 9, source: "stylite-stoop",
       });
       bus.emit("stoop", { x: p.x, y: p.y, z: p.z });
-      /* A stoop puts it ON THE GROUND, but standing and dangerous -
-         not the plummet window. It goes straight back up. */
-      state.phase = "perched";
-      state.perchTimer = 1.1;
+      /* A stoop puts it ON THE GROUND, vulnerable to close-range attacks and melee.
+         Remain grounded for `stoopGroundSeconds` before coiling back up to a spire. */
+      state.phase = "stoopGrounded";
+      state.timer = C.stoopGroundSeconds;
+      state.pos.copy(p);
+      state.absorb = 1;
+      state.absorbV = 0;
+      if (inst) inst.grounded = true;
       return;
     }
     /* THE CROWN ANSWERS. Seven metres of animal arriving on a rock
@@ -2965,7 +2973,7 @@ export function buildStylite(ctx) {
       return;
     }
     state.tumble = 0;
-    if (state.phase !== "perched") land(isStoop);
+    if (state.phase === (isStoop ? "stoop" : "leap")) land(isStoop);
   }
 
   function stepPlummet(dt) {
@@ -3145,6 +3153,15 @@ export function buildStylite(ctx) {
     if (state.phase === "perched") { stepPerched(dt); return; }
     if (state.phase === "leap") { stepFlight(dt, false); return; }
     if (state.phase === "stoop") { stepFlight(dt, true); return; }
+    if (state.phase === "stoopGrounded") {
+      state.timer = Math.max(0, state.timer - dt);
+      faceThe(ps.x, ps.z, 2.2, dt);
+      state.coil = damp(state.coil, 0.35, 4, dt);
+      if (state.timer <= 0) {
+        beginLeap(pickPerch());
+      }
+      return;
+    }
     if (state.phase === "plummet") { stepPlummet(dt); return; }
 
     if (state.phase === "stunned") {
@@ -3224,7 +3241,8 @@ export function buildStylite(ctx) {
     inst.yaw = state.facing;
     /* Read by combat.js's HITBOX.stylite: the melee gate and the
        stunned multiplier both hang off it. */
-    inst.grounded = state.phase === "stunned" || state.phase === "recover";
+    inst.grounded = state.phase === "stunned" || state.phase === "recover" || state.phase === "stoopGrounded"
+      || (state.phase === "stoop" && (state.pos.y - groundAt(state.pos.x, state.pos.z)) < 3.5);
     inst.alerted = state.phase !== "dormant";
     inst.suspicion = inst.alerted ? 1 : 0;
     inst.root.position.set(inst.x, inst.y, inst.z);
@@ -3539,7 +3557,7 @@ export function buildStylite(ctx) {
         seat(state.perch);
         state.perchTimer = C.perchSeconds[1];
       }
-      inst.grounded = state.phase === "stunned" || state.phase === "recover";
+      inst.grounded = state.phase === "stunned" || state.phase === "recover" || state.phase === "stoopGrounded";
       setEncounterGate(state.phase === "dormant",
         state.phase === "dormant" || state.phase === "rouse");
       poseBody(0);

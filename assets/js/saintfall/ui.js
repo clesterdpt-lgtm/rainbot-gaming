@@ -244,6 +244,246 @@ function escapeHtml(value) {
   }[character]));
 }
 
+const DOCTRINE_GLOSSARY = Object.freeze({
+  "white-vigil": {
+    saint: "Saint Veyra · Scout",
+    abilities: [
+      {
+        id: "crescent_volley",
+        name: "Crescent Volley",
+        keybind: "LMB",
+        summary: "Main ranged dual pistol attack (LMB). Rapidly fires alternating crescent energy pulses from twin wrist emitters.",
+        patterns: ["paired crescent volley", "crescent volley", "crescents", "crescent"],
+      },
+      {
+        id: "vigil_step",
+        name: "Vigil Step",
+        keybind: "E",
+        summary: "Tactical combat blink (E). Instantly translates 12 metres through combat to reposition or evade. Holds 2 recharging charges.",
+        patterns: ["Vigil Steps", "Vigil Step", "the Step"],
+      },
+      {
+        id: "quick_blades",
+        name: "Quick Blades",
+        keybind: "F / RMB",
+        summary: "Rapid melee strikes (F or RMB). Swings dual wrist blades in alternating hands at 1.30x tempo for swift close-quarters cuts.",
+        patterns: ["quick blade strikes", "blade strikes", "blade strike", "quick blades"],
+      },
+      {
+        id: "aerial_stoop",
+        name: "Aerial Stoop",
+        keybind: "Airborne F",
+        summary: "Aimed aerial melee thrust and dive (Airborne F). Pierces along the reticle line up to 21 metres, either flying level as a lance or diving to earth.",
+        patterns: ["Aerial Stoop", "the Stoop", "Stoop"],
+      },
+      {
+        id: "white_vigil_veil",
+        name: "Veil of the Vigil",
+        keybind: "Stand Still (1.6s)",
+        summary: "Camouflage concealment (Stand still 1.6s). Enemies lose track of Saint Veyra, and the next crescent volley fired from the veil deals +160% bonus damage.",
+        patterns: ["veils Saint Veyra", "the veil"],
+      },
+      {
+        id: "verdict",
+        name: "Paired Verdict",
+        keybind: "Alternating LMB",
+        summary: "Combative cadence. Landing alternating left and right pistol pulses builds Verdict stacks; at 6 stacks, triggers an empowered damage pulse.",
+        patterns: ["Paired Verdict", "a Verdict", "Verdict"],
+      },
+      {
+        id: "field_command",
+        name: "Field Command",
+        keybind: "Q",
+        summary: "Tactical support strike (Q). Calls precision aerial ordnance and orbital fire missions to suppress and break enemy swarms.",
+        patterns: ["field commands", "field command", "command cooldown", "command"],
+      },
+      {
+        id: "augur_flight",
+        name: "Augur Flight",
+        keybind: "Shift + Space",
+        summary: "High-capacity scout jetpack (Shift + Space). Provides sustained vertical lift and rapid aerial mobility with an expanded fuel tank.",
+        patterns: ["Augur pack", "jetpack", "flight", "glide"],
+      },
+    ],
+  },
+  "bastion-penitent": {
+    saint: "Saint Torren · Bulwark",
+    abilities: [
+      {
+        id: "reliquary_hammer",
+        name: "Reliquary Hammer",
+        keybind: "LMB / F",
+        summary: "Main heavy melee attack (LMB or F). Delivers crushing two-handed hammer blows that stagger ordinary foes and break armor.",
+        patterns: ["reliquary hammer", "hammer blows", "hammer blow", "hammer chain", "hammer kill", "hammer"],
+      },
+      {
+        id: "hammer_cast",
+        name: "Hammer Cast",
+        keybind: "RMB",
+        summary: "Thrown hammer ability (RMB). Hurls the reliquary hammer forward to pierce enemies, knock flyers out of the sky, and return to hand.",
+        patterns: ["Hammer Cast", "returning hammer", "the Cast", "the cast", "Cast"],
+      },
+      {
+        id: "tower_shield",
+        name: "Tower Shield",
+        keybind: "Hold E",
+        summary: "Impassable frontal shield wall (Hold E). Unlimited physical block with zero charge drain. Timed perfect guards stagger nearby foes.",
+        patterns: ["tower shield", "raised shield", "perfect guard", "the shield", "shield", "guarding", "guard"],
+      },
+      {
+        id: "powered_leap",
+        name: "Powered Leap",
+        keybind: "Shift + Space",
+        summary: "Rocket-assisted ballistic leap (Shift + Space). Launches Saint Torren up to 58 metres across the field, venting boiler heat on launch and landing.",
+        patterns: ["landing a leap", "Landing from a leap", "Leaping vents", "leap's cooldown", "leaping", "leap"],
+      },
+      {
+        id: "penitents_fall",
+        name: "Penitent's Fall",
+        keybind: "Airborne F",
+        summary: "Heavy aerial ground slam (Airborne F). Plummets down to crack the earth with an explosive radial shockwave.",
+        patterns: ["Penitent's Fall"],
+      },
+      {
+        id: "censer_boiler",
+        name: "Censer Boiler",
+        keybind: "R (Vent)",
+        summary: "Internal steam boiler (R). Powers leaps and thermal shocks; venting relieves heat pressure and generates thermal bursts.",
+        patterns: ["vents the boiler", "boiler", "firebox"],
+      },
+      {
+        id: "field_command",
+        name: "Field Command",
+        keybind: "Q",
+        summary: "Heavy siege ordnance (Q). Calls delayed artillery and aerial strikes; calling from behind a raised shield skips the fuse entirely.",
+        patterns: ["field commands land", "field commands hit", "field commands", "field command", "command called", "Calling a command", "command"],
+      },
+    ],
+  },
+  "vesper-reliquary": {
+    saint: "Saint Aurel · Vanguard",
+    abilities: [
+      {
+        id: "censer_lance",
+        name: "Censer-Lance",
+        keybind: "LMB",
+        summary: "Primary ranged rifle fire (LMB). Fires focused thermal rounds; builds weapon heat that requires venting.",
+        patterns: ["censer-lance", "rifle shots", "rifle shot", "rifle kill", "rifle"],
+      },
+      {
+        id: "focused_aim",
+        name: "Focused Aim",
+        keybind: "RMB",
+        summary: "Shoulder aim (RMB). Focuses lance trajectory for precision headshots and enemy weak-point hits.",
+        patterns: ["aimed headshot", "aimed"],
+      },
+      {
+        id: "melee_procession",
+        name: "Melee Procession",
+        keybind: "F",
+        summary: "Three-strike polearm combo (F). Sweeps light enemies, staggers on the second blow, and cleaves on the finisher.",
+        patterns: ["melee-combo strikes", "melee-combo strike", "melee-combo", "combo strikes", "combo strike", "third strike", "second strike", "first strike", "melee key", "melee hit", "melee"],
+      },
+      {
+        id: "furnace_lance",
+        name: "Furnace Lance",
+        keybind: "Hold Alt-Fire",
+        summary: "Charged thermal beam (Hold Alt-Fire / Middle Click). Consumes Reliquary charge to unleash a high-damage piercing beam.",
+        patterns: ["Furnace Lance input", "Furnace Lance"],
+      },
+      {
+        id: "executioners_thrust",
+        name: "Executioner's Thrust",
+        keybind: "Hold F",
+        summary: "Charged jet spear thrust (Hold F). Consumes charge for a high-speed piercing dash that staggers and exposes heavy foes.",
+        patterns: ["Executioner's Thrust", "hold melee", "Hold melee", "hold the melee key", "Hold the melee key"],
+      },
+      {
+        id: "aegis_guard",
+        name: "Aegis Guard",
+        keybind: "Hold E",
+        summary: "Frontal energy shield (Hold E). Absorbs incoming fire using Reliquary charge; timed blocks emit a stagger pulse.",
+        patterns: ["raising Aegis", "Aegis block", "Aegis guard", "perfect guard", "Aegis", "guard"],
+      },
+      {
+        id: "thruster_boost",
+        name: "Thruster Boost",
+        keybind: "Shift (Tap)",
+        summary: "Directional thruster burst (Tap Shift). Rapid ground dash in your movement direction to evade attacks or close distance.",
+        patterns: ["backward boost", "forward boost", "ground boost", "boost"],
+      },
+      {
+        id: "sustained_flight",
+        name: "Sustained Flight",
+        keybind: "Shift + Space",
+        summary: "Jet thruster propulsion (Hold Shift + Space). Sustains vertical climbing and aerial hovering at the cost of charge.",
+        patterns: ["jet ignition", "activating the jet", "jet"],
+      },
+      {
+        id: "penitents_fall",
+        name: "Penitent's Fall",
+        keybind: "Airborne F",
+        summary: "Aerial kinetic ground slam (Airborne F). Plummets from the air to strike the earth with a wide staggering shockwave.",
+        patterns: ["Penitent's Fall"],
+      },
+      {
+        id: "manual_vent",
+        name: "Manual Vent",
+        keybind: "R",
+        summary: "Heat purge (R). Vents accumulated weapon heat from the censer-lance to avoid overheat lockout and trigger heat rites.",
+        patterns: ["manual vent", "venting", "vent"],
+      },
+      {
+        id: "field_command",
+        name: "Field Command",
+        keybind: "Hold Q + LMB",
+        summary: "Orbital tactical command (Hold Q + LMB). Deploys beacons to call Orbital Lances, Cluster Salvos, or Gilding chapels.",
+        patterns: ["Orbital Lance", "Cluster Salvo", "Gilding Rite", "field command", "offensive-command", "commands", "command"],
+      },
+    ],
+  },
+});
+
+function escapeRegex(str) {
+  return String(str || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+const DOCTRINE_COMPILERS = {};
+for (const [characterId, data] of Object.entries(DOCTRINE_GLOSSARY)) {
+  const patternMap = new Map();
+  const allPatterns = [];
+  for (const ability of data.abilities) {
+    for (const pattern of ability.patterns) {
+      patternMap.set(pattern.toLowerCase(), ability);
+      allPatterns.push(pattern);
+    }
+  }
+  allPatterns.sort((a, b) => b.length - a.length);
+  const regex = new RegExp("\\b(" + allPatterns.map(escapeRegex).join("|") + ")\\b", "gi");
+  DOCTRINE_COMPILERS[characterId] = { patternMap, regex, saint: data.saint };
+}
+
+function formatDoctrineText(text, characterId = "vesper-reliquary") {
+  if (!text) return "";
+  const key = String(characterId || "").toLowerCase();
+  const compiler = DOCTRINE_COMPILERS[key] || DOCTRINE_COMPILERS["vesper-reliquary"];
+  const parts = String(text).split(compiler.regex);
+  let html = "";
+  for (let i = 0; i < parts.length; i += 1) {
+    const part = parts[i];
+    if (i % 2 === 1) {
+      const ability = compiler.patternMap.get(part.toLowerCase());
+      if (ability) {
+        html += `<span class="sf-ability-link" role="button" tabindex="0" data-sf-ability="${escapeHtml(ability.id)}" data-saint="${escapeHtml(key)}" title="${escapeHtml(ability.name)} (${escapeHtml(ability.keybind)}): ${escapeHtml(ability.summary)}" aria-label="${escapeHtml(ability.name)}: ${escapeHtml(ability.keybind)}">${escapeHtml(part)}</span>`;
+        continue;
+      }
+    }
+    html += escapeHtml(part);
+  }
+  return html;
+}
+
+
 function doctrineSigilMarkup(orderId, role, modifier = "") {
   const id = String(orderId || "");
   const source = DOCTRINE_SIGILS[id];
@@ -1284,8 +1524,94 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render, setQualit
     };
   }
 
+  function activeOperativeId(definitions = null) {
+    if (ctx.playerCharacter?.id && DOCTRINE_GLOSSARY[ctx.playerCharacter.id]) return ctx.playerCharacter.id;
+    if (definitions?.id && DOCTRINE_GLOSSARY[definitions.id]) return definitions.id;
+    if (doctrine.treeId && DOCTRINE_GLOSSARY[doctrine.treeId]) return doctrine.treeId;
+    const orders = definitions?.orders || definitions?.doctrine?.orders || [];
+    if (orders.some((o) => o.id === "quicksilver" || o.id === "crescent" || o.id === "stoop")) return "white-vigil";
+    if (orders.some((o) => o.id === "bulwark" || o.id === "cast" || o.id === "forge")) return "bastion-penitent";
+    return "vesper-reliquary";
+  }
+
+  let pinnedAbilityLink = null;
+
+  function ensureAbilityPopover() {
+    let popover = root.querySelector("#sf-ability-popover");
+    if (!popover) {
+      popover = document.createElement("div");
+      popover.id = "sf-ability-popover";
+      popover.className = "sf-ability-popover";
+      popover.setAttribute("role", "tooltip");
+      popover.setAttribute("aria-hidden", "true");
+      popover.hidden = true;
+      const doctrinePage = root.querySelector('[data-menu-page="doctrine"]') || root;
+      doctrinePage.appendChild(popover);
+    }
+    return popover;
+  }
+
+  function showAbilityPopover(link, pinned = false) {
+    if (!link || !root) return;
+    const abilityId = link.dataset.sfAbility;
+    const saintId = link.dataset.saint || activeOperativeId();
+    const operativeData = DOCTRINE_GLOSSARY[saintId] || DOCTRINE_GLOSSARY["vesper-reliquary"];
+    const ability = operativeData?.abilities?.find((entry) => entry.id === abilityId);
+    if (!ability) return;
+
+    const popover = ensureAbilityPopover();
+    popover.innerHTML = `
+      <div class="sf-ability-popover__meta">
+        <span class="sf-ability-popover__saint">${escapeHtml(operativeData.saint)}</span>
+        <kbd class="sf-ability-popover__kbd">${escapeHtml(ability.keybind)}</kbd>
+      </div>
+      <h5 class="sf-ability-popover__title">${escapeHtml(ability.name)}</h5>
+      <p class="sf-ability-popover__desc">${escapeHtml(ability.summary)}</p>
+    `;
+
+    popover.hidden = false;
+    popover.classList.add("is-visible");
+    popover.setAttribute("aria-hidden", "false");
+
+    const rect = link.getBoundingClientRect();
+    const popRect = popover.getBoundingClientRect();
+    const margin = 8;
+
+    let top = rect.top - popRect.height - margin;
+    if (top < margin) {
+      top = rect.bottom + margin;
+    }
+    let left = rect.left + (rect.width - popRect.width) / 2;
+    left = Math.max(margin, Math.min(window.innerWidth - popRect.width - margin, left));
+
+    popover.style.top = `${Math.round(top)}px`;
+    popover.style.left = `${Math.round(left)}px`;
+
+    if (pinned) {
+      if (pinnedAbilityLink && pinnedAbilityLink !== link) {
+        pinnedAbilityLink.classList.remove("is-pinned");
+      }
+      pinnedAbilityLink = link;
+      link.classList.add("is-pinned");
+    }
+  }
+
+  function hideAbilityPopover({ force = false } = {}) {
+    if (!force && pinnedAbilityLink) return;
+    const popover = root?.querySelector("#sf-ability-popover");
+    if (!popover) return;
+    popover.classList.remove("is-visible");
+    popover.setAttribute("aria-hidden", "true");
+    popover.hidden = true;
+    if (pinnedAbilityLink) {
+      pinnedAbilityLink.classList.remove("is-pinned");
+      pinnedAbilityLink = null;
+    }
+  }
+
   function renderTalent(definition, current, state, orderState, edit, definitions) {
     const eligibility = talentEligibility(definition, current, state, orderState, edit, definitions);
+    const operativeId = activeOperativeId(definitions);
     const { rank, maxRank } = eligibility;
     const inspected = doctrine.inspectedTalentId === definition.id;
     const cardState = !eligibility.implemented ? "forthcoming"
@@ -1296,8 +1622,8 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render, setQualit
     const ranks = Array.isArray(definition.ranks) ? definition.ranks : [];
     const detailId = `sf-talent-detail-${safeDomId(definition.id)}`;
     const rankDetails = ranks.length ? `<ol>${ranks.map((entry, index) =>
-      `<li data-state="${index < rank ? "owned" : index === rank ? "next" : "locked"}"><b>RANK ${rankNumeral(index + 1)}</b><span>${escapeHtml(entry?.description || "Rite effect awaiting record.")}</span></li>`).join("")}</ol>`
-      : `<p>${escapeHtml(definition.description || definition.summary || "Rite effect awaiting record.")}</p>`;
+      `<li data-state="${index < rank ? "owned" : index === rank ? "next" : "locked"}"><b>RANK ${rankNumeral(index + 1)}</b><span>${formatDoctrineText(entry?.description || "Rite effect awaiting record.", operativeId)}</span></li>`).join("")}</ol>`
+      : `<p>${formatDoctrineText(definition.description || definition.summary || "Rite effect awaiting record.", operativeId)}</p>`;
     const spendLabel = !eligibility.implemented ? "FORTHCOMING"
       : rank >= maxRank ? "MAX RANK" : `INSCRIBE ${rankNumeral(rank + 1)}`;
     const reason = eligibility.reason || (rank > 0 ? `Rank ${rank} of ${maxRank} inscribed.` : "Ready to inscribe.");
@@ -1325,7 +1651,7 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render, setQualit
         <span class="sf-doctrine-talent__tier">${tierNumeral(tier)}</span>
       </div>
       <header><span><small>TIER ${tierNumeral(tier)}${gate > 0 ? ` · ${gate} PTS` : ""}</small><strong>${escapeHtml(definition.name || "Unnamed Rite")}</strong></span><b data-talent-rank="${rank}" aria-label="Rank ${rank} of ${maxRank}">${pips}</b></header>
-      <p>${escapeHtml(definition.summary || "A Reliquary rite awaiting inscription.")}</p>
+      <p>${formatDoctrineText(definition.summary || "A Reliquary rite awaiting inscription.", operativeId)}</p>
       <footer class="sf-doctrine-talent__meta-row">
         <span class="sf-doctrine-talent__badge" data-state="${cardState}">${stateBadgeLabel}</span>
       </footer>
@@ -1358,6 +1684,7 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render, setQualit
     }
 
     doctrine.previewTalentId = definition.id;
+    const operativeId = activeOperativeId(definitions);
     const current = runtimeTalent(state, orderState, definition.id);
     const eligibility = talentEligibility(definition, current, state, orderState, edit, definitions);
     const { rank, maxRank } = eligibility;
@@ -1377,8 +1704,8 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render, setQualit
     const ranks = Array.isArray(definition.ranks) ? definition.ranks : [];
     const rankDetails = ranks.length ? ranks.map((entry, index) => {
       const rankState = index < rank ? "owned" : index === rank ? "next" : "locked";
-      return `<li data-state="${rankState}"><b>${String(index + 1).padStart(2, "0")}</b><span><small>RANK ${rankNumeral(index + 1)}</small><strong>${escapeHtml(entry?.description || "Rite effect awaiting record.")}</strong></span></li>`;
-    }).join("") : `<li data-state="${rank > 0 ? "owned" : "next"}"><b>01</b><span><small>RITE EFFECT</small><strong>${escapeHtml(definition.description || definition.summary || "Rite effect awaiting record.")}</strong></span></li>`;
+      return `<li data-state="${rankState}"><b>${String(index + 1).padStart(2, "0")}</b><span><small>RANK ${rankNumeral(index + 1)}</small><strong>${formatDoctrineText(entry?.description || "Rite effect awaiting record.", operativeId)}</strong></span></li>`;
+    }).join("") : `<li data-state="${rank > 0 ? "owned" : "next"}"><b>01</b><span><small>RITE EFFECT</small><strong>${formatDoctrineText(definition.description || definition.summary || "Rite effect awaiting record.", operativeId)}</strong></span></li>`;
     const spendLabel = !eligibility.implemented ? "FORTHCOMING"
       : rank >= maxRank ? "MAX RANK" : `INSCRIBE RANK ${rankNumeral(rank + 1)}`;
     const actionButtons = `<button type="button" data-doctrine-action="refund" data-talent-action="refund" data-talent-id="${escapeHtml(definition.id)}"${disabledAttributes(!eligibility.canRefund, eligibility.refundReason)}>REFUND RANK</button>
@@ -1396,7 +1723,7 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render, setQualit
           <b data-state="${stateName}">${stateLabel}</b>
         </div>
       </header>
-      <p class="sf-doctrine__preview-summary">${escapeHtml(definition.summary || "A Reliquary rite awaiting inscription.")}</p>
+      <p class="sf-doctrine__preview-summary">${formatDoctrineText(definition.summary || "A Reliquary rite awaiting inscription.", operativeId)}</p>
       <div class="sf-doctrine__preview-meta" aria-label="Rite requirements">
         <span><small>CURRENT RANK</small><strong>${rank} / ${maxRank}</strong></span>
         <span><small>ORDER GATE</small><strong>${gate ? `${gate} PTS` : "OPEN"}</strong></span>
@@ -1423,12 +1750,13 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render, setQualit
   function renderCapstonePreview(host, definition, orderDefinition, orderState,
     state, edit, definitions) {
     const status = capstoneStatus(definition, orderDefinition, orderState, state, edit, definitions);
+    const operativeId = activeOperativeId(definitions);
     const iconSrc = talentIconUrl(definition.id, definition);
     const fusions = Array.isArray(definition.fusions) ? definition.fusions : [];
     const body = fusions.length
-      ? fusions.map((fusion, index) => `<li data-state="${status.slot >= 0 ? "owned" : "locked"}"><b>${String(index + 1).padStart(2, "0")}</b><span><small>${escapeHtml(fusion.name || "FUSION")}</small><strong>${escapeHtml(fusion.description || "Fusion effect awaiting record.")}</strong></span></li>`).join("")
+      ? fusions.map((fusion, index) => `<li data-state="${status.slot >= 0 ? "owned" : "locked"}"><b>${String(index + 1).padStart(2, "0")}</b><span><small>${escapeHtml(fusion.name || "FUSION")}</small><strong>${formatDoctrineText(fusion.description || "Fusion effect awaiting record.", operativeId)}</strong></span></li>`).join("")
       : "";
-    const effect = `<li data-state="${status.slot >= 0 ? "owned" : "next"}"><b>00</b><span><small>VOW EFFECT</small><strong>${escapeHtml(definition.description || definition.summary || "Capstone effect awaiting record.")}</strong></span></li>`;
+    const effect = `<li data-state="${status.slot >= 0 ? "owned" : "next"}"><b>00</b><span><small>VOW EFFECT</small><strong>${formatDoctrineText(definition.description || definition.summary || "Capstone effect awaiting record.", operativeId)}</strong></span></li>`;
     host.dataset.state = status.stateName;
     host.dataset.talentId = definition.id;
     host.innerHTML = `<header class="sf-doctrine__preview-head">
@@ -1440,7 +1768,7 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render, setQualit
           <b data-state="${status.stateName}">${status.stateLabel}</b>
         </div>
       </header>
-      <p class="sf-doctrine__preview-summary">${escapeHtml(definition.summary || "The final expression of this Order.")}</p>
+      <p class="sf-doctrine__preview-summary">${formatDoctrineText(definition.summary || "The final expression of this Order.", operativeId)}</p>
       <div class="sf-doctrine__preview-meta" aria-label="Vow requirements">
         <span><small>ORDER GATE</small><strong>${status.invested} / ${status.required} PTS</strong></span>
         <span><small>VOW SEALS</small><strong>${status.seals ? `${status.seals} EARNED` : "NONE YET"}</strong></span>
@@ -1485,12 +1813,13 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render, setQualit
       return;
     }
     const status = capstoneStatus(definition, orderDefinition, orderState, state, edit, definitions);
+    const operativeId = activeOperativeId(definitions);
     const { slot, invested, required, reason, stateName } = status;
     const inspected = doctrine.inspectedTalentId === definition.id;
     const previewed = doctrine.previewTalentId === definition.id;
     const fusions = Array.isArray(definition.fusions) && definition.fusions.length
       ? `<ul class="sf-doctrine__fusions">${definition.fusions.map((fusion) =>
-        `<li><b>${escapeHtml(fusion.name)}</b><span>${escapeHtml(fusion.description)}</span></li>`).join("")}</ul>` : "";
+        `<li><b>${escapeHtml(fusion.name)}</b><span>${formatDoctrineText(fusion.description, operativeId)}</span></li>`).join("")}</ul>` : "";
     const iconSrc = talentIconUrl(definition.id, definition);
     const gateFill = clamp(invested / Math.max(1, required), 0, 1);
     const cardInteraction = stage.classList.contains("sf-touch-enabled")
@@ -1504,9 +1833,9 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render, setQualit
       </div>
       <div class="sf-doctrine__vow-body">
         <header><span><small>CAPSTONE VOW · ${required} PTS</small><strong>${escapeHtml(definition.name || "Unnamed Vow")}</strong></span><b data-state="${stateName}">${status.stateLabel}</b></header>
-        <p>${escapeHtml(definition.summary || "The final expression of this Order.")}</p>
+        <p>${formatDoctrineText(definition.summary || "The final expression of this Order.", operativeId)}</p>
         <i class="sf-doctrine__vow-gate" aria-hidden="true"><em style="width:${(gateFill * 100).toFixed(1)}%"></em></i>
-        <div class="sf-doctrine__vow-detail" id="sf-capstone-detail-${safeDomId(definition.id)}" data-talent-detail${inspected ? "" : " hidden"}>${escapeHtml(definition.description || "Capstone effect awaiting record.")}</div>
+        <div class="sf-doctrine__vow-detail" id="sf-capstone-detail-${safeDomId(definition.id)}" data-talent-detail${inspected ? "" : " hidden"}>${formatDoctrineText(definition.description || "Capstone effect awaiting record.", operativeId)}</div>
         ${fusions}
         <div class="sf-doctrine__vow-action"><small>${escapeHtml(reason || (slot >= 0 ? "This Vow occupies one of two active seals." : "An earned Vow Seal is ready."))}</small><span><button type="button" data-doctrine-action="inspect" data-talent-action="inspect" data-talent-id="${escapeHtml(definition.id)}" aria-expanded="${inspected ? "true" : "false"}" aria-controls="sf-capstone-detail-${safeDomId(definition.id)}">${inspected ? "BACK TO RITES" : "DETAILS"}</button><button type="button" data-doctrine-action="vow" data-capstone-action="${status.action}" data-capstone-id="${escapeHtml(definition.id)}" data-order-id="${escapeHtml(orderDefinition.id)}" data-capstone-slot="${status.actionSlot}"${disabledAttributes(status.barred, reason)}>${status.label}</button></span></div>
       </div>
@@ -1532,6 +1861,7 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render, setQualit
     doctrine.inspectedTalentId = null;
     doctrine.previewTalentId = null;
     doctrine.hoverTalentId = null;
+    hideAbilityPopover({ force: true });
     refreshDoctrine();
     const panel = root.querySelector("[data-doctrine-order-panel]");
     if (panel) panel.scrollTop = 0;
@@ -1879,6 +2209,7 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render, setQualit
     else {
       doctrine.respecUntil = 0;
       hideRespecWarn();
+      hideAbilityPopover({ force: true });
     }
     if (next === "map") {
       refreshMap();
@@ -2434,6 +2765,7 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render, setQualit
     menuSfx("close");
     menu.open = false;
     menu.restartUntil = 0;
+    hideAbilityPopover({ force: true });
     const restart = root.querySelector('[data-menu-action="restart"]');
     if (restart) restart.textContent = "RESTART OPERATION";
     menuEl.hidden = true;
@@ -2756,8 +3088,23 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render, setQualit
 
   root.addEventListener("click", (event) => {
     if (menu.panel === "doctrine") {
+      const abilityLink = event.target instanceof Element ? event.target.closest(".sf-ability-link") : null;
+      if (abilityLink) {
+        event.preventDefault();
+        event.stopPropagation();
+        if (pinnedAbilityLink === abilityLink) {
+          hideAbilityPopover({ force: true });
+        } else {
+          hideAbilityPopover({ force: true });
+          showAbilityPopover(abilityLink, true);
+        }
+        return;
+      }
+      if (pinnedAbilityLink && !(event.target instanceof Element && event.target.closest("#sf-ability-popover"))) {
+        hideAbilityPopover({ force: true });
+      }
       const node = doctrineNodeFrom(event.target);
-      if (node && !event.target.closest("button, a") && setDoctrinePreview(node)) {
+      if (node && !event.target.closest("button, a, .sf-ability-link") && setDoctrinePreview(node)) {
         menuSfx("switch");
         return;
       }
@@ -2912,11 +3259,48 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render, setQualit
     doctrine.hoverTalentId = card.dataset.talentId;
   });
 
+  root.addEventListener("pointerover", (event) => {
+    if (menu.panel !== "doctrine") return;
+    const link = event.target instanceof Element ? event.target.closest(".sf-ability-link") : null;
+    if (link) {
+      showAbilityPopover(link, false);
+    }
+  });
+
+  root.addEventListener("pointerout", (event) => {
+    if (menu.panel !== "doctrine") return;
+    const link = event.target instanceof Element ? event.target.closest(".sf-ability-link") : null;
+    if (link) {
+      const next = event.relatedTarget instanceof Element
+        ? event.relatedTarget.closest(".sf-ability-link, #sf-ability-popover") : null;
+      if (!next) hideAbilityPopover();
+    }
+  });
+
   root.addEventListener("focusin", (event) => {
     if (menu.panel !== "doctrine") return;
+    const link = event.target instanceof Element ? event.target.closest(".sf-ability-link") : null;
+    if (link) {
+      showAbilityPopover(link, false);
+      return;
+    }
     const node = doctrineNodeFrom(event.target);
     if (node) setDoctrinePreview(node);
   });
+
+  root.addEventListener("focusout", (event) => {
+    if (menu.panel !== "doctrine") return;
+    const link = event.target instanceof Element ? event.target.closest(".sf-ability-link") : null;
+    if (link) {
+      hideAbilityPopover();
+    }
+  });
+
+  root.addEventListener("scroll", () => {
+    if (menu.panel === "doctrine") {
+      hideAbilityPopover({ force: true });
+    }
+  }, { capture: true, passive: true });
 
   commandEls.forEach((button) => {
     button.addEventListener("pointerenter", () => {
@@ -2938,8 +3322,21 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render, setQualit
     if (capture) { event.preventDefault(); event.stopImmediatePropagation(); return; }
     if (menu.open) {
       const interactiveTarget = event.target instanceof Element
-        && !!event.target.closest("button, a, input, select, textarea,"
+        && !!event.target.closest("button, a, input, select, textarea, .sf-ability-link,"
           + " [role='button'], [role='switch'], [role='tab']");
+      const abilityLink = event.target instanceof Element
+        ? event.target.closest(".sf-ability-link") : null;
+      if (abilityLink && ["Enter", "Space"].includes(event.code)) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        if (pinnedAbilityLink === abilityLink) {
+          hideAbilityPopover({ force: true });
+        } else {
+          hideAbilityPopover({ force: true });
+          showAbilityPopover(abilityLink, true);
+        }
+        return;
+      }
       const doctrineTab = event.target instanceof Element
         ? event.target.closest("[data-doctrine-order][role='tab']") : null;
       const doctrineCard = event.target instanceof Element
@@ -2971,6 +3368,11 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render, setQualit
         event.preventDefault(); event.stopImmediatePropagation();
         if (!event.repeat) openMap();
       } else if (event.code === "Escape" || keybindMatches("menu", event.code)) {
+        if (pinnedAbilityLink || root.querySelector("#sf-ability-popover.is-visible")) {
+          event.preventDefault(); event.stopImmediatePropagation();
+          hideAbilityPopover({ force: true });
+          return;
+        }
         event.preventDefault(); event.stopImmediatePropagation();
         closeMenu({ requestLock: true });
       } else if (!interactiveTarget && isGameplayBind(event.code)) {
@@ -3397,6 +3799,8 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render, setQualit
     destroy() {
       if (destroyed) return false;
       destroyed = true;
+
+      hideAbilityPopover({ force: true });
 
       window.removeEventListener("keydown", onKeyDown, true);
       window.removeEventListener("keyup", onKeyUp, true);

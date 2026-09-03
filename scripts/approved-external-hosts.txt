@@ -17,9 +17,11 @@ opengameart.org
 pagead2.googlesyndication.com
 pixabay.com
 qzvrrpzmalskayushbrv.supabase.co
+rainbot.games
 raw.githubusercontent.com
 schema.org
 unpkg.com
 www.halopedia.org
 www.mariowiki.com
 www.profitabledisplaynetwork.com
+www.rainbot.games

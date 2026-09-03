@@ -4,6 +4,14 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
   <meta name="theme-color" content="#081821" />
+  <meta name="referrer" content="strict-origin-when-cross-origin" />
+  <script>
+    if (window.top !== window.self) {
+      try {
+        if (window.top.location.hostname !== window.location.hostname) window.top.location.href = window.location.href;
+      } catch (_e) { window.top.location.href = window.location.href; }
+    }
+  </script>
   <meta name="description" content="The Drowned Orrery is an original cinematic Three.js action-adventure set in a valley where astronomy took root." />
   <meta property="og:title" content="The Drowned Orrery — A Rainbot Original" />
   <meta property="og:description" content="Wake three meridian lenses, master the prism bracer, and face the Hollow Astronomer." />

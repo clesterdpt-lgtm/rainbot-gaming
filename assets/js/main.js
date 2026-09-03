@@ -5,6 +5,19 @@
    - subscribe modal
    ============================================ */
 
+// Anti-clickjacking frame guard: prevent unauthorized iframe embedding / scraping
+(function preventFraming() {
+  try {
+    if (window.top !== window.self) {
+      if (window.top.location.hostname !== window.location.hostname) {
+        window.top.location.href = window.location.href;
+      }
+    }
+  } catch (_e) {
+    window.top.location.href = window.location.href;
+  }
+})();
+
 // Detect whether we're at site root or in a subdir (games/, articles/, legal/)
 // so generated nav links are correct whether the site is served
 // from a server OR opened directly via file://

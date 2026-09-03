@@ -2258,6 +2258,9 @@ export function buildProgression(ctx) {
         XP_AWARDS.breach_cycle_cleared.id);
     }
   }));
+  stops.push(ctx.combat?.bus?.on?.("kill", (event = {}) => {
+    onEnemyKilled(event);
+  }) || null);
   stops.push(ctx.mission?.bus?.on?.("districtBossDone", (event = {}) => {
     awardBossDefeat(event.key);
   }));

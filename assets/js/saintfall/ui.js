@@ -994,6 +994,13 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render, setQualit
   const clearedUntil = new Map();
   const pendingTimers = new Set();
   const touchBindings = new Map();
+  const DOUBLE_TAP_WINDOW_MS = 750;
+  let lastEscapePressTime = 0;
+  let ignoreEscapeMenuToggleUntil = 0;
+  let intentionalPointerUnlockUntil = 0;
+  let intentionalMaximizeExitUntil = 0;
+  let keyboardEscapeLocked = false;
+  let wasPointerLocked = false;
   let saveData = { autosave: null, manuals: [null, null, null] };
   let updateClock = 0;
   let announceRaf = 0;
@@ -2069,6 +2076,7 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render, setQualit
 
   function isMaximized() {
     return !!document.fullscreenElement
+      || !!document.webkitFullscreenElement
       || stage.classList.contains("is-maxed")
       || document.documentElement.classList.contains("sf-maximised")
       || document.body.classList.contains("rb-game-maxed");
@@ -2085,7 +2093,38 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render, setQualit
     return active;
   }
 
+  async function lockEscapeInFullscreen() {
+    const hasFs = Boolean(document.fullscreenElement || document.webkitFullscreenElement);
+    if (!hasFs) return false;
+    const keyboard = navigator.keyboard;
+    if (!keyboard || typeof keyboard.lock !== "function") return false;
+    try {
+      await keyboard.lock(["Escape"]);
+      keyboardEscapeLocked = true;
+      return true;
+    } catch (_) {
+      keyboardEscapeLocked = false;
+      return false;
+    }
+  }
+
+  function unlockEscapeKeyboard() {
+    if (!keyboardEscapeLocked) return;
+    try {
+      if (navigator.keyboard && typeof navigator.keyboard.unlock === "function") {
+        navigator.keyboard.unlock();
+      }
+    } catch (_) { /* best-effort */ }
+    keyboardEscapeLocked = false;
+  }
+
   function setMaximized(active) {
+    if (!active) {
+      intentionalMaximizeExitUntil = performance.now() + 1000;
+      unlockEscapeKeyboard();
+    } else {
+      intentionalMaximizeExitUntil = 0;
+    }
     stage.classList.toggle("is-maxed", active);
     surface?.classList?.toggle?.("is-maxed", active);
     if (!active) {
@@ -2097,7 +2136,12 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render, setQualit
     document.body.classList.toggle("rb-game-maxed", active);
     syncMaximizeButton();
     if (active && !document.fullscreenElement && surface.requestFullscreen) {
-      try { surface.requestFullscreen().catch(() => false); } catch (_) { /* CSS fallback remains active. */ }
+      try {
+        const fsPromise = surface.requestFullscreen();
+        fsPromise?.then?.(() => {
+          void lockEscapeInFullscreen();
+        })?.catch?.(() => false);
+      } catch (_) { /* CSS fallback remains active. */ }
     } else if (!active && (document.fullscreenElement || document.webkitFullscreenElement)) {
       const exitFs = document.exitFullscreen || document.webkitExitFullscreen;
       try { exitFs?.call?.(document)?.catch?.(() => false); } catch (_) { /* CSS state already restored. */ }
@@ -2119,11 +2163,41 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render, setQualit
       document.fullscreenElement ||
       document.webkitFullscreenElement
     );
-    if (!hasNativeFs && (stage.classList.contains("is-maxed") || document.documentElement.classList.contains("sf-maximised") || document.body.classList.contains("rb-game-maxed"))) {
-      setMaximized(false);
-    } else {
+    if (hasNativeFs) {
       syncMaximizeButton();
+      void lockEscapeInFullscreen();
+      return;
     }
+    unlockEscapeKeyboard();
+
+    if (performance.now() < intentionalMaximizeExitUntil) {
+      stage.classList.remove("is-maxed");
+      surface?.classList?.remove?.("is-maxed");
+      document.querySelectorAll(".is-maxed").forEach((el) => {
+        el.classList.remove("is-maxed");
+      });
+      document.documentElement.classList.remove("sf-maximised");
+      document.body.classList.remove("rb-game-maxed");
+      syncMaximizeButton();
+      window.dispatchEvent(new Event("resize"));
+      return;
+    }
+
+    if (stage.classList.contains("is-maxed") || document.documentElement.classList.contains("sf-maximised") || document.body.classList.contains("rb-game-maxed")) {
+      stage.classList.add("is-maxed");
+      surface?.classList?.add?.("is-maxed");
+      document.documentElement.classList.add("sf-maximised");
+      document.body.classList.add("rb-game-maxed");
+      syncMaximizeButton();
+      if (!menu.open && !destroyed && ctx.runtime?.phase === "playing" && !ctx.intro?.isBlocking?.()) {
+        lastEscapePressTime = performance.now();
+        ignoreEscapeMenuToggleUntil = performance.now() + 150;
+        openMenu("operation", { force: true });
+      }
+      return;
+    }
+
+    syncMaximizeButton();
   }
 
   function openWheel(source = "keyboard", origin = null) {
@@ -2739,6 +2813,7 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render, setQualit
     ctx.player?.input?.clearAll?.();
     touch?.releaseAll?.();
     setMenuInert(true);
+    intentionalPointerUnlockUntil = performance.now() + 500;
     if (document.pointerLockElement) document.exitPointerLock?.();
     refreshOperation();
     refreshSaves();
@@ -2791,6 +2866,10 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render, setQualit
     careerRecovery.armedUntil = 0;
     careerRecovery.errorMessage = "";
     if (!careerRecovery.resolving) careerRecovery.resolvedMessage = "";
+    intentionalPointerUnlockUntil = 0;
+    if (isMaximized()) {
+      void lockEscapeInFullscreen();
+    }
     return true;
   }
 
@@ -3368,6 +3447,27 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render, setQualit
         event.preventDefault(); event.stopImmediatePropagation();
         if (!event.repeat) openMap();
       } else if (event.code === "Escape" || keybindMatches("menu", event.code)) {
+        if (event.code === "Escape") {
+          if (event.repeat) {
+            event.preventDefault(); event.stopImmediatePropagation();
+            return;
+          }
+          if (performance.now() < ignoreEscapeMenuToggleUntil) {
+            event.preventDefault(); event.stopImmediatePropagation();
+            return;
+          }
+          const now = performance.now();
+          const elapsed = now - lastEscapePressTime;
+          const isDoubleTap = elapsed <= DOUBLE_TAP_WINDOW_MS && elapsed >= 60;
+          if (isDoubleTap && isMaximized()) {
+            event.preventDefault(); event.stopImmediatePropagation();
+            lastEscapePressTime = 0;
+            setMaximized(false);
+            announce("Embedded view restored");
+            return;
+          }
+          lastEscapePressTime = now;
+        }
         if (pinnedAbilityLink || root.querySelector("#sf-ability-popover.is-visible")) {
           event.preventDefault(); event.stopImmediatePropagation();
           hideAbilityPopover({ force: true });
@@ -3411,6 +3511,26 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render, setQualit
       return;
     }
     if (event.code === "Escape") {
+      if (event.repeat) {
+        event.preventDefault(); event.stopImmediatePropagation();
+        return;
+      }
+      if (performance.now() < ignoreEscapeMenuToggleUntil) {
+        event.preventDefault(); event.stopImmediatePropagation();
+        return;
+      }
+      const now = performance.now();
+      const elapsed = now - lastEscapePressTime;
+      const isDoubleTap = elapsed <= DOUBLE_TAP_WINDOW_MS && elapsed >= 60;
+      if (isDoubleTap && isMaximized()) {
+        event.preventDefault(); event.stopImmediatePropagation();
+        lastEscapePressTime = 0;
+        setMaximized(false);
+        openMenu("operation", { force: true });
+        announce("Embedded view restored");
+        return;
+      }
+      lastEscapePressTime = now;
       if (openMenu("operation", { force: true })) {
         event.preventDefault(); event.stopImmediatePropagation();
       }
@@ -3563,8 +3683,25 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render, setQualit
     if (document.hidden) cancelWheel("visibility");
   }
   function onPointerLockChange() {
-    if (wheel.open && wheel.openedLocked && document.pointerLockElement !== canvas) {
+    const isLocked = document.pointerLockElement === canvas;
+    const lostLock = wasPointerLocked && !isLocked;
+    wasPointerLocked = isLocked;
+
+    if (wheel.open && wheel.openedLocked && !isLocked) {
       cancelWheel("pointer-lock");
+    }
+
+    if (
+      lostLock
+      && performance.now() >= intentionalPointerUnlockUntil
+      && !menu.open
+      && !destroyed
+      && ctx.runtime?.phase === "playing"
+      && !ctx.intro?.isBlocking?.()
+    ) {
+      lastEscapePressTime = performance.now();
+      ignoreEscapeMenuToggleUntil = performance.now() + 150;
+      openMenu("operation", { force: true });
     }
   }
   function onSfxMuted() {
@@ -3595,6 +3732,7 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render, setQualit
   document.addEventListener("visibilitychange", onVisibilityChange);
   document.addEventListener("pointerlockchange", onPointerLockChange);
   document.addEventListener("fullscreenchange", onFullscreenChange);
+  document.addEventListener("webkitfullscreenchange", onFullscreenChange);
   document.addEventListener("rainbot:sfx-muted", onSfxMuted);
 
   const stopWon = ctx.mission.bus?.on?.("won", () => {
@@ -3796,6 +3934,9 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render, setQualit
     menuState,
     settingsState,
     setSetting,
+    isMaximized,
+    setMaximized,
+    toggleMaximized,
     destroy() {
       if (destroyed) return false;
       destroyed = true;
@@ -3815,7 +3956,9 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render, setQualit
       document.removeEventListener("visibilitychange", onVisibilityChange);
       document.removeEventListener("pointerlockchange", onPointerLockChange);
       document.removeEventListener("fullscreenchange", onFullscreenChange);
+      document.removeEventListener("webkitfullscreenchange", onFullscreenChange);
       document.removeEventListener("rainbot:sfx-muted", onSfxMuted);
+      unlockEscapeKeyboard();
 
       touchObserver.disconnect();
       detachTouchCommands();

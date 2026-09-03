@@ -2222,7 +2222,6 @@ export function buildCombat(ctx) {
       }
       const killEvent = { ...damageEvent, x: inst.x, z: inst.z };
       bus.emit("kill", killEvent);
-      ctx.progression?.onEnemyKilled?.(killEvent);
     } else if (enemies.play && !inst.actionLocked
       && !inst.collapsed
       && !inst.spec?.legOwnedStates?.includes(inst.state)

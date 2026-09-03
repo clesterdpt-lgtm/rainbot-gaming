@@ -102,6 +102,13 @@ export function buildSummitDoctrine(ctx, player) {
       try { window.localStorage?.setItem(store, JSON.stringify(record)); } catch (_) { /* private mode */ }
     }, 250);
   }
+  function flushPersistence() {
+    window.clearTimeout(persistTimer);
+    persistTimer = 0;
+    try { window.localStorage?.setItem(store, JSON.stringify(record)); } catch (_) { /* private mode */ }
+  }
+  const onPageHide = () => flushPersistence();
+  window.addEventListener("pagehide", onPageHide);
 
   const listeners = new Set();
   function notify() {
@@ -1295,7 +1302,8 @@ export function buildSummitDoctrine(ctx, player) {
     dispose() {
       for (const stop of stops) stop?.();
       listeners.clear();
-      window.clearTimeout(persistTimer);
+      window.removeEventListener("pagehide", onPageHide);
+      flushPersistence();
     },
   };
 }

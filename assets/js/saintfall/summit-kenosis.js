@@ -124,26 +124,13 @@ const KITS = {
       distance: 0.98, centreY: 1.15,
     },
     hammer: {
-      damage: 260, returnDamage: 130, speed: 34, returnSpeed: 40,
-      /* 46, and a longer throw was TRIED AND REVERTED. Reaching a
-         Stylite perched 110m up wants ~120, and at that range the
-         hammer is still outbound when the cast's whole loop expects it
-         home: the kit probe caught `catches: 0` and a recast refused
-         with "hammer-away". A thrown weapon that returns is a cadence,
-         not just a projectile, and tripling its flight breaks the
-         cadence. Torren's reach against a distant perch needs a
-         different answer than a bigger number here. */
-      range: 46, cooldown: 8.0, knockdownStun: 3.0, knockback: 14,
-      /* THE FLYER ASSIST. The cast is the Bastion's whole answer to
-         anything airborne - he cannot fly, his hammer is the only
-         thing he owns that leaves the ground, and a small fast target
-         at 30 metres against an open sky is close to unhittable with
-         a chase camera and a thrown weapon.
-         So the throw SNAPS onto a flyer inside this cone. Deliberately
-         flyers only: ground targets are already reachable and a
-         magnetised hammer against a Thresher pack would take the aim
-         out of the player's hands. */
-      assistCone: 0.38,     // ~22 degrees off the reticle
+      damage: 260, returnDamage: 130, speed: 46, returnSpeed: 64,
+      /* 46 baseline for flat ground throws against thrash packs;
+         skyward throws expand dynamically to 96m and assist lock-on up to 120m
+         so the hammer easily strikes the Stylite perched atop needle spires. */
+      range: 46, skywardRange: 96, assistRange: 120,
+      cooldown: 8.0, knockdownStun: 3.0, knockback: 14,
+      assistCone: 0.44,     // ~25 degrees off the reticle
       assistLead: 0.55,     // fraction of flight time led, see launchHammer
     },
   },
@@ -1318,6 +1305,13 @@ export function buildKenosisKit(ctx, player, loadout) {
 
   function tryThrowHammer() {
     if (!isBastion || !hammerPart) return false;
+    /* MANUAL RECALL. If the hammer is currently outbound, pressing
+       the cast button recalls it immediately so the player is never
+       stranded waiting for a miss to timeout. */
+    if (hammer.phase === "out") {
+      beginHammerReturn();
+      return true;
+    }
     const ps = player.state;
     const reason = ctx.combat?.player?.dead ? "dead"
       : ps.free ? "free-camera"
@@ -1340,7 +1334,7 @@ export function buildKenosisKit(ctx, player, loadout) {
     return true;
   }
 
-  /* WATCHING THE FLYERS MOVE.
+  /* WATCHING THE FLYERS AND PERCHES MOVE.
      `enemies.js` publishes no velocity - a creature is a position that
      changes - so leading a target means measuring it. One Map entry
      per airborne body, refreshed each frame from the position delta
@@ -1352,7 +1346,7 @@ export function buildKenosisKit(ctx, player, loadout) {
     const live = ctx.enemies?.live || [];
     for (const inst of live) {
       if (!inst || inst.id === undefined) continue;
-      if (!inst.spec?.flies || inst.grounded || inst.health <= 0) {
+      if ((!inst.spec?.flies && !inst.spec?.perches) || inst.grounded || inst.health <= 0) {
         assistTrack.delete(inst.id);
         continue;
       }
@@ -1377,17 +1371,19 @@ export function buildKenosisKit(ctx, player, loadout) {
     }
   }
 
-  /* The best flyer to snap onto, or null. "Best" is the one closest
-     to the reticle AXIS rather than the nearest one: with two kites in
-     frame the player has already said which they meant by pointing at
-     it, and picking by distance would overrule them. */
+  /* The best flyer or perched boss to snap onto, or null. "Best" is
+     the one closest to the reticle AXIS rather than the nearest one:
+     with two targets in frame the player has already said which they
+     meant by pointing at it, and picking by distance would overrule
+     them. Supports perched beasts like Stylite up to assistRange. */
   const assistCentre = new THREE.Vector3();
   function flyerAssist(from, dir) {
     const cone = Math.max(0, tune("castAssistCone", KIT.hammer.assistCone));
     if (cone <= 0) return null;
     let best = null;
+    const maxFlyerRange = tune("castAssistRange", KIT.hammer.assistRange || 120);
     for (const inst of ctx.enemies?.live || []) {
-      if (!inst || !inst.spec?.flies || inst.grounded) continue;
+      if (!inst || (!inst.spec?.flies && !inst.spec?.perches) || inst.grounded) continue;
       if (inst.health <= 0 || inst.state === "death") continue;
       if (ctx.combat?.targetable && !ctx.combat.targetable(inst)) continue;
       const box = ctx.combat?.hitbox?.[inst.key];
@@ -1397,16 +1393,16 @@ export function buildKenosisKit(ctx, player, loadout) {
       const dy = assistCentre.y - from.y;
       const dz = assistCentre.z - from.z;
       const dist = Math.hypot(dx, dy, dz);
-      if (dist < 2.5 || dist > KIT.hammer.range) continue;
+      if (dist < 2.5 || dist > maxFlyerRange) continue;
       const cos = (dx * dir.x + dy * dir.y + dz * dir.z) / dist;
       const ang = Math.acos(clamp(cos, -1, 1));
       if (ang > cone) continue;
-      /* Not through a wall. Snapping onto something behind cover
-         spends the cast on masonry and reads as the assist stealing
-         the throw. */
+      /* Not through a solid wall. Perched creatures gripping high rock
+         allow a generous margin so a claw tip on needle surface still
+         locks cleanly. */
       const wall = ctx.collide?.rayBlock?.(from.x, from.y, from.z,
         dx / dist, dy / dist, dz / dist, dist);
-      if (Number.isFinite(wall) && wall < dist - 0.5) continue;
+      if (Number.isFinite(wall) && wall < dist - 2.0) continue;
       if (!best || ang < best.ang) {
         best = { ang, dist, inst, x: assistCentre.x, y: cy, z: assistCentre.z };
       }
@@ -1429,13 +1425,13 @@ export function buildKenosisKit(ctx, player, loadout) {
     }
     if (hammerVel.lengthSq() < 1e-8) hammerVel.set(0, 0, 1);
     hammerVel.normalize();
-    /* SNAP ONTO A FLYER, and lead it. The hammer covers its 46m in
-       about 1.35 seconds, which is long enough for a kite to leave the
-       point it was aimed at - so the throw is put part of the way
-       toward where the target is heading, using the movement the kit
-       has watched since the last cast. */
+
+    /* SNAP ONTO A FLYER OR PERCHED BOSS. The assist leads moving flyers,
+       and provides extended range to strike Stylite perched 50-100m up. */
     const assist = flyerAssist(handWorld, hammerVel);
     hammer.assisted = assist ? assist.inst.key : null;
+    let targetRange = tune("castRange", KIT.hammer.range);
+
     if (assist) {
       const flight = assist.dist / Math.max(1e-3, KIT.hammer.speed);
       const lead = KIT.hammer.assistLead * flight;
@@ -1447,8 +1443,19 @@ export function buildKenosisKit(ctx, player, loadout) {
       );
       if (hammerVel.lengthSq() < 1e-8) hammerVel.set(0, 0, 1);
       hammerVel.normalize();
+      targetRange = Math.max(targetRange, assist.dist + 8);
+    } else if (hammerVel.y > 0.12) {
+      /* Skyward throw: when aiming up at spires or into the air,
+         expand reach up to 96m so manual throws reach distant perches. */
+      targetRange = Math.max(targetRange, KIT.hammer.skywardRange || 96);
     }
-    hammerVel.multiplyScalar(KIT.hammer.speed);
+
+    hammer.maxRange = targetRange;
+    const speedScale = targetRange > 50 ? Math.min(1.35, targetRange / 50) : 1.0;
+    hammer.currentSpeed = KIT.hammer.speed * speedScale;
+    hammer.currentReturnSpeed = KIT.hammer.returnSpeed * speedScale;
+
+    hammerVel.multiplyScalar(hammer.currentSpeed);
     hammerPos.copy(handWorld);
     hammerHits.clear();
     hammer.phase = "out";
@@ -1476,27 +1483,26 @@ export function buildKenosisKit(ctx, player, loadout) {
     const dirX = hammerVel.x; const dirY = hammerVel.y; const dirZ = hammerVel.z;
     const mag = Math.hypot(dirX, dirY, dirZ) || 1;
     const ux = dirX / mag; const uy = dirY / mag; const uz = dirZ / mag;
+
+    let wallAt = Infinity;
     if (!returning) {
       /* rayBlock answers in METRES - the distance to the first wall,
          or Infinity for a clear line. */
-      const wallAt = ctx.collide?.rayBlock?.(hammerPos.x, hammerPos.y, hammerPos.z,
+      wallAt = ctx.collide?.rayBlock?.(hammerPos.x, hammerPos.y, hammerPos.z,
         ux, uy, uz, stepLen) ?? Infinity;
-      if (Number.isFinite(wallAt) && wallAt <= stepLen) {
-        const d = Math.max(0.1, wallAt - 0.2);
-        hammerImpact(hammerPos.x + ux * d, hammerPos.y + uy * d,
-          hammerPos.z + uz * d, false);
-        beginHammerReturn();
-        return false;
-      }
     }
+
+    const reachStep = Number.isFinite(wallAt) ? Math.min(stepLen, wallAt + 0.3) : stepLen;
+    let hitPerchedBoss = false;
+
     if (ctx.combat?.raycastEnemies) {
       /* March the ray past every body it finds inside the step - the
          cast goes THROUGH the line, that is the point of it. */
       let from = 0;
-      for (let guardCount = 0; guardCount < 6 && from < stepLen; guardCount += 1) {
+      for (let guardCount = 0; guardCount < 6 && from < reachStep; guardCount += 1) {
         const hit = ctx.combat.raycastEnemies(
           hammerPos.x + ux * from, hammerPos.y + uy * from, hammerPos.z + uz * from,
-          ux, uy, uz, stepLen - from);
+          ux, uy, uz, reachStep - from);
         if (!hit || !hit.inst) break;
         from += Math.max(0.35, hit.t + 0.35);
         if (hammerHits.has(hit.inst)) continue;
@@ -1531,7 +1537,25 @@ export function buildKenosisKit(ctx, player, loadout) {
         rite("castHit", {
           inst: hit.inst, grounded: downed, x: hit.x, y: hit.y, z: hit.z,
         });
+        if (hit.inst.spec?.perches || hit.inst.key === "stylite") {
+          hitPerchedBoss = true;
+        }
       }
+    }
+
+    /* When the hammer strikes a perched boss (Stylite on its spire),
+       rebound immediately rather than flying past into empty sky. */
+    if (!returning && hitPerchedBoss) {
+      beginHammerReturn();
+      return false;
+    }
+
+    if (!returning && Number.isFinite(wallAt) && wallAt <= stepLen) {
+      const d = Math.max(0.1, wallAt - 0.2);
+      hammerImpact(hammerPos.x + ux * d, hammerPos.y + uy * d,
+        hammerPos.z + uz * d, false);
+      beginHammerReturn();
+      return false;
     }
     const dmg = returning
       ? tune("castReturnDamage", KIT.hammer.returnDamage,
@@ -1618,7 +1642,8 @@ export function buildKenosisKit(ctx, player, loadout) {
       }
     }
     if (hammer.phase === "out") {
-      const step = Math.max(1e-4, KIT.hammer.speed * dt);
+      const speed = hammer.currentSpeed || KIT.hammer.speed;
+      const step = Math.max(1e-4, speed * dt);
       let remaining = step;
       let flying = true;
       while (flying && remaining > 1e-4) {
@@ -1635,7 +1660,7 @@ export function buildKenosisKit(ctx, player, loadout) {
           hammerImpact(hammerPos.x, ground + 0.15, hammerPos.z, false);
           beginHammerReturn();
           flying = false;
-        } else if (hammer.distance >= KIT.hammer.range) {
+        } else if (hammer.distance >= (hammer.maxRange || KIT.hammer.range)) {
           beginHammerReturn();
           flying = false;
         }
@@ -1644,12 +1669,13 @@ export function buildKenosisKit(ctx, player, loadout) {
       handPosition(handWorld);
       hammerVel.copy(handWorld).sub(hammerPos);
       const dist = hammerVel.length();
-      const step = KIT.hammer.returnSpeed * dt;
+      const retSpeed = hammer.currentReturnSpeed || KIT.hammer.returnSpeed;
+      const step = retSpeed * dt;
       if (dist <= Math.max(1.4, step)) {
         hammerPos.copy(handWorld);
         catchHammer();
       } else {
-        hammerVel.normalize().multiplyScalar(KIT.hammer.returnSpeed);
+        hammerVel.normalize().multiplyScalar(retSpeed);
         sweepHammer(Math.min(0.6, step), true);
         hammerStep.copy(hammerVel).normalize().multiplyScalar(step);
         hammerPos.add(hammerStep);

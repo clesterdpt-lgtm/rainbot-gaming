@@ -3644,6 +3644,33 @@ export async function createPlayer(ctx, canvas) {
     return true;
   }
 
+  /** Drop a live melee pose when a higher-priority player verb takes over.
+   *
+   * Guard and Vault are reactions, so making either wait for the tail of a
+   * swing turns a timely press into no response at all.  Only melee clips are
+   * soft-cancellable here: death, throws, reloads and authored encounter
+   * actions keep their existing commitment. */
+  function interruptAction(nextAction) {
+    if (nextAction !== "block" && nextAction !== "jump") return false;
+    if (!action.name || !action.name.startsWith("melee")) return false;
+    action.name = null;
+    action.t = 0;
+    action.spec = null;
+    action.hitDone = false;
+    action.queued = null;
+    action.aimYaw = null;
+    action.queuedAimYaw = null;
+    action.combo = 0;
+    action.comboAt = -9;
+    action.turnFrom = null;
+    action.turnSweep = null;
+    action.turnDir = 0;
+    action.strikeArc = null;
+    action.lungeTarget = null;
+    sampleAction(0);
+    return true;
+  }
+
   /**
    * Killed.
    *
@@ -3684,25 +3711,48 @@ export async function createPlayer(ctx, canvas) {
       ? capturedAimYaw
       : Number.isFinite(state.aimViewYaw) ? state.aimViewYaw : state.camYaw;
     if (action.name && action.name.startsWith("melee")) {
-      /* Buffered: pressing during the swing chains, which is what
-         makes a combo feel responsive rather than dropped.
+      /* Once the blade has left its hit window, the remaining clip is only
+         recovery. A fresh melee press may start the next procession step
+         immediately instead of waiting through that tail. Presses made while
+         the current blow can still connect remain buffered, preserving one
+         hit per committed swing and preventing a same-press double attack. */
+      const hitEnd = action.spec.hit?.[1];
+      const recoveryReady = action.hitDone && Number.isFinite(hitEnd)
+        && action.t >= hitEnd;
+      if (recoveryReady) {
+        action.queued = false;
+        action.queuedAimYaw = null;
+        action.name = null;
+        action.spec = null;
+        action.hitDone = false;
+        action.aimYaw = null;
+        action.turnFrom = null;
+        action.turnSweep = null;
+        action.turnDir = 0;
+        action.strikeArc = null;
+        action.lungeTarget = null;
+        sampleAction(0);
+      } else {
+        /* Buffered: pressing during the swing chains, which is what
+           makes a combo feel responsive rather than dropped.
 
-         The gate was 0.42 of the clip - a third of a second in which
-         a press did NOTHING, not even queue, which is the window a
-         player actually presses in when they are reacting to
-         something. It only has to be late enough that the press
-         cannot be the same one that started this swing; the
-         wind-up is 0.25s and 0.18 of the shortest clip is 0.14s, so
-         one input cannot register twice.
+           The gate was 0.42 of the clip - a third of a second in which
+           a press did NOTHING, not even queue, which is the window a
+           player actually presses in when they are reacting to
+           something. It only has to be late enough that the press
+           cannot be the same one that started this swing; the
+           wind-up is 0.25s and 0.18 of the shortest clip is 0.14s, so
+           one input cannot register twice.
 
-         The queued yaw is re-captured on every press inside the
-         window, so the chained blow faces wherever the reticle
-         ENDED UP rather than where it was on the first press. */
-      if (action.t > action.spec.dur * 0.18) {
-        action.queued = true;
-        action.queuedAimYaw = aimYaw;
+           The queued yaw is re-captured on every press inside the
+           window, so the chained blow faces wherever the reticle
+           ENDED UP rather than where it was on the first press. */
+        if (action.t > action.spec.dur * 0.18) {
+          action.queued = true;
+          action.queuedAimYaw = aimYaw;
+        }
+        return false;
       }
-      return false;
     }
     if (state.clock - action.comboAt > MELEE_COMBO_GRACE_SECONDS) action.combo = 0;
     action.queuedAimYaw = null;
@@ -3866,7 +3916,12 @@ export async function createPlayer(ctx, canvas) {
       }
     }
 
-    if (action.t >= action.spec.dur) {
+    /* A buffered follow-up owns recovery as soon as the live strike can no
+       longer connect. This preserves the complete wind-up and hit window,
+       while removing the inert tail that made a combo press feel ignored. */
+    const queuedRecoveryCancel = !!action.queued && action.hitDone
+      && Number.isFinite(hitWin?.[1]) && action.t >= hitWin[1];
+    if (queuedRecoveryCancel || action.t >= action.spec.dur) {
       const chain = action.queued;
       const chainAimYaw = action.queuedAimYaw;
       const finishedMelee = !!action.name && action.name.startsWith("melee");
@@ -4566,6 +4621,13 @@ export async function createPlayer(ctx, canvas) {
     state.deathPose = action.name === "death"
       ? clamp01(action.t / DEATH_FALL_SECONDS) : 0;
     const { lx, ly, jumpPressed } = input.poll();
+    /* Read reaction inputs before the shield/pack gates inspect the current
+       action. This makes a guard or ordinary vault cancel a melee and take
+       effect in this same simulation frame, rather than being rejected as
+       "busy" until the animation ends. The jetpack chord keeps its committed
+       traversal rules and therefore is not treated as an ordinary vault. */
+    if (input.state.block) interruptAction("block");
+    else if (jumpPressed && !input.state.jetpack) interruptAction("jump");
     const shieldState = ctx.shield?.beginFrame?.(dt, state, input.state) || null;
     const shieldMode = !!shieldState?.active;
     /* The fall resolves BEFORE the pack, because committing to it
@@ -7831,6 +7893,7 @@ export async function createPlayer(ctx, canvas) {
     resetHandFlipStats: () => { flipStats.clamped = 0; flipStats.frames = 0; flipStats.worst = 0; },
     meleeSwing,
     meleePierce,
+    interruptAction,
     die,
     cancelTransientActions,
     listActions: () => Object.keys(ACTIONS),

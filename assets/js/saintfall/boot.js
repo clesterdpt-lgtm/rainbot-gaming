@@ -7,7 +7,7 @@
 (() => {
   "use strict";
 
-  const BUILD = "20260903-escape-fullscreen-1";
+  const BUILD = "20260903-chest-diamond-centering-1";
   const THREE_VERSION = "0.180.0";
   const CDN_BASES = [
     `https://cdn.jsdelivr.net/npm/three@${THREE_VERSION}/`,

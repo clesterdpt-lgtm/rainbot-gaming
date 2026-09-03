@@ -1505,7 +1505,43 @@ export async function buildVesperTrooper(ctx) {
     return node;
   };
   const chest = need("Spine");
+  const sternum = need("Spine01");
   const head = need("Head");
+
+  /* THE CHEST RELIQUARY EMBLEM RIDES THE BREASTPLATE, NOT THE SHOULDERS.
+   *
+   * In the imported asset, the amber diamond and dark iron frame
+   * (materials 'vesper-reliquary-amber' and 'vesper-dark-iron') were
+   * auto-weighted 100% to Spine (the shoulder/neck parent). While sheathed
+   * or running forward, Spine and Spine01 align. But when wielding the
+   * censer-lance, the shoulders rotate ~18 degrees to reach the rear control grip.
+   * Because the surrounding breastplate (vesper-atlas) is parented to Spine01,
+   * rotating Spine orbited the diamond ~4.5cm off the hero midline, making it
+   * visibly slide across the breastplate to the side.
+   * Re-assigning the amber inlay and its dark-iron frame to Spine01 keeps
+   * the chest diamond perfectly anchored and centered to the breastplate
+   * in all wielded, aiming, and sheathed stances. */
+  root.traverse((child) => {
+    if (!child.isSkinnedMesh) return;
+    const matNames = (Array.isArray(child.material) ? child.material : [child.material])
+      .map((m) => m?.name || "");
+    const isChestEmblem = matNames.some((n) => n === "vesper-reliquary-amber" || n === "vesper-dark-iron");
+    if (!isChestEmblem) return;
+
+    const spineIdx = child.skeleton.bones.indexOf(chest);
+    const sternumIdx = child.skeleton.bones.indexOf(sternum);
+    if (spineIdx >= 0 && sternumIdx >= 0) {
+      const skinIndex = child.geometry.attributes.skinIndex;
+      for (let i = 0; i < skinIndex.count; i++) {
+        for (const comp of ["X", "Y", "Z", "W"]) {
+          if (skinIndex[`get${comp}`](i) === spineIdx) {
+            skinIndex[`set${comp}`](i, sternumIdx);
+          }
+        }
+      }
+      skinIndex.needsUpdate = true;
+    }
+  });
 
   // The controller indexes limbs by spatial side (-X first), not by
   // anatomical label.  Meshy's Right bones sit at -X in the bind pose.

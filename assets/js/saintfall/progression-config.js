@@ -151,7 +151,7 @@ export const XP_AWARDS = deepFreeze({
     label: "Precentor silenced",
     event: "enemy_killed",
     match: { enemyKey: "precentor" },
-    amount: 750,
+    amount: 1600,
     repeat: "event",
   },
   kill_cantor: {
@@ -159,7 +159,7 @@ export const XP_AWARDS = deepFreeze({
     label: "Gilded Cantor toppled",
     event: "enemy_killed",
     match: { enemyKey: "cantor" },
-    amount: 800,
+    amount: 1800,
     repeat: "event",
   },
   kill_matriarch: {
@@ -167,7 +167,7 @@ export const XP_AWARDS = deepFreeze({
     label: "Matriarch purged",
     event: "enemy_killed",
     match: { enemyKey: "matriarch" },
-    amount: 850,
+    amount: 2500,
     repeat: "event",
   },
   kill_stylite: {
@@ -175,7 +175,7 @@ export const XP_AWARDS = deepFreeze({
     label: "Stylite brought down",
     event: "enemy_killed",
     match: { enemyKey: "stylite" },
-    amount: 900,
+    amount: 2700,
     repeat: "event",
   },
   kill_garner: {
@@ -183,7 +183,7 @@ export const XP_AWARDS = deepFreeze({
     label: "Garner closed",
     event: "enemy_killed",
     match: { enemyKey: "garner" },
-    amount: 950,
+    amount: 2900,
     repeat: "event",
   },
   kill_winnower: {
@@ -191,7 +191,7 @@ export const XP_AWARDS = deepFreeze({
     label: "Winnower brought down",
     event: "enemy_killed",
     match: { enemyKey: "winnower" },
-    amount: 1050,
+    amount: 3200,
     repeat: "event",
   },
   kill_distaff: {
@@ -199,7 +199,7 @@ export const XP_AWARDS = deepFreeze({
     label: "Distaff unwound",
     event: "enemy_killed",
     match: { enemyKey: "distaff" },
-    amount: 1200,
+    amount: 3500,
     repeat: "event",
   },
   kill_abbess: {
@@ -207,7 +207,7 @@ export const XP_AWARDS = deepFreeze({
     label: "Abbess unseated",
     event: "enemy_killed",
     match: { enemyKey: "abbess" },
-    amount: 1200,
+    amount: 3800,
     repeat: "event",
   },
   kill_coulter: {
@@ -215,7 +215,7 @@ export const XP_AWARDS = deepFreeze({
     label: "Coulter broken",
     event: "enemy_killed",
     match: { enemyKey: "coulter" },
-    amount: 1400,
+    amount: 5000,
     repeat: "event",
   },
   kill_apostate: {
@@ -223,7 +223,7 @@ export const XP_AWARDS = deepFreeze({
     label: "Apostate broken",
     event: "enemy_killed",
     match: { enemyKey: "apostate" },
-    amount: 2000,
+    amount: 7500,
     repeat: "event",
   },
   relay_silenced: {

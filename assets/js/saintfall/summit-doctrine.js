@@ -33,6 +33,7 @@ import {
   KENOSIS_VOW_SEAL_RANKS, KENOSIS_XP_THRESHOLDS, KENOSIS_XP_AWARDS,
   TUNING, kenosisTreeFor, kenosisNodeIds,
 } from "saintfall/summit-doctrine-config.js";
+import { DISTRICT_SITE_BOSS_KEYS, BOSS_ENEMY_KEYS } from "saintfall/progression.js";
 
 const STORE_PREFIX = "saintfall:kenosis-doctrine:v1:";
 
@@ -161,6 +162,7 @@ export function buildSummitDoctrine(ctx, player) {
       rank: fieldRank,
       rankCap: KENOSIS_RANK_CAP,
       totalXp: record.totalXp,
+      xp: record.totalXp,
       xpIntoRank: Math.max(0, record.totalXp - floorXp),
       xpForNext: fieldRank >= KENOSIS_RANK_CAP ? 0 : Math.max(0, nextXp - floorXp),
       pointsEarned: earned,
@@ -263,6 +265,7 @@ export function buildSummitDoctrine(ctx, player) {
     if (!edit.ok) return result(false, edit.message);
     record.allocations = {};
     record.activeCapstones = [null, null];
+    deadWeightBossStates = new WeakMap();
     persist();
     notify();
     return result(true, "Doctrine reset.");
@@ -312,8 +315,12 @@ export function buildSummitDoctrine(ctx, player) {
     persist();
     notify();
     if (after > before) {
+      const rankUps = after - before;
+      const gainedSeals = sealsForRank(after) - sealsForRank(before);
+      const message = `Field Rank ${after} · ${rankUps === 1 ? "Doctrine Point earned" : `${rankUps} Doctrine Points earned`}${gainedSeals > 0 ? ` · ${gainedSeals === 1 ? "Vow Seal earned" : `${gainedSeals} Vow Seals earned`}` : ""}`;
       bus.emit("rank", { rank: after, source });
-      ctx.gameUi?.announce?.(`Field Rank ${after}. A Doctrine Point is available.`);
+      ctx.mission?.announce?.(message.toUpperCase(), 3.2);
+      ctx.gameUi?.announce?.(message);
     }
     return result(true, "", { awarded: add, rank: after });
   }
@@ -379,6 +386,41 @@ export function buildSummitDoctrine(ctx, player) {
     braceUntil: -99,
   };
   const now = () => player?.state?.clock || 0;
+  /* Boss control and damage vulnerability are different clocks. A boss can
+     be off-balance for Shatterpoint without being unable to act for that
+     entire window, and repeated hammer contacts cannot refresh the hard
+     stagger until its brace expires. Weak keys keep encounter bodies
+     collectible and make this state naturally disappear with the actor. */
+  let deadWeightBossStates = new WeakMap();
+
+  function deadWeightBossState(inst, create = false) {
+    if (!inst || !BOSS_ENEMY_KEYS.has(inst.key)) return null;
+    let state = deadWeightBossStates.get(inst);
+    if (!state && create) {
+      state = { lockUntil: -99, offBalanceUntil: -99, staggers: 0, resisted: 0 };
+      deadWeightBossStates.set(inst, state);
+    }
+    return state || null;
+  }
+
+  function deadWeightOffBalance(inst) {
+    const state = deadWeightBossState(inst);
+    return !!state && now() < state.offBalanceUntil;
+  }
+
+  function deadWeightStatus(inst) {
+    const state = deadWeightBossState(inst);
+    const clock = now();
+    return {
+      boss: !!state,
+      braced: !!state && clock < state.lockUntil,
+      offBalance: !!state && clock < state.offBalanceUntil,
+      lockRemaining: state ? Math.max(0, state.lockUntil - clock) : 0,
+      offBalanceRemaining: state ? Math.max(0, state.offBalanceUntil - clock) : 0,
+      staggers: state?.staggers || 0,
+      resisted: state?.resisted || 0,
+    };
+  }
 
   /* ============================================================
      THE KIT ORACLE. Numbers the kits were going to use anyway.
@@ -794,11 +836,36 @@ export function buildSummitDoctrine(ctx, player) {
           fx.bankedWeight = 0;
         }
         if (has("anvil_dead_weight") && detail.inst) {
-          ctx.enemies?.stun?.(detail.inst, tuned("anvil_dead_weight", "stun") || 0.55);
-          cue("anvil", "pulse", {
-            x: detail.x, y: detail.y, z: detail.z, radius: 2.2, stage: "pulse",
-            talentId: "anvil_dead_weight", intensity: 0.42,
-          });
+          const bossState = deadWeightBossState(detail.inst, true);
+          if (!bossState) {
+            ctx.enemies?.stun?.(detail.inst,
+              tuned("anvil_dead_weight", "stun") || 0.55);
+            cue("anvil", "pulse", {
+              x: detail.x, y: detail.y, z: detail.z, radius: 2.2, stage: "pulse",
+              talentId: "anvil_dead_weight", intensity: 0.42,
+            });
+          } else {
+            const clock = now();
+            if (clock >= bossState.lockUntil) {
+              const stun = tuned("anvil_dead_weight", "bossStun") || 0.25;
+              ctx.enemies?.stun?.(detail.inst, stun);
+              bossState.lockUntil = clock
+                + (tuned("anvil_dead_weight", "bossLockout") || 2.5);
+              bossState.offBalanceUntil = clock
+                + (tuned("anvil_dead_weight", "offBalance") || 1.5);
+              bossState.staggers += 1;
+              cue("anvil", "pulse", {
+                x: detail.x, y: detail.y, z: detail.z, radius: 2.2,
+                stage: "pulse", talentId: "anvil_dead_weight", intensity: 0.54,
+              });
+            } else {
+              bossState.resisted += 1;
+              cue("anvil", "brace", {
+                x: detail.x, y: detail.y, z: detail.z, radius: 2.2,
+                stage: "resist", talentId: "anvil_dead_weight", intensity: 0.34,
+              });
+            }
+          }
         }
         if (has("anvil_ring_true") && detail.killed && ctx.combat?.player) {
           const heal = tuned("anvil_ring_true", "health") || 14;
@@ -956,10 +1023,30 @@ export function buildSummitDoctrine(ctx, player) {
   }
 
   /* ---------------------- shared notifiers ---------------------- */
+  const rewardedBosses = new Set();
+
+  function awardBossDefeat(keyOrSite) {
+    const enemyKey = DISTRICT_SITE_BOSS_KEYS[keyOrSite] || keyOrSite;
+    if (!BOSS_ENEMY_KEYS.has(enemyKey)) return false;
+    if (rewardedBosses.has(enemyKey)) return false;
+    rewardedBosses.add(enemyKey);
+    const award = KENOSIS_XP_AWARDS[enemyKey];
+    if (award) {
+      grantXp(award, null, "boss-defeat");
+      return true;
+    }
+    return false;
+  }
+
   function onEnemyKilled(event = {}) {
     const key = event.enemyKey || event.key || "";
-    const award = KENOSIS_XP_AWARDS[key] || 20;
-    grantXp(award, null, "kill");
+    const isBoss = BOSS_ENEMY_KEYS.has(key);
+    if (isBoss) {
+      if (rewardedBosses.has(key)) return event;
+      rewardedBosses.add(key);
+    }
+    const award = KENOSIS_XP_AWARDS[key] || 50;
+    grantXp(award, null, isBoss ? "boss-kill" : "kill");
     const clock = now();
     if (has("vigil_pale_ledger")) {
       fx.ledgerUntil = clock + (tuned("vigil_pale_ledger", "seconds") || 3);
@@ -1063,7 +1150,9 @@ export function buildSummitDoctrine(ctx, player) {
       if (!inst) continue;
       /* Shatterpoint needs the target's state at the moment of the
          blow, which only exists here - a damage getter cannot see it. */
-      if (has("anvil_shatterpoint") && (inst.stunTime || 0) > 0 && inst.health > 0) {
+      if (has("anvil_shatterpoint")
+        && ((inst.stunTime || 0) > 0 || deadWeightOffBalance(inst))
+        && inst.health > 0) {
         const bonus = (tuned("anvil_shatterpoint", "damage") || 1) - 1;
         if (bonus > 0) {
           ctx.combat?.damageEnemy?.(inst,
@@ -1100,6 +1189,9 @@ export function buildSummitDoctrine(ctx, player) {
   stops.push(ctx.combat?.bus?.on?.("kill", (e) => onEnemyKilled(e)) || null);
   stops.push(ctx.combat?.bus?.on?.("playerHurt", (e) => onPlayerHurt(e)) || null);
   stops.push(ctx.combat?.bus?.on?.("melee", (e) => onMelee(e)) || null);
+  stops.push(ctx.mission?.bus?.on?.("districtBossDone", (e) => awardBossDefeat(e?.key)) || null);
+  stops.push(ctx.mission?.bus?.on?.("finalBossDone", (e) => awardBossDefeat(e?.key || "apostate")) || null);
+  stops.push(ctx.districtBosses?.bus?.on?.("defeated", (e) => awardBossDefeat(e?.enemyKey || e?.key)) || null);
 
   return {
     bus,
@@ -1168,10 +1260,15 @@ export function buildSummitDoctrine(ctx, player) {
       record.totalXp = 0;
       record.allocations = {};
       record.activeCapstones = [null, null];
+      deadWeightBossStates = new WeakMap();
+      rewardedBosses.clear();
       persist();
       notify();
       return { ok: true, source: options.source || "runtime" };
     },
+    awardBossDefeat,
+    onEnemyKilled,
+    deadWeightStatus,
     /* No career/field split - see the m108 milestone. A null field
        layer is explicitly valid to `save.js` (`validFieldProgression`
        returns true for null), so the campaign simply records that

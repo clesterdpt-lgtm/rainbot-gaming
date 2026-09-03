@@ -47,6 +47,30 @@ for (const order of DOCTRINE_ORDERS) {
   if (order.capstone) CAPSTONES.set(order.capstone.id, order.capstone);
 }
 
+export const DISTRICT_SITE_BOSS_KEYS = Object.freeze({
+  censer: "winnower",
+  scar: "distaff",
+  ossuary: "garner",
+  bloom: "abbess",
+  choir: "stylite",
+  reach: "matriarch",
+  saint: "coulter",
+  apostate: "apostate",
+});
+
+export const BOSS_ENEMY_KEYS = Object.freeze(new Set([
+  "precentor",
+  "cantor",
+  "matriarch",
+  "stylite",
+  "garner",
+  "winnower",
+  "distaff",
+  "abbess",
+  "coulter",
+  "apostate",
+]));
+
 /* Every rite below is a deployed mechanic. Keeping this list explicit makes
    persistence validation fail closed if a future data-only preview is added
    before its gameplay bridge exists. */
@@ -1099,12 +1123,26 @@ export function buildProgression(ctx) {
     return true;
   }
 
+  function awardBossDefeat(keyOrSite) {
+    const enemyKey = DISTRICT_SITE_BOSS_KEYS[keyOrSite] || keyOrSite;
+    if (!BOSS_ENEMY_KEYS.has(enemyKey)) return false;
+    const award = XP_AWARDS[`kill_${enemyKey}`];
+    if (!award) return false;
+    const receipt = sourceReceipt("boss", enemyKey);
+    if (noteLifetimeOnce(receipt, "kills")) {
+      grantXp(award.amount, receipt, award.id);
+      return true;
+    }
+    return false;
+  }
+
   function onEnemyKilled(event = {}) {
     const enemyKey = event.enemyKey || event.key || "unknown";
     const enemyId = typeof event.enemyId === "string" ? event.enemyId.trim() : "";
+    const isBoss = BOSS_ENEMY_KEYS.has(enemyKey);
     const award = XP_AWARDS[`kill_${enemyKey}`];
-    if (!enemyId || !award) return event;
-    const receipt = sourceReceipt("kill", enemyId);
+    if ((!enemyId && !isBoss) || !award) return event;
+    const receipt = isBoss ? sourceReceipt("boss", enemyKey) : sourceReceipt("kill", enemyId);
     if (noteLifetimeOnce(receipt, "kills")) {
       grantXp(award.amount, receipt, award.id);
     }
@@ -2220,6 +2258,15 @@ export function buildProgression(ctx) {
         XP_AWARDS.breach_cycle_cleared.id);
     }
   }));
+  stops.push(ctx.mission?.bus?.on?.("districtBossDone", (event = {}) => {
+    awardBossDefeat(event.key);
+  }));
+  stops.push(ctx.mission?.bus?.on?.("finalBossDone", (event = {}) => {
+    awardBossDefeat(event.key || "apostate");
+  }));
+  stops.push(ctx.districtBosses?.bus?.on?.("defeated", (event = {}) => {
+    awardBossDefeat(event.enemyKey || event.key);
+  }));
 
   window.addEventListener("pagehide", flushPersistence);
 
@@ -2256,6 +2303,7 @@ export function buildProgression(ctx) {
     resetCareer,
     reset: resetCareer,
     resetForQA,
+    awardBossDefeat,
     onEnemyKilled,
     modifyEnemyDamage,
     onEnemyDamaged,

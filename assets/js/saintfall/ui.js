@@ -1999,6 +1999,7 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render, setQualit
     const menuFrame = root.querySelector(".sf-menu__frame");
     if (menuFrame) {
       menuFrame.inert = showMissionWrap;
+      menuFrame.hidden = showMissionWrap;
       if (showMissionWrap) menuFrame.setAttribute("aria-hidden", "true");
       else menuFrame.removeAttribute("aria-hidden");
     }

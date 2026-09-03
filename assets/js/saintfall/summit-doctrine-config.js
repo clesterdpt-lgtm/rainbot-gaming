@@ -58,6 +58,16 @@ export const KENOSIS_XP_AWARDS = Object.freeze({
   harrow: 150,
   "censer-kite": 45,
   cohort: 120,
+  precentor: 800,
+  cantor: 900,
+  matriarch: 1300,
+  stylite: 1400,
+  garner: 1500,
+  winnower: 1650,
+  distaff: 1800,
+  abbess: 1950,
+  coulter: 2500,
+  apostate: 3800,
 });
 
 /* ------------------------------------------------------------
@@ -111,7 +121,17 @@ export const TUNING = Object.freeze({
   forge_furnace_gait: { speed: [1.35, 1.5], seconds: [3.5, 4.5] },
   forge_the_open_firebox: { radius: 10, damage: 300, stun: 2.8 },
 
-  anvil_dead_weight: { stun: [0.55, 0.85] },
+  /* Ordinary bodies take the full hammer stagger. Bosses yield once, then
+     brace: the shorter control beat preserves a well-timed interruption while
+     the lockout guarantees them room to resume their own attack cycle.
+     `offBalance` is deliberately separate so Shatterpoint keeps its damage
+     setup without requiring the boss to remain helpless. */
+  anvil_dead_weight: {
+    stun: [0.55, 0.85],
+    bossStun: [0.25, 0.40],
+    bossLockout: 2.5,
+    offBalance: 1.5,
+  },
   anvil_measured_swing: { damage: [1.5, 1.9] },
   anvil_ring_true: { health: [14, 22] },
   anvil_shatterpoint: { damage: [1.6, 2.1] },
@@ -576,9 +596,9 @@ const BASTION_ORDERS = [
     art: { colour: "#e8503a", accent: "#ffd0b0", folds: 4, spin: -0.28 },
     talents: [
       t("anvil_dead_weight", "anvil", "Dead Weight",
-        "Nothing struck by this keeps its footing.", 1, 0, [
-          "Hammer blows stagger for 0.55 seconds.",
-          "They stagger for 0.85 seconds.",
+        "Ordinary foes fall; bosses yield once, then brace.", 1, 0, [
+          "Hammer blows stagger ordinary enemies for 0.55 seconds. Bosses stagger for 0.25 seconds, then resist Dead Weight for 2.5 seconds.",
+          "Ordinary enemies stagger for 0.85 seconds and bosses for 0.40 seconds. Boss resistance remains 2.5 seconds.",
         ]),
       t("anvil_measured_swing", "anvil", "Measured Swing",
         "The third blow is the one that was aimed.", 1, 0, [

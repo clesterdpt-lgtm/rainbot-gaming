@@ -2974,44 +2974,50 @@ body.sf-high-contrast .sf-stage:not(.sf-touch-enabled) #sf-native-ui :is(
    pause, focus trap, score record, and shared leaderboard; this one deliberate
    veil only decides when the player is ready to see those numbers. */
 #sf-native-ui .sf-mission-wrap{
-  position:absolute;inset:0;z-index:30;display:grid;align-items:end;overflow:hidden;
+  position:fixed!important;inset:0!important;left:0!important;top:0!important;
+  width:100vw!important;height:100vh!important;max-width:none!important;margin:0!important;padding:0!important;
+  z-index:999999!important;display:grid;align-items:end;overflow:hidden;
   border:0;border-radius:0;background:#050608;isolation:isolate
 }
-#sf-native-ui .sf-mission-wrap[hidden]{display:none}
+#sf-native-ui .sf-mission-wrap[hidden]{display:none!important}
+#sf-native-ui .sf-menu:has(.sf-mission-wrap:not([hidden])) .sf-menu__frame,
+#sf-native-ui .sf-menu__frame[inert]{display:none!important}
 #sf-native-ui .sf-mission-wrap__art{
   position:absolute;inset:0;z-index:-2;
   background-image:url("../img/saintfall/saintfall-mission-complete-v1.jpg");
   background-position:center;background-size:cover;
-  filter:saturate(.78) contrast(1.05) brightness(.84);transform:scale(1.01)
+  filter:saturate(.8) contrast(1.05) brightness(.84);transform:scale(1.01)
 }
 #sf-native-ui .sf-mission-wrap::before{
   content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;
   background:
-    linear-gradient(90deg,rgba(2,3,5,.96) 0%,rgba(3,5,7,.83) 28%,rgba(3,4,6,.2) 66%,rgba(2,3,5,.18)),
-    linear-gradient(0deg,rgba(2,3,5,.95) 0%,rgba(2,3,5,.22) 52%,rgba(2,3,5,.12))
+    linear-gradient(90deg,rgba(2,3,5,.96) 0%,rgba(3,5,7,.84) 36%,rgba(3,4,6,.28) 68%,rgba(2,3,5,.18)),
+    linear-gradient(0deg,rgba(2,3,5,.97) 0%,rgba(2,3,5,.3) 54%,rgba(2,3,5,.12))
 }
 #sf-native-ui .sf-mission-wrap__card{
-  display:grid;align-content:end;gap:.65rem;box-sizing:border-box;
-  width:min(36rem,calc(100% - 3rem));max-height:calc(100% - 3rem);margin:0 0 1.5rem 1.5rem;padding:1.15rem 1.25rem;
-  overflow-y:auto;border:1px solid rgba(216,164,65,.48);border-left:4px solid #d8a441;border-radius:0;
-  background:linear-gradient(110deg,rgba(98,63,26,.2),transparent 48%),rgba(4,7,9,.88);
-  box-shadow:0 1.2rem 3.4rem rgba(0,0,0,.58),inset 0 0 0 1px rgba(115,216,237,.07)
+  display:grid;align-content:end;gap:clamp(.75rem,1.2vh,1.1rem);box-sizing:border-box;
+  width:min(50rem,calc(100% - 4rem));max-height:calc(100% - 3.5rem);
+  margin:0 0 clamp(1.8rem,3.5vh,3rem) clamp(1.8rem,3.5vw,3rem);
+  padding:clamp(1.5rem,2.2vw,2.2rem) clamp(1.6rem,2.5vw,2.5rem);
+  overflow-y:auto;border:1px solid rgba(216,164,65,.55);border-left:5px solid #d8a441;border-radius:0;
+  background:linear-gradient(110deg,rgba(98,63,26,.32),rgba(6,10,14,.86) 48%),rgba(4,7,9,.94);
+  box-shadow:0 1.5rem 4rem rgba(0,0,0,.7),inset 0 0 0 1px rgba(115,216,237,.1)
 }
-#sf-native-ui .sf-mission-wrap__kicker{color:#79d8ed;font-size:9px;font-weight:700;letter-spacing:.2em}
-#sf-native-ui .sf-mission-wrap__card h2{margin:0;color:#f6f0dd;font:600 clamp(1.75rem,4vw,3.1rem)/1 "Cinzel",Georgia,serif;letter-spacing:.1em}
-#sf-native-ui .sf-mission-wrap__card>p{margin:0;color:#f0d58c;font:600 15px/1.3 "Cormorant Garamond",Georgia,serif;font-style:italic;letter-spacing:.02em}
-#sf-native-ui .sf-mission-wrap__verdict{display:grid;gap:.25rem;margin-top:.15rem;padding:.65rem 0;border-block:1px solid rgba(216,164,65,.18)}
-#sf-native-ui .sf-mission-wrap__verdict strong{color:#f6f0dd;font:600 12px/1.2 "Cinzel",Georgia,serif;letter-spacing:.13em}
-#sf-native-ui .sf-mission-wrap__verdict span{max-width:32rem;color:rgba(225,236,236,.72);font-size:11px;line-height:1.52}
-#sf-native-ui .sf-mission-wrap__card footer{display:flex;align-items:center;justify-content:space-between;gap:.9rem}
-#sf-native-ui .sf-mission-wrap__card footer small{max-width:14rem;color:rgba(115,216,237,.72);font-size:8px;letter-spacing:.12em;line-height:1.4}
+#sf-native-ui .sf-mission-wrap__kicker{color:#79d8ed;font-size:clamp(10px,.85vw,12px);font-weight:700;letter-spacing:.24em}
+#sf-native-ui .sf-mission-wrap__card h2{margin:0;color:#f6f0dd;font:700 clamp(2.2rem,4vw,3.4rem)/1.05 "Cinzel",Georgia,serif;letter-spacing:.1em}
+#sf-native-ui .sf-mission-wrap__card>p{margin:0;color:#f0d58c;font:600 clamp(17px,1.35vw,22px)/1.35 "Cormorant Garamond",Georgia,serif;font-style:italic;letter-spacing:.025em}
+#sf-native-ui .sf-mission-wrap__verdict{display:grid;gap:.35rem;margin-top:.2rem;padding:.85rem 0;border-block:1px solid rgba(216,164,65,.25)}
+#sf-native-ui .sf-mission-wrap__verdict strong{color:#f6f0dd;font:600 clamp(13px,1.1vw,15px)/1.25 "Cinzel",Georgia,serif;letter-spacing:.14em}
+#sf-native-ui .sf-mission-wrap__verdict span{max-width:44rem;color:rgba(225,236,236,.8);font-size:clamp(12.5px,1vw,14.5px);line-height:1.55}
+#sf-native-ui .sf-mission-wrap__card footer{display:flex;align-items:center;justify-content:space-between;gap:1.2rem;margin-top:.25rem}
+#sf-native-ui .sf-mission-wrap__card footer small{max-width:20rem;color:rgba(115,216,237,.82);font-size:clamp(9.5px,.75vw,11px);letter-spacing:.14em;line-height:1.45}
 #sf-native-ui .sf-mission-wrap__card button{
-  flex:0 0 auto;min-height:44px;padding:.65rem .85rem;border:1px solid rgba(216,164,65,.68);border-radius:0;
-  background:linear-gradient(90deg,rgba(128,78,25,.46),rgba(35,25,20,.9),rgba(128,78,25,.46));
-  color:#fff0cf;font:700 10px/1 "Cinzel",Georgia,serif;letter-spacing:.1em;cursor:pointer
+  flex:0 0 auto;min-height:48px;padding:.75rem 1.4rem;border:1px solid rgba(216,164,65,.72);border-radius:0;
+  background:linear-gradient(90deg,rgba(128,78,25,.52),rgba(35,25,20,.94),rgba(128,78,25,.52));
+  color:#fff0cf;font:700 clamp(11px,.9vw,13px)/1 "Cinzel",Georgia,serif;letter-spacing:.12em;cursor:pointer
 }
 #sf-native-ui .sf-mission-wrap__card button:hover,
-#sf-native-ui .sf-mission-wrap__card button:focus-visible{border-color:#f0d58c;background:rgba(216,164,65,.24);outline:2px solid rgba(115,216,237,.72);outline-offset:2px}
+#sf-native-ui .sf-mission-wrap__card button:focus-visible{border-color:#f0d58c;background:rgba(216,164,65,.32);outline:2px solid rgba(115,216,237,.8);outline-offset:2px}
 body.sf-high-contrast #sf-native-ui .sf-mission-wrap__card{border-color:#ffe199;background:rgba(0,0,0,.96)}
 body.sf-high-contrast #sf-native-ui .sf-mission-wrap__verdict span{color:#fff}
 body.sf-reduced-motion #sf-native-ui .sf-mission-wrap__art{transform:none}
@@ -3035,24 +3041,28 @@ body.sf-reduced-motion #sf-native-ui .sf-mission-wrap__art{transform:none}
   #sf-native-ui .sf-mission-wrap{align-items:end}
   #sf-native-ui .sf-mission-wrap::before{background:linear-gradient(0deg,rgba(2,3,5,.98) 0%,rgba(2,3,5,.84) 52%,rgba(2,3,5,.18))}
   #sf-native-ui .sf-mission-wrap__art{background-position:64% center}
-  #sf-native-ui .sf-mission-wrap__card{width:calc(100% - 1rem);max-height:calc(100% - 1rem);margin:.5rem;padding:.8rem;gap:.48rem}
-  #sf-native-ui .sf-mission-wrap__card h2{font-size:clamp(1.45rem,8vw,2.15rem)}
-  #sf-native-ui .sf-mission-wrap__card>p{font-size:13px}
-  #sf-native-ui .sf-mission-wrap__card footer{align-items:stretch;flex-direction:column}
-  #sf-native-ui .sf-mission-wrap__card footer small{max-width:none}
-  #sf-native-ui .sf-mission-wrap__card button{width:100%}
+  #sf-native-ui .sf-mission-wrap__card{width:calc(100% - 1rem);max-height:calc(100% - 1rem);margin:.5rem;padding:1rem .9rem;gap:.55rem}
+  #sf-native-ui .sf-mission-wrap__kicker{font-size:9.5px}
+  #sf-native-ui .sf-mission-wrap__card h2{font-size:clamp(1.6rem,7.5vw,2.2rem)}
+  #sf-native-ui .sf-mission-wrap__card>p{font-size:14px}
+  #sf-native-ui .sf-mission-wrap__verdict{padding:.5rem 0;gap:.25rem}
+  #sf-native-ui .sf-mission-wrap__verdict strong{font-size:12px}
+  #sf-native-ui .sf-mission-wrap__verdict span{font-size:11.5px;line-height:1.45}
+  #sf-native-ui .sf-mission-wrap__card footer{align-items:stretch;flex-direction:column;gap:.6rem}
+  #sf-native-ui .sf-mission-wrap__card footer small{max-width:none;font-size:9.5px}
+  #sf-native-ui .sf-mission-wrap__card button{width:100%;min-height:46px;font-size:11px}
 }
 @media (orientation:landscape) and (max-height:500px){
   #sf-native-ui .sf-mission-wrap__art{background-position:center 45%}
-  #sf-native-ui .sf-mission-wrap__card{width:min(34rem,calc(100% - 1rem));max-height:calc(100% - 1rem);margin:.5rem;padding:.6rem .75rem;gap:.32rem}
-  #sf-native-ui .sf-mission-wrap__kicker{font-size:7px}
-  #sf-native-ui .sf-mission-wrap__card h2{font-size:1.45rem}
-  #sf-native-ui .sf-mission-wrap__card>p{font-size:11px}
-  #sf-native-ui .sf-mission-wrap__verdict{padding:.38rem 0}
-  #sf-native-ui .sf-mission-wrap__verdict strong{font-size:9px}
-  #sf-native-ui .sf-mission-wrap__verdict span{font-size:8px;line-height:1.3}
-  #sf-native-ui .sf-mission-wrap__card footer small{font-size:7px}
-  #sf-native-ui .sf-mission-wrap__card button{min-height:40px;padding:.45rem .65rem;font-size:8px}
+  #sf-native-ui .sf-mission-wrap__card{width:min(38rem,calc(100% - 1rem));max-height:calc(100% - 1rem);margin:.5rem;padding:.65rem .85rem;gap:.32rem}
+  #sf-native-ui .sf-mission-wrap__kicker{font-size:8px}
+  #sf-native-ui .sf-mission-wrap__card h2{font-size:1.55rem}
+  #sf-native-ui .sf-mission-wrap__card>p{font-size:11.5px}
+  #sf-native-ui .sf-mission-wrap__verdict{padding:.38rem 0;gap:.18rem}
+  #sf-native-ui .sf-mission-wrap__verdict strong{font-size:10px}
+  #sf-native-ui .sf-mission-wrap__verdict span{font-size:9.5px;line-height:1.32}
+  #sf-native-ui .sf-mission-wrap__card footer small{font-size:8px}
+  #sf-native-ui .sf-mission-wrap__card button{min-height:40px;padding:.45rem .75rem;font-size:9px}
 }
 
 /* The shared score panel remains the authority for local/cloud standings;

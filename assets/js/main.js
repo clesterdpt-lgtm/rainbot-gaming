@@ -1883,7 +1883,7 @@ function openProModal(defaultPlan = "monthly") {
         Pro is still in the lab. The plan is early access and supporter perks—but checkout is not live yet.
       </div>
       <div class="modal__actions">
-        <a class="btn btn--primary" id="rb-pro-updates" href="mailto:hello@rainbotgaming.com?subject=Rainbot%20Pro%20launch%20updates">Get launch updates</a>
+        <a class="btn btn--primary" id="rb-pro-updates" href="mailto:hello@rainbot.games?subject=Rainbot%20Pro%20launch%20updates">Get launch updates</a>
         <button class="btn btn--ghost" id="rb-close-pro" type="button">Maybe later</button>
       </div>
     </div>

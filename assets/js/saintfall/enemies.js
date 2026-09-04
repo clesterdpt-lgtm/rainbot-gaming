@@ -2179,6 +2179,50 @@ export async function buildEnemies(ctx, onProgress) {
     return { reach, blocker };
   }
 
+  /* A HIDDEN RIG STILL PAYS FOR EVERY BONE.
+
+     `scene.updateMatrixWorld()` recurses into every child regardless
+     of visibility, and every node with `matrixAutoUpdate` recomposes
+     its local matrix and multiplies out its world matrix each frame -
+     three's `matrixWorldAutoUpdate` flag only skips the multiply for
+     that one node and still recurses. The field holds ~520 living
+     creatures of ~37 nodes each, and on the spawn causeway nine of
+     them are shown: the other 19,000 nodes were the single largest
+     CPU item in the live profile (~3.5ms of a 10ms main-thread frame,
+     `updateMatrixWorld` + `multiplyMatrices`) computing matrices
+     nothing reads.
+
+     A creature beyond its pose range is exactly the case where none
+     of that matters: the loop below `continue`s before touching a
+     bone, the mixer does not run, the skin is not drawn and casts no
+     shadow. So its root's `updateMatrixWorld` is replaced with a
+     version that refreshes the ROOT alone and does not descend. The
+     root stays honest for everything that reads it (`inst.root
+     .matrixWorld`, `localToWorld`), and the gameplay readers that DO
+     reach into a far rig's bones - `combat.limbSpan`, the sac and
+     heart volumes - already call `bone.updateWorldMatrix(true, false)`
+     first, which walks the parent chain by a different method and is
+     untouched by this. Thawing restores the prototype method and
+     forces one full pass, so a creature re-entering range is posed
+     correctly on the frame it reappears. Body-chain creatures (the
+     burrowers) are never frozen: their chain is posed while hidden. */
+  function frozenUpdateMatrixWorld() {
+    if (this.matrixAutoUpdate) this.updateMatrix();
+    if (this.parent === null) this.matrixWorld.copy(this.matrix);
+    else this.matrixWorld.multiplyMatrices(this.parent.matrixWorld, this.matrix);
+    this.matrixWorldNeedsUpdate = false;
+  }
+
+  function setMatrixFreeze(inst, frozen) {
+    inst.matrixFrozen = frozen;
+    if (frozen) {
+      inst.root.updateMatrixWorld = frozenUpdateMatrixWorld;
+      return;
+    }
+    delete inst.root.updateMatrixWorld;
+    inst.root.updateMatrixWorld(true);
+  }
+
   function update(dt, camera) {
     if (camera) camera.getWorldPosition(_eye);
     for (let i = live.length - 1; i >= 0; i -= 1) {
@@ -2221,6 +2265,9 @@ export async function buildEnemies(ctx, onProgress) {
       // the cost of animating it.
       const dying = inst.state === "death";
       if (dying) inst.deathElapsed = (inst.deathElapsed || 0) + dt;
+      const freeze = !shown && !dying && !inst.body
+        && d2 > poseRange * poseRange;
+      if (freeze !== !!inst.matrixFrozen) setMatrixFreeze(inst, freeze);
       if (!dying && d2 > poseRange * poseRange) continue;
 
       if (dying || d2 < animRange * animRange) inst.mixer.update(dt);
@@ -2715,6 +2762,7 @@ export async function buildEnemies(ctx, onProgress) {
       return {
         species: species.size,
         live: live.length,
+        matrixFrozen: live.reduce((n, inst) => n + (inst.matrixFrozen ? 1 : 0), 0),
         crowd: { ...crowdStats },
         clips: [...species.values()].map((s) => `${s.key}:${s.clips.size}`),
       };

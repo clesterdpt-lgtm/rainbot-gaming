@@ -1234,8 +1234,53 @@ void main() {
 
 /* ------------------------------------------------------------------ */
 
+/* A LIGHT THAT CONTRIBUTES NOTHING STILL COSTS A FULL BRDF.
+
+   three's forward loop calls RE_Direct for EVERY light in the scene on
+   EVERY lit fragment - GGX specular, Lambert diffuse, the lot - and only
+   afterwards multiplies by an irradiance that is exactly zero for a
+   point light past its cutoff `distance` (getDistanceAttenuation
+   saturates to 0 there) or for any light held at intensity 0.
+
+   This level keeps 21 point lights and 3 directionals resident at all
+   times on purpose (the constant-visible-light invariant: a light that
+   joins the scene mid-session recompiles every material - see
+   summit-lights/shield/apostate), and at any given pixel almost all of
+   them are either out of range or parked at zero. Measured on the
+   spawn causeway at DPR2/high: hiding every point light took the GPU
+   frame from 33.3ms to 20.1ms; the ten zero-intensity ones alone were
+   7ms. That is the single largest cost in the frame and none of it
+   reaches the picture.
+
+   So the loop body is guarded: RE_Direct only runs when the incident
+   colour is non-zero. Skipping an addition of exactly 0.0 is
+   bit-identical to performing it (the A/B stills harness confirms
+   byte-equal captures), the branch is coherent across a warp because
+   light reach is spatial, and the light COUNT the program is keyed on
+   is untouched, so the invariant above still holds. Installed once,
+   before the first program compiles; idempotent; a no-op with a
+   warning on any three whose chunk text has moved. */
+export function installLightGuard(THREE) {
+  const chunks = THREE.ShaderChunk;
+  if (!chunks || typeof chunks.lights_fragment_begin !== "string") return false;
+  const src = chunks.lights_fragment_begin;
+  if (src.includes("SF_LIGHT_GUARD")) return true;
+  const call = "RE_Direct( directLight, geometryPosition, geometryNormal, "
+    + "geometryViewDir, geometryClearcoatNormal, material, reflectedLight );";
+  const count = src.split(call).length - 1;
+  if (count < 1) {
+    console.warn("[saintfall] light guard not installed: three's lights_fragment_begin "
+      + "no longer matches; every resident light will be shaded at full cost.");
+    return false;
+  }
+  chunks.lights_fragment_begin = src.split(call).join(
+    `if ( directLight.color != vec3( 0.0 ) ) ${call} /* SF_LIGHT_GUARD */`);
+  return true;
+}
+
 export function createRenderer(ctx, canvas) {
   const { THREE } = ctx;
+  installLightGuard(THREE);
 
   const renderer = new THREE.WebGLRenderer({
     canvas,

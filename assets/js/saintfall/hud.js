@@ -15,6 +15,24 @@ import { keybindLabel, onKeybindsChange } from "saintfall/keybinds.js";
 
 export function buildHud(ctx, host) {
   const el = host;
+
+  /* `textContent = sameString` still replaces the text node and dirties
+     style + layout for the subtree; `setAttribute` with an unchanged
+     value is likewise not free on every engine. The per-frame readouts
+     below mostly repeat themselves frame to frame, so every hot write
+     goes through these and only touches the DOM on an actual change. */
+  function setText(node, text) {
+    if (!node || node.__sfText === text) return;
+    node.__sfText = text;
+    node.textContent = text;
+  }
+  function setAttr(node, name, value) {
+    if (!node) return;
+    const cache = node.__sfAttrs || (node.__sfAttrs = {});
+    if (cache[name] === value) return;
+    cache[name] = value;
+    node.setAttribute(name, value);
+  }
   el.innerHTML = `
     <div class="sf-hud__district" id="sf-district">
       <div class="sf-hud__eyebrow">SAINTFALL &middot; OPERATION THE GILDED SILENCE</div>
@@ -780,9 +798,34 @@ export function buildHud(ctx, host) {
     return wholeMapSemantic;
   }
 
+  /* The minimap redraws at 20Hz from inside the frame, after the
+     compass and readouts have already dirtied style - so a
+     getBoundingClientRect here was a forced synchronous layout twenty
+     times a second. The canvas is CSS-sized; a ResizeObserver hands
+     over its box for free and the rect read is only the fallback. */
+  const mapBounds = { width: 0, height: 0, seen: false };
+  if (mapCanvas && typeof ResizeObserver === "function") {
+    try {
+      new ResizeObserver((entries) => {
+        for (const entry of entries) {
+          const box = entry.contentRect;
+          if (box.width > 0 && box.height > 0) {
+            mapBounds.width = box.width;
+            mapBounds.height = box.height;
+            mapBounds.seen = true;
+          }
+        }
+      }).observe(mapCanvas);
+    } catch (_) { /* fall through to the rect read */ }
+  }
+  function minimapBounds(canvas) {
+    if (canvas === mapCanvas && mapBounds.seen) return mapBounds;
+    return canvas?.getBoundingClientRect?.();
+  }
+
   function drawMinimap(player, canvas = mapCanvas, options = {}) {
     const map2d = canvas?.getContext?.("2d");
-    const bounds = canvas?.getBoundingClientRect?.();
+    const bounds = minimapBounds(canvas);
     if (!bounds) return null;
     if (!map2d || bounds.width < 2 || bounds.height < 2) return;
     const dpr = Math.min(2, window.devicePixelRatio || 1);
@@ -1457,11 +1500,11 @@ export function buildHud(ctx, host) {
        way a boss bar does. The state captions still exist as data
        (`boss.detail`, packed below) for the screen reader and for any
        harness that wants them - they are just not drawn. */
-    bossBarNameEl.textContent = boss.name;
+    setText(bossBarNameEl, boss.name);
     bossBarFillEl.style.width = `${(bossBarAnim.fill * 100).toFixed(2)}%`;
     bossBarChipEl.style.width = `${(bossBarAnim.chip * 100).toFixed(2)}%`;
-    bossBarTrackEl.setAttribute("aria-valuenow", String(pct));
-    bossBarTrackEl.setAttribute("aria-valuetext",
+    setAttr(bossBarTrackEl, "aria-valuenow", String(pct));
+    setAttr(bossBarTrackEl, "aria-valuetext",
       `${boss.name} ${pct} percent${boss.detail ? ` — ${boss.detail}` : ""}`);
   }
 
@@ -1479,6 +1522,11 @@ export function buildHud(ctx, host) {
     el,
     update(dt, player, camera) {
       refreshTier();
+      /* Read the HUD box FIRST, while layout is still clean from the
+         browser's last rendering step. Reading it after the compass and
+         readout writes below forced a synchronous layout every frame. */
+      const hudW = el.clientWidth || 1;
+      const hudH = el.clientHeight || 1;
       const p = player.position;
       const d = districtAt(p.x, p.z);
       const key = d ? d.key : null;
@@ -1542,7 +1590,7 @@ export function buildHud(ctx, host) {
       }
 
       if (readoutEl) {
-        readoutEl.textContent = `${Math.round(p.x)} , ${Math.round(p.z)}   ·   ${Math.round(p.y)}m`;
+        setText(readoutEl, `${Math.round(p.x)} , ${Math.round(p.z)}   ·   ${Math.round(p.y)}m`);
       }
 
       updateBossBar(dt);
@@ -1557,9 +1605,6 @@ export function buildHud(ctx, host) {
       /* Project world impacts after the camera has settled for this
          frame. DOM text stays pin-sharp while its anchor follows the
          creature and naturally disappears behind the camera. */
-      const hudW = el.clientWidth || 1;
-      const hudH = el.clientHeight || 1;
-
       for (let i = damageNumbers.length - 1; i >= 0; i -= 1) {
         const item = damageNumbers[i];
         item.age += dt;
@@ -1585,16 +1630,16 @@ export function buildHud(ctx, host) {
         const fuelN = clamp01(jet.fuel / jet.maxFuel);
         const value = Math.round(fuelN * 100);
         jetFillEl.style.transform = `scaleX(${fuelN})`;
-        jetValueEl.textContent = jet.lockedOut && jet.requested ? `${value}% · RELEASE`
+        setText(jetValueEl, jet.lockedOut && jet.requested ? `${value}% · RELEASE`
           : jet.mode === "thrust" ? `${value}% · THRUST`
             : jet.mode === "glide" ? `${value}% · GLIDE`
               : jet.mode === "empty" ? `${value}% · EMPTY`
                 : jet.mode === "recharging" ? `${value}% · CHARGING`
                   : jet.mode === "cooldown" ? `${value}% · COOLING`
-                    : jet.mode === "low" ? `${value}% · LOW` : `${value}%`;
+                    : jet.mode === "low" ? `${value}% · LOW` : `${value}%`);
         jetEl.dataset.state = fuelN <= 0.18 ? "crit" : jet.mode;
-        jetEl.setAttribute("aria-valuenow", String(value));
-        jetEl.setAttribute("aria-valuetext", `${value} percent, ${jet.mode}`);
+        setAttr(jetEl, "aria-valuenow", String(value));
+        setAttr(jetEl, "aria-valuetext", `${value} percent, ${jet.mode}`);
       }
       const boost = ctx.boost?.status?.();
       if (boost) {
@@ -1602,18 +1647,18 @@ export function buildHud(ctx, host) {
         boostEl.dataset.state = boost.active ? "active"
           : boost.cooldownRemaining > 0 ? "cooldown"
             : lowCharge ? "low" : "ready";
-        boostValueEl.textContent = boost.active
+        setText(boostValueEl, boost.active
           ? (boost.attack ? "IMPACT" : boost.holding ? "GLIDE" : "BOOST")
           : boost.cooldownRemaining > 0 ? `${boost.cooldownRemaining.toFixed(1)}S`
-            : lowCharge ? "LOW CHARGE" : "READY";
+            : lowCharge ? "LOW CHARGE" : "READY");
       }
       const shield = ctx.shield?.status?.();
       if (shield) {
         if (shield.active && jet) {
           const value = Math.round(clamp01(jet.fuel / jet.maxFuel) * 100);
-          jetValueEl.textContent = `${value}% · AEGIS`;
+          setText(jetValueEl, `${value}% · AEGIS`);
           jetEl.dataset.state = "shield";
-          jetEl.setAttribute("aria-valuetext", `${value} percent, Aegis blocking`);
+          setAttr(jetEl, "aria-valuetext", `${value} percent, Aegis blocking`);
         }
       }
 
@@ -1629,7 +1674,7 @@ export function buildHud(ctx, host) {
             hasOperativeAbility = true;
             const held = Math.max(0, Math.min(b.maxCharges, b.charges));
             const pips = "◆".repeat(held) + "◇".repeat(Math.max(0, b.maxCharges - held));
-            teleportValueEl.textContent = `${pips} ${b.rechargeIn.toFixed(1)}S CD`;
+            setText(teleportValueEl, `${pips} ${b.rechargeIn.toFixed(1)}S CD`);
             teleportEl.dataset.state = b.charges > 0 ? "ready" : "cooldown";
           }
         } else if (teleportEl) {
@@ -1642,10 +1687,10 @@ export function buildHud(ctx, host) {
           castEl.hidden = !cooling;
           if (cooling) {
             hasOperativeAbility = true;
-            castValueEl.textContent = h.phase === "out" ? "CAST"
+            setText(castValueEl, h.phase === "out" ? "CAST"
               : h.phase === "return" ? "RETURNING"
                 : h.phase === "windup" ? "WINDING"
-                  : `${h.cooldown.toFixed(1)}S CD`;
+                  : `${h.cooldown.toFixed(1)}S CD`);
             castEl.dataset.state = h.phase !== "held" ? "active" : "cooldown";
           }
         } else if (castEl) {
@@ -1679,7 +1724,7 @@ export function buildHud(ctx, host) {
           guardCueEl.style.top = `${(-guardWorld.y * 0.5 + 0.5) * hudH}px`;
           guardCueEl.style.setProperty("--sf-guard-spread", `${10 - progress * 3}px`);
           guardCueEl.style.setProperty("--sf-guard-scale", String(1.08 - progress * 0.08));
-          guardCueEl.setAttribute("aria-label",
+          setAttr(guardCueEl, "aria-label",
             threat.training ? "Training melee attack incoming" : "Melee attack incoming");
         }
       } else {
@@ -1694,7 +1739,7 @@ export function buildHud(ctx, host) {
 
       const hp = clamp01(combat.player.hp / combat.player.maxHp);
       hpEl.style.width = `${hp * 100}%`;
-      hpValueEl.textContent = `${Math.ceil(combat.player.hp)}`;
+      setText(hpValueEl, `${Math.ceil(combat.player.hp)}`);
       // Colour is a threshold, not a gradient. A bar that slides
       // continuously from green to red never reads as "you are in
       // trouble NOW" - it just reads as slightly different.
@@ -1767,12 +1812,12 @@ export function buildHud(ctx, host) {
           ammoEl.dataset.state = state;
           ammoEl.classList.toggle("is-over", h.overheated);
           ammoEl.classList.toggle("is-venting", h.venting);
-          ammoEl.setAttribute("aria-valuenow", String(pct));
-          ammoEl.setAttribute("aria-valuetext", h.overheated
+          setAttr(ammoEl, "aria-valuenow", String(pct));
+          setAttr(ammoEl, "aria-valuetext", h.overheated
             ? `Weapon overheated at ${pct} percent`
             : h.venting ? `Weapon venting at ${pct} percent`
               : heat <= 0.015 ? "Weapon cool" : `Weapon heat ${pct} percent`);
-          heatStateEl.textContent = stateText;
+          setText(heatStateEl, stateText);
           for (const fill of heatFillEls) fill.style.strokeDasharray = `${pct} 100`;
         }
       } else {
@@ -1791,7 +1836,7 @@ export function buildHud(ctx, host) {
       }
       if (boonOn) {
         const left = Math.max(0, boon.remaining);
-        boonValueEl.textContent = `${left.toFixed(1)}S`;
+        setText(boonValueEl, `${left.toFixed(1)}S`);
         boonFillEl.style.width = `${clamp01(left / Math.max(0.001, boon.seconds)) * 100}%`;
         boonEl.dataset.level = left < 3.5 ? "fading" : "full";
       }
@@ -1800,8 +1845,8 @@ export function buildHud(ctx, host) {
       if (obj) {
         objEl.style.opacity = "1";
         objEl.dataset.event = obj.event ? "1" : "0";
-        objLabelEl.textContent = obj.name;
-        objDistanceEl.textContent = `${Math.round(obj.dist)}M`;
+        setText(objLabelEl, obj.name);
+        setText(objDistanceEl, `${Math.round(obj.dist)}M`);
         objBarEl.style.width = `${(obj.progress || 0) * 100}%`;
         if (objArrowEl && Number.isFinite(obj.x) && Number.isFinite(obj.z)) {
           const dx = obj.x - ps.x;
@@ -1826,11 +1871,11 @@ export function buildHud(ctx, host) {
       } else {
         objEl.style.opacity = "0";
         objEl.dataset.event = "0";
-        objDistanceEl.textContent = "—";
+        setText(objDistanceEl, "—");
         if (objArrowEl) objArrowEl.style.opacity = "0";
       }
 
-      bannerEl.textContent = mission.state.banner || "";
+      setText(bannerEl, mission.state.banner || "");
       bannerEl.style.opacity = mission.state.banner ? "1" : "0";
 
       for (const s of stratNodes) {
@@ -1840,10 +1885,10 @@ export function buildHud(ctx, host) {
           ? clamp01(1 - cd / s.spec.cooldown) : 1;
         const status = ready ? "READY" : cd < 10 ? `${cd.toFixed(1)}S` : `${Math.ceil(cd)}S`;
         s.fill.style.width = `${pct * 100}%`;
-        s.status.textContent = status;
+        setText(s.status, status);
         s.node.dataset.ready = ready ? "1" : "0";
         s.node.dataset.cooldown = ready ? "0" : String(Math.ceil(cd));
-        s.node.setAttribute("aria-label", `${s.spec.name}, ${ready ? "ready" : `${Math.ceil(cd)} seconds`}`);
+        setAttr(s.node, "aria-label", `${s.spec.name}, ${ready ? "ready" : `${Math.ceil(cd)} seconds`}`);
       }
 
       /* The trooper can now fire mid-glide and mid-flight, so the
@@ -1884,12 +1929,10 @@ export function buildHud(ctx, host) {
         doctrineCueEl.hidden = !showCue;
         if (showCue) {
           doctrineCueEl.dataset.points = String(pointsAvailable);
-          if (doctrinePtsEl) doctrinePtsEl.textContent = String(pointsAvailable);
-          if (doctrineLabelEl) {
-            doctrineLabelEl.textContent = pointsAvailable === 1
-              ? "DOCTRINE TALENT POINT AVAILABLE"
-              : "DOCTRINE TALENT POINTS AVAILABLE";
-          }
+          setText(doctrinePtsEl, String(pointsAvailable));
+          setText(doctrineLabelEl, pointsAvailable === 1
+            ? "DOCTRINE TALENT POINT AVAILABLE"
+            : "DOCTRINE TALENT POINTS AVAILABLE");
         }
       }
     },
